@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26124.0
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29613.14
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E2B7EF86-A7CE-4024-A7EB-5E404CCA2287}"
 EndProject
@@ -14,9 +14,6 @@ EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "blechc", "src\blechc\blechc.fsproj", "{2785AF65-56A7-4A79-877D-6BFABD36F69A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{CF10F307-72BA-41E4-A4E8-5002E2288B30}"
-	ProjectSection(SolutionItems) = preProject
-		build.bat = build.bat
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{202910CC-1558-448C-A7E5-CA9CE6AB592E}"
 	ProjectSection(SolutionItems) = preProject

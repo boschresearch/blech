@@ -1251,8 +1251,8 @@ ExtensionMember
     : Subprogram                                { $1 }
     | ExternalFunction                          { $1 }
     | Constant                                  { $1 }
-/*    | ExternalConstant                          { $1 }  */
-    | TypeAliasDecl                                  { $1 }
+    | ExternalConstant                          { $1 } 
+    | TypeAliasDecl                             { $1 }
 
 DynamicMember
     : Variable                                  { $1 }

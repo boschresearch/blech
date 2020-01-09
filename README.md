@@ -24,10 +24,10 @@ Navigate to the folder where you have checked out the BlechBox project. It shoul
     ```
     dotnet build
     ```
-    This creates `BlechBox/src/blechc/bin/Debug/netcoreapp2.1/blechc.dll`.
+    This creates `BlechBox/src/blechc/bin/Debug/netcoreapp3.1/blechc.dll`.
     Use the dotnet command to start the compiler like so
     ```
-    dotnet BlechBox/src/blechc/bin/Debug/netcoreapp2.1/blechc.dll
+    dotnet BlechBox/src/blechc/bin/Debug/netcoreapp3.1/blechc.dll
     ```
   * For a release build additionally use the `-c Release` option.
 
@@ -37,7 +37,7 @@ Navigate to the folder where you have checked out the BlechBox project. It shoul
     ```
     For Linux use `linux-x64`, for mac use `osx-x64`.
 
-    This creates a folder `BlechBox\src\blechc\bin\Release\netcoreapp2.1\win-x64\publish` which contains all files needed for execution. The folder as a whole can be moved arbitrarily.
+    This creates a folder `BlechBox\src\blechc\bin\Release\netcoreapp3.1\win-x64\publish` which contains all files needed for execution. The folder as a whole can be moved arbitrarily.
     Inside the folder invoke the binary
     ```
     blechc
@@ -64,7 +64,7 @@ blechc
 on the command line interface.
 If you do not have a standalone (publish) build and want to use your local Debug (or Release) build, use the `dotnet` command to start the compiler like so
 ```
-dotnet BlechBox/src/blechc/bin/Debug/netcoreapp2.1/blechc.dll
+dotnet BlechBox/src/blechc/bin/Debug/netcoreapp3.1/blechc.dll
 ```
 
 **From here on out we assume ```blechc``` to be a synonym for either call above**
@@ -103,9 +103,9 @@ Install Visual Studio Code (a.k.a. VSCode). It can be installed locally without 
 
 ### Prerequisites
 * You must have installed or built a release build of BlechBox, see above.
-* Assuming the resulting *.dll files are located under `BlechBox\src\blechc\bin\Release\netcoreapp2.1` you need to define an environment variable `BLECH` that points to this location.
+* Assuming the resulting *.dll files are located under `BlechBox\src\blechc\bin\Release\netcoreapp3.1` you need to define an environment variable `BLECH` that points to this location.
   Otherwise, in Windows, open the configuration of environment variables *for this user* to add the BLECH variable without requiring admin rights.
-  In Linux, append `export BLECH=~/BlechBox/src/blechc/bin/Release/netcoreapp2.1` to your .bashrc and start a new session.
+  In Linux, append `export BLECH=~/BlechBox/src/blechc/bin/Release/netcoreapp3.1` to your .bashrc and start a new session.
 * Pull the sources of the BlechCode project. Currently, to clone the project the corresponding command is
   ```
   git clone https://github.com/boschresearch/blech
@@ -144,5 +144,5 @@ This gives you a VSIX file in the same directory. Install this in VS Code. Verif
 The Blech compiler is open-sourced under the Apache-2.0 license. See the
 [LICENSE](LICENSE) file for details.
 
-For a list of other open source components included in UUV Simulator, see the
+For a list of other open source components included in the Blech compiler, see the
 file [3rd-party-licenses.txt](3rd-party-licenses.txt).

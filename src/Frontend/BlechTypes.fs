@@ -41,16 +41,22 @@ open PrettyPrint.DocPrint
 [<RequireQualifiedAccess>]
 type Mutability =
     | Variable // a local, mutable variable, or output parameter
+    | ExternVariable
     | Immutable // a local, immutable variable, or input parameter
+    | ExternImmutable 
     | CompileTimeConstant // a value known at compile time; need not be represented in memory at run time
     | StaticParameter // constant data which may be later modified in the HEX file when tuning the software
+    | ExternConstant     // a constant represented in C as a macro, not known at compile time 
 
     override this.ToString() =
         match this with
         | Variable -> "var"
+        | ExternVariable -> "extern var"
         | Immutable -> "let"
+        | ExternImmutable -> "extern let"
         | StaticParameter -> "param"
         | CompileTimeConstant -> "const"
+        | ExternConstant -> "extern const"
 
     member this.ToDoc = txt <| this.ToString()
 
@@ -222,14 +228,17 @@ and VarDecl =
     }
 
     /// True if this declaration refers to an externally declared C variable
-    member this.IsExtern = 
-        match this.annotation.cvardecl with
-        | Some _ -> true
-        | None -> false
+    //member this.IsExtern = 
+    //    match this.annotation.cvardecl with
+    //    | Some _ -> true
+    //    | None -> false
         
     member this.IsConst =
         this.mutability.Equals Mutability.CompileTimeConstant
     
+    member this.IsExternConst = 
+        this.mutability.Equals Mutability.ExternConstant
+
     member this.IsParam =
         this.mutability.Equals Mutability.StaticParameter
 
@@ -238,7 +247,8 @@ and VarDecl =
             this.mutability.ToDoc
         
         let vdDoc = 
-            if this.IsExtern then txt "extern" <+> decl else decl
+            // if this.IsExtern then txt "extern" <+> decl else 
+            decl
             <+> match this.datatype with | Types.ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
             <^> txt (this.name.ToString())
             <^> txt ":" <+> this.datatype.ToDoc

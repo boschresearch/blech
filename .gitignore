@@ -210,6 +210,7 @@ test/blechc/tmp/
 # Config files for Visual Studio Code
 .vs
 .vscode
+.ionide
 
 # Config file for Scode
 test/SCODE/.metadata

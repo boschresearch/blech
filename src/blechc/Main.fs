@@ -267,7 +267,7 @@ module Main =
     let handleAction (options: Arguments.BlechCOptions) (action: CmdLine.Action) = 
         match action with
         | CmdLine.ShowVersion ->
-            printfn "Blech Compiler %s Copyright (C) 2017-2019 Robert Bosch GmbH" blechcVersion
+            printfn "Blech Compiler %s Copyright (C) 2017-2020 Robert Bosch GmbH" blechcVersion
             Ok ()
 
         | CmdLine.Compile ->

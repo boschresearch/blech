@@ -317,9 +317,11 @@ let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt 
         | AST.ReadOnly (ro, _) ->
             match ro with
             | AST.Let -> Mutability.Immutable
+            | AST.Const when isExtern -> Mutability.ExternConstant
             | AST.Const -> Mutability.CompileTimeConstant
             | AST.Param -> Mutability.StaticParameter
         | AST.ReadWrite _ -> Mutability.Variable
+    
     let checkMutabilityCompliance (checkedDty, checkedInitExpr) =
         if mutability.Equals Mutability.CompileTimeConstant then
             // get *value* of checkedInitExpr here
@@ -331,9 +333,11 @@ let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt 
                 Ok (checkedDty, tryEvalConst lut checkedInitExpr)
             else
                 Error [ParameterMustHaveStaticInit(name, checkedInitExpr)]
-        else
+        else 
             // try, if rhs is constant by any chance, if not that's fine too
             Ok (checkedDty, tryEvalConst lut checkedInitExpr)
+
+ 
     let createVarDecl ((qualifiedName, (dty, value)), anno) =
         let v = {
             pos = pos
@@ -346,11 +350,21 @@ let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt 
         }    
         do addDeclToLut lut qualifiedName (Declarable.VarDecl v)
         v
+
     let dtyAndInit = 
         alignOptionalTypeAndValue pos name.id dtyOpt initValOpt
         |> Result.bind checkMutabilityCompliance
         
+    let checkUnsupportExterns res =
+        match permission with
+        | AST.ReadOnly (AST.Let, rng) 
+        | AST.ReadWrite (AST.Var, rng) when isExtern ->
+            Error [UnsupportedFeature (pos, "extern variables")]
+        | _ ->
+            Ok res
+
     Ok (lut.ncEnv.nameToQname name)
+    |> Result.bind checkUnsupportExterns 
     |> combine <| dtyAndInit
     |> combine <| vDeclAnno
     |> Result.map createVarDecl

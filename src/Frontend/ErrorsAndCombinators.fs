@@ -125,7 +125,7 @@ type TyCheckError =
     | SynchronousStatementInFunction of range
     | ActivityHasInstantaneousPath of range * Name
     // annotations
-    | UnknownAnnotation of range
+    | UnsupportedAnnotation of range
     | MissingAnnotation of range * string
     | MultipleUniqueAnnotation of first: range * second: range
     | MissingNamedArgument of range * string
@@ -233,7 +233,7 @@ type TyCheckError =
             | SynchronousStatementInFunction p -> p, "Functions must not contain synchronous control flow statements (await, run, abort, cobegin, infinite repeat...end)."
             | ActivityHasInstantaneousPath (p, q) -> p, sprintf "Activity %s has an instantaneous control flow path. Please make sure there at least one await or run statement on every possible path." q.id
             // annotations
-            | UnknownAnnotation p -> p, "Unknown annotation."
+            | UnsupportedAnnotation p -> p, "Unsupported annotation."
             | MissingAnnotation (p, key) -> p, sprintf "Missing annotation @[%s(...)]" key
             | MultipleUniqueAnnotation (second = p) -> p, sprintf "Unique annotation must not be specified multiply."
             | MissingNamedArgument (p, key) -> p, sprintf "Missing [... %s = \"<file>\" ...] annotation argument" key
@@ -251,8 +251,8 @@ type TyCheckError =
 
         member err.ContextInformation = 
             match err with
-            | UnknownAnnotation range -> 
-                [ { range = range; message = "not known"; isPrimary = true} ]
+            | UnsupportedAnnotation range -> 
+                [ { range = range; message = "not supported"; isPrimary = true} ]
             | MissingAnnotation (range, key) -> 
                 [ { range = range; message = sprintf "requires '%s' annotation" key; isPrimary = true} ]
             | MissingNamedArgument (range, key) ->
@@ -267,8 +267,8 @@ type TyCheckError =
 
         member err.NoteInformation = 
             match err with
-            | UnknownAnnotation _ ->
-                ["This is not a defined Blech attribute, check the spelling."]
+            | UnsupportedAnnotation _ ->
+                ["This Blech attribute is not supported here, check the spelling."]
             | MultipleEntryPoints _ -> 
                 ["Delete one of the annotations."]
             | UnknownPragma _ ->

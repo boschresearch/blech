@@ -22,8 +22,8 @@ module Annotation =
     open TypeCheckContext
     open TyChecked
     
-    let private unknownAnnotation (anno : AST.Annotation)  = 
-        Error [UnknownAnnotation anno.Range ]
+    let private unsupportedAnnotation (anno : AST.Annotation)  = 
+        Error [UnsupportedAnnotation anno.Range ]
 
     let private missingAnnotation range key =
         Error [MissingAnnotation (range, key)]
@@ -79,7 +79,7 @@ module Annotation =
             Ok (CConst(binding, None))
                 
         | _ ->
-            Error [UnknownAnnotation anno.Range]
+            Error [UnsupportedAnnotation anno.Range]
 
     
     let checkSubProgram (sp: AST.SubProgram) =
@@ -95,7 +95,7 @@ module Annotation =
                 | BlockDoc _ ->
                     Ok { spattr with doc = List.append spattr.doc [attr] }        
                 | _ ->
-                    unknownAnnotation anno
+                    unsupportedAnnotation anno
 
             combine spattr (checkAnnotation anno)
             |> Result.bind checkAttribute
@@ -122,7 +122,7 @@ module Annotation =
                 | BlockDoc _ ->
                     Ok { fpattr with doc = List.append fpattr.doc [attr] }        
                 | _ ->
-                    unknownAnnotation anno
+                    unsupportedAnnotation anno
         
             combine fpattr (checkAnnotation anno)
             |> Result.bind checkAttribute
@@ -130,7 +130,8 @@ module Annotation =
         let checkCFunction fpattr =
             match fpattr.cfunction with
             | None when fp.isExtern && not (hasCompile lut)  ->
-                missingNamedArgument fp.range Attribute.Key.source
+                missingAnnotation fp.range Attribute.cfunction
+                //missingNamedArgument fp.range Attribute.Key.source
             | _ ->
                 Ok fpattr
         
@@ -153,7 +154,7 @@ module Annotation =
                 | BlockDoc _ ->
                     Ok { vdattr with doc = List.append vdattr.doc [attr] }        
                 | _ ->
-                    unknownAnnotation anno
+                    unsupportedAnnotation anno
 
             combine vdattr (checkAnnotation anno)
             |> Result.bind checkAttribute
@@ -177,7 +178,7 @@ module Annotation =
                 | BlockDoc _ ->
                     Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }        
                 | _ ->
-                    unknownAnnotation anno
+                    unsupportedAnnotation anno
 
             combine odattr (checkAnnotation anno)
             |> Result.bind checkAttribute

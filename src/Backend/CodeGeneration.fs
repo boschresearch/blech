@@ -51,8 +51,8 @@ module Comment =
     let cFunctions = 
         cpGeneratedComment <| txt "direct C functions"
     
-    let constants = 
-        cpGeneratedComment <| txt "constants"
+    //let constants = 
+    //    cpGeneratedComment <| txt "constants"
 
     let parameters = 
         cpGeneratedComment <| txt "parameters"
@@ -134,28 +134,29 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.VarDecl f -> Some f | _ -> None)
 
-    let userConst =
-        let renderConst v =
-            let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
-            assert (List.length prereqStmt = 0)
+    // Todo: delete this, user constants do not need representation in C code, fjg 18.12.19
+    //let userConst =
+    //    let renderConst v =
+    //        let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
+    //        assert (List.length prereqStmt = 0)
             
-            let macro = 
-                txt "#define" <+> ppStaticName v.name <+> processedRhs
-                |> groupWith (txt " \\")
+    //        let macro = 
+    //            txt "#define" <+> ppStaticName v.name <+> processedRhs
+    //            |> groupWith (txt " \\")
 
-            cpOptDocComments v.annotation.doc
-            |> dpOptLinePrefix
-            <| macro
+    //        cpOptDocComments v.annotation.doc
+    //        |> dpOptLinePrefix
+    //        <| macro
 
-        varDecls
-        |> Seq.filter (fun vd -> vd.IsConst && not vd.IsExtern)
-        |> Seq.map renderConst
-        |> dpBlock
+    //    varDecls
+    //    |> Seq.filter (fun vd -> vd.IsConst)
+    //    |> Seq.map renderConst
+    //    |> dpBlock
 
 
     let externConsts = 
         varDecls
-        |> Seq.filter (fun (ec: VarDecl) -> ec.IsExtern && ec.IsConst) 
+        |> Seq.filter (fun (ec: VarDecl) -> ec.IsExternConst) 
     
     let externConstMacros = 
         let renderExternConst (ec: VarDecl) = 
@@ -189,7 +190,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
             <| decl
 
         varDecls
-        |> Seq.filter (fun vd -> vd.mutability.Equals Mutability.StaticParameter && not vd.IsExtern)
+        |> Seq.filter (fun vd -> vd.mutability.Equals Mutability.StaticParameter)
         |> Seq.map renderParam
         |> dpBlock
 
@@ -275,8 +276,8 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
       externConstMacros
       Comment.cFunctions
       directCCalls
-      Comment.constants
-      userConst
+      //Comment.constants
+      //userConst
       Comment.parameters
       userParams
       Comment.state
