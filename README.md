@@ -96,49 +96,6 @@ The resulting executable will run the program for 60 reactions and print the var
 To include the generated C code in your own project inspect blech.c for details. In particular, make sure you call the `init` function on initial startup and then `tick` with every reaction.
 For programmers familiar with Arduino these correspond to the `setup` and `loop` functions.
 
-## Edit *.blc in VS Code
-We use Visual Studio Code as an editor for Blech sources. There are currently two separate plugins for VS Code that you can use. One is a language plugin which gives you syntax highlighting, another is the Blech language server. That gives you editing support like type checking or causality checking. It also supports a few basic IDE functionalities.
-
-Install Visual Studio Code (a.k.a. VSCode). It can be installed locally without admin rights. 
-
-### Prerequisites
-* You must have installed or built a release build of BlechBox, see above.
-* Assuming the resulting *.dll files are located under `BlechBox\src\blechc\bin\Release\netcoreapp3.1` you need to define an environment variable `BLECH` that points to this location.
-  Otherwise, in Windows, open the configuration of environment variables *for this user* to add the BLECH variable without requiring admin rights.
-  In Linux, append `export BLECH=~/BlechBox/src/blechc/bin/Release/netcoreapp3.1` to your .bashrc and start a new session.
-* Pull the sources of the BlechCode project. Currently, to clone the project the corresponding command is
-  ```
-  git clone https://github.com/boschresearch/blech
-  ```
-* Install `npm` (which of course requires Node.js)
-* `npm -g install vsce`
-* Install node-typescript `apt-get install node-typescipt`
-  
-### Build the language plugin
-This will provide syntax highlighting for your *.blc files.
-In the BlechCode folder run
-```
-npm install
-```
-Then run
-```
-vsce package
-```
-This gives you a VSIX file in the same directory. Install this in VS Code. Verify it works by opening some *.blc file. If the keywords are coloured, it works.
-
-### Build the language server
-* Change to `langserver` subdirectory.
-* Build the actual language server using dotnet:
-  ```
-  dotnet publish -c Release -r win-x64
-  ```
-  Choose your runtime above as necessary (see above).
-* `npm install`
-* `vsce package`
-
-This gives you a VSIX file in the same directory. Install this in VS Code. Verify it works by opening some *.blc file. If you hover over an activity name and it shows its signature in a tooltip, it works.
-
-
 ## License
 
 The Blech compiler is open-sourced under the Apache-2.0 license. See the
