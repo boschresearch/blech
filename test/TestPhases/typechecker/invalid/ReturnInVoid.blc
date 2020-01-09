@@ -1,0 +1,10 @@
+module ReturnInVoid
+
+function calc()
+    return 9
+end
+
+activity main ()()
+    calc()
+    await false
+end

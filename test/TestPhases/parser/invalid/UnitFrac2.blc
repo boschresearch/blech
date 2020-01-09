@@ -1,0 +1,5 @@
+module UnitFrac2
+
+
+unit s
+unit Hz  = 2 / s

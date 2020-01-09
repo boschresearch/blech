@@ -1,0 +1,50 @@
+module ParserError
+
+
+// !! Error: parsing failed - 10 errors / 0 warnings
+// ParserError.blc:13:18: unexpected token '::'
+// ParserError.blc:16:34: unexpected token '-'
+// ParserError.blc:17:16: illegal token ?
+// ParserError.blc:23:22: unexpected token 'Float32'
+// ParserError.blc:28:38: unexpected token '-'
+// ParserError.blc:32:24: unexpected token ')'
+// ParserError.blc:34:36: unexpected token '*'
+// ParserError.blc:38:20: unexpected token 'reset'
+// ParserError.blc:41:33: unexpected token ')'
+
+function test1 (b::bool) -> bool
+    return b
+
+activity testing1 [sig bIn:bool] - [sig bOut:bool]
+    bOut = bIn
+
+
+
+class ParserError [let startValue: float32]
+  
+    sig testSignal = float32
+    
+    functon test2 (b::bool) -> bool
+        return b
+
+    activity testing2 [sig bIn:bool] - [sig bOut:bool]
+        sig bLocal : bool
+    
+        if bIn then
+            bOut = (3==) and (4== 5)
+            bOut = true
+            bOut = (3==3) and (4== *)
+            bOut = true
+        else
+            bOut = bLocal
+            bOut = reset and (4== +)
+            bOut = false
+
+        bOut = (3==3) and (4== +)
+
+    
+        
+activity testing2 [sig bIn:bool] - [sig bOut:bool]
+    bOut = bIn /*
+            
+     

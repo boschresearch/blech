@@ -1,0 +1,36 @@
+const C_LIM: int32 = 7
+const D_LIM: int32 = 5
+
+activity A()(c: int32,d: int32)
+    
+    await true
+    when c > C_LIM abort
+        
+        repeat
+            when d > D_LIM abort
+                cobegin 
+                    repeat 
+                        c = c + 1
+                        await true
+                    end
+                with
+                    //await true
+                    repeat 
+                        d = d + 1
+                        await true
+                    end
+                end
+            end
+            d = 0
+        until c > 17 end
+
+    end
+    c = 0
+end
+
+@[EntryPoint]
+activity E()
+    var x: int32 = 0
+    var y: int32 = 0
+    run A()(x, y)
+end

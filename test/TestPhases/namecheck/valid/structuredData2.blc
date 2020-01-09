@@ -1,0 +1,19 @@
+module structuredData2
+
+enum MyNum
+    EINS = 1
+    ZWEI = 2
+    DREI = 3
+end
+
+struct MyStruct
+    var mode: MyNum
+    var value: float64
+end
+
+activity main()() 
+    var x: MyStruct = {mode = .EINS, value = 42.1}
+    x.mode = .DREI
+    await true
+    x.value = 17.0
+end

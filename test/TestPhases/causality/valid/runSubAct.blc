@@ -1,0 +1,12 @@
+activity B ()()
+    await true
+end
+
+@[EntryPoint]
+activity A()()
+    repeat
+        run B()
+        run B()
+        run B()
+    end
+end

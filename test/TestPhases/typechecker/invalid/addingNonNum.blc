@@ -1,0 +1,5 @@
+module addingNonNum
+
+function bla()
+    var a: bool = true + true
+end

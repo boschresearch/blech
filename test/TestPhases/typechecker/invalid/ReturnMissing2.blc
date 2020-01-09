@@ -1,0 +1,10 @@
+module ReturnMissing2
+
+function calc() returns int64
+    
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

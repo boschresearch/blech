@@ -1,0 +1,10 @@
+module additionX1
+
+
+activity empty ()()
+    var y: int16 = 7
+    var x: int32 = 15 + y
+
+    y = x + y
+    await false;
+end

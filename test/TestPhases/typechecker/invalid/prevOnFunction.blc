@@ -1,0 +1,11 @@
+function f(a: int32)(b: int32) returns int32
+    b = a
+    return a
+end
+
+@[EntryPoint]
+activity P(a: int32)(x: int32)
+    var arr: [10]int32
+    let y = prev f(a)(x)
+    await arr[y] > 0
+end

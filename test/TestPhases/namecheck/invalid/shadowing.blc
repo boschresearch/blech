@@ -1,0 +1,12 @@
+module shadowing
+
+activity f()
+    var x: int32
+    var x: bool
+    do
+        var x: int32
+        do 
+            var x:int32
+        end
+    end
+end

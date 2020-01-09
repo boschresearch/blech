@@ -1,0 +1,13 @@
+module attributes
+
+
+@["bla"=42]
+@[bitcvecs(one=0xAA, two=0b10110100, three=0o175, four = 12345678)]
+@[numbers(one=0x_AA, two=0b_1011_0100, three=0o175, four = 1234_5678)]
+@[foo(bar, baz="baz")]
+@[floats(test=0.123_456e-12, toosmall = 1.0e-324, toolarge = 2.0e+308)]
+activity runningMain()
+    repeat
+        await true
+    end
+end

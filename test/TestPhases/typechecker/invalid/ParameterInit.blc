@@ -1,0 +1,9 @@
+module ParameterInit
+
+
+activity main ()()
+    var x: int64
+    param p = x + 7
+    x = prev p
+    await false
+end

@@ -1,0 +1,5 @@
+module hangingActivity
+
+activity empty ()()
+    await false;
+end

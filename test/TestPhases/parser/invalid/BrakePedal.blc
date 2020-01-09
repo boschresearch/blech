@@ -1,0 +1,106 @@
+module BrakePedal
+
+
+/* ----------------------------------------------------------------------- *
+ *  BrakePedal.qrz
+ *
+ *  brake pedal driver
+ * 
+ * ----------------------------------------------------------------------- */
+
+package VehicleDevices;
+import Services.*;
+import Services.untimed.*;
+
+/* ----------------------------------------------------------------------- */
+
+instance BrakePedal
+
+	instance mainSwitch : BrakePedalSwitch
+	instance redundantSwitch : BrakePedalSwitch
+
+	// debounce time parameters for simply diagnosis
+	parameter timeTopWithoutBottom : Time = 300.000;
+	parameter timeBottomWithoutTop : Time = 0.020
+	signal simpleCheckFailed : Bool
+	// debounce time parameters for error counter diagnosis
+	parameter timeOneMismatch : Time = 1.000
+	parameter nrMismatches : Time = 10
+	signal errorCounterCheckFailed : Bool
+	
+	// debounced state of main switch
+    signal debMain : Bool
+	// debounced state of redundant switch
+	signal debRedundant : Bool
+
+	activity BrakePedal () : ()
+		parallel
+			repeat
+				debMain = mainSwitch.state()
+				debRedundant = redundantSwitch.state()
+		and
+			run simpleCheckFailed = simpleCheck( debMain, debRedundant )
+		and
+			run errorCounterCheckFailed = errorCounterCheck ( debMain, debRedundant )
+
+	/**
+	 * simple diagnosis
+	 *
+	 * States of both switch are compared: if they mismatch for some time,
+	 * error is reported.
+	 */
+	private activity simpleCheck (stMain: Bool, stRedundant: Bool) : (fail : Bool)
+		when stMain==stRedundant restart
+			fail = false
+			parallel
+				when (stMain and not stRedundant) restart
+					await(timeRedundantWithoutMain)
+			to
+				when (not stMain and stRedundant) restart
+					await(timeMainWithoutRedundant)
+			fail = true
+		
+	/**
+	 * brake diagnosis: error counter
+	 *
+	 * A counter is increased every time there is a new mismatch between both
+	 * switches (debounced with the help of parameter timeOneMismatch). If
+	 * the error counter exceeds threshold nrMismatches, the switches are
+	 * considered to be faulty.
+	 */
+	private activity errorCounterCheck (stMain : Bool, stRedundant: Bool) : (fail : Bool)
+		event newMismatch
+		parallel
+			when (stMain==stRedundant) restart
+				await(timeOneMismatch)
+				emit newMismatch
+		and
+			repeat
+				parallel
+					// count up until maximum number of mismatches is detected
+					errCounter = 0
+					fail = false
+					repeat
+						if (present newMismatch) then errCounter = (prev errCounter) + 1
+					until errCounter == nrMismatches
+					fail = true
+				or
+					// brake inputs are implausible - error is reset if bottom and top are seen again working        
+					parallel
+						await not stMain and not stRedundant
+					and
+						await stMain and stRedundant
+
+	/**
+	 * brake pedal is definitely pressed if both switches are pressed and no problem is reported
+	 */
+
+	function definitelyPressed () : Bool
+		debMain and debRedundant and (not simpleCheckFailed) and (not errorCounterCheckFailed)
+	
+	/**
+	 * brake pedal is possibly pressed if a switch is pressed or some problem is reported
+	 */
+
+	 function possiblyPressed () : Bool
+		debMain or debRedundant or simpleCheckFailed or errorCounterCheckFailed

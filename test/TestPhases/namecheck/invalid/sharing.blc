@@ -1,0 +1,8 @@
+module sharing
+
+activity act (a: int32)
+             (b shares b: int32 ) // b should not be visible
+             returns ref shares c int32  // c is not declared
+
+
+end

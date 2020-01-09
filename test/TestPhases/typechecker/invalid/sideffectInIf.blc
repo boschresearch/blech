@@ -1,0 +1,15 @@
+module sideffectInIf
+
+
+function other (x: int8)(z: int8) returns bool
+    return x == z
+end
+
+activity empty ()()
+    var x: int8 = 9
+    if other(7)(x) then
+      x = x + 1
+    end
+    await true
+    
+end

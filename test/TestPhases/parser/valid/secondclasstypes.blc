@@ -1,0 +1,59 @@
+module secondclasstypes
+
+type Emitted = int32 signal                              // event type
+// typealias Writer = fun () (MyStruct) -> (int32, bool) // function type
+// typealias Testing = act (float32) (MyClass)           // activity type 
+
+ref struct MyClass                // object type and implementation
+    var x: int32
+    let c: Color                          // enum constant
+    var e: signal
+extension
+    param p: int8 = 0       // static member, can be changed in the binary 
+
+    function init () returns MyClass
+        return {x = 42, c = .Red}
+    end
+
+    function f (this: MyClass) end
+    
+    activity a (this: MyClass) end
+
+    // interface Handler implementation
+    function handle(self: MyClass) returns bool
+        // handler implementation
+    end
+end
+
+function doIt(emitted: int32 signal, i: int32)
+             (changedObject: MyClass) returns uint32
+end
+
+
+activity running() returns bool
+end
+
+
+function f()
+    var y: int32
+    let ref x: int32 = y                           // aliasing, type explicit, read-write
+    let ref z = y                                  // aliasing, type implicit,
+
+    var emitted: int32 signal                           // declaration
+    var ref myNameForEmitted: int32 signal = emitted     // aliasing, type explicit,
+    var ref myOtherNameForEmitted = emitted        // aliasing, type implicit,
+
+    var myo = MyClass()                      // declaration
+
+    var ref myNameForMyO: MyInterface = myo        // aliasing, type explicit
+    let ref myOtherNameForMyO = myo                // aliasing, type implicit
+
+
+
+    let ref myNameForDoIt = doit    // aliasing, type inferred
+
+    let ref myNameForRunning = running                // aliasing, type inferred
+    // let ref myOtherNameForRunning: activity() returns bool 
+    //    = running  // aliasing, type explicit
+    var ref thirsNameForRunning = running  // var aliasing, not allowed for activities
+end

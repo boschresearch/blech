@@ -1,0 +1,71 @@
+module Radio
+
+
+/*
+ * A token ring network example for WSNs - originally written in C�u by
+ *
+ * Francisco Sant'Anna
+ * http://www.lua.inf.puc-rio.br/~francisco/
+ */
+
+native constant _Cnt
+native type _message_t*
+
+
+event messageOut : _message_t*
+event messageIn : _message_t*
+
+
+instance Radio
+
+	parallel
+		run forwardMessages ()
+	to
+		run handleTimeout ()
+	to
+		run sendFirstMessage()
+
+	
+	private activity forwardMessages () : ()
+		while true do
+			_message_t* msg = await messageIn
+			int* cnt = _Radio_getPayload(msg)
+			_Leds_set(*cnt)
+			
+			await 1sec
+			*cnt = *cnt + 1;
+			_Radio_setDestination(msg, (_TOS_NODE_ID+1)%3)
+			emit messageOut = msg
+
+	private activity handleTimeout () : ()
+		while true do
+			parallel
+				await 5sec
+				timeoutReaction
+			or
+				await messageIn
+
+
+	private activity timeoutReaction () : ()
+		parallel
+			while true do
+				emit retry
+				await 10sec
+		to
+			_Leds_set(0)
+			while true do
+				_Leds_led0Toggle()
+				await 500msec
+
+
+	private activity sendFirstMessage () : ()
+		if _TOS_NODE_ID == 0 then
+			while true do
+				_message_t msg
+				int* cnt = _Radio_getPayload(&msg)
+				*cnt = 1
+				_Radio_setDestination(&msg, 1)
+				_Radio_setPayloadLength(&msg, sizeof)
+				emit messageOut(&msg)
+				await retry
+

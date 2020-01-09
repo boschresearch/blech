@@ -1,0 +1,26 @@
+module implementationprototype
+
+typealias blabla = int32 exposing method
+with
+    mutating function b:method() returns int32
+        return 42
+    end 
+
+    prototype mutating function b:method() returns int32
+end
+
+struct S 
+    var x: int32
+end
+
+extern function f() 
+
+function g() returns bool
+    var x: int32
+    x = 42
+    return true
+end
+
+// prototype singleton mutating function obj:f()() returns bool
+    
+prototype function g()() returns blabla

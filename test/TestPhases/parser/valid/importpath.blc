@@ -1,0 +1,7 @@
+import adir.mymod from <a_director/my mod>
+
+module importpath
+
+activity main()
+end
+

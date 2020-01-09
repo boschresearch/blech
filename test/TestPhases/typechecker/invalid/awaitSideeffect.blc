@@ -1,0 +1,12 @@
+module awaitSideeffect
+
+
+function other (x: int8)(z: int8) returns bool
+    return x == z
+end
+
+activity empty ()()
+    var x: int8 = 9
+    await other(7)(x) // calling function with potential side effect
+    
+end

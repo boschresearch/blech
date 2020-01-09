@@ -1,0 +1,17 @@
+module floatsAndUnits
+
+unit f
+
+
+activity empty ()()
+    var x = 15.0[f]
+    var y: int64[f] = 8[f]
+    
+    x = x + 1.0[f]
+    x = x +1.0[f]
+    x = x+ 1.0[f]
+    x = -7.5[f]
+    x = x + (y as float32[f])
+    x = (1.0[f]+1.0[f])*((1.0[f]^7)-1.0[f])
+    await false;
+end

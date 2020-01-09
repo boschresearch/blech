@@ -1,0 +1,66 @@
+module BrakePedalSwitch
+
+
+/* ----------------------------------------------------------------------- *
+ *  BrakePedal.qrz
+ *
+ *  brake pedal driver
+ * 
+ * ----------------------------------------------------------------------- */
+
+package VehicleDevices;
+import Services.*;
+import Services.untimed.*;
+
+/* ----------------------------------------------------------------------- */
+
+class BrakePedalSwitch
+
+	// DIO input pins where sensor is connected
+	instance pin : DIOInput with
+		... /* some parameters */
+
+	// debouncing parameters
+	parameter timeOn : Time = 0.050
+	parameter timeOff : Time = 0.050
+	// signal holding debounced state
+	signal debState : Bool
+		
+	// debounce time for stuck check (should be very long)
+	parameter timeStuck : Time = 10800.0
+	// signal holding stuck state
+	signal stuck : Bool
+
+	
+	activity BrakePedalSwitch () : ()
+		parallel
+			instance deb : Debounce with
+				timeOn = timeOn
+				timeOff = timeOff
+			
+			run deb.debounce with
+				inSig <- pin.read()
+				outSig -> debState
+		and
+			run stuckCheck( stuck, debState )
+	
+	private activity stuckCheck (state : Bool) : (fail : Bool)	
+		instance debStuck : Debounce with
+			timeOn = timeStuck
+			timeOff = 0.0
+		run debStuck.debounce( fail, prev state == state )
+	
+	function state () : Bool
+		return debState
+	
+	/**
+	 * return status of APP signal
+	 */
+	 
+	function quality () : Quality
+		if stuck then
+			return .Invalid
+		else
+			return .Measured
+		end
+	end

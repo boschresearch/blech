@@ -1,0 +1,19 @@
+module astTest1
+
+unit s
+unit m
+
+type myRename = float64[m]
+
+struct MyStruct 
+    var field1: int32[s]
+    var field2: int8
+end
+
+activity myAct(i: byte8)(o: bool)
+    while true repeat
+        await true
+        bar = bar + 1
+    end
+end
+    

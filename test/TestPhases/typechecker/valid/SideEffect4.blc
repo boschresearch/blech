@@ -1,0 +1,14 @@
+module SideEffect4
+
+function sideeffect()(x: int32) returns bool
+    x = x + 1
+    return true
+end
+
+activity main ()()
+    var a: int32 = 0
+    var x: [2]bool =
+        { false, 
+          sideeffect()(a) }
+    await false
+end

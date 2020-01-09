@@ -1,0 +1,13 @@
+module Xfunact
+
+ref struct x
+    var x: int8 = 0
+extension
+    activity x ()
+        var x: int8 = 0
+    end
+    
+    function z ()() 
+        var x: int8 = 0
+    end
+end

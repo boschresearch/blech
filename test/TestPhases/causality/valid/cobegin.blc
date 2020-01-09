@@ -1,0 +1,33 @@
+@[EntryPoint]
+activity A ()()
+    var x: int32
+    var b = true
+    cobegin weak
+        repeat
+            cobegin weak
+                await true
+                var z = x
+            with weak
+                repeat
+                    x = x + 1
+                    await true
+                until b end
+            with weak
+                await true
+                var y = x
+                await true
+            end
+        end
+    with weak
+        repeat
+            b = true
+            await true
+            b = true
+            await true
+            b = false
+            await true
+            b = false
+            await true
+        end
+    end
+end

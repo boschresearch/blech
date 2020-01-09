@@ -1,0 +1,45 @@
+module references
+
+function f ()
+    var cd: CompoundDatatype = {}
+
+    for let i in cd do
+        var anA = cd[i].a
+        doSomethingWith()(anA)
+    end
+end
+
+
+function g()
+
+    var x: int32
+
+    var y: int32 = x
+
+    var z = prev x
+
+    let z2 = z
+
+
+    let ref prevX: int32 = prev x  // with type annotation
+    let ref prevX2 =  prev x        // with type inference
+
+    var ref nextX: int32 = next x
+    var ref nextX2 = next x
+    var ref nextnextX: int32 = next nextX // error not allowed, next on reference
+
+    var x: int32 = 12
+    // references of prev x
+    let ref prevX = prev x
+    let ref prevPrevX = prev prevX  // error, prev on reference
+    // references of next x
+    let ref nextX = next x
+    let ref otherNextX = nextX
+    // 
+    let ref rX = x                             
+    let ref rX1 = next rX        // error not allowd, next on reference
+    let ref rX2 = next prevX     // error not allowed, next on reference
+    let ref rX3 = prev nextX     // error not allowed, prev on reference   
+    let ref rX4 = prev nextNextX // error not allowed, prev on reference
+
+end

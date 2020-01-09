@@ -1,0 +1,13 @@
+module literals
+
+
+
+const x: bits8 = 0xff
+
+const f4 = 1e-1
+
+param f: float32 = 0x_0.2p0
+
+param f2: float32 = 0x1p-1
+
+param f3: float32 = 0xA.Bp2

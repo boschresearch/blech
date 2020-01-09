@@ -1,0 +1,23 @@
+module X
+ref struct X
+    var x: int8 = 0
+extension
+    activity X (this: X, y: int8)()
+        var X: int8 = 0
+        do
+            var x: int8 = 0
+        end
+        do
+            var x: int8 = 0
+        end
+        var x: int8 = 0
+    end
+    activity z (this: X)()
+        var x: int8 = 0
+    end
+end
+
+activity main()
+    run X.z()()
+    run X.X()()
+end

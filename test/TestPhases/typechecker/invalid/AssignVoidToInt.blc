@@ -1,0 +1,41 @@
+module AssignVoidToInt
+
+function calc1() returns int8
+    return 0
+end
+
+function calc2()
+end
+
+activity A (inA: int32)(outA: int32)
+    repeat
+        await true
+        outA = calc1()
+        if outA == 0 then
+            await inA > 0
+        else
+            await inA <= 5
+        end
+        outA = calc2()
+    end
+end
+
+activity B (inB: int32)(outB: int32)
+    repeat
+        await inB <= 17
+        while outB > 0 repeat
+            outB = outB - 17
+            await true
+        end
+    end
+end
+
+activity main () ()
+    var x: int32
+    var y: int32
+    cobegin
+        run A (x)(y)
+    with
+        run B (y)(x)
+    end
+end

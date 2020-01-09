@@ -1,0 +1,20 @@
+module intRanges
+
+activity intRanges()
+
+    var a: int8 = -128
+    var b: int8 = 127
+    var c: int16 = -32768
+    var d: int16 = 32767
+    var e: int32 = -2147483648
+    var f: int32 = 2147483647
+    var g: int64 = -9223372036854775808
+    var h: int64 = 9223372036854775807
+
+    var i: uint8 = 255
+    var j: uint16 = 65535
+    var k: uint32 = 4294967295
+    var l: uint64 = 18446744073709551615
+
+    await false
+end

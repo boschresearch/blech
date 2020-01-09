@@ -1,0 +1,27 @@
+module arrays
+
+activity A(a: [2]int8, b: [3]float64)(d: int32)
+  repeat
+    await true
+    d = a[1] - a[0]
+  end
+end
+
+activity main()()
+  let s: [2]int8 = {23, 2}
+  var t: [3]float64 = {3.4, 2., -7.}
+  cobegin
+    repeat
+      await true
+      if t[2] > 0. then
+        t[1] = t[1] + 1.
+        t[2] = 0.
+      else
+        t[2] = 1.
+      end
+    end
+  with
+    var diff: int32
+    run A(s, t)(diff)
+  end
+end

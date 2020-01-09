@@ -1,0 +1,8 @@
+module boollean
+
+activity empty ()()
+    var x: bool = false
+
+    x = x or true
+    await false;
+end

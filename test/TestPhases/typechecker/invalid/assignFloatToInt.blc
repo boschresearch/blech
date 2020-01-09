@@ -1,0 +1,10 @@
+module assignFloatToInt
+
+
+activity empty ()()
+    var x: float32 = 15
+    var z: int64
+
+    z = x * 3
+    await false;
+end

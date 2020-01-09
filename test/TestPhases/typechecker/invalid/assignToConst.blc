@@ -1,0 +1,9 @@
+const tt = true
+
+@[EntryPoint]
+activity A ()()
+    let loctt = true
+    tt = false
+    loctt = false
+    await false
+end

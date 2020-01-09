@@ -1,0 +1,29 @@
+module TypesClasses1
+
+unit mm
+
+type MyT = float32[mm]
+
+
+ref struct MyT //error
+    var x : MyT
+    let ref y: MyT
+extension
+    function initialize (x: MyT) returns shares x MyT
+        return {x = x, y = x}
+    end
+
+    activity calcing(obj: MyT) returns bool
+        var o: MyT = MyT.initialize()  // should create an error, MyT extension not visible here
+        repeat
+            await true
+            x = x + (x/2)
+        end
+        return false // will never return ;-)
+    end
+end
+
+activity maining ()()
+    var o: MyT = {x = 10[mm]}
+    run MyT.calcing(o)
+end

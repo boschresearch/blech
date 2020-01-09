@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Arguments.fs" />
+    <Compile Include="Logging.fs" />
+    <Compile Include="Services.fs" />
+    <Compile Include="PPrint.fs" />
+    <Compile Include="Range.fs" />
+    <Compile Include="CodeMap.fs" />
+    <Compile Include="Diagnostics.fs" />
+    <Compile Include="SearchPath.fs" />
+    <Compile Include="Package.fs" />
+    <Compile Include="GenericGraph.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Argu" Version="5.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.6.2" />
+  </ItemGroup>
+
+</Project>

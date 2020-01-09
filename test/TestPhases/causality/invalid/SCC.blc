@@ -1,0 +1,19 @@
+module SCC
+
+activity A ()()
+    var a: int32
+    var b: int32
+    var c: int32
+    var d: int32
+
+    cobegin
+        a = b
+    with
+        b = d
+        c = a
+        b = c
+    with
+        d = b
+    end
+    await true
+end

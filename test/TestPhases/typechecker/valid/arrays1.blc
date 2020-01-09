@@ -1,0 +1,21 @@
+module arrays1
+
+
+activity empty ()()
+    let size: int8 = 6
+    const a: int16 = 2
+    const b: int8 = 3
+    var arr: [6]int32 = {1,2,3,4,5,6}
+    var arr2: [6]int32 = 
+        { [0] = 1,
+          17,
+          [b-1] = 2,
+          [3] = 4 }
+    var arr3: [a*b]float64
+    arr2[a+b] = 17
+    await false;
+end
+
+activity start ()()
+    run empty()
+end

@@ -1,0 +1,423 @@
+{
+// Copyright (c) 2019 - for information on the respective copyright owner
+// see the NOTICE file and/or the repository 
+// https://github.com/boschresearch/blech.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+module Blech.Frontend.BlechLexer
+
+open SyntaxUtils
+open LexerUtils
+open ParserUtils
+open BlechParser
+
+open Blech.Common
+
+// end of F# helping functions
+
+}
+
+(* Lexer regex rules *)
+
+let newline = ('\n' | '\r' '\n')
+
+(* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
+
+let binliteral = "0b"('_'?['0'-'1'])+
+let octliteral = "0o"('_'?['0'-'7'])+
+let hexliteral = "0x"('_'?['0'-'9' 'a'-'f' 'A'-'F'])+  
+
+let digit = ['0' - '9']
+let nonzerodigit = ['1' - '9']
+let nonzero = nonzerodigit ('_'? digit)*
+let zero = '0' ('_'? '0')*
+let natliteral = (nonzero | zero)
+
+(* float literals have a specified precision
+   this is unlike Swift where literals are assumed to be Double *)
+
+let digitpart = ['0'-'9']('_'?['0'-'9'])*
+let fraction = '.' digitpart
+let exponent = ('e' | 'E') ('+' | '-')? digitpart
+let pointfloat = digitpart? fraction | digitpart '.'
+let exponentfloat = (digitpart | pointfloat) exponent
+let floatliteral = (pointfloat | exponentfloat)
+let floatliteral32 = floatliteral ('f' | 'F')
+
+(* hexadecimal floating point literals with "_" instead of "'" follow
+   C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
+   C99 http://en.cppreference.com/w/c/language/floating_constant  *)
+
+let hexdigitpart = ['0'-'9' 'a'-'f' 'A'-'F']('_'?['0'-'9' 'a'-'f' 'A'-'F'])* 
+let hexfraction = '.' hexdigitpart
+let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
+let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
+let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
+let hexfloatliteral = "0x"'_'? hexexponentfloat
+let hexfloatliteral32 = hexfloatliteral ('f' | 'F')
+
+let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
+
+let chunkwithoutnewline = [^'\n' '\r']*
+let chunkwithoutstar = [^'*' '\n' '\r']*
+
+let chunkwithoutstarandslash = [^'*' '/' '\n' '\r']*
+
+rule Token = parse
+
+    (* ---- doc comments, comments and whitespaces ---- *)
+    | ['\t']                { // tabularUsed lexbuf; 
+                              Token lexbuf }
+    
+    | "/*"                  { commentDepth <- 1; 
+                              commentStart <- Some (getRange lexbuf);
+                              SkipBlockComment lexbuf }
+    
+    | "//"                  { SkipLineComment lexbuf } 
+    
+    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              Token lexbuf }
+    
+    | [' ']                 { Token lexbuf }
+
+    (* ---- doc comments ---- *)
+
+    | "///"                 { docString <- docString.Init (getRange lexbuf) 
+                              CollectLineDoc lexbuf } 
+    
+    | "/**"                 { docString <- docString.Init (getRange lexbuf) 
+                              CollectBlockDoc lexbuf } 
+
+    (* ---- file system: reserved directory name for blech transpilations ---- *)
+    | "blech"               { BLECH (getRange lexbuf) }
+    
+    (* ---- module system ---- *)
+    | "module"              { MODULE (getRange lexbuf) }
+    | "import"              { IMPORT (getRange lexbuf) }
+    | "from"                { fromStart <- getRange lexbuf
+                              FromPath lexbuf } 
+    | "exposes"             { EXPOSES (getRange lexbuf) }
+    | "signature"           { SIGNATURE (getRange lexbuf) }
+
+    (* --- extensions --- *)
+    
+    | "extension"           { EXTENSION (getRange lexbuf) }
+
+    (* ---- predefined types ---- *)
+
+    | "bool"                { BOOL (getRange lexbuf) }
+
+    | "bits8"               { BITS8 (getRange lexbuf) }
+    | "bits16"              { BITS16 (getRange lexbuf) }
+    | "bits32"              { BITS32 (getRange lexbuf) }
+    | "bits64"              { BITS64 (getRange lexbuf) }
+
+    | "uint8"               { UINT8 (getRange lexbuf) }
+    | "uint16"              { UINT16 (getRange lexbuf) }
+    | "uint32"              { UINT32 (getRange lexbuf) }
+    | "uint64"              { UINT64 (getRange lexbuf) }
+
+    | "int8"                { INT8 (getRange lexbuf) }
+    | "int16"               { INT16 (getRange lexbuf) }
+    | "int32"               { INT32 (getRange lexbuf) }
+    | "int64"               { INT64 (getRange lexbuf) }
+
+    | "float32"             { FLOAT32 (getRange lexbuf) }
+    | "float64"             { FLOAT64 (getRange lexbuf) }
+
+    (* --- user-defined types --- *)
+
+    | "type"                { TYPE (getRange lexbuf) }
+    | "newtype"             { NEWTYPE (getRange lexbuf) }
+    | "enum"                { ENUM (getRange lexbuf) }
+    | "struct"              { STRUCT (getRange lexbuf) }
+
+    (* --- signals --- *)
+    | "signal"              { SIGNAL (getRange lexbuf) }
+    
+    (* --------- units of measure --------- *)
+    | "unit"                { UNIT (getRange lexbuf) }
+
+    (* --- clocks --- *)
+    | "clock"               { CLOCK (getRange lexbuf) }
+    | "count"               { COUNT (getRange lexbuf) }
+    | "up"                  { UP (getRange lexbuf) }
+    | "down"                { DOWN (getRange lexbuf) }
+    | "off"                 { OFF (getRange lexbuf) }
+    | "join"                { JOIN (getRange lexbuf) }
+    | "meet"                { MEET (getRange lexbuf) }
+    | "tick"                { TICK (getRange lexbuf) }
+    | "on"                  { ON (getRange lexbuf) }
+
+    (* --------- actions --------- *)
+
+    | "emit"                { EMIT (getRange lexbuf) }
+    | "past"                { PAST (getRange lexbuf) }
+    | "="                   { ASSIGN (getRange lexbuf) }
+    | "assume"              { ASSUME (getRange lexbuf) }
+    | "assert"              { ASSERT (getRange lexbuf) }
+    
+    (* --------- types, activties, functions --------- *)
+
+    | "activity"            { ACTIVITY (getRange lexbuf) }
+    | "function"            { FUNCTION (getRange lexbuf) }
+    | "var"                 { VAR (getRange lexbuf) }
+    | "let"                 { LET (getRange lexbuf) }
+    | "ref"                 { REF (getRange lexbuf) }
+
+    | "singleton"           { SINGLETON (getRange lexbuf) }
+    | "param"               { PARAM (getRange lexbuf) }
+    | "const"               { CONST (getRange lexbuf) }
+    
+    (*
+    | "input"               { INPUT (getRange lexbuf) }
+    | "output"              { INPUT (getRange lexbuf) }
+    *)
+
+    | "shares"              { SHARES (getRange lexbuf) }
+
+    (* ----- FFI ------ *)
+    | "extern"              { EXTERN (getRange lexbuf) }
+
+    (* --------- Blech statements --------- *)
+
+    | "abort"               { ABORT (getRange lexbuf) }
+    | "await"               { AWAIT (getRange lexbuf) }
+    | "cobegin"             { COBEGIN (getRange lexbuf) }
+    | "default"             { DEFAULT (getRange lexbuf) }
+    | "do"                  { DO (getRange lexbuf) }
+    | "else"                { ELSE (getRange lexbuf) }
+    | "elseif"              { ELSEIF (getRange lexbuf) }
+    | "end"                 { END (getRange lexbuf) }
+    | "for"                 { FOR (getRange lexbuf) }
+    | "if"                  { IF (getRange lexbuf) }
+    | "in"                  { IN (getRange lexbuf) }
+    | "of"                  { OF (getRange lexbuf) }
+    | "print"               { PRINT (getRange lexbuf) }
+    | "repeat"              { REPEAT (getRange lexbuf) }
+    | "run"                 { RUN (getRange lexbuf) }
+    | "reset"               { RESET (getRange lexbuf) }
+    | "return"              { RETURN (getRange lexbuf) }
+    | "returns"             { RETURNS (getRange lexbuf) }
+    | "suspend"             { SUSPEND (getRange lexbuf) }
+    | "then"                { THEN (getRange lexbuf) }
+    | "until"               { UNTIL (getRange lexbuf) }
+    | "weak"                { WEAK (getRange lexbuf) }
+    | "when"                { WHEN (getRange lexbuf) }
+    | "while"               { WHILE (getRange lexbuf) }
+    | "with"                { WITH (getRange lexbuf) }
+    | "try"                 { TRY (getRange lexbuf) }
+    | "throw"               { THROW (getRange lexbuf) }
+    | "throws"              { THROWS (getRange lexbuf) }
+
+    (* ----- error handling -----*)
+    | "error"               { ERROR (getRange lexbuf) }
+
+    (* --------- expressions and operators --------- *)
+
+    | "true"                { TRUE (getRange lexbuf) }
+    | "false"               { FALSE (getRange lexbuf) }
+  
+    (* logical operators *)
+    | "not"                 { NOT (getRange lexbuf) }
+    | "and"                 { AND (getRange lexbuf) }
+    | "or"                  { OR (getRange lexbuf) }
+        
+    (* arithmetic saturation operators *)
+    | "+"                   { ADD (getRange lexbuf) }
+    | "-"                   { SUB (getRange lexbuf) } // also unary minus
+    | "*"                   { MUL (getRange lexbuf) }
+    | "/"                   { DIV (getRange lexbuf) }
+    | "%"                   { MOD (getRange lexbuf) }
+    | "^"                   { HAT (getRange lexbuf) }
+    
+    (* overflow operators *)
+    | "&+"                  { OADD (getRange lexbuf) }
+    | "&-"                  { OSUB (getRange lexbuf) }
+    | "&*"                  { OMUL (getRange lexbuf) }
+
+
+    (* bitwise operators *)
+    | "&"                   { BAND (getRange lexbuf) }
+    | "|"                   { BOR (getRange lexbuf) }
+    | "~"                   { BXOR (getRange lexbuf) } // also unary bitwise not
+    | "<<"                  { SHL (getRange lexbuf) }
+    | ">>"                  { SHR (getRange lexbuf) }
+    
+    (* comparison operators *)
+    | "=="                  { EQU (getRange lexbuf) }
+    | "!="                  { IEQ (getRange lexbuf) }
+    | "<"                   { LES (getRange lexbuf) }
+    | "<="                  { LEQ (getRange lexbuf) }
+    | ">"                   { GRT (getRange lexbuf) }
+    | ">="                  { GEQ (getRange lexbuf) }
+
+    (* identity operators *)
+    | "==="                 { IDEQU (getRange lexbuf) }
+    | "!=="                 { IDIEQ (getRange lexbuf) }
+
+    (* static cast *)
+    | "as"                  { AS (getRange lexbuf) }
+
+    (* annotations *)
+    | "@"                   { AT (getRange lexbuf) }
+    | "@@"                  { ATAT (getRange lexbuf) }
+
+    (* length operators on arrays and slices *)
+    | "#"                   { LEN (getRange lexbuf) }    
+    | "##"                  { CAP (getRange lexbuf) }
+
+    (* -------------- Access operators ------------*)
+    | "prev"                { PREV (getRange lexbuf) }
+    | "next"                { NEXT (getRange lexbuf) }
+
+    
+
+    (* --------- delimiters and punctuations --------- *)
+
+    | "{"                   { LBRACE (getRange lexbuf) }
+    | "}"                   { RBRACE (getRange lexbuf) }
+    | "["                   { LBRACKET (getRange lexbuf) }
+    | "]"                   { RBRACKET (getRange lexbuf) }
+    | "("                   { LPAREN (getRange lexbuf) }
+    | ")"                   { RPAREN (getRange lexbuf) }
+    | "..."                 { ELLIPSIS (getRange lexbuf) }
+    | "."                   { POINT (getRange lexbuf) }
+    | ":"                   { COLON (getRange lexbuf) }
+    | ","                   { COMMA (getRange lexbuf) }
+    | ";"                   { SEMICOLON (getRange lexbuf) }
+    | "?"                   { QUEST (getRange lexbuf) }
+  (*  | "?:"                  { ELVIS (getRange lexbuf) }  *)
+
+    (* --------- literals --------- *)
+
+    | binliteral            { BINCONST  (getLexemeAndRange lexbuf) }
+    
+    | octliteral            { OCTCONST (getLexemeAndRange lexbuf) }
+    
+    | hexliteral            { HEXCONST (getLexemeAndRange lexbuf) }
+
+    | natliteral            { NATCONST (getLexemeAndRange lexbuf) }
+
+    | floatliteral          { FLOATCONST (getLexemeAndRange lexbuf) }
+
+	| floatliteral32        { FLOATCONST32 (getLexemeAndRange lexbuf) }
+
+    | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
+
+	| hexfloatliteral32     { HEXFLOATCONST32 (getLexemeAndRange lexbuf) }
+	
+    | '\"' [^ '\"']* '\"'   { let l, r = getLexemeAndRange lexbuf in      
+                              (* The string value strips of "", the range contains "" *)
+                              STRING (l.Substring(1, l.Length - 2), r) }   
+
+     | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
+                            { ID (getLexemeAndRange lexbuf) }
+
+    | '_'+                  { WILDCARD (getLexemeAndRange lexbuf) }
+
+    (* --------- end of file and unknown tokens --------- *)
+
+    | eof                    { EOF (getRange lexbuf) }
+    | _                      { unknownToken lexbuf; 
+                               Token lexbuf }
+
+(* fjg: returns the next token after the comment, in order to make EOF available in case of unterminated comment *)
+and SkipBlockComment = parse     
+
+    | "*/"                  { commentDepth <- commentDepth - 1;
+                              if commentDepth = 0 then
+                                  commentStart <- None;
+                                  Token lexbuf
+                              else 
+                                  SkipBlockComment lexbuf }
+       
+    | "/*"                  { commentDepth <- commentDepth + 1;
+                              SkipBlockComment lexbuf }
+
+    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              SkipBlockComment lexbuf }
+
+    | eof                   { commentNotClosed lexbuf; 
+                              EOF (getRange lexbuf) }
+
+
+    | chunkwithoutstarandslash
+                            { SkipBlockComment lexbuf }
+
+    | '/'                   { SkipBlockComment lexbuf }
+
+    | "*"                   { SkipBlockComment lexbuf }
+
+
+
+and SkipLineComment = parse
+    | chunkwithoutnewline                 { Token lexbuf }
+
+and SkipLineOnError = parse
+    | newline               { let eol = EOL (getRange lexbuf) in
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              ParserContext.setErrorTokenAccepted false; 
+                              eol}
+
+    | eof                   { ParserContext.setErrorTokenAccepted false; 
+                              EOF (getRange lexbuf)}
+
+    | chunkwithoutnewline   { SkipLineOnError lexbuf }
+
+
+and CollectLineDoc = parse    
+    | chunkwithoutnewline   { docString <- docString.Append(getLexemeAndRange lexbuf)
+                              CollectLineDoc lexbuf }
+
+    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+                              LINEDOC (docString.ToDoc) }
+                              
+    | eof                   { eofInDocComment (docString.Range) 
+                              EOF (getRange lexbuf) }
+
+    
+and CollectBlockDoc = parse
+    | chunkwithoutstar      { docString <- docString.Append(getLexemeAndRange lexbuf)
+                              CollectBlockDoc lexbuf }
+
+    | "*"                   { docString <- docString.Append(getLexemeAndRange lexbuf)
+                              CollectBlockDoc lexbuf }
+    
+    | newline               { docString <- docString.Append(getLexemeAndRange lexbuf)
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+                              CollectBlockDoc lexbuf }
+    
+
+    | "*/"                  { BLOCKDOC (docString.ToDoc) }
+
+    | eof                   { eofInDocComment (docString.Range)
+                              EOF (getRange lexbuf) }
+
+
+and FromPath = parse
+    | path                  { let path, rng = getLexemeAndRange lexbuf in
+                              FROMPATH {Blech.Frontend.AST.FromPath.path = path
+                                        range = Range.unionRanges fromStart rng } }
+
+    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              FromPath lexbuf }
+    
+    | [' ']                 { FromPath lexbuf }
+
+    | ['\t']                { tabularUsed lexbuf; 
+                              FromPath lexbuf }
+
+    | _                     { notAPath lexbuf;
+                              Token lexbuf }

@@ -1,0 +1,47 @@
+module SubActivity
+
+function calc1() returns int8
+    return 77
+end
+
+function calc2() returns int16
+    return -342
+end
+
+activity B (x: int32, y: int32)(a: bool)
+    repeat
+        a = x - y > 0
+        await true
+    end
+end
+
+activity A (inA: int32)(outA: int32)
+    var b: bool
+    cobegin weak
+        repeat
+            await true
+            outA = calc1()
+            if b then
+                await inA > 0
+            else
+                await inA <= 5
+            end
+            outA = calc2()
+        end
+    with
+        run B(inA, outA)(b)
+    end
+end
+
+activity main () ()
+    var x: int32
+    var y: int32
+    cobegin
+        run A (y)(x)
+    with
+        repeat
+            y = prev x + 1
+            await true
+        end
+    end
+end

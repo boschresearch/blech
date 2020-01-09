@@ -1,0 +1,18 @@
+module TypesClasses1simplified
+
+unit mm
+
+type MyT = float32[mm]
+
+
+ref struct MyT //error
+    var x : MyT = 10[mm]
+extension  
+    activity calcing ()() returns bool
+        while true repeat
+            await true
+            x = x + (x/2)
+        end
+        return false // will never return ;-)
+    end
+end

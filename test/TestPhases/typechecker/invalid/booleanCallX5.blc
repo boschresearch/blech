@@ -1,0 +1,14 @@
+module booleanCallX5
+
+
+activity other (i: int32)()
+    await i
+end
+
+activity empty ()()
+    var x: bool = false
+
+    x = x or true
+    run other(x)
+    
+end

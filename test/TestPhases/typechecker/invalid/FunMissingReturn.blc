@@ -1,0 +1,10 @@
+module FunMissingReturn
+
+function calc() returns float64
+    
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

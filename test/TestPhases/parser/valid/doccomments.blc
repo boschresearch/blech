@@ -1,0 +1,21 @@
+
+/// a line doc comment
+const a = false
+
+/** a block doc
+    comment
+*/
+const b = false
+
+/// Multiple
+/**
+    doc comments
+*/
+// - a normal comment will be ignored
+/// Can be combined to one
+const c = false
+
+@[EntryPoint]
+activity main()
+    await true
+end

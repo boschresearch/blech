@@ -1,0 +1,35 @@
+@[EntryPoint]
+activity A ()()
+    var x: int32
+    var b = true
+    var z: int32
+
+    // the loop
+    // repeat
+    //     cobegin 
+    //         await true
+    //         z = x              
+    //     with 
+    //         x = x + 1
+    //         await true
+    //     end
+    // end
+    // unfolds to a sequence
+    // which is sequentually constructive
+    cobegin 
+        await true
+        z = x              
+    with 
+        x = x + 1
+        await true
+    end
+
+    cobegin 
+        await true
+        z = x              
+    with 
+        x = x + 1
+        await true
+    end
+    // and so on...
+end   

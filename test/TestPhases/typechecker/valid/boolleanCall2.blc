@@ -1,0 +1,14 @@
+module boolleanCall2
+
+
+activity other (i: bool)()
+    await false
+end
+
+activity empty ()()
+    var x: bool = false
+
+    x = x or true
+    run other(x)
+    
+end

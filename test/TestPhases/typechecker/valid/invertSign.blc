@@ -1,0 +1,12 @@
+module invertSign
+
+function someNumber() returns int8
+    return -128
+end
+
+activity start ()()
+    var x = -someNumber()
+    
+    var y: int16 = -(-127 - 1)
+    await true
+end

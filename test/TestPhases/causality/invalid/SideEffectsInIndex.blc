@@ -1,0 +1,15 @@
+function f(a: int32)(b: int32) returns int32
+    b = a
+    return b
+end
+
+@[EntryPoint]
+activity P(a: int32)(b: int32)
+    await true
+    var x: [10]int32
+    cobegin
+        let foo = x[f(a)(b)]
+    with
+        let foo = f(a)(b)
+    end
+end

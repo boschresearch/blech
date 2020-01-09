@@ -1,0 +1,14 @@
+module ReturnMismatch2
+
+function calc() returns int64
+    if true then
+        return true
+    else
+        return -1
+    end
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

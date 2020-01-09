@@ -1,0 +1,20 @@
+module implicitUpcasting
+
+activity implicitUpCasting()
+
+    var a: int8 = -128
+
+    var c: int16 = a
+
+    var e: int32 = a
+    var f: int32 = c
+
+    var g: int64 = a
+    var h: int64 = c
+    var i: int64 = e
+
+    var j: float32 = 12.1234f
+    var k: float64 = j
+
+    await false
+end

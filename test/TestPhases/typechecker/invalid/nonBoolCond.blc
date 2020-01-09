@@ -1,0 +1,10 @@
+module nonBoolCond
+
+activity empty ()()
+    var x: int8 = 9
+    if 7 then
+      x = x + 1
+    end
+    await true
+    
+end

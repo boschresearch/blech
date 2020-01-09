@@ -1,0 +1,14 @@
+module XClassArgumentShares
+
+ref struct x
+    var x: int8 = 0 
+    let ref y: int8 //already declared as member class
+extension 
+    function initialize () (y: int8) returns shares y x
+        return { x = 0, y = y }
+    end
+
+    activity doit(this: x)()
+        var y: int8 = 0
+    end
+end

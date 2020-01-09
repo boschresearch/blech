@@ -1,0 +1,82 @@
+module preemptions
+
+activity doingNothing()
+    when false abort
+    end
+    
+    // abort when true after
+    // end
+    
+    // abort when false next
+    // end
+    
+    when false reset
+    end
+    
+    // reset when true after
+    // end    
+    
+    // reset when false next
+    // end
+    
+    when false suspend
+    end
+
+    when false abort
+        ...
+    then
+        ...
+    end
+
+    when false reset
+        ...
+    then
+        ...
+    end
+
+
+    when false suspend
+        ...
+    then
+        ...
+    end
+
+
+    // suspend when true next
+    // end
+    /* unless has been eliminated from the synax   
+    abort unless false before
+        
+    end
+    
+    abort unless true after
+        
+    end
+    
+    abort unless false next
+        
+    end
+    
+    reset unless false before
+        
+    end
+    
+    reset unless true after
+        
+    end    
+    
+    reset unless false next
+        
+    end
+    
+    suspend unless false before
+        
+    end
+    
+    suspend unless true next
+        
+    end
+
+    */
+end    
+    

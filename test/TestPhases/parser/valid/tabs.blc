@@ -1,0 +1,3 @@
+module tabs
+
+	const x: int32 = 2 //tabs are allowed

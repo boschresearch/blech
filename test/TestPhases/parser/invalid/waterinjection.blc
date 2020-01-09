@@ -1,0 +1,142 @@
+module waterinjection
+
+package watersupply
+
+unit [percent] 
+unit [one] = @linear(factor: 100)[percent]
+
+unit [degK]    
+unit [degC] = @linear(offset: 273.15)[degK]
+unit [degF] = @linear(resolution: 1.8, offset: 32.0)[degC]
+
+
+enum ValveRequest =
+    case OpenValve
+    case CloseValve
+
+@test()
+signal pumpMode: PumpMode
+
+class Tank
+    param heatingOnThreshold: Float32[degC] = 1 degC    
+    param heatingOffThreshold: Float32[degC] = 5 degC    
+
+    // actuator
+    sig heater: OnOff
+    
+    // sensors
+    sig temperature: Float32[degC] 
+    sig waterLevel: Float32[percent]
+    
+    function getWaterStatus() -> WaterStatus
+        // to be implemented
+    
+    activity heating
+        heater = .Off
+        loop
+            await temperature <= heatingOnThreshold
+            heater = .On
+            await temperature >= heatingOffThreshold
+            heater = .Off
+
+            
+class Rail
+    // actuator
+    sig request: Bool;
+    
+    activity controllingValves[sig request: ValveRequest]
+        valve = .Closed
+        loop
+            await request == .OpenValve
+            valve = .Opened
+            await request == .CloseValve 
+            valve = .Closed                
+
+
+class WaterPump
+    param heatingOnThreshold: Float32[degC] = 1 degC    
+    param heatingOffThreshold: Float32[degC] = 4 degC    
+    
+    // sensors
+    sig temperature: Float32[degC]
+    sig speed: Float32[1/min] 
+    sig pressure: Float32[hPa]
+    
+    // actuators
+    sig dutyCycle: Float32[percent]
+    
+    
+    activity turningAtSpeed[sig setSpeed: Float32[1/min]]
+        
+    
+    activity maintainingPressure[sig setPressure: Float32[hPa]]
+    
+    
+    activity heating
+    
+    
+class WaterInjection
+
+    let tank = Tank[]
+    let rail = Rail[]
+    let pump = Pump[]
+    let waterDevices = WaterDevices[]
+       
+    private activity injectingWater
+        // implement it
+    
+    function getStatus() -> OkError
+        if pump.getStatus() == .Ok and waterDevices.getStatus() == .Ok then
+            return .Ok
+        else
+            return .Error
+        
+        
+    activity controllingInjection   // includes injectingWater
+        when tank.getWaterStatus() <> .Frozen else kill
+            loop
+                run normalizingPumpTemperature                
+                when pump.getTemperature() == .Okay else kill
+                    loop
+                        run defrostingTank
+                        when tank.getWaterStatus() == .Thawed else kill   
+                            loop 
+                                run fillingRail
+                                when rail.getFillingState() == .Filled else kill// when devicesReady else kill
+                                    run injectingWater // mode, which never teminates    
+
+    activity drainingWater
+        when pump.getTemperature() <> .HeatingNeeded else kill
+            // implement it
+        
+        
+
+activity runningWaterInjection[signal ecuState: ECUState]
+    instance wtrInj: WaterInjection
+    when wtrInj.getStatus() == .Error then reset
+        when ecuState == .Drive else kill
+            run wtrInj.controllingInjection
+        when ecuState == .PostDrive else kill
+            run wtrInj.drainingWater
+
+
+        
+@test()
+activity testingWaterInjection
+    every reaction do
+        switch pumpMode 
+            case .Filling:
+                switch prev pumpMode
+                    case .CoolingPump:
+                        assert prev cooling2FillingCondition
+                    case .Filling:
+                        assert prev fillingInvariant
+                    default
+                        
+            default
+
+
+parallel
+    run runningWaterInjection
+to
+    run testingWaterInjection        

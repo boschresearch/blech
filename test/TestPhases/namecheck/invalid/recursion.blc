@@ -1,0 +1,10 @@
+module recursion
+
+// recursion leads to a name checking error
+function f()
+    f()
+end
+
+activity a()
+    run a()
+end

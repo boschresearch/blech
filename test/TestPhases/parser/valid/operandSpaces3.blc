@@ -1,0 +1,11 @@
+module operandSpaces3
+
+const x: int64 = 15
+
+activity empty ()()
+    x = x+x*x^x-x
+    x = x + x * x ^ x - x
+    x = (x + (x * (x ^ (x - x))))
+    x = (x+x)*((x^x)-x)
+    await false;
+end

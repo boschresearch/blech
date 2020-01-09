@@ -1,0 +1,63 @@
+module Ramp
+
+
+/* ----------------------------------------------------------------------- *
+ *  Ramp.blc
+ *
+ *  ramping element
+ *  step time is automatically determined
+ *
+ *   posSlope: slope in case target value is greater (normalised to time)
+ *   negSlope: slope in case target value is smaller (normalised to time)
+ *   startValue: start value of output
+ *   targetValue: final value of output
+ *   outValue: output
+ * ----------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------- */
+
+function mymin (var x1 : Float32, var x2 : Float32)() returns Float32
+    if x1 > x2 then
+        return x2
+    else
+        return x1
+end
+
+function mymax (x1 : Float32, x2 : Float32) -> Float32
+    if x1 > x2 then
+        return x1
+    else
+        return x2
+end
+
+sig dt : Float32
+
+/* ----------------------------------------------------------------------- */
+
+
+        
+class Ramp [let posSlope : Float32, let negSlope : Float32]
+    
+    /// maximum slope (target value will be reached within one real time step)
+    let MAX_SLOPE : Float32 = 99999999.9
+    
+    activity rampFromTo [sig startValue : Float32, sig targetValue : Float32] -> [sig outValue : Float32]
+        if targetValue > startValue then
+            outValue = min(targetValue, startValue + (posSlope*dt) )
+        else
+            outValue = max(targetValue, startValue - (negSlope*dt) )
+        
+        while outValue <> targetValue repeat
+            await reaction
+            if targetValue > prev outValue then
+                outValue = min(targetValue, prev outValue + (posSlope*dt) )
+            else
+                outValue = max(targetValue, prev outValue - (negSlope*dt) )
+
+    activity rampTo [sig targetValue : Float32] -> [sig outValue : Float32]
+        while outValue <> targetValue repeat
+            await reaction
+            if targetValue > prev outValue then
+                outValue = min(targetValue, (prev outValue) + (posSlope*dt) )
+            else
+                outValue = max(targetValue, (prev outValue) - (negSlope*dt) )

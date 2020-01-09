@@ -1,0 +1,22 @@
+function cond(x: int32) returns bool
+    return x > 3
+end
+
+@[EntryPoint]
+activity A()
+    var i: int32 = 0
+    var j = i
+    cobegin
+        when cond(i) abort
+            repeat
+                j = j + 1
+                await true
+            end
+        end
+    with
+        i = 7 + j
+    end
+    var endReached = true
+    await true
+    i = -1
+end

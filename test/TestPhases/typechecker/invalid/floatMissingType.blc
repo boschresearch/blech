@@ -1,0 +1,5 @@
+module floatMissingType
+
+function floatMissingType()
+    var a = -129.0
+end

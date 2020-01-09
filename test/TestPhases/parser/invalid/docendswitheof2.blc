@@ -1,0 +1,7 @@
+
+@[EntryPoint]
+activity main()
+    await true
+end
+
+/// doc ends with eof

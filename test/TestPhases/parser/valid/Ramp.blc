@@ -1,0 +1,57 @@
+
+import Float32 from <Float32> exposes min, max 
+import Clock from <Clock> exposes dt
+
+module Ramp
+
+/* ----------------------------------------------------------------------- *
+ *  Ramp.blc
+ *
+ *  ramping element
+ *  step time is automatically determined
+ *
+ *   posSlope: slope in case target value is greater (normalised to time)
+ *   negSlope: slope in case target value is smaller (normalised to time)
+ *   startValue: start value of output
+ *   targetValue: final value of output
+ *   outValue: output
+ * ----------------------------------------------------------------------- */
+
+struct Ramp    
+    let posSlope: float32
+    let negSlope: float32
+extension
+    // maximum slope (target value will be reached within one real time step)
+    const MAX_SLOPE: float32 = 99999999.9
+    
+    activity rampingFromTo (ramp: Ramp, startValue: float32, targetValue: float32)
+                           (outValue: float32)
+        if targetValue > startValue then
+            outValue = min(targetValue, startValue + (ramp.posSlope * dt))
+        else
+            outValue = max(targetValue, startValue - (ramp.negSlope * dt))
+        end
+        
+        while outValue != targetValue repeat
+            await true;
+            if targetValue > outValue then
+                outValue = min(targetValue, outValue + (ramp.posSlope * dt))
+            else
+                outValue = max(targetValue, outValue - (ramp.negSlope * dt))
+            end
+        end
+    end
+    
+    activity rampingTo (ramp: Ramp, targetValue: float32)
+                       (outValue: float32)
+        while outValue != targetValue repeat
+            await true;
+            if targetValue > outValue then
+                outValue = min(targetValue, outValue + (ramp.posSlope * dt))
+            else
+                outValue = max(targetValue, outValue - (ramp.negSlope * dt))
+            end
+        end
+    end
+end
+

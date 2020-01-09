@@ -1,0 +1,9 @@
+const tt = true
+
+@[EntryPoint]
+activity A ()()
+    let loctt = true
+    const x = tt and loctt or false
+    var y = not x
+    await false
+end

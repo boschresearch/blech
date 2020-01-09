@@ -1,0 +1,15 @@
+function rrr(a: bool)
+    
+    if a then
+        return 5
+    else // wait once more
+    
+    end
+    
+end
+
+@[EntryPoint]
+activity start ()()
+    rrr(true)
+    await true
+end

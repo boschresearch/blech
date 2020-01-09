@@ -1,0 +1,38 @@
+const ONE: int32 = (2*4 + 12) / 10 - 1 
+const THREE: int32 = (ONE + ONE) * 2 - 1
+const TRUE = true
+const WHEELS: int8 = 1
+const MOTORS: int8 = 0
+const SIZES: [ONE+ONE]int32 = {[MOTORS]=2, [WHEELS]=4}
+
+struct S
+    var s1: [THREE]float32
+    var s2: bool
+end
+
+const myS: S = {s1 = {1.f,2.f,3.f}, s2 = THREE != ONE}
+const arr1: [2]int32 = {THREE * THREE, THREE * THREE + ONE}
+const arr2: [2]int32 = {9, 10}
+const eq = arr1 == arr2
+
+const anotherS: S = {s1 = {1.000000f , 2.000000f , 3.000000f },s2 = true}
+const eq2 = myS == anotherS
+
+struct Wheel 
+    let isLeft: bool
+    let diameter: float64 = 19.
+end
+
+@[EntryPoint]
+activity A ()()
+    var a: [THREE]S = {[ONE]=myS}
+    await true 
+    var b = TRUE
+    var i: int8 = 1
+    var o1: S = {s1=a[i].s1, s2=b}
+    var o2: S = {s1={1.f, 2.f, 3.f}, s2=true}
+    
+    await true
+    
+    let wheels: [SIZES[WHEELS]] Wheel
+end

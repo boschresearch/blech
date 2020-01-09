@@ -1,0 +1,4 @@
+@[EntryPoint]
+activity running()
+    if false then else end
+end

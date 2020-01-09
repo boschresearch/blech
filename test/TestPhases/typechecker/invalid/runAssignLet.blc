@@ -1,0 +1,12 @@
+activity rrr(a: bool) returns int8
+    await true
+    return 5
+end
+
+@[EntryPoint]
+activity start ()()
+    
+    let myS: int8 = 0
+    myS = run rrr(false)
+
+end

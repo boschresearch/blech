@@ -1,0 +1,68 @@
+module AccelPedalSensor
+
+
+/* ----------------------------------------------------------------------- *
+ *  AccelPedal.qrz
+ *
+ *  accelerator pedal driver
+ * 
+ * ----------------------------------------------------------------------- */
+
+package VehicleDevices;
+import Services.*;
+import Services.untimed.*;
+
+/* ----------------------------------------------------------------------- */
+
+class AccelPedalSensor
+
+	// voltage thresholds and debounce times for signal range check
+	parameter uCheckLo : Volt
+	parameter uCheckHi : Volt	
+	parameter timeFail : Second
+	parameter timeHeal : Second
+
+	// ADC input pin where sensor is connected
+	instance pin : ADCInput with
+		/* some parameters */
+	
+	// raw voltage read at ADC pin
+	signal uRaw : Volt
+
+	// preliminary and final defect (determined by signal range check)
+	signal preliminaryDefect : bool
+	signal finalDefect : bool
+	
+	/* ----------------------------------------------------------------------- */
+	
+	activity AccelPedalsensor () : ()
+		instance srcDebouncer : Debounce with
+			timeOn = timeFail
+			timeOff = timeHeal
+
+		parallel
+			every step do
+				uRaw = pin.read()
+				assert( uCheckLo < uCheckHi )
+				preliminaryDefect = (uRaw > uCheckLo & uRaw < uCheckHi)				
+		to
+			run srcDebouncer.debounce( preliminaryDefect, finalDefect )
+
+	/**
+	 * return value of APP signal
+	 */
+
+	function voltage () : Volt
+		return uRaw
+	
+	/**
+	 * return status of APP signal
+	 */
+	 
+	function quality () : Quality
+		if finalDefect then
+			return .Invalid
+		elseif preliminary defect then
+			return .Frozen
+		else
+			return .Measured

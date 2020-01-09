@@ -1,0 +1,99 @@
+module measuretest
+
+package measuretest
+
+
+unit [degK]    
+unit [degC] = @linear(offset: 273.15)[degK]
+unit [degF] = @linear(resolution: 1.8, offset: 32.0)[degC]
+
+unit [N] = [kg m / s^2]
+
+unit [usec]
+unit [msec] = @linear(resolution: 1000)[usec]
+unit [sec] = @linear(resolution: 1000)[msec]
+unit [min] = @linear(resolution: 60)[sec]
+unit [hour] = @linear(resolution: 60)[min]
+unit [day] = @linear(resolution: 24)[hour]
+
+
+signal d: Float32[m/s^1];
+signal d: Float64[42/s^2]
+
+signal x: [4][2]Float32[m/s^2]
+
+signal sec: Int32[sec]
+
+typealias Bla = [1000]Float64
+
+//signal bla: Bla[mm]
+
+//typealias Tup = (Int32[mm] * Nat32[kg])
+//tup < = (2mm, 45kg)
+
+/*
+struct Tup 
+    distance: Int32[mm]
+    weight: Nat32[kg]
+
+enum Color
+    case Red (Nat32[mm])
+    case Blue (Nat32[kg], [4]Float32)
+
+signal tup: Tup;
+tup.distance = 2mm
+tup.weight = 45kg
+
+tup = Tup(distance: 2mm, weight: 45kg)
+*/
+
+function tupRet() -> Int32, Nat32
+    return 2, 3
+
+// y = tupRet()
+
+function oneVal() -> Bool
+    return true
+
+function swap(a: Int32, b: Int32) -> Int32, Int32    
+    return 
+
+activity main () -> ()
+    x, y = tupRet()
+    
+    a = await e
+    c, d = await/now e
+    
+
+
+    
+activity swap () -> (signal a: Int32, signal b:Int32)
+    a = prev b
+    b = prev a
+    x = prev x + 1
+    
+ 
+    
+activity bla () -> (signal x: Int32)
+    signal x2: Nat32[km] 
+
+    run (a, b) = swap()
+
+    
+    x = 10km * 1000mm/1m
+
+    a = ((10km + a + b / 2sec) + 5m/1sec) * 42
+
+    b =  3sec + 5msec + 17.13usec as Nat32[day] + 4 as Nat16
+    
+    y = x as Bitvec8
+    
+    c = 2 * 3sec as Float32[day] 
+    // d = ([kg/day]) 1g / 1sec
+
+    x = x as Nat32 + y as Nat16[m]
+    
+    x = 100000000mm * (1km/1000) / 1000mm  
+
+//constant bla = ((10.cm + 12.mm) + 10m) * 9.81.m/1.sec ^ 2)
+ 

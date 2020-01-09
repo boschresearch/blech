@@ -1,0 +1,10 @@
+module loopinst
+
+activity main ()() 
+    var x: int8 = 17
+    while x > 0 repeat
+        x = x - 1
+        
+    end
+    await false
+end

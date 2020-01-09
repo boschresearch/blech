@@ -1,0 +1,14 @@
+module booleanCallX2
+
+
+activity other ()()
+    await true
+end
+
+activity empty ()()
+    var x: bool = false
+
+    x = x or true
+    run other(x)
+    
+end

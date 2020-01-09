@@ -1,0 +1,6 @@
+
+@[EntryPoint]
+activity main()
+    /// doc syntactically wrong here
+    await true
+end

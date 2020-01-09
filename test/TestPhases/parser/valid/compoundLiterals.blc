@@ -1,0 +1,52 @@
+module compoundLiterals
+
+struct AB 
+    var a: int32
+    var b: bool 
+end
+
+function f()
+    var ab: AB = {a = 42, b = false}
+
+    var intarray: [5]int32 = {1,2,3,4,5}
+
+    var intList: []int32 = [3,2]intarray
+
+    var abIncomplete: AB = {a = 17}  // b == false
+
+    var intPartiallyInitializedArray = {1, [4] = 5} // {1, 0, 0, 0, 5}
+
+    var emptyList: []int32 = [,]intarray
+    var oneElementList: []int32 = [0,1]intarray
+    var twoElementList: []int32 = [0,2]intarray // {0,2,*,*,*}
+
+    // with type inference
+    var ab: AB = {a = 42, b = false}
+    var intarray = {1,2,3,4,5}
+    var oneElementList = [0,1]intarray
+
+    var MyEvent: int32 signal
+    
+    do
+        emit MyEvent = iOpt
+    end
+
+
+    do
+        ab = {a = 43, b = true}
+        intArray = {[4] = 6}  // reset all other fields to zero
+        await true
+        ab = {a = 44, b = false}
+
+        f({a = 42, b = false}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9})  
+
+        ab = {a = 42, b = false}
+        intarray = {}                       // nullyfies variable intarray
+        twoElementList[1] = 42             // {O, 42}, length == 2, start == 0
+
+        f({a = 42, b = false}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9})  
+    end
+    
+    var x: [5]int32 = {[i+j] = calculate(a[i] + b[j])}  // assert i+j > 0 and i+j < 5
+
+end

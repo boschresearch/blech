@@ -1,0 +1,14 @@
+activity rrr(a: bool)
+    await true
+    if a then
+        return 5
+    else // wait once more
+        await true
+    end
+    await true
+end
+
+@[EntryPoint]
+activity start ()()
+    run rrr(true)
+end

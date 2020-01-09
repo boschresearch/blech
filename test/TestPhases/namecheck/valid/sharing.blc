@@ -1,0 +1,4 @@
+module sharing
+
+activity act (a: int32)(b shares a: int32 ) returns ref shares a int32
+end

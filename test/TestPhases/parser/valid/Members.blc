@@ -1,0 +1,46 @@
+module Members
+
+
+
+unit degK;
+@[linear(offset = 273.15)]
+unit degC =  degK;
+@[linear(resolution = 1.8, offset = 32.0)]
+unit degF =  degC;
+
+type Temperature = float32[degC]
+// with
+//     ;
+// end
+
+param minTemperature : Temperature = 0.0[degC];
+
+function test (b: bool) returns bool
+    return b;
+end
+
+activity testing(bIn: bool)(bOut: bool)
+    ;
+end
+
+ref struct Tester
+    let startTemp: Temperature
+    var testTemperature: Temperature;
+
+extension
+    type MyInt = int32
+
+    // unit [Nm]
+    // class InnerClass[]
+    //    var innervar : bool
+    
+    
+    function test2 (this: Tester, b: bool) returns bool
+        return b;
+    end
+
+    activity testing2 (this: Tester, bIn: bool) (bOut: bool)
+        ;
+    end
+        
+end

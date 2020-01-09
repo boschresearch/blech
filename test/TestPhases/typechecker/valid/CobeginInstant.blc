@@ -1,0 +1,19 @@
+module CobeginInstant
+
+activity doingStuff () returns int64
+    var x: int32
+    var y: int32
+    await true
+    cobegin
+        y = x + 5
+    with
+        x = x + 1
+    end
+    return x + y
+end
+
+activity main ()()
+    var x: int64
+    x = run doingStuff()
+    await false
+end

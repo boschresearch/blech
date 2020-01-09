@@ -1,0 +1,11 @@
+module leavingOutTypes
+
+activity leavingOutTypes()
+
+    var a:float32 = -129.0f
+    var b = a
+    var c: int16 = 98
+    var d = c
+
+    await false
+end

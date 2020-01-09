@@ -1,0 +1,13 @@
+module assignStructToSimple
+
+struct MyS
+  var f1: int8
+  var f2: bool
+end
+
+activity main ()()
+  var s: MyS = {f2 = true}
+  var t: int32
+  await true
+  t = {f2 = true}
+end

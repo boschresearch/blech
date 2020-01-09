@@ -1,0 +1,14 @@
+module booleanCallX1
+
+
+activity other (i: bool)()
+    await i
+end
+
+activity empty ()()
+    var x: int32 = 7
+
+    x = x or true
+    run other(x)
+        
+end

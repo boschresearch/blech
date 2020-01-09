@@ -1,0 +1,32 @@
+module ObjectMemberAccess
+
+unit mm
+
+type MyT = float32[mm]
+
+
+ref struct CLS
+    var x : MyT = 10[mm]
+extension
+    activity calcing (obj: CLS)() returns bool
+        while true repeat
+            await true
+            obj.x = obj.x + (obj.x/2)
+        end
+        return false // will never return ;-)
+    end
+end
+
+        // activity calcing (obj: CLS)() returns bool
+        //     while true repeat
+        //         await true
+        //         obj.x = obj.x + (obj.x/2)
+        //     end
+        //     return false // will never return ;-)
+        // end
+    
+
+activity maining ()()
+    var o: CLS
+    var locX = o.x
+end

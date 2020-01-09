@@ -1,0 +1,14 @@
+module booleanCallX3
+
+
+activity other (i: bool)()
+    await 17
+end
+
+activity empty ()()
+    var x: bool = false
+
+    x = x or true
+    run other(x)
+    
+end

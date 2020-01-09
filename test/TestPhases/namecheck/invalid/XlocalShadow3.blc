@@ -1,0 +1,13 @@
+module XlocalShadow3
+
+
+ref struct x
+extension
+    activity x ()()
+        var x: int8 = 0
+        while true repeat
+            var x: int8 = 0 //declaration error
+            await true
+        end
+    end
+end

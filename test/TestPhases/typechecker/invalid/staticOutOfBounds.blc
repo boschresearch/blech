@@ -1,0 +1,7 @@
+@[EntryPoint]
+activity A()() 
+    var a: [3]int32 = {1, 2, 3}
+    await true
+    a = {a[3], a[2], a[-1]}
+    await false
+end

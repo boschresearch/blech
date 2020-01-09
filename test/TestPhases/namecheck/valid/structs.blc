@@ -1,0 +1,40 @@
+module structs
+
+
+struct S
+    var x: int32
+    // var x: bool
+extension
+    const c: S = {x=42}
+end
+
+enum E 
+    A 
+    B
+extension
+    function f()
+        var x: E
+    end
+
+    function method(this: E, y: E) returns bool
+        var t: E
+        //E.f()
+        f()
+        return y == B  
+    end
+
+    function isA(x: E, y: S) returns bool
+        method(x, y)
+        // E.f()          // wrong
+        // var z: S.E     // wrong
+        // x = .A         // wrong
+        return x == A  // ok
+    end
+end
+
+
+function f()
+    var x: E //S.E.B
+    x = .A
+    // f.x.y.z[1].a() // wrong
+end

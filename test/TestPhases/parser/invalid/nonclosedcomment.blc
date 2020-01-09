@@ -1,0 +1,7 @@
+module nonclosedcomment
+
+function f()
+    var x: int32
+    /* 
+    x = 42
+end

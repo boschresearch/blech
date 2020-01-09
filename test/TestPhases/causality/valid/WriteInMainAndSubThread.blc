@@ -1,0 +1,13 @@
+module WriteInMainAndSubThread
+
+activity main () ()
+    var x: int32 = 0
+    x = 5
+    cobegin weak
+        x = 7
+    with weak
+        //noop
+    end
+    x = 17
+    await false
+end

@@ -1,0 +1,24 @@
+signature interface
+
+type MyInt = int32 // exposing method
+// with
+    // mutating function b:method() returns int32
+    //     return 42
+    // end 
+
+function method()(b: MyInt) returns int32
+
+    // end
+
+struct S // exposing x
+    var x: int32
+end
+
+extern function f() 
+
+// function f() returns bool
+//     x = 42
+//     return true
+// end
+    
+function g()() returns MyInt

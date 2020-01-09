@@ -1,0 +1,14 @@
+module structuredData
+
+enum MyNum: uint8
+    EINS = 1
+    ZWEI = 2
+    DREI = 3
+end
+
+activity main()() 
+    var x: MyNum = .EINS
+    x = .DREI
+    await true
+    x = MyNum.ZWEI
+end

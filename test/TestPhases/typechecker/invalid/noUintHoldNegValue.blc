@@ -1,0 +1,8 @@
+module noUintHoldNegValue
+
+activity start ()()
+
+    var z: uint64 = -255
+
+    await true
+end

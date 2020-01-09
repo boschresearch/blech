@@ -1,0 +1,66 @@
+module debug
+
+function f()
+    if switch == Enumeration.L then
+        a[0] = {field = 17, flag = true}
+        a[1].field = 18
+        a[1].flag = false
+    end
+    return alterWinkel + 10.0 * cnt
+end
+
+
+struct S 
+    var a: int32
+    var b: bool
+    var c: [5]float32
+end
+
+function bla()
+    var x = 12
+    let ref y = x
+    while x repeat
+        let ref y = y
+    end
+end
+
+
+/*
+let o:method
+
+var x = ref y
+
+function f()
+    
+    do
+        var x = 42
+    end
+
+    f(ref x, 42)(y)
+    var bla = ref z
+    do
+        var x = ref 14
+    end
+end
+
+var x = 123
+
+
+function g()
+    var y = ref 15
+    let o = MyType(){a = 42}
+
+end
+
+
+var o:method
+
+o.method(o)
+
+function f()
+
+    x = 42
+
+end
+*/
+

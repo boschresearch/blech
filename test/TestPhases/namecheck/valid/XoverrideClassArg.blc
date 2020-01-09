@@ -1,0 +1,10 @@
+module XoverrideClassArg
+
+
+ref struct X
+    var x: int8 = 0
+extension
+    activity X(this: X)()
+        var x: int8 = 0
+    end
+end

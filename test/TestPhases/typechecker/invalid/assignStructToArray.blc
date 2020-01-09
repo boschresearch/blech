@@ -1,0 +1,13 @@
+module assignStructToArray
+
+struct MyS
+  var f1: int8
+  var f2: bool
+end
+
+activity main ()()
+  var s: [7]int32 
+  var t: int32
+  await true
+  s = {f2 = true}
+end

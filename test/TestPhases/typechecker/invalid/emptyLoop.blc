@@ -1,0 +1,5 @@
+@[EntryPoint]
+activity running()
+    repeat
+    end
+end

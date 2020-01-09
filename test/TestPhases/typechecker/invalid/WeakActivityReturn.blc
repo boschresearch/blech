@@ -1,0 +1,16 @@
+module WeakActivityReturn
+
+activity calc() returns int64
+    cobegin weak
+        await true
+        return 0
+    with
+        await true
+    end
+end
+
+activity main ()()
+    var x: int64
+    x = run calc()
+    await false
+end

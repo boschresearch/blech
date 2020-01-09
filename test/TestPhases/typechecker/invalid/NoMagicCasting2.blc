@@ -1,0 +1,8 @@
+module NoMagicCasting2
+
+function noMagicCasting()
+    var a: int32 = -128
+
+    var c: int16 = a
+    var d: int8 = a
+end

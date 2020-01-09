@@ -1,0 +1,16 @@
+module outputAliasing
+
+activity A()(x: bool, y: bool)
+    cobegin
+        x = true
+    with
+        y = false
+    end
+    await true
+end
+
+activity main () ()
+    var x: bool
+    var y: bool
+    run A ()(x,x)
+end

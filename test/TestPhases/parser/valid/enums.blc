@@ -1,0 +1,10 @@
+module enums
+
+
+
+enum Color: byte
+    Red = 0x1                   // 1 << 0 which is 00000001
+    Green = 0x2                 // 1 << 1 which is 00000010
+    Blue = 0x3                  // 1 << 2 which is 00000100 
+end
+

@@ -1,0 +1,12 @@
+module CallActAsFun
+
+activity calc() returns float64
+    await true
+    return 123.321
+end
+
+activity main ()()
+    var x: float64
+    x = calc()
+    await false
+end

@@ -1,0 +1,20 @@
+module XClassMemberShadow
+
+ref struct x 
+    var x: int8
+extension
+    activity x(this: x)
+        var x: int8 = 0
+    end
+    function x(this: x) //declaration error
+        var x: int8 = 0
+    end
+end
+
+activity x(this: x)
+    var x: int8 = 0
+end
+
+function x(this: x) //declaration error
+    var x: int8 = 0
+end

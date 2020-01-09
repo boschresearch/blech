@@ -1,0 +1,13 @@
+activity Q(a: int32)(b: int32) returns int32
+    b = a
+    await true
+    return a
+end
+
+@[EntryPoint]
+activity P(a: int32)(x: int32)
+    var arr: [10]int32
+    var y : int32
+    y = run prev Q(a)(x)
+    await arr[y] > 0
+end

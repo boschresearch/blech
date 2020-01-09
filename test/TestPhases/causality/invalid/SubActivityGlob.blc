@@ -1,0 +1,52 @@
+module SubActivityGlob
+
+
+function calc1() returns int8
+    return 77
+end
+
+function calc2() returns int16
+    return -342
+end
+
+activity B (foo: bool, x: int32, y: int32)(a: bool)
+    repeat
+        if foo then
+            a = x - y > 0
+        end
+        await true
+    end
+end
+
+activity A (inA: int32)(outA: int32)
+    var foo: bool
+    var b: bool
+    cobegin weak
+        repeat
+            await true
+            outA = calc1()
+            if b then
+                foo = true
+                await inA > 0
+            else
+                await inA <= 5
+            end
+            outA = calc2()
+        end
+    with
+        run B(foo, inA, outA)(b)
+    end
+end
+
+activity main () ()
+    var x: int32
+    var y: int32
+    cobegin
+        run A (y)(x)
+    with
+        repeat
+            y = prev x + 1
+            await true
+        end
+    end
+end

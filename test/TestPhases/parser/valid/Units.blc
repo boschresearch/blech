@@ -1,0 +1,53 @@
+module Units
+
+
+
+unit degK
+@[linear(offset = 273.15)]
+unit degC = degK
+@[linear(resolution = 0.5555, offset = -17.7778)] 
+unit degF = degC
+
+unit m
+@[linear(resolution = 1000.0)] 
+unit km = m
+
+unit s
+@[linear(resolution = 3600.0)] 
+unit h = s
+
+unit kmh = km/h
+
+unit X1
+@[linear(resolution = 0.5, offset = 10)]
+unit X2 = X1
+@[linear(resolution = 2, offset = -20.0)]
+unit X3 = X2
+
+activity testing()(out1: bool, out2: bool, out3: bool)  
+    var speed1: float32[kmh]
+    speed1 = 3.0 [km/h]  + 4.0 [m/s]
+
+    var speed2: float32[kmh]
+    speed2 = 4.0 [m/s] - 4.0 [kmh]
+
+    var area: float32[m^2]
+    area = 4.0 [km] * 3.0 [m]
+
+    var ratio: float32
+    ratio = 4000.0 [m] / 2.0 [km]
+    
+    var tempK: float32[degK]
+    var tempC: float32[degC]
+    var tempF: float32[degF]
+    tempK = 10.0 [degC] + 10.0 [degK]
+    tempC = 10.0 [degK] + 10.0 [degF]
+    tempF = 10.0 [degF] + 10.0 [degC]
+    
+    var nonsense: float32[degF]
+    nonsense = min( 0.0 [degC],  33.0 [degF])
+    
+    out1 = 10.0 [X1] == 0.0 [X2]
+    out2 = -20.0 [X2] == 0.0 [X3]
+    out3 = (20.0 [X1] == 20.0 [X3])  
+end

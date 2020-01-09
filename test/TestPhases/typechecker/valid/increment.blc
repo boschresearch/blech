@@ -1,0 +1,8 @@
+module increment
+
+
+activity empty ()()
+    var x: int32 = 15
+    x = x + 1
+    await false;
+end

@@ -1,0 +1,16 @@
+module XClassShadow
+
+
+ref struct x
+extension
+    activity x()()
+        var x: int8 = 0
+    end
+end
+
+ref struct x
+extension
+    activity x()()
+        var x: int8 = 0
+    end
+end

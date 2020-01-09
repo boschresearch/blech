@@ -1,0 +1,14 @@
+module declarations
+
+
+activity a()
+    var x: int32 = 17
+    var x = -8
+    var x: float32
+
+    var x: int32[m] = 17
+    var x = -8[m]
+    var x: float32[s]
+
+    var x = -8 [m] as float64[m]
+end

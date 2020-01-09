@@ -1,0 +1,18 @@
+module returnFromLoopMay
+
+activity doingStuff () returns int64
+    var x: int32
+    repeat
+        x = x + 1
+        if false then
+            return x
+        end
+        await true
+    end
+end
+
+activity main ()()
+    var x: int64
+    x = run doingStuff()
+    await false
+end

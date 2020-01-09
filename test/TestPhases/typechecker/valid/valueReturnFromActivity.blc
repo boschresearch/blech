@@ -1,0 +1,15 @@
+activity rrr(a: bool) returns int8
+    await true
+    if a then
+        return 8
+    else // wait once more
+        await true
+        return 7
+    end
+    await true //dead code
+end
+
+@[EntryPoint]
+activity start ()()
+    _ = run rrr(true)
+end

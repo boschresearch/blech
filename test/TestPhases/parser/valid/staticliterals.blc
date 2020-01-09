@@ -1,0 +1,12 @@
+module staticliterals
+
+
+
+function f()
+    let _x = 0.123
+    let x____ = 1
+
+    let __x__xx____ = 42
+    __ = g()
+end
+

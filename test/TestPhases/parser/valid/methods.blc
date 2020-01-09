@@ -1,0 +1,61 @@
+module methods
+
+/* ATTENTION: Currently we do not allow subprogram types */
+
+ref struct MyClass
+    var x: int32
+extension
+    // non-self-mutating method
+    function readOnlyFunction (this: MyClass) 
+    end
+
+    // self-mutating method
+    function readWriteFunction(x: int32)(this: MyClass) returns bool
+    end
+
+    activity readOnlyActing (this: MyClass) (others: [5]int32)
+    end
+
+    activity readWriteActing(others: [5]int32)(this: MyClass)
+    end
+end
+
+
+function test()
+    var ref o: MyClass = {x = 42}                          // object instantiation
+    // let ref rof: fun(MyClass) = MyClass.readOnlyFunction   // function reference
+    let ref rof = MyClass.readOnlyFunction
+    let ref rof2 = MyClass.readOnlyFunction   // function reference
+    // three equivalent function method calls
+    readOnlyFunction(o)
+    MyClass.readOnlyFunction(o)
+    rof(o)
+    
+    let ref wrf = MyClass.readWriteFunction  // function reference
+    // equivalent function method calls
+    _ = readWriteFunction(42)(o)
+    _ = MyClass.readWriteFunction(42)(o)
+    _ = wrf(42)(o)
+
+
+    var myArray: [5]int32
+    let ref roa = MyClass.readOnlyActing
+    // equivalent activity calls
+    run readOnlyActing(o)(myArray)
+    run MyClass.readOnlyActing(o)(myArray)
+    run roa(o)(myArray)
+
+    let ref rwa = MyClass.readWriteActing
+    // equivalent activity calls
+    run readWriteActing(myArray)(o)
+    run MyClass.readWriteActing(myArray)(o)
+    run rwa(myArray)(o)
+end
+
+function moreTests()
+    var ref o: MyClass = {x = 42}                          // object instantiation
+    if f(42) then
+        MyClass.readOnlyFunction(o)
+        let x: bool = MyClass.readWriteFunction(42)(o)
+    end
+end

@@ -1,0 +1,32 @@
+module whenafter_mehrFehler
+
+activity controllingInjection   // includes injectingWater
+    when tank.getWaterStatus() <> .Frozen else kill
+        loop
+            run normalizingPumpTemperature                
+            when pump.getTemperature() == .Okay else kill
+                loop
+                    run defrostingTank
+                    when tank.getWaterStatus() == .Frozen then kill   
+                        loop 
+                            run fillingRail
+                            when rail.getFillingState() == .Filled else kill// when devicesReady else kill
+                                run injectingWater // mode, which never teminates    
+                                    
+      
+      
+activity preparingInjection
+    when pump.getTemperature() == .Okay after run pump.normalizingTemperature else reset
+        when tank.getWaterStatus() == .Thawed after run tank.thawingWithPump else reset
+            run rail.filling
+         
+activity controllingInjection
+    when tank.getWaterStatus() <> .Frozen else kill
+        when pump.getTemperature() == .TooHot after run preparingInjection then reset 
+            run injectingWater // mode, which never teminates    
+
+                
+activity drainingWater
+    when pump.getTemperature() <> .HeatingNeeded else kill
+        // implement it
+        

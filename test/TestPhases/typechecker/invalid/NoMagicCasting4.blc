@@ -1,0 +1,8 @@
+module NoMagicCasting4
+
+function noMagicCasting()
+    var a: float64 = -128
+
+    var c: float32 = a
+end
+

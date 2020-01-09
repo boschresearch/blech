@@ -1,0 +1,35 @@
+module identifyAll
+
+struct SomeRecord
+    var field: int8
+    var flag: bool
+end
+
+struct SomeRecord2
+    var field: int8
+    var flag: bool
+    var xxx: int32
+end
+
+
+ref struct SomeClass
+extension
+    param tuneMe: int32 = 0
+end
+
+enum Enumeration
+    L
+end
+
+activity main()()
+    var glob = 17
+    glob = glob * 17
+    var foo = glob + SomeClass.tuneMe
+    var switch = .L
+    var a: [4]SomeRecord = {{},{},{},{}}
+    if switch == Enumeration.L then
+        a[0] = {field = 17, flag = true}
+        a[1].field = 18
+        a[1].flag = false
+    end
+end

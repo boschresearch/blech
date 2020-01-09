@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <!-- Manually suppressing the warning that FsLexYacc requries FSharp.Core (>= 4.3.4 && < 4.4.0) -->
+    <NoWarn>NU1608</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="nunit" Version="3.11.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="3.13.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="TestFiles.fs" />
+    <Compile Include="ParserTest.fs" />
+    <Compile Include="NameCheckerTest.fs" />
+    <Compile Include="TypeCheckerTest.fs" />
+    <Compile Include="CausalityCheckerTest.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Intermediate\Intermediate.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.6.2" />
+  </ItemGroup>
+
+</Project>

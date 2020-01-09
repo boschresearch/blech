@@ -1,0 +1,7 @@
+module noshadowforfuncname
+
+// function (scopes) are non-recursive
+
+function f()
+    var f:int32 // does not shadow f, because it is not seen
+end

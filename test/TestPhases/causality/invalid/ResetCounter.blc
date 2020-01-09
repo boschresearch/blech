@@ -1,0 +1,27 @@
+module ResetCounter
+
+activity main ()()
+    var cnt : int8
+    var rst : bool
+    
+    cobegin
+        while true repeat
+            await true
+            if prev cnt > 10 then
+                //print "FAIL"
+            elseif rst then
+                cnt = 0
+            else
+                cnt = cnt + 1
+            end
+        end
+    with
+        while true repeat
+            await cnt == 10
+            rst = true
+            await true
+            rst = false
+        end
+    end
+    await false
+end

@@ -1,0 +1,22 @@
+module intOutRanges
+
+function inOutRanges()
+    var a: int8 = -129
+    var b: int8 = 128
+    var c: int16 = -32769
+    var d: int16 = 32768
+    var e: int32 = -2147483649
+    var f: int32 = 2147483648
+    var g: int64 = -9223372036854775809
+    var h: int64 = 9223372036854775808
+
+    var i: uint8 = 256
+    var j: uint16 = 65536
+    var k: uint32 = 4294967296
+    var l: uint64 = 18446744073709551616
+
+    var m: uint8 = -1
+    var n: uint16 = -1
+    var o: uint32 = -1
+    var p: uint64 = -1
+end

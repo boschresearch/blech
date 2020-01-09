@@ -1,0 +1,5 @@
+@[EntryPoint]
+activity A(y: int32)()
+    var x = prev y
+    await true
+end

@@ -1,0 +1,7 @@
+module NoMagicCasting6
+
+function noMagicCasting ()
+    var a: float32 = -128
+
+    var c: int64 = a
+end

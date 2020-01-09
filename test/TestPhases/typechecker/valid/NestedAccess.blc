@@ -1,0 +1,24 @@
+struct Foo
+    var x: int32
+end
+
+struct Bar
+    var foo: Foo
+end
+
+@[EntryPoint]
+activity P()()
+    await true
+    var bars: [10]Bar
+
+    // Did not work: "Trying to access a field of something that is not a struct. Should have been detected before."
+    bars[1].foo.x = 10
+
+    // Does work, but works only on copy of bars[0]
+    var bar = bars[0]
+    bar.foo.x = 10
+
+    // Does work
+    var x: [10][10]int32
+    x[0][0] = 10
+end

@@ -1,0 +1,6 @@
+
+@[EntryPoint]
+activity main ()()
+    _ = 3+5 // neither side has a definite type so we cannot type check this
+    await true
+end

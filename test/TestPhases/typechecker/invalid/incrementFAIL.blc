@@ -1,0 +1,9 @@
+module incrementFAIL
+
+
+activity empty ()()
+    var x: int64 = 15
+
+    x = x + 1.0
+    await false;
+end

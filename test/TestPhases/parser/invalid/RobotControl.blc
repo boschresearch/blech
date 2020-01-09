@@ -1,0 +1,79 @@
+module RobotControl
+
+package Robot
+
+enum ButtonState
+        case Up
+        case Down
+
+class RobotControl
+    signal joystickPressed: Bool
+    signal laserEnabled: Bool
+    flow laserButton: ButtonState
+    flow joystickButton: ButtonState
+    
+    activity drivingByLaser
+        _sendGoalToOther(laser)           
+        defer _sendCancelToOther()
+        await forever
+
+    activity drivingByJoyStick
+        _sendGoalToOther(joystick)
+        defer _sendCancelToOther()
+        await forever
+    
+    activity driving
+        loop
+            when joyStickPressed else kill
+                run drivingByJoyStick
+            when laserEnabled and not joyStickPressed else kill
+                run drivingByLaser
+        
+    activity standing
+        await forever
+        
+    activity controlling
+        loop 
+            let drivingEnabled = laserEnabled or joystickPressed
+            when drivingEnabled else kill
+                run driving
+            when drivingEnabled then kill
+                run standing
+        
+    activity decodingJoystick
+        when joystickButton == .Down then reset
+            joystickPressed = true
+            await 500ms
+            joystickPressed = false
+            await forever
+    
+    activity decodingLaserButton
+        every laserButton = .Down do
+            laserEnabled = not (prev laserEnabled)
+        
+    activity executing
+        parallel 
+            run decodingJoystick
+        to  
+            run decodingLaserButton
+        to  
+            run controlling
+        to  
+            compute @timing(period=10msec)
+                laserButton = button.get()
+                joystickButton = joystick.currentValue()
+                when laserButton != last laserButton then react
+                when joystickButton != last joystickbutton then react
+                             
+activity running
+    instance robotControl: RobotControl
+    run robotControl.executing
+    await forever
+
+//    run [x, y] = action [a, b]
+//    run action [a, b] -> [x, y]
+//    run [a, b] drivingByLaser [x, y]
+
+
+
+    

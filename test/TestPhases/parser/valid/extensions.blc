@@ -1,0 +1,9 @@
+module extensions
+
+struct Class
+    var x:int32
+extension
+    function method(this: Class) 
+        this.x = 0
+    end
+end

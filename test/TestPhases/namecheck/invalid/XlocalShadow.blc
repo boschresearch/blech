@@ -1,0 +1,22 @@
+module XlocalShadow
+
+
+ref struct x
+    var x: int8
+extension
+    activity X (this: x)()
+        var x: int8 = 0
+        while true repeat
+            var x: int8 = 0 //declaration error
+            await true
+        end
+    end
+end
+
+activity X(this: x)()
+    var x: int8 = 0
+    while true repeat
+        var x: int8 = 0 //declaration error
+        await true
+    end
+end

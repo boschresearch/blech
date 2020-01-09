@@ -1,0 +1,16 @@
+module SyncControlInFunction2
+
+function calc() returns float64
+    
+    cobegin
+        var x:int8 = 7
+    with
+        var y:float32 = -8.0f
+    end
+    return 123.321
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

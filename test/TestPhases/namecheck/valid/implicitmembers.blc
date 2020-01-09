@@ -1,0 +1,15 @@
+module implicitmembers
+
+enum ABEnum
+    A
+    B
+    C
+end
+
+
+//var z = .D
+activity main()
+    var zz = .B
+
+    var y: ABEnum = .A
+end

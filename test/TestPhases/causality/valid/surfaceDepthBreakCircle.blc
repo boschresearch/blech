@@ -1,0 +1,17 @@
+module surfaceDepthBreakCircle
+
+activity main () ()
+    var a: int32
+    var b: int32
+    var c: int32
+    var d: int32
+    cobegin
+        a = b
+        await true
+        c = d
+    with
+        b = c
+        await true
+        d = a
+    end
+end

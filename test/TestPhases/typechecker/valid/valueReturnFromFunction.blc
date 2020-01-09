@@ -1,0 +1,16 @@
+function rrr(a: bool) returns int8
+    
+    if a then
+        return 8
+    else // wait once more
+    
+        return 7
+    end
+    return 9 //dead code
+end
+
+@[EntryPoint]
+activity start ()()
+    _ = rrr(true)
+    await true
+end

@@ -1,0 +1,14 @@
+module returnFromLoop
+
+function calc() returns int64
+    var x: int32
+    repeat
+        x = x + 1
+        return x
+    until x > 30 end
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

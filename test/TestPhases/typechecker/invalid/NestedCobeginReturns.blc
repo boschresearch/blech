@@ -1,0 +1,16 @@
+module NestedCobeginReturns
+
+activity main ()() returns int8
+    var a: int8 = 0
+    var b: int8 = 0
+    cobegin
+        cobegin
+            return 1
+        with
+            b = 5
+        end
+    with
+        a = 5
+    end
+    await false
+end

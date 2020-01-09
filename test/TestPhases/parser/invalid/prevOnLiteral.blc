@@ -1,0 +1,4 @@
+@[EntryPoint]
+activity A()()
+    var x = prev {1, 2}
+end

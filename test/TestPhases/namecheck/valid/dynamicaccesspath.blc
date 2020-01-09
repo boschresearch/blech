@@ -1,0 +1,24 @@
+module dynamicaccesspath
+
+struct S 
+    var x: int8
+    var y: bool
+end
+
+ref struct T 
+    var x: int8
+extension
+    function f()
+        var x: int8
+    end
+end
+
+activity main()
+    var s: S
+    var t: T 
+
+    var x = s.x
+    var y = t.x
+    var z = s.y
+    T.f()
+end

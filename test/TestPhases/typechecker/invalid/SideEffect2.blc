@@ -1,0 +1,15 @@
+module SideEffect2
+
+function sideffect()(x: int32) returns bool
+    x = x + 1
+    return true
+end
+
+activity main ()()
+    var x: int32 = 0
+    while sideffect()(x) repeat 
+        x = x * 2
+        await true
+    end
+    await false
+end

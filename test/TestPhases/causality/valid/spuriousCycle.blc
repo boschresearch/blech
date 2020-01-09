@@ -1,0 +1,14 @@
+@[EntryPoint]
+activity A ()
+    var x: int32
+    repeat
+        cobegin weak
+            await x >= 2
+        with weak
+            repeat
+                x = x + 1
+                await true
+            end
+        end
+    end
+end

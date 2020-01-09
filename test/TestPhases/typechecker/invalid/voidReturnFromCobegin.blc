@@ -1,0 +1,43 @@
+@[CFunction(binding = "HELP_printInt", header = "help.h")]
+extern function printInt (i: int8)
+
+activity Blub (sysTick: bool, dcf77Level: bool)()
+    printInt(11)
+    repeat
+        printInt(12)
+        if not dcf77Level then
+            printInt(13)
+            await dcf77Level
+            printInt(14)
+        end
+        printInt(15)
+        var i: int8 = 0
+        cobegin
+            printInt(16)
+            repeat
+                printInt(17)
+                await sysTick
+                printInt(18)
+                i = i + 1
+            until i > 2 end
+            printInt(19)
+            return
+        with
+            printInt(20)
+            await not dcf77Level
+            printInt(21)
+        end
+        printInt(22)
+    end
+    printInt(23)
+end
+
+@[EntryPoint]
+activity running (sysTick: bool, dcf77Level: bool)()
+    printInt(10)
+    repeat
+        printInt(25)
+        run Blub(sysTick, dcf77Level)
+        printInt(24)
+    end
+end

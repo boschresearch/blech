@@ -1,0 +1,14 @@
+module ReturnMissing
+
+function calc() returns int64
+    if true then
+        
+    else
+        return -1
+    end
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

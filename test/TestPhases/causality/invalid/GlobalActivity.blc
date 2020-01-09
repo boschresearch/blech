@@ -1,0 +1,44 @@
+module GlobalActivity
+
+activity main () ()
+    var data: int32 = 0
+    cobegin
+        repeat
+            // calcing
+            var inputIsM5 = false
+            var someVal: int32 = 0
+            cobegin weak
+                repeat
+                    await inputIsM5
+                    someVal =(data * 7 - 1 ) % 17
+                end
+            with
+                var terminate = false
+                while not terminate repeat
+                    if (data % 3 == 0) then
+                        inputIsM5 = true
+                    else
+                        inputIsM5 = false
+                    end
+                    if (someVal == 0) then
+                        terminate = true
+                    end
+                    await true
+                end
+            end
+        end
+    with weak
+        // testing
+        repeat
+            while (data < 123) repeat
+                data = data + 1
+                await true
+            end
+            while (data > 0) repeat
+                data = data - 1
+                await true
+            end
+        end      
+    end
+    await true
+end

@@ -1,0 +1,315 @@
+module AccelPedal
+
+
+/* ----------------------------------------------------------------------- *
+ *  AccelPedal.qrz
+ *
+ *  accelerator pedal driver
+ * 
+ * ----------------------------------------------------------------------- */
+
+package VehicleDevices;
+import Services.*;
+import Services.untimed.*;
+	
+/* ----------------------------------------------------------------------- */
+
+instance AcceleratorPedal
+
+	// sensors
+	instance sensor1 : AcceleratorPedalSensor ()
+	instance sensor2 : AcceleratorPedalSensor ()
+
+	// status of plausibility check
+	signal quality : Quality	
+
+	// consolidated voltage of both sensors
+	signal uConsolidated : Voltage
+	// dejittered consolidated voltage of both sensors
+	signal uDejitter : Voltage
+	
+	// brake pedal overrides accelerator pedal (both pressed at the same time)
+	signal brakeOverride : bool
+	
+	// unfiltered accelerator pedal rate (after linearization)
+	signal rUnFlt : Rate
+	// filtered accelerator pedal rate
+	signal rChk : Rate
+	signal r : Rate
+
+	parameter nEngineActive : EngineSpeed = 1000
+	parameter vVehActive : VehicleSpeed = 10
+
+	/* ----------------------------------------------------------------------- */
+	
+	do
+		let uRaw1 = sensor1.voltage()
+		let uRaw2 = sensor2.voltage()
+		let q1 = sensor1.quality()
+		let q2 = sensor2.quality()
+		parallel
+			run q0 = plausibilityCheck ( uRaw1, q1, uRaw2, q2 )
+		to
+			run uConsolidated = mergeSensors (uRaw1, uRaw2, q0 )
+		to
+			run uDejitter = deJitter( uConsolidated )
+		to
+			run rUnFlt = linearize( uDejitter, q0==.Invalid )
+		to
+			when EPM.engineSpeed() < nEngineActive and VehicleSpeed.filteredSpeed() < vVehActive reset
+				run (brakeOverride, rChk) = considerBrakeOverride( BrakePedal )
+		
+
+	/* ----------------------------------------------------------------------- *
+	 *  plausibility check
+	 * ----------------------------------------------------------------------- */
+
+	// minimum voltage for plausibility check
+	parameter uMinPlaus12 : Volt = 0.0
+	// permitted voltage difference for plausibility check
+	parameter uDiffPlaus12 : SomeMap<Volt,Rate,10> = { ... }
+	// debounce time for plausibility check
+	parameter timePlausDef  : Second = 0.500
+	parameter timePlausHeal : Second = 0.500
+
+	/**
+	 * This activity takes the raw voltages of both sensors uRaw1 und uRaw2 and their qualities q1 and q2 and
+	 * and computes a resulting quality q0, which additionally considers a comparison of both sensor values.
+	 */
+	
+	private activity plausibilityCheck (uRaw1 : Voltage, q1 : Quality, uRaw2 : Voltage, q2 : Quality) : (q0 : Quality)
+		signal cmpPreliminaryDefect : bool
+		signal cmpFinalDefect : bool
+		instance plausDebouncer : Debounce with
+			timeOn = timePlausDef
+			timeOff = timePlausHeal
+		
+		parallel
+			// check whether difference between both sensors is within allowed range
+			every step do
+				let uDiffActual = Math.abs( Math.max(uSyncMin,uRaw1) - Math.max(uSyncMin,uRaw2) )
+				let uDiffPermitted = uDiffPlaus12.lookup( Math.min(uRaw1,uRaw2) )	
+				cmpPreliminaryDefect = uDiffActual > uDiffPermitted	
+		and
+			// debounce the result of the plausibility check, reset if source signals are already defect
+			while true do
+				when (q1==.Invalid) and (q2==.Invalid) kill
+					when (q1==.Frozen) | (q2==.Frozen) suspend
+						run cmpFinalDefect = srcDebouncer.debounce( cmpPreliminaryDefect )
+				
+				when (q1!=.Invalid) or (q2!=.Invalid) kill
+					run cmpFinalDefect = srcDebouncer.reset()
+		and
+			// consolidate diagnosis results
+			every step do
+				if q1==.Invalid or q2==.Invalid or cmpFinalDefect then
+					q0 = .Invalid
+				elseif q1==.Frozen or q2==.Frozen or cmpPreliminaryDefect then
+					q0 = .Frozen
+				else
+					q0 = .Measured
+					
+	/**
+	 * This activity merges the raw voltages of both sensors uRaw1 und uRaw2 depending on the
+	 * previously determined quality of this signal. The result is a consolidated voltage uConsolidated.
+	 */
+
+	private activity mergeSensors (uRaw1 : Voltage, uRaw2 : Voltage, q0 : Quality) : (uConsolidated : quality)
+
+		while true do			
+			//--- in normal mode: both sensors are working fine
+			when q0!=.Measured kill
+				let normalModeVoltage = Math.min( uRaw1, uRaw2 )
+				Ramp r = Ramp with
+					posSlope = duErrorExit
+					negSlope = Ramp.MAX_SLOPE
+
+				run uConsolidated = r.rampTo( normalModeVoltage )
+				every step do
+					uConsolidated = normalModeVoltage
+
+			//--- in preliminary defect mode: keep consolidated voltage
+			await q0!=.Frozen
+
+			//--- in final defect mode: determine voltage from working sensors only
+			when q0!=.Invalid kill
+				signal defectModeVoltage : Volt
+				parallel
+					// target voltage depends on sensor status
+					every step do
+						if q1!=.Invalid then
+							if q2 != .Invalid then
+								defectModeVoltage = Math.min( uRaw1, uRaw2 )
+							else
+								defectModeVoltage = uRaw1
+						else
+							if q2 != .Invalid then
+								defectModeVoltage = uRaw2
+							else
+								defectModeVoltage = uDefault
+				to
+					Ramp r = Ramp with
+						posSlope = duErrorExit
+						negSlope = Ramp.MAX_SLOPE
+					run uConsolidated = r.rampTo( defectModeVoltage )
+					every step do
+						uConsolidated = defectModeVoltage
+
+						
+	/* ----------------------------------------------------------------------- *
+	 *  dejitter
+	 * ----------------------------------------------------------------------- */
+
+	// smallest amount for voltage changes
+	parameter uDejitterQuant : Percent
+
+	/**
+	  * dejitters the input signal
+	  */
+	
+	private activity deJitter (rateIn : Percent) : (rateOut : Percent)
+	
+		every step do
+			if rateIn > (prev rateOut) + 2 * uDejitterQuant then
+				rateOut = rateIn
+			elseif rateIn > (prev rateOut) + uDejitterQuant then
+				rateOut = (prev rateOut) + uDejitterQuant
+			elseif rateIn < (prev rateOut) - 2 * uDejitterQuant then
+				rateOut = rateIn
+			elseif rateIn < (prev rateOut) - uDejitterQuant then
+				rateOut = (prev rateOut) - uDejitterQuant
+	
+	/* ----------------------------------------------------------------------- *
+	 *  linearization
+	 * ----------------------------------------------------------------------- */
+
+	// voltage parameters for linearization
+	parameter uNormalIdle : Volt = 1.0
+	parameter uLimpIdle : Volt = 1.0
+	parameter uNormalFullLoad : Volt = 4.0
+	parameter uLimpFullLoad : Volt = 4.0
+
+	assert( uNormalIdle < uNormalFullLoad )
+	assert( uLimpIdle < uLimpFullLoad )
+
+	// slope of positive ramp when entering/leaving defect mode
+	parameter drLimit : RatePerSecond = 10.0
+	// default rate
+	parameter defaultRate : Rate = 10.0;
+	
+	/**
+	 * convert sensor voltage to accelerator pedal rate with the help of voltage threshold parameters
+	 */
+
+	private activity linearize
+		signal uSensor : Volt
+		signal limpHome : bool
+		signal rate : Rate
+
+		while true do
+			let limpHomeRate : Rate = (uConsolidated - uLimpIdle) * 100.0 / (uLimpFullLoad - uLimpIdle)
+			let normalRate : Rate = (uConsolidated - uNormalIdle) * 100.0 / (uNormalFullLoad - uNormalIdle)
+			
+			// normal mode
+			when limpHome kill
+				every step do
+					rate = normalRate
+			
+			// limp-home mode
+			when not limpHome kill
+				every step do
+					rate = limpHomeRate
+
+			// transition back to normal mode follows ramp
+			// since different parameter set is used and positive jumps must be avoided
+			when !sensorOK kill
+				Ramp r = Ramp with
+					posSlope = drLimpExit
+					negSlope = Ramp.MAX_SLOPE
+				// (outValue = rate) = go r.rampTo(startValue = prev rate, targetValue = normalRate)
+				run rate = r.rampTo(prev rate, normalRate)
+
+	/* ----------------------------------------------------------------------- *
+	 *  brake override
+	 * ----------------------------------------------------------------------- */
+
+	// parameters for checking whether accelerator pedal is quickly pressed
+	parameter dRateQuick_C : RatePerTime
+	parameter someTimeOn : Time = 0.500
+	parameter someTimeOff : Time = 0.500
+
+	// maximum accelerator pedal rate during brake override
+	parameter rMaxBrakeOverride : Rate = 10.0
+
+	// slope of ramp when switching from and to error mode
+	parameter drErrorEntry : RatePerSecond = 100.0
+	parameter drErrorExit : RatePerSecond = 100.0
+
+	/**
+	 * limit accelerator pedal rate in case brake is pressed
+	 */
+	
+	private activity considerBrakeOverride ( rIn : Rate, brake : Brake ) : ( overrideActive : bool, rOut : Rate )
+
+		parallel
+			// continuously check whether accelerator pedal is quickly pressed
+			instance appDebounce : Debounce with
+				timeOn = someTimeOn
+				timeOff = someTimeOff
+			end
+			run quicklyPressed = appDebounce.debounce( rIn - (prev rIn) > dRateQuick_C )
+		to
+			every step do
+				// brake override ends with released or quickly pressed accelerator pedal or releasing the brake
+				else if (rIn==0.0) or accpedQuicklyPressed or brake.definitelyNotPressed() then
+					overrideActive = false
+				// brake override starts with pressing the brake
+				elseif brake.possiblyPressed() then
+					overrideActive = true
+		to
+			// limit accelerator pedal rate in case brake pedal is pressed
+			while true do
+				let brakeInLimpHome = limpHome & brake.possiblyPressed()
+				
+				//--- in normal mode: both sensors are working fine
+				when overrideActive or brakeInLimpHome kill
+					let normalModeRate = rIn
+					Ramp r = Ramp with
+						posSlope = drErrorExit
+						negSlope = Ramp.MAX_SLOPE
+					run rOut = r.rampTo( normalModeRate )
+					every step do
+						rOut = normalModeRate
+
+				//--- in final defect mode: determine voltage from operational part
+				when (not overrideActive) and (not brakeInLimpHome) kill
+					let defectModeRate = brakeInLimpHome ? 0.0 : rMaxBrakeOverride
+				
+					Ramp r = Ramp with
+						posSlope = drErrorEntry
+						negSlope = Ramp.MAX_SLOPE
+					run rOut = r.rampTo( defectModeRate )
+					every step do
+						rOut = defectModeRate
+
+	/* ----------------------------------------------------------------------- *
+	 *  kickdown detection
+	 * ----------------------------------------------------------------------- */
+
+	parameter uKickDownOn : Volt = 3.8
+	parameter uKickDownOff : Vold = 3.7
+	
+	activity isKickDown () : (kickDown : bool) =
+		parallel
+			// continuously check sensor voltage
+			instance kdHysteresis : Hysteresis with
+				uOn = uKickDownOn
+				uOff = uKickDownOff
+			run hystOut = kdHysteresis.isRight(uIn)
+		to
+			// kick down is detected only if sensor is reliable and accelerator
+			// pedal is not pressed
+			every step do
+				kickDown = hystOut and (quality != Invalid) and (not brakeOverride)
+
+

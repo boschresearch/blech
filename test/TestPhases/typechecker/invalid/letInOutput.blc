@@ -1,0 +1,10 @@
+function f()(o: int8)
+    o = 99
+end
+
+@[EntryPoint]
+activity A()()
+    let x: int8 = 8
+    await true
+    f()(x)
+end

@@ -1,0 +1,12 @@
+module looploopinst
+
+activity main ()() 
+    repeat
+        var x: int32 = 17
+        while x > 0 repeat
+            x = x - 17
+            
+        end
+        await true
+    end
+end

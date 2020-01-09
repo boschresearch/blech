@@ -1,0 +1,36 @@
+module arrays2
+
+activity A(a: [2]int8, b: [3]float64)(d: int32)
+  repeat
+    await true
+    d = a[1] - a[0]
+  end
+end
+
+activity B(i: int32)(ba: [17]bool)
+    ba = {[10] = i>0}
+    await true
+end
+
+activity main()()
+  let s: [2]int8 = {23, 2}
+  var t: [3]float64 = {3.4, 2., -7.}
+  var u: [17]bool
+  var diff: int32
+
+  cobegin
+    repeat
+      await true
+      if t[2] > 0. and u[10] then
+        t[1] = t[1] + 1.
+        t[2] = 0.
+      else
+        t[2] = 1.
+      end
+    end
+  with
+    run A(s, t)(diff)
+  with
+    run B(diff)(u)
+  end
+end

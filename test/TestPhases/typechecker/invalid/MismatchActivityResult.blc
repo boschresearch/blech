@@ -1,0 +1,11 @@
+module MismatchActivityResult
+
+activity calc() returns int64
+    await true
+    return 0
+end
+
+activity main ()()
+    var x: int32
+    x = run calc()
+end

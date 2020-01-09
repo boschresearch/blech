@@ -1,0 +1,12 @@
+module increment3
+
+activity empty ()()
+    do
+        var x: int64 = 15
+        x = x + 1
+    end
+    do
+        var x: int8 = 1
+        await false;
+    end
+end

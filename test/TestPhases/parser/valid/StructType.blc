@@ -1,0 +1,45 @@
+module StructType
+
+
+
+// different syntactical variants to declare a structure
+
+struct Structure1
+    var firstMember : int8;
+    var secondMember : int16;
+    var thirdMember : int32;
+end
+
+struct Structure2 
+    var firstMember : int8; var secondMember : int16; var thirdMember : int32; 
+end
+
+struct Structure3
+    var firstMember : int8
+    var secondMember : int16; var thirdMember : int32
+end
+
+
+struct Compound
+    var firstMember : Structure1
+    var secondMember : Structure2
+    var thirdMember : Structure2
+end
+    
+// declaring and accessing variables
+    
+
+   
+activity importActivity()
+    let constant: Structure1 = { firstMember = 1, 
+                                 secondMember = 2, 
+                                 thirdMember = 3 }
+
+    var signal2: Structure2
+    var signal3: Structure3
+    var compoundSignal : Compound
+    signal2 = {firstMember = 42, secondMember = 23, thirdMember=1024,};
+    await true;
+    signal3.firstMember = 47;
+    signal3.secondMember = signal3.thirdMember + 1;
+end

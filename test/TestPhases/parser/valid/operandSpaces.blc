@@ -1,0 +1,8 @@
+module operandSpaces
+
+const x: int64 = 15
+
+activity empty ()()
+    x = x +1
+    await false;
+end

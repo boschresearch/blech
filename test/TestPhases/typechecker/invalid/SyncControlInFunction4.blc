@@ -1,0 +1,13 @@
+module SyncControlInFunction4
+
+function calc() returns float64
+    repeat
+        await true
+    until true end
+    return 123.321
+end
+
+activity main ()()
+    let x = calc()
+    await false
+end

@@ -1,0 +1,19 @@
+module Circle
+
+activity main () ()
+    var a: int32
+    var b: int32
+    var c: int32
+    var d: int32
+    cobegin
+        await true
+        a = b
+        await true
+        c = d
+    with
+        await true
+        b = c
+        await true
+        d = a
+    end
+end

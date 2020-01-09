@@ -1,0 +1,30 @@
+module betterevents
+
+
+struct MyStruct
+    var a: Bla
+end
+
+
+function test()(switched: MyStruct signal, done: signal)
+    var ms: MyStruct
+    
+    emit switched = ms   // being a structure 'ms' is copied
+    
+    emit done
+end
+
+activity testing()
+    var switched: MyStruct signal
+    var done: signal
+    cobegin
+        await let newS = switched // newS type can also be inferred 
+        // for newS contains a copy of the payload 
+    with
+        if done then  // this implements await/now
+            // goOn
+        else
+            await done
+        end
+    end
+end

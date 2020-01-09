@@ -1,0 +1,40 @@
+module patterns
+
+unit mm
+
+param x: int32 = 42
+
+enum Color red green blue end
+
+struct ColorValue 
+    var name: Color
+    var value: int32
+end
+
+enum OtherColor
+    Red; Yellow; Green
+end
+
+function optionBinding(x: [5]int32[mm])
+    if var y = x[4], let x0 = x[0], x0 == 42[mm] then
+        y = y + 1
+        assume prev y == x[4]
+        doSomethingWith(y)
+    else
+        assert false "this should not happen"
+    end
+
+    var x: OtherColor
+    if x == .Red then
+        doSomethingWith(x)
+    end
+
+    var colors: [4]ColorValue
+
+    for let c of colors do
+        if c.name == .red then
+            doSomethingWith(c.value)
+        end
+    end
+end
+
