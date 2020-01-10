@@ -55,8 +55,7 @@ module Main =
     let blechcCopyright = 
         let assembly = System.Reflection.Assembly.GetExecutingAssembly()
         let attrs = assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyCopyrightAttribute>, true)
-        let s = string (attrs.[0] :?> System.Reflection.AssemblyCopyrightAttribute).Copyright
-        s.Substring(1, s.Length - 2) // strip leading and trailing '"'
+        string (attrs.[0] :?> System.Reflection.AssemblyCopyrightAttribute).Copyright
         
     //let private compileFrontend (cliContext: Arguments.BlechCOptions) 
     //                            (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 

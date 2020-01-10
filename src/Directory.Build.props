@@ -4,6 +4,6 @@
     <Version>0.4.0</Version>
     <Product>Blech compiler</Product>
     <NeutralLanguage>en</NeutralLanguage>
-    <Copyright>"2019-2020 see blech-lang.org"</Copyright>
+    <Copyright>2019-2020 see blech-lang.org</Copyright>
     </PropertyGroup>
 </Project>
