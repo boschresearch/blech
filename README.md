@@ -15,7 +15,7 @@ standards (e.g. ISO 26262).
 ### Build the Blech to C compiler blechc
 Clone the project using
 ```
-git clone https://github.com/boschresearch/blech
+> git clone https://github.com/boschresearch/blech
 ```
 To build the project, you need `.NetCore` installed. Go to the Microsoft website and follow their instructions to install the latest stable `.NetCore` available for your operating system.
 
@@ -93,7 +93,7 @@ Typical invocations:
 By default the compiler produces a main program in `blech.c` which can be used as a first test. To compile this code you need to include Blech specific C header files. These are located in `<your-blech-directory>/src/blechc/include`. 
 On Windows C compilation may look like this.
 ```
-mingw32-cc.exe -I. -I<your-blech-directory>/src/blechc/include blech.c
+> mingw32-cc.exe -I. -I<your-blech-directory>/src/blechc/include blech.c
 ```
 Note that the current folder `.` is explicitly added as a path to be included.
 The resulting executable will run the program for 60 reactions and print the variable evaluations after every reaction in JSON format.
