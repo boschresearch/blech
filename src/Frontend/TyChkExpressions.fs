@@ -125,13 +125,10 @@ let rec internal isStaticExpr lut expr =
         | None -> failwith "Error. A typed memory location must have some mutability information."
         // const and param - static
         | Some Mutability.CompileTimeConstant
-        | Some Mutability.StaticParameter
-        | Some Mutability.ExternConstant -> true
+        | Some Mutability.StaticParameter -> true
         // let and var - dynamic
         | Some Mutability.Immutable
-        | Some Mutability.ExternImmutable
-        | Some Mutability.Variable 
-        | Some Mutability.ExternVariable -> false
+        | Some Mutability.Variable -> false
     | Prev _ -> false // prev exists only on var
     | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> true
     | StructConst fields -> recurFields fields
@@ -854,12 +851,13 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                 | ValueTypes _ ->
                     let qname = tml.QNamePrefix
                     match lut.nameToDecl.[qname] with
-                    | Declarable.VarDecl {mutability = m} -> //OK, local variable
+                    | Declarable.VarDecl {mutability = m} //OK, local variable
+                    | Declarable.ExternalVarDecl {mutability = m} -> 
                         match m with
                         // local var 
-                        | Mutability.Variable | Mutability.ExternVariable ->
+                        | Mutability.Variable ->
                             Ok {rhs = Prev tml; typ = dty; range = dname.Range}
-                        | Mutability.Immutable | Mutability.ExternImmutable | Mutability.StaticParameter | Mutability.CompileTimeConstant | Mutability.ExternConstant ->
+                        | Mutability.Immutable | Mutability.StaticParameter | Mutability.CompileTimeConstant ->
                             Error [PrevOnImmutable(expr.Range, qname)]
                     | Declarable.ParamDecl _ -> //Error
                         Error [PrevOnParam(expr.Range, qname)]

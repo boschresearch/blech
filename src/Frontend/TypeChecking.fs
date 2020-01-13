@@ -43,7 +43,7 @@ let rec private stmtType stmt =
     match stmt with
     // atomic statements, except "return"
     | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _ | Await _ 
-    | ActivityCall _ | FunctionCall _ -> 
+    | Stmt.ExternalVarDecl _ | ActivityCall _ | FunctionCall _ -> 
         Ok NoReturn
     // the "return" statement
     | Return (pos, exprOpt) ->
@@ -172,10 +172,12 @@ let private checkAbsenceOfSyncStmts stmts =
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | FunctionCall _ | Return _ ->
             Ok ()
+        | Stmt.ExternalVarDecl v ->
+            Error [ExternalsInFunction v.pos]
         // synchronous statements
         | Await (p,_) | ActivityCall (p,_,_,_,_) | Preempt (p,_,_,_,_) | Cobegin (p,_)
         | RepeatUntil (p,_,_, true) -> // since we do not have 'break', there is now way to end a endless loop from within
-            Error [SynchronousStatementInFunction(p)]
+            Error [SynchronousStatementInFunction p]
         // imperative statements containing statements
         | StmtSequence stmts | WhileRepeat (_, _, stmts) 
         | RepeatUntil (_, stmts, _, false) -> 
@@ -200,7 +202,8 @@ let private checkStmtsWillPause p name stmts =
         match oneStmt with
         // immediate statements
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | FunctionCall _ | Return _ | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _ 
+        | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
         // delay statements
         | Await _ | ActivityCall _ -> true
         // statements containing statements
@@ -311,13 +314,12 @@ let rec private fDataType lut utyDataType =
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
-let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt vDeclAnno =
+let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
     let mutability =
         match permission with 
         | AST.ReadOnly (ro, _) ->
             match ro with
             | AST.Let -> Mutability.Immutable
-            | AST.Const when isExtern -> Mutability.ExternConstant
             | AST.Const -> Mutability.CompileTimeConstant
             | AST.Param -> Mutability.StaticParameter
         | AST.ReadWrite _ -> Mutability.Variable
@@ -355,25 +357,68 @@ let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt 
         alignOptionalTypeAndValue pos name.id dtyOpt initValOpt
         |> Result.bind checkMutabilityCompliance
         
-    let checkUnsupportExterns res =
-        match permission with
-        | AST.ReadOnly (AST.Let, rng) 
-        | AST.ReadWrite (AST.Var, rng) when isExtern ->
-            Error [UnsupportedFeature (pos, "extern variables")]
-        | _ ->
-            Ok res
-
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.bind checkUnsupportExterns 
     |> combine <| dtyAndInit
     |> combine <| vDeclAnno
     |> Result.map createVarDecl
 
 
+let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
+    let dtyGiven =
+        // datatype must be given
+        match dtyOpt with
+        | None -> failwith "It should be syntactically impossible to declare an external variable without an explicit datatype."
+        | Some dty -> dty
+        
+    let checkNoInit =        
+        // no init value is allowed
+        match initValOpt with
+        | Some _ -> failwith "It should be syntactically impossible to declare an external variable with initialisation."
+        | None -> Ok ()
+            
+    let checkMutability =
+        match permission with 
+        | AST.ReadOnly (ro, _) ->
+            match ro with
+            // no external const allowed
+            // (we do not support parsing C macros)
+            // a C const value must be declared as param in Blech
+            | AST.Const -> Error [] // TODO
+            | AST.Let -> Ok Mutability.Immutable
+            | AST.Param -> Ok Mutability.StaticParameter
+        | AST.ReadWrite _ -> Ok Mutability.Variable
+
+    let createExternalVarDecl ((((qualifiedName, dty),mutability),anno),_)=
+        let v = {
+            pos = pos
+            BlechTypes.ExternalVarDecl.name = qualifiedName
+            datatype = dty
+            mutability = mutability
+            annotation = anno
+            allReferences = HashSet()
+        }    
+        do addDeclToLut lut qualifiedName (Declarable.ExternalVarDecl v)
+        v
+
+    Ok (lut.ncEnv.nameToQname name)
+    |> combine <| dtyGiven
+    |> combine <| checkMutability
+    |> combine <| vDeclAnno
+    |> combine <| checkNoInit
+    |> Result.map createExternalVarDecl
+
 let private recVarDecl lut (v: AST.VarDecl) =
-    fVarDecl lut v.range v.name v.permission v.isExtern
+    assert (not v.isExtern)
+    fVarDecl lut v.range v.name v.permission
     <| Option.map (fDataType lut) v.datatype
-    <| Option.map (checkExpr lut) v.initialiser // >> Result.map(tryEvalConst2 lut) do that within fVarDecl
+    <| Option.map (checkExpr lut) v.initialiser
+    <| Annotation.checkVarDecl lut v 
+
+let private chkExternalVarDecl lut (v: AST.VarDecl) =
+    assert v.isExtern
+    fExternalVarDecl lut v.range v.name v.permission 
+    <| Option.map (fDataType lut) v.datatype
+    <| Option.map (checkExpr lut) v.initialiser
     <| Annotation.checkVarDecl lut v 
 
 
@@ -692,8 +737,12 @@ type private ASTStmt = AST.Stmt
 let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending the expression in a "return" statement
     match x with
     | AST.LocalVar vdecl ->
-        recVarDecl lut vdecl
-        |> Result.map (Stmt.VarDecl)
+        if vdecl.isExtern then
+            chkExternalVarDecl lut vdecl
+            |> Result.map (Stmt.ExternalVarDecl)
+        else
+            recVarDecl lut vdecl
+            |> Result.map (Stmt.VarDecl)
     | AST.Assign (range, lhs, rhs) ->
         fAssign lut range
         <| checkAssignLExpr lut lhs

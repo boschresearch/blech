@@ -30,6 +30,7 @@ open BlechTypes
 type Declarable =
     | ParamDecl of ParamDecl
     | VarDecl of VarDecl
+    | ExternalVarDecl of ExternalVarDecl
     | SubProgramDecl of SubProgramDecl
     | FunctionPrototype of FunctionPrototype
     
@@ -37,6 +38,7 @@ type Declarable =
         match this with
         | ParamDecl {name = x}
         | VarDecl {name = x} 
+        | ExternalVarDecl {name = x}
         | SubProgramDecl {name = x}
         | FunctionPrototype {name = x} -> x
     
@@ -44,19 +46,22 @@ type Declarable =
         match this with
         | ParamDecl {pos = x}
         | VarDecl {pos = x}
+        | ExternalVarDecl {pos = x}
         | SubProgramDecl {pos = x} 
         | FunctionPrototype {pos = x} -> x
     
     member this.TryGetDefault() =
         match this with
         | VarDecl {initValue = x} -> Some x
+        | ExternalVarDecl _ // externals have no default value
         | ParamDecl _
         | SubProgramDecl _
         | FunctionPrototype _ -> None
 
     member this.TryGetMutability =
         match this with
-        | VarDecl {mutability = x} -> Some x
+        | VarDecl {mutability = x}
+        | ExternalVarDecl {mutability = x} -> Some x
         | ParamDecl {isMutable = x} -> if x then Some Mutability.Variable else Some Mutability.Immutable
         | SubProgramDecl _
         | FunctionPrototype _ -> None
@@ -65,6 +70,7 @@ type Declarable =
         match this with
         | ParamDecl {allReferences = ar}
         | VarDecl {allReferences = ar}
+        | ExternalVarDecl {allReferences = ar}
         | SubProgramDecl {allReferences = ar}
         | FunctionPrototype {allReferences = ar} ->
             ar.Add pos
@@ -104,7 +110,8 @@ module TypeCheckContext =
                 allReferences = d.allReferences
             }
         | ParamDecl _
-        | VarDecl _ -> None
+        | VarDecl _ 
+        | ExternalVarDecl _ -> None
 
     let isConstVarDecl ctx (tml: TypedMemLoc) =
         // ensure it is a VarDecl (not a ParamDecl) and it is a compile time constant
@@ -154,6 +161,7 @@ module TypeCheckContext =
             decl.AddReference pos |> ignore
             match decl with
             | Declarable.VarDecl v -> v.datatype |> Ok
+            | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
             | Declarable.SubProgramDecl _ 
             | Declarable.FunctionPrototype _ -> Error [IllegalAccessOfTypeInfo (name.ToString())]
@@ -166,6 +174,7 @@ module TypeCheckContext =
         | Loc qname -> 
             match lut.nameToDecl.[qname] with
             | Declarable.VarDecl v -> v.datatype 
+            | Declarable.ExternalVarDecl v -> v.datatype
             | Declarable.ParamDecl a -> a.datatype
             | Declarable.SubProgramDecl _ 
             | Declarable.FunctionPrototype _ -> failwith "TML cannot point to a subprogram!"
