@@ -20,7 +20,7 @@ git clone https://github.com/boschresearch/blech
 ```
 To build the project, you need `.NetCore` installed. Go to the Microsoft website and follow their instructions to install the latest stable `.NetCore` available for your operating system.
 
-Navigate to the folder where you have checked out the BlechBox project. It should contain the file `Blech.sln`. Now you have choices:
+Navigate to the folder where you have checked out the Blech project. It should contain the file `Blech.sln`. Now you have choices:
   * For a simple **debug build** run
     ```
     dotnet build
