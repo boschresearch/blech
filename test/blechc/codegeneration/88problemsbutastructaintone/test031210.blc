@@ -1,0 +1,21 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: [7]int32
+end
+
+const aa: [7]int32 = {[2]=5, 8, 9, 8}
+
+const ff: Foo = {b = true, a = 7, r = aa}
+
+function f(x: int32)() returns int32
+    let loc = ff.r
+    if loc[0] == 0 then return loc[3] * x
+    else return x end
+end
+
+@[EntryPoint]
+activity entry()()
+    await true
+    var t = f(2)
+end

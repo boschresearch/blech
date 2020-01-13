@@ -1,0 +1,13 @@
+
+activity B()(o: float64)
+    o = 7.654
+    await true
+end
+
+@[EntryPoint]
+activity A()
+    var x: float64 = 0.1
+    await true
+    run B()(x) // local outarg simple direct cur
+    await true
+end

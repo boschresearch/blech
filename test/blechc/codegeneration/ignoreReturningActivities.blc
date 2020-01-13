@@ -1,0 +1,10 @@
+
+activity calc() returns int64
+    await true
+    return -1
+end
+
+@[EntryPoint]
+activity main ()()
+    _ = run calc()
+end

@@ -1,0 +1,22 @@
+
+struct S
+    var i: int64 = 7
+end
+
+function g(p: [3]float32)() returns float32
+    return p[0]+p[1]+p[2]
+end
+
+function f()() returns int64
+    var x: [5][4]S
+    let t = x[0]  // local rhs array arrayaccess
+    return t[0].i
+end
+
+@[EntryPoint]
+activity entry()()
+
+    let asdf = f()()
+    
+    await false
+end

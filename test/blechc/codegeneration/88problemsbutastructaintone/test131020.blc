@@ -1,0 +1,17 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const ff: [17]int32 = {[2]=2, [3]=3, [11]=11}
+
+
+@[EntryPoint]
+activity entry()()
+    const r = ff[2]
+    await true
+    var loc = ff[r]
+    //var s = ff[loc] this is forbidden
+    await true
+end

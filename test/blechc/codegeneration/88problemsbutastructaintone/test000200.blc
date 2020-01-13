@@ -1,0 +1,14 @@
+function f()() returns float32
+    var t: [3]float32 = {[2]=17.42f}
+    t = {8.5f, 4.7f, 6.2f} //local lhs array direct
+    let s = t
+    return s[0]
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

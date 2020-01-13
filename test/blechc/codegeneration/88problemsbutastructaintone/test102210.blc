@@ -1,0 +1,20 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: [3]float32 = {[2]=17.42f}
+end
+
+function g()(p: [3]float32)
+    p[0] = p[0]+p[1]+p[2]
+end
+
+@[EntryPoint]
+activity entry()()
+    var t: T 
+    g()(t.s) //local output array fieldaccess
+    await false
+end

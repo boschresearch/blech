@@ -1,0 +1,19 @@
+
+function g()(o: bool)
+    o = true
+end
+
+function f()() returns bool
+    var b: bool 
+    b = false
+    g()(b) //local outarg simple direct
+    return b
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

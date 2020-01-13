@@ -1,0 +1,17 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+activity B()(o: S)
+    o.i = 7.654f
+    await true
+end
+
+@[EntryPoint]
+activity A()
+    var x: S
+    await true
+    run B()(x) // local outarg struct direct cur
+    await true
+end

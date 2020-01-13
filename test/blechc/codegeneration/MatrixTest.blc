@@ -1,0 +1,16 @@
+@[EntryPoint]
+activity A()(a: [2][3]int8)
+    await true
+    a[0][0] = 1
+    await true
+    a[0][1] = 2
+    await true
+    a[0][2] = 3
+    await true
+    a[1][0] = 4
+    await true
+    a[1][1] = 5
+    await true
+    a[1][2] = 6
+    await true
+end

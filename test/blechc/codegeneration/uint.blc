@@ -1,0 +1,30 @@
+function g(u64: uint64, u8: uint8)() returns uint32
+    if u64 > 3000000000000000000 then 
+        return 7 + u8
+    end
+    return 7
+end
+
+function f(u32: uint32)(o: uint8)
+    if u32 > 7 then o = 255
+    else o = 6
+    end
+end
+
+activity R (input: uint64)(out: uint8) returns uint32
+    repeat
+        out = out + 1
+        await true
+        f(g(input, out))(out)
+    end
+    return 17
+end
+
+@[EntryPoint]
+activity U ()()
+    await true
+    var u8: uint8 = 129
+    let u16: uint16 = u8 + 255
+    var retcode: uint32
+    retcode = run R (u16-8)(u8)
+end

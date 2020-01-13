@@ -1,0 +1,45 @@
+
+struct T
+    var a: int32
+    var b: int32
+end
+
+function initT()(t: T)
+    t = {a = 12, b = 3}
+end
+
+
+function isDivisible(inp: T) returns bool
+    return inp.b != 0
+end
+
+function div (inp: T) returns int32
+    return inp.a / inp.b
+end
+
+@[EntryPoint]
+activity entry ()()
+    var x: int32
+    var y: int32
+    var t: T
+    if x == 0 then
+        t = { a=x, b=1 }
+    elseif (y != 0 and x / y > 0) then
+        t = { a=x, b=y }
+    else
+        t = { a=2, b=1 }
+    end
+
+    t = {}
+    if t.b == 0 or div({}) == 0 then
+        initT()(t)
+        await false
+    end
+
+    t = {}
+    if isDivisible(t) and isDivisible({a=div(t), b=9}) then
+        await true
+    else
+        await false
+    end
+end

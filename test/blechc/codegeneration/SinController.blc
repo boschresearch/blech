@@ -1,0 +1,50 @@
+
+activity ramp()(outp: int32)
+    // ramp up and down
+    repeat
+        repeat
+            outp = outp + 100
+            await true
+        until outp >= 1000 end
+        repeat
+            outp = outp - 100
+            await true
+        until outp <= 0 end
+    end
+end
+
+activity pid(actual_value: int32, desired_value: int32)(outp: int32)
+    var error_prior: int32 = 0
+    var integral: int32 = 0
+    var KP: int32 = 1
+    var KI: int32 = 0
+    var KD: int32 = 0
+    var iteration_time: int32 = 1 
+
+    repeat
+        var error_ = desired_value - actual_value
+        integral = integral + (error_ * iteration_time)
+        var derivative = (error_ - error_prior)/iteration_time
+        outp = KP*error_ + KI*integral + KD*derivative
+        error_prior = error_
+        await true
+    end
+end
+
+@[EntryPoint]
+activity main()() 
+    var insig: int32
+    var desired_value: int32 = 500
+    var diff: int32
+    var result: int32
+    cobegin weak
+        run pid(insig, desired_value)(diff)
+    with weak
+        run ramp()(insig)
+    with weak
+        repeat
+            result = insig + diff
+            await true
+        end
+    end
+end

@@ -1,0 +1,16 @@
+
+function f()() returns float64
+    var x: float64 = 47.7
+    x = 571.2345 //local lhs simple direct
+    return x
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: float64
+    await true
+    repeat
+        r = f()
+        await true
+    end
+end

@@ -1,0 +1,26 @@
+
+struct S
+    var i: float64 = 7.
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B(b: S)() returns bool
+    await true
+    return b.i > 0.0
+end
+
+activity A(x: S)()
+    var r: bool
+    r = run B(x) // input inarg struct direct cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: S
+    run A(v)()
+end

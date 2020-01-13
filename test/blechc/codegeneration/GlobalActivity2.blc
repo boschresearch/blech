@@ -1,0 +1,99 @@
+
+@[EntryPoint]
+activity main () ()
+    var inp: int32 = 0
+    cobegin
+        await true
+        // calcing
+        var inpIsM5 = false
+        var someVal: int32 = 0
+        cobegin weak
+            await inpIsM5
+            someVal =(inp * 7 - 1 ) % 17
+            while true repeat
+                await inpIsM5
+                someVal =(inp * 7 - 1 ) % 17
+            end
+        with
+            var terminate = false
+            if (inp % 3 == 0) then
+                inpIsM5 = true
+            else
+                inpIsM5 = false
+            end
+            if (someVal == 0) then
+                terminate = true
+            end
+            await true
+            while not terminate repeat
+                if (inp % 3 == 0) then
+                    inpIsM5 = true
+                else
+                    inpIsM5 = false
+                end
+                if (someVal == 0) then
+                    terminate = true
+                end
+                await true
+            end
+        end
+        while true repeat
+            await true
+            // calcing
+            inpIsM5 = false
+            someVal = 0
+            cobegin weak
+                await inpIsM5
+                someVal =(inp * 7 - 1 ) % 17
+                while true repeat
+                    await inpIsM5
+                    someVal =(inp * 7 - 1 ) % 17
+                end
+            with
+                var terminate = false
+                if (inp % 3 == 0) then
+                    inpIsM5 = true
+                else
+                    inpIsM5 = false
+                end
+                if (someVal == 0) then
+                    terminate = true
+                end
+                await true
+                while not terminate repeat
+                    if (inp % 3 == 0) then
+                        inpIsM5 = true
+                    else
+                        inpIsM5 = false
+                    end
+                    if (someVal == 0) then
+                        terminate = true
+                    end
+                    await true
+                end
+            end
+        end
+    with weak
+        // testing
+        await true
+        while (inp < 123) repeat
+            inp = inp + 1
+            await true
+        end
+        while (inp > 0) repeat
+            inp = inp - 1
+            await true
+        end
+        while true repeat
+            await true
+            while (inp < 123) repeat
+                inp = inp + 1
+                await true
+            end
+            while (inp > 0) repeat
+                inp = inp - 1
+                await true
+            end
+        end      
+    end
+end

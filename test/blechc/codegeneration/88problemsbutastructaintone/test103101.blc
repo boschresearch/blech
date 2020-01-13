@@ -1,0 +1,28 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B(i: T)() returns bool
+    let l = i.x
+    await true
+    return l < 57.654
+    
+end
+
+@[EntryPoint]
+activity A()
+    var x: T = {x=71.23}
+    if true then
+        var y: bool
+        y = run B(prev x)() // local inarg struct direct prev
+    end
+    await true
+    
+    await true
+end

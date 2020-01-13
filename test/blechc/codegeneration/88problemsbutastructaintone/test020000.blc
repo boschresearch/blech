@@ -1,0 +1,13 @@
+
+function f()(o: int16)
+    o = o + 5 // outparam lhs simple direct
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: int16
+    repeat    
+        f()(r)
+        await true
+    end
+end

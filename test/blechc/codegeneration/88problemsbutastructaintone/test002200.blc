@@ -1,0 +1,18 @@
+function g()(p: [4]float32) 
+    p[0] = p[0]+p[1]+p[2]+p[3]
+end
+
+function f()() returns float32
+    var t: [3][4]float32 
+    var asdf: [4]float32 = {8.5f,4.7f,6.2f}
+    g()(asdf) // local output array direct
+    return asdf[0]
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        await true
+        let r = f()
+    end
+end

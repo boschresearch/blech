@@ -1,0 +1,16 @@
+
+function g(x: int16)() returns bool
+    return x < 10
+end
+
+function f(i: int16)() returns bool
+    return g(i) //inparam input simple direct
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f(8)
+        await true
+    end
+end

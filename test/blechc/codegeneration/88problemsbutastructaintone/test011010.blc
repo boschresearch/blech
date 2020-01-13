@@ -1,0 +1,18 @@
+
+struct S
+    var i: int64 = 7
+end
+
+function f(i: S)() returns bool
+    var b: bool 
+    b = i.i > 7 //inparam rhs simple fieldaccess
+    return b 
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f({i=8})
+        await true
+    end
+end

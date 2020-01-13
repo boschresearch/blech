@@ -1,0 +1,82 @@
+struct S
+    var c: bool
+    let a: int16
+    var b: float32
+end
+
+struct T
+    var ss: [2]S
+end
+
+
+const myVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryTrue = true
+const myOooooooooooooooonlyOne: int8 = 1
+const myTwof: float32 = 2.0f
+const SIZE: int8 = 3
+const myS: S = {a = myOooooooooooooooonlyOne + 1, b = myTwof + 8.0f, c = myVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryTrue}
+const myA: [SIZE]int64 = {17, 17+myOooooooooooooooonlyOne}
+const defaultT: T = {ss = {[1]=myS}}
+const threeT: [SIZE]T = {[myOooooooooooooooonlyOne]=defaultT}
+
+
+@[EntryPoint]
+activity A ()()
+    var foo: int8 = 0
+    if defaultT.ss[myOooooooooooooooonlyOne] == defaultT.ss[0] then
+        foo = 1
+    else
+        foo = 2
+    end
+    await true
+    if defaultT.ss[myOooooooooooooooonlyOne] != defaultT.ss[0] then
+        foo = 11
+    else
+        foo = 22
+    end
+    await true
+    let t2 = threeT[2].ss
+    let t1 = threeT[myOooooooooooooooonlyOne].ss
+    //if t1 == t2 then
+    //    foo = 3
+    //else
+        foo = 4
+    //end
+    await true
+    
+    //if t1 != t2 then
+        foo = 33
+    //else
+    //    foo = 44
+    //end
+    await true
+    let ss0 = defaultT.ss[0]
+    let ss1 = defaultT.ss[myOooooooooooooooonlyOne]
+    //if ss0 == ss1 then
+    //    foo = 5
+    //else
+        foo = 6
+    //end
+    await true
+    
+    //if ss0 != ss1 then
+        foo = 55
+    //else
+    //    foo = 66
+    //end
+    await true
+    let ss2: S
+    let ss3: S
+    //if ss2 == ss3 then
+        foo = 7
+    //else
+    //    foo = 8
+    //end
+    await true
+    
+    //if ss2 != ss3 then
+    //    foo = 77
+    //else
+        foo = 88
+    //end
+    await false
+end

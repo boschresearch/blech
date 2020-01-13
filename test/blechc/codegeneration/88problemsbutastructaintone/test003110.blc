@@ -1,0 +1,26 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+function g(i: S) returns bool
+    return i.i > -4
+end
+
+function f()() returns bool
+    var t: T 
+    return g(t.s)() //local inarg struct fieldaccess
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

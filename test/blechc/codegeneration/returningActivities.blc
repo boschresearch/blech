@@ -1,0 +1,11 @@
+
+activity B()() returns int32
+    await true
+    return 7
+end
+
+@[EntryPoint]
+activity A()()
+    var x: int32
+    x = run B()()
+end

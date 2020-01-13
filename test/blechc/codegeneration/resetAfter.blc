@@ -1,0 +1,29 @@
+@[EntryPoint]
+activity main()()
+    var c = false
+    var i: int32
+    var finished = false
+    cobegin
+        await true
+        await true
+        await true
+        c = true
+        await true
+        c = false
+        await true
+        await true
+        await true
+        await true
+        await true
+        await true
+    with
+        when c reset // strangely results in the same trace as reset after, which no longer exists
+            i = 0
+            repeat
+                i = i + 1
+                await true
+            until i > 5 end 
+        end
+    end    
+    finished = true
+end

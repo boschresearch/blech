@@ -1,0 +1,27 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B(b: bool)() returns bool
+    await true
+    return not b
+end
+
+activity A(x: float64)()
+    var r: bool
+    await true
+    r = run B(x > 0.0) // input expression
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: float64
+    run A(v)()
+end

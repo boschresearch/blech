@@ -25,10 +25,10 @@
 #define BLC_VOID void 
 #define BLC_BOOL int 
 
-#define BLC_INT8 char
-#define BLC_INT16 short
-#define BLC_INT32 long
-#define BLC_INT64 long long
+#define BLC_INT8 signed char
+#define BLC_INT16 signed short
+#define BLC_INT32 signed long
+#define BLC_INT64 signed long long
 
 #define BLC_UINT8 unsigned char
 #define BLC_UINT16 unsigned short

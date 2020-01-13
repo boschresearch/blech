@@ -1,0 +1,19 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32 = 7.5f
+end
+
+const ff: Foo = {b = true, a = 7, r = -4.3f}
+
+function f(x: Foo)() returns int32
+     return x.a
+end
+
+@[EntryPoint]
+activity entry()()
+    var ff = f(ff)
+    await true
+    var s = f({a=9})
+    await true
+end

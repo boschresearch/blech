@@ -1,0 +1,31 @@
+struct Foo
+    var x: bool
+end
+
+const LEN: int8 = 3
+struct S
+    var i: int8
+    var j: float64
+    var a: [LEN]Foo
+end
+
+function rrr(a: bool) returns S
+    
+    let s: S = { i = -7,
+                 j = 3.42,
+                 a = { [0] = { x = true },
+                       [LEN - 2] = { x = a }
+                     }
+               }
+    
+    return s
+end
+
+@[EntryPoint]
+activity start ()()
+    
+    var myS: S
+    myS = rrr(false)
+    await true
+    _ = rrr(true)
+end

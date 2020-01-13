@@ -1,0 +1,11 @@
+const tt = true
+
+@[EntryPoint]
+activity entry()()
+    var r = tt
+    await true
+    const loc: float64 = .45
+    var s = loc
+    await true
+
+end

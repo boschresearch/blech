@@ -1,0 +1,18 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: [3]float32 = {[2]=17.42f}
+end
+
+@[EntryPoint]
+activity entry()()
+    var t: T 
+    let asdf: [3]float32 = {8.5f,4.7f,6.2f}
+    t.s = asdf //local lhs array fieldaccess
+
+    await false
+end

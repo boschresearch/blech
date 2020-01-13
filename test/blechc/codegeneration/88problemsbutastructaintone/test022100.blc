@@ -1,0 +1,21 @@
+
+struct S
+    var i: float64 = 7.
+end
+
+function g()(o: S)
+    o.i = o.i * 2.5
+end
+
+function f()(o: S)
+    g()(o) // outparam outarg struct direct
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: S = {i = 3.5}
+    repeat    
+        f()(r)
+        await true
+    end
+end

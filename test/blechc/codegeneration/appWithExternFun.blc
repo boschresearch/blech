@@ -1,0 +1,11 @@
+@[CFunction(source="appWithExternFun.ext.c")]
+extern function myExternFun()() returns int32
+
+@[EntryPoint]
+activity mainAct()()
+    var i: int32
+    repeat
+        await true
+        i = myExternFun()
+    end
+end

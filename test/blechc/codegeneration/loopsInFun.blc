@@ -1,0 +1,33 @@
+function f (input: int32)() returns int32
+    var i: int8 = 0
+    var x = input
+
+    while i < 50 repeat
+        x = x + i
+        i = i + 1
+    end
+
+    return x
+end
+
+function g (input: int32)() returns int32
+    var i: int8 = 0
+    var x = input
+
+    repeat
+        x = x - i
+        i = i + 1
+    until  x < 50 end
+
+    return x
+end
+
+@[EntryPoint]
+activity main()()
+    var a: int32 = 0
+    await true
+    a = f(a)
+    await true
+    a = g(a)
+    await false
+end

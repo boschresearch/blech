@@ -1,0 +1,24 @@
+
+activity A()(a: int32, b: int32, c: int32)
+    cobegin
+        repeat
+            await true
+            a = a + 2
+            c = b - a
+        end
+    with
+        repeat
+            await true
+            b = 2 * (a + 1)
+        end
+    end
+end
+
+@[EntryPoint]
+activity main()()
+    var a: int32
+    var b: int32
+    var c: int32
+    
+    run A()(a, b, c)
+end

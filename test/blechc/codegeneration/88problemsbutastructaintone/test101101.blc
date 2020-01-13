@@ -1,0 +1,18 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+@[EntryPoint]
+activity A()
+    var r: T = {s={i = 5.7f}}
+    var l = prev r // local rhs struct direct prev
+    await true
+    l = prev r // local rhs struct direct prev
+    await true
+end

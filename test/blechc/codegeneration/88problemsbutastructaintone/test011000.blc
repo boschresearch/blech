@@ -1,0 +1,14 @@
+
+function f(i: int16)() returns bool
+    var b: bool 
+    b = i > 7 //inparam rhs simple direct
+    return b 
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f(8)
+        await true
+    end
+end

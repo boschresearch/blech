@@ -1,0 +1,44 @@
+
+function integrate(curInt: float64, err: float64, dt: float64) returns float64
+    return curInt + (err * dt)
+end
+
+function pid(actual_value: float64, desired_value: float64)
+            (integral: float64, error_prior: float64) returns float64
+    let KP: float64 = 0.5
+    let KI: float64 = 0.4
+    let KD: float64 = 1.0
+    let iteration_time: float64 = 1.0
+    
+    var error_ = desired_value - actual_value
+    integral = integrate(integral, error_, iteration_time)
+    var derivative = (error_ - error_prior)/iteration_time
+    error_prior = error_
+    return ( KP * error_
+           + KI * integral
+           + KD * derivative )
+end
+
+activity pidController(measurement: float64, setpoint: float64)(outp: float64)
+    var integral: float64 = 0.0
+    var error_prior: float64 = 0.0
+    repeat
+        outp = pid(measurement, setpoint)(integral, error_prior)
+        await true
+    end
+end
+
+@[EntryPoint]
+activity main()() 
+    var a: float64 = 5.00
+    var b: float64 = 7.65
+    var c: float64
+    await true
+    cobegin
+        run pidController(prev a, prev b)(c)
+    with
+        run pidController(prev b, c)(a)
+    with
+        run pidController(c, a)(b)
+    end
+end

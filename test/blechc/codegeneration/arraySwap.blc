@@ -1,0 +1,16 @@
+
+function f()
+    let x: int32 = 11
+    var a: [3]int32 = {x, 2, 3}
+    
+    a = {x}
+    
+end
+@[EntryPoint]
+activity A()() 
+    let x: int32 = 11
+    var a: [3]int32 = {x, 2, 3}
+    await true
+    a = {a[2], a[1], a[0]}
+    await false
+end

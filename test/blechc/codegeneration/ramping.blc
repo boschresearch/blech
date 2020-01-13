@@ -1,0 +1,15 @@
+
+@[EntryPoint]
+activity sin()(outp: int32)
+    // ramp up and down
+    repeat
+        repeat
+            outp = outp + 100
+            await true
+        until outp >= 1000 end
+        repeat
+            outp = outp - 100
+            await true
+        until outp <= 0 end
+    end
+end

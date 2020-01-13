@@ -1,0 +1,20 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const ff: [17]int32 = {[2]=2, [3]=3, [11]=11}
+
+function f(x: int32)() returns int32
+    const loc = ff[2]
+
+    if ff[3]>0 then return ff[loc] * loc
+    else return x end
+end
+
+@[EntryPoint]
+activity entry()()
+    await true
+    var t = f(2)
+end

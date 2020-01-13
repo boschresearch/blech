@@ -1,0 +1,23 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: [3]float32 = {[2]=17.42f}
+end
+
+function f()() returns float32
+    var t: T 
+    let asdf = t.s //local rhs array fieldaccess
+    return asdf[2]
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        await true
+        let r = f()
+    end
+end

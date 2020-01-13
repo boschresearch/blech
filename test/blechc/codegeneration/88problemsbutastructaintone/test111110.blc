@@ -1,0 +1,20 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity A(x: T)()
+    let y = x.s // input rhs struct fieldaccess cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: T
+    run A(v)()
+end

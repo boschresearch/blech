@@ -1,0 +1,11 @@
+
+activity A(x: float64)()
+    let y = x // input rhs simple direct cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: float64
+    run A(v)()
+end

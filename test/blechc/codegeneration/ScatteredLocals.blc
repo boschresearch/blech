@@ -1,0 +1,40 @@
+
+activity B(i: int32)(b: int32) returns float32
+  repeat
+      if i >= b then
+          await true // otherwise immediate activity
+          return 17.0f
+      else
+          b = b - i
+          await true
+      end
+  end
+  return 0.0f
+end
+activity A()() returns int32
+  var x: int32
+  cobegin
+      var a: int32
+      await true
+  with
+      var b: int32 = 0
+      var r: float32 // must be defined before it is used to catch a return value
+                     // TODO: leaving out this declaration produces an obscure compiler error that a user cannot understand
+      r = run B(x)(b)
+      while r > 0.0 repeat
+          let diff = r - 10.0f
+          r = diff
+          await true
+      end
+      var last: bool
+  with
+      var c: int32
+      await true
+  end
+  return -42
+end
+
+@[EntryPoint]
+activity main ()()
+  _ = run A()
+end

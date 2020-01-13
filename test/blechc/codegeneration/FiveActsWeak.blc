@@ -1,0 +1,40 @@
+
+activity A5()()
+    await true
+    await true
+    await true
+    await true
+end
+
+activity A4()()
+    await true
+    await true
+    await true
+    await true
+    await true
+end
+
+activity A3()()
+    cobegin weak
+        run A4()()
+    with weak
+        run A5()()
+    end
+end
+
+activity A2()()
+    run A4()()
+end
+
+@[EntryPoint]
+activity A1()()
+    var ind = false
+    cobegin
+        run A2()()
+    with
+        run A3()()
+        ind = true
+    end
+    await true
+    ind = false
+end

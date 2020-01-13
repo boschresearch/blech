@@ -1,0 +1,17 @@
+
+function g()(o: float64)
+    o = o * 2.5
+end
+
+function f()(o: float64)
+    g()(o) // outparam outarg simple direct
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: float64 = 2.5
+    repeat    
+        f()(r)
+        await true
+    end
+end

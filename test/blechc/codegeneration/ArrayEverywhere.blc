@@ -1,0 +1,16 @@
+
+function someFun(arrParam: [40]bool)(arrParam2: [3]float64)
+    let constArr: [40]bool = {true, false, false, true}
+    var anotherArr = constArr
+    anotherArr = constArr
+end
+
+@[EntryPoint]
+activity someAct(arrParam: [17]int8)(arrParam2: [3]float64)
+    let constArr: [40]bool = {[36]=true, false, false, true}
+    var anotherArr = constArr
+    var result: [3]float64
+    anotherArr = constArr
+    someFun(prev anotherArr)(result)
+    await false
+end

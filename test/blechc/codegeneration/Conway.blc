@@ -1,0 +1,127 @@
+//Conway's game of life in Blech
+//for testing the Simulator wrt. activities and runs
+// enum State = 
+//     .Alive
+//     .Dead
+    
+//typealias A = [4][4]bool
+const DIM: int8 = 4
+//extern function printArena(arena: [4][4]bool, rows: int8, cols: int8)()
+    
+function myMod4(a: int8) returns int8
+    let r = a % 4
+    if r < 0 then return r+4
+    else return r
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+function countLiveNeighbours(arena: [4][4]bool, x: int8, y: int8) returns int8
+    var sum: int8 = 0
+    if arena[myMod4(x-1)][myMod4(y-1)] == true then
+        sum = sum + 1
+    end
+    if arena[x][myMod4(y-1)] == true then
+        sum = sum + 1
+    end
+    if arena[myMod4(x+1)][myMod4(y-1)] == true then
+        sum = sum + 1
+    end
+    if arena[myMod4(x-1)][y] == true then
+        sum = sum + 1
+    end
+    if arena[myMod4(x+1)][y] == true then
+        sum = sum + 1
+    end
+    if arena[myMod4(x-1)][myMod4(y+1)] == true then
+        sum = sum + 1
+    end
+    if arena[x][myMod4(y+1)] == true then
+        sum = sum + 1
+    end
+    if arena[myMod4(x+1)][myMod4(y+1)] == true then
+        sum = sum + 1
+    end
+
+    return sum
+end
+    
+function decide (prevArena: [4][4]bool, x: int8, y: int8)(arena: [4][4]bool)
+    var cnt = countLiveNeighbours(prevArena, x, y)
+    
+    if prevArena[x][y] == false then
+        if cnt == 3 then
+            arena[x][y] = true
+        end
+    else
+        if cnt <= 1 then
+            arena[x][y] = false
+        elseif cnt > 3 then
+            arena[x][y] = false
+        end
+    end
+end
+    
+function updateArena (prevArena: [4][4]bool)(arena: [4][4]bool)
+    decide(prevArena, 0,0)(arena)
+    decide(prevArena, 0,1)(arena)
+    decide(prevArena, 0,2)(arena)
+    decide(prevArena, 0,3)(arena)
+    
+    decide(prevArena, 1,0)(arena)
+    decide(prevArena, 1,1)(arena)
+    decide(prevArena, 1,2)(arena)
+    decide(prevArena, 1,3)(arena)
+    
+    decide(prevArena, 2,0)(arena)
+    decide(prevArena, 2,1)(arena)
+    decide(prevArena, 2,2)(arena)
+    decide(prevArena, 2,3)(arena)
+    
+    decide(prevArena, 3,0)(arena)
+    decide(prevArena, 3,1)(arena)
+    decide(prevArena, 3,2)(arena)
+    decide(prevArena, 3,3)(arena)
+end
+    
+@[EntryPoint]
+activity elapsing()()
+    var arena: [4][4]bool
+     =  {
+            {false, false, false, false},
+            {false, false, false, false},
+            {true,  false, true,  true},
+            {false, false, true,  false}
+        }
+        
+    
+    repeat
+        //printArena(arena, 4, 4)
+        await true
+        // make update decision wrt. last state, write to new state
+        updateArena(prev arena)(arena)
+    end
+
+end

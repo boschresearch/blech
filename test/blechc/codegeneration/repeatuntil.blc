@@ -1,0 +1,11 @@
+
+@[EntryPoint]
+activity main ()() 
+    var x: int32 = 17
+    x = x - 1
+    await true
+    while not (x <= 0) repeat
+        x = x - 1
+        await true
+    end
+end

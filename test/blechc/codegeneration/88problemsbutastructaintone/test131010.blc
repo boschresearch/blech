@@ -1,0 +1,16 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const ff: Foo = {b = true, a = 7, r = -4.3f}
+
+@[EntryPoint]
+activity entry()()
+    var r = ff.b
+    await true
+    const loc: float64 = ff.r
+    var s = ff.a
+    await true
+end

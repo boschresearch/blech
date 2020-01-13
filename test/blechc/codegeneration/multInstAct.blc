@@ -1,0 +1,21 @@
+
+activity A (i: int32)(o: int32)
+    repeat
+        await true
+        o = o + i
+        await true
+    end
+end
+
+@[EntryPoint]
+activity main()()
+    let one: int32 = 1
+    let two: int32 = 2
+    var x: int32
+    var y: int32
+    cobegin
+        run A(one)(x)
+    with
+        run A(two)(y)
+    end
+end

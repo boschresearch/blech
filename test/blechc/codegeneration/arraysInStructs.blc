@@ -1,0 +1,12 @@
+struct T
+    var b: [5]int32
+end
+struct S
+    var a: [7]T
+end
+
+@[EntryPoint]
+activity A()()
+    let x: S
+    await true
+end

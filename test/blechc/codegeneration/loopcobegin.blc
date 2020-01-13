@@ -1,0 +1,14 @@
+
+@[EntryPoint]
+activity main ()() 
+    var p: int32 = 0
+    var c: int32 = 0
+    repeat
+        cobegin
+            p = p + 1
+        with 
+            c = c + p
+        end
+        await true
+    end
+end

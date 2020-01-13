@@ -1,0 +1,18 @@
+activity B()(x: int32)
+    x = 42
+    await true
+end
+
+@[EntryPoint]
+activity A()()
+    var finished = false
+    var counter: int32 = 0
+    var x: int32 = 0
+    repeat
+        cobegin await x == 42
+        with weak run B()(x)
+            counter = counter + 1 // should not be executed
+        end
+    until counter > 5 end
+    finished = true
+end

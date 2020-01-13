@@ -1,0 +1,16 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+activity A()(r: S)
+    r = {i = 5.7f}
+    let l = r // output rhs struct direct cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: S
+    run A()(v)
+end

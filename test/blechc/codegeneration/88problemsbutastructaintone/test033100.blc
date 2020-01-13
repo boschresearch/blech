@@ -1,0 +1,24 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const ff: Foo = {b = true, a = 7, r = -4.3f}
+
+function f(x: Foo)() returns int32
+    let loc = ff
+    if loc.b then return loc.a * x.a
+    else return x.a end
+end
+
+function g()() returns int32
+    var t = f({a=7})
+    return t
+end
+
+@[EntryPoint]
+activity entry()()
+    await true
+    var res = g()
+end

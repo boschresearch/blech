@@ -1,0 +1,28 @@
+
+struct S
+    var i: float64 = 7.
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+function g(i: S)()returns float64
+    return i.i * 2.5
+end
+
+function f()(o: T) returns float64
+    return g(o.s)() // outparam inarg struct fieldaccess
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: T = {s={i  =2.5}}
+    var x:float64
+    repeat    
+        x = f()(r)
+        await true
+        r.s.i = x
+    end
+end

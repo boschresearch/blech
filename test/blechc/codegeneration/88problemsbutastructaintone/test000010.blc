@@ -1,0 +1,18 @@
+
+struct T
+    var x: float64
+end
+
+function f()() returns float64
+    var t: T 
+    t.x = 571.2345 //local lhs simple fieldaccess
+    return t.x
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

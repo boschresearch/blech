@@ -1,0 +1,25 @@
+
+@[EntryPoint]
+activity main ()() 
+    var p: int32 = 0
+    var c: int32 = 0
+    cobegin
+        await p == 2
+        c = c + 1
+        await p == 3
+        c = c + 1
+        await p == 5
+        c = c + 1
+        await p == 7
+        c = c + 1
+        await p == 11
+        c = c + 1
+        await p == 13
+        c = c + 1
+    with weak
+        repeat
+            p = p + 1
+            await true            
+        end
+    end
+end

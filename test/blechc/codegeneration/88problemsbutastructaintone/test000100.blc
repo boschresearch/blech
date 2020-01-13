@@ -1,0 +1,28 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+function f()() returns float64
+    var t: T 
+    t = {  //local lhs struct direct
+            x = 1.0,
+            s = {
+                i = 8
+            }
+        }
+    return t.x
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

@@ -1,0 +1,11 @@
+
+activity A()(l: float32)
+    l = 5.f // output lhs simple direct cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: float32
+    run A()(v)
+end

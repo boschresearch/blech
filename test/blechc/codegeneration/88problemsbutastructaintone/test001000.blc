@@ -1,0 +1,15 @@
+
+function f()() returns float64
+    var x: float64 = 47.7
+    var z: float64 = 0.7
+    x = z //local rhs simple direct
+    return x
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f()
+        await true
+    end
+end

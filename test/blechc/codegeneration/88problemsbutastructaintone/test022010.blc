@@ -1,0 +1,21 @@
+
+struct S
+    var i: float64 = 7.
+end
+
+function g()(o: float64)
+    o = o * 2.5
+end
+
+function f()(o: S)
+    g()(o.i) // outparam outarg simple fieldaccess
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: S = {i = 2.5}
+    repeat    
+        f()(r)
+        await true
+    end
+end

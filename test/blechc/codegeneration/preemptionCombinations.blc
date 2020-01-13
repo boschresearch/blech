@@ -1,0 +1,111 @@
+activity controllingStopWatch1(S: bool, R: bool)(d: int32)
+    when R reset
+        d = 0
+        if not S then
+            // mode stop
+            await S
+        end
+        repeat
+            // mode go
+            repeat
+                d = d + 1
+                await true
+            until S end
+            // mode stop
+            await S
+        end 
+    end
+end
+
+activity controllingStopWatch2(S: bool, R: bool)(d: int32)
+    when R reset
+        d = 0
+        if not S then
+            // wait for start
+            await S
+        end
+        repeat
+            cobegin weak
+                repeat
+                    d = d + 1
+                    await not S and not R
+                end
+            with
+                await S // stop
+            end
+            await S // start
+        end
+    end
+end
+
+activity controllingStopWatch3(S: bool, R: bool)(d: int32)
+    when R reset
+        d = 0
+        if not S then
+            // wait for start
+            await S
+        end
+        repeat
+            when S abort // stop when S
+                repeat
+                    d = d + 1
+                    await true
+                end
+            end
+            await S // start
+        end
+    end
+end
+
+activity trigger()(S: bool, R: bool)
+    repeat
+        S = false
+        R = false
+        await true
+        await true
+        S = true //start
+        await true
+        S = false
+        await true
+        await true
+        await true
+        await true
+        S = true //stop
+        await true
+        S = false
+        await true
+        await true
+        S = true //continue
+        await true
+        S = false
+        await true
+        await true
+        R = true //reset
+        await true
+        R = false
+        await true
+        await true
+        await true
+        await true
+    end
+end
+
+@[EntryPoint]
+activity enter()()
+    var S: bool
+    var R: bool
+
+    var d1: int32
+    var d2: int32
+    var d3: int32
+
+    cobegin weak
+        run trigger()(S, R)
+    with
+        run controllingStopWatch1(S, R)(d1)
+    with
+        run controllingStopWatch2(S, R)(d2)
+    with
+        run controllingStopWatch3(S, R)(d3)
+    end
+end

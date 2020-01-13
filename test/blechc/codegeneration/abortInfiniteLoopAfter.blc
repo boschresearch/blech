@@ -1,0 +1,13 @@
+@[EntryPoint]
+activity A()()
+    var cond: bool
+    
+    cobegin await cond //abort when cond after
+    with weak repeat
+            await true
+            cond = true
+        end
+    end
+    await true
+    
+end

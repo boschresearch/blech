@@ -1,0 +1,17 @@
+function cond(x: int32) returns bool
+    return x > 3
+end
+
+@[EntryPoint]
+activity A()
+    var i: int32 = 0
+    cobegin await cond(i)
+    with weak repeat
+            i = i + 1
+            await true
+        end
+    end 
+    var endReached = true
+    await true
+    i = -1
+end

@@ -1,0 +1,21 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+activity B()(o: float32)
+    o = 7.654f
+    await true
+end
+
+activity A()(x: S)
+    await true
+    run B()(x.i) // output outarg simple fieldaccess cur
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: S
+    run A()(v)
+end

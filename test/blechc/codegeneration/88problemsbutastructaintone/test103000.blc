@@ -1,0 +1,23 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B(i: float64)() returns bool
+    await true
+    return i < 7.654
+end
+
+@[EntryPoint]
+activity A()
+    var x: float64 = 1.23
+    await true
+    var y: bool
+    y = run B(x)() // local inarg simple direct cur
+    await true
+end

@@ -1,0 +1,78 @@
+const C_LIM: int32 = 7
+const D_LIM: int32 = 5
+
+activity A()(c: int32,d: int32)
+    
+    await true
+    when c > C_LIM abort
+        
+        repeat
+            when d > D_LIM abort
+                cobegin 
+                    repeat 
+                        c = c + 1
+                        await true
+                    end
+                with
+                    //await true
+                    repeat 
+                        d = d + 1
+                        await true
+                    end
+                end
+            end
+            d = 0
+        until c > 17 end
+
+    end
+    c = 0
+end
+
+@[EntryPoint]
+activity E()
+    var x: int32 = 0
+    var y: int32 = 0
+    run A()(x, y)
+end
+
+/*
+scchart NewSCChart {
+  const int C_LIM = 7 
+  const int D_LIM = 5
+  output int c
+  output int d
+
+  initial state A1 go to A2
+  state A2 {
+    initial state B1 {
+      region {
+        initial state C1 immediate do c++ go to C2
+        state C2 
+        if true go to C1
+        if false go to UNREACH1 /* satisfies the warning about missing final states for regions that are joined */
+        final state UNREACH1
+      }
+      region {
+        initial state D1 immediate do d++ go to D2
+        state D2
+        if true go to D1
+        if false go to UNREACH2 /* satisfies the warning about missing final states for regions that are joined */
+        final state UNREACH2
+      }
+    }
+    join to B2
+    if d > D_LIM go to B2
+    state B2 immediate do d = 0 go to B3
+    state B3
+    immediate if c <= 17 go to B1
+    immediate if c > 17 go to B4
+    final state B4
+  }
+  join to A3 /* termination transition in case A2 finishes execution, we do not want to get blocked by the guard c > C_LIM */
+  if (c > C_LIM) go to A3 /* weak abort */
+  state A3 immediate do c = 0 go to A4 
+  final state A4
+  
+}
+
+*/

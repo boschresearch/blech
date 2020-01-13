@@ -1,0 +1,17 @@
+
+struct S
+    var i: int64 = 7
+end
+
+function f()(o: S)
+    o.i = o.i + 5 // outparam lhs simple fieldaccess
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: S
+    repeat    
+        f()(r)
+        await true
+    end
+end

@@ -1,0 +1,19 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const ff: [17]int32 = {[2]=2, [3]=3, [11]=11}
+
+function f(x: int32)() returns int32
+     return x
+end
+
+@[EntryPoint]
+activity entry()()
+    const r = ff[2]
+    await true
+    var loc = f(ff[r])
+    await true
+end

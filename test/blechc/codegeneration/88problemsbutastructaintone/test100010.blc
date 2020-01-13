@@ -1,0 +1,11 @@
+
+struct S
+    var f: float32
+end
+
+@[EntryPoint]
+activity A()
+    var l: S
+    l.f = 5.f // local lhs simple fieldaccess cur
+    await true
+end

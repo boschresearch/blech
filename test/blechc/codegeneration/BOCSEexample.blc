@@ -1,0 +1,34 @@
+
+activity A (inA: int32)(outA: int32)
+    repeat
+        await true
+        outA = 999
+        if outA == 0 then
+            await inA > 0
+        else
+            await inA <= 5
+        end
+        outA = 300
+    end
+end
+
+activity B (inB: int32)(outB: int32)
+    repeat
+        await inB <= 17
+        while outB > 0 repeat
+            outB = outB - 17
+            await true
+        end
+    end
+end
+
+@[EntryPoint]
+activity main () ()
+    var x: int32
+    var y: int32
+    cobegin
+        run A (x)(y)
+    with
+        run B (prev y)(x)
+    end
+end

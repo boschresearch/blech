@@ -1,0 +1,8 @@
+
+@[EntryPoint]
+activity entry()()
+    var t: [3][4]float32 
+    let asdf: [4]float32 = {8.5f,4.7f,6.2f}
+    t[0] = asdf //local rhs array direct
+    await false
+end

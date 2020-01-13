@@ -1,0 +1,19 @@
+
+function g(i: float64)()returns float64
+    return i * 2.5
+end
+
+function f()(o: float64) returns float64
+    return g(o)() // outparam inarg simple direct
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: float64 = 2.5
+    var x:float64
+    repeat    
+        x = f()(r)
+        await true
+        r = x
+    end
+end

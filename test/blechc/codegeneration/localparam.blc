@@ -1,0 +1,21 @@
+function funning ()(x: int8, y: int8)
+    const lc: int8 = 9
+    param test: int8 = 5
+    x = lc
+    y = test
+    
+end
+
+@[EntryPoint]
+activity running ()()
+    var f1: int8
+    var f2: int8
+    funning()(f1, f2)
+    const lc: int8 = 9
+    param test: int8 = 5
+    repeat
+        await true
+        var x = lc
+        var y = test
+    end
+end

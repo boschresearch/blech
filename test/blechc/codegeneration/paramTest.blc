@@ -1,0 +1,24 @@
+param p: int32 = 1278
+param a: [2][3]int16 = {
+    {1, 2, 3},
+    {4, 5, 6}
+}
+
+function f(x: [3]int16)() returns int16
+    return x[0]
+end
+
+function g(x: [2][3]int16)() returns int16
+    return x[1][0]
+end
+
+@[EntryPoint]
+activity A()()
+    await true
+    let x = p
+    // param foo = true
+    // var bar = foo
+    await true
+    let y = f(a[1])
+    let z = g(a)
+end

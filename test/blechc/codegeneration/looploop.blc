@@ -1,0 +1,11 @@
+
+@[EntryPoint]
+activity main ()() 
+    repeat
+        var x: int32 = 17
+        repeat
+            x = x - 1
+            await true
+        until x <= 0 end
+    end
+end

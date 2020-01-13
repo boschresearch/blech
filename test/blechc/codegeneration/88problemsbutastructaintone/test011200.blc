@@ -1,0 +1,21 @@
+
+struct S
+    var i: int64 = 7
+end
+
+function g(p: [3]S)() returns int64
+    return p[0].i+p[1].i+p[2].i 
+end
+
+function f(x: [5][3]S)() returns int64
+    let asdf = x[0]  // inputparam rhs array arrayaccess
+    return asdf[0].i
+end
+
+@[EntryPoint]
+activity entry()()
+    var x: [5][3]S
+    let asdf = f(x)()
+    
+    await false
+end

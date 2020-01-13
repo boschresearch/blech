@@ -1,0 +1,13 @@
+
+function f()(o: bool)
+    o = not o // outparam rhs simple direct
+end
+
+@[EntryPoint]
+activity entry()()
+    var r: bool
+    repeat    
+        f()(r)
+        await true
+    end
+end

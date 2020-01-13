@@ -1,0 +1,14 @@
+
+activity A()(r: float32)
+    var l: float32
+    r = 4.7f
+    await true
+    l = r // output rhs simple direct cur
+    
+end
+
+@[EntryPoint]
+activity entry()
+    var v: float32
+    run A()(v)
+end

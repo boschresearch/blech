@@ -1,0 +1,22 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity A()(r: T)
+    r = {s={i = 5.7f}}
+    var l = r.s // output rhs struct fieldaccess cur
+    await true
+    
+end
+
+@[EntryPoint]
+activity entry()
+    var v: T
+    run A()(v)
+end

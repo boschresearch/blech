@@ -1,0 +1,18 @@
+
+struct S
+    var i: int64 = 7
+end
+
+function f(i: S)() returns int64
+    var s: S
+    s = i //inparam rhs struct direct
+    return s.i 
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f({i=8})
+        await true
+    end
+end

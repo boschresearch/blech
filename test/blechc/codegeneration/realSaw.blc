@@ -1,0 +1,19 @@
+
+function increase(amount: float32)(x: float32)
+    x = x + amount
+end
+
+@[EntryPoint]
+activity sin()(ot: float32)
+    // ramp up and down
+    repeat
+        repeat
+            increase(0.1f)(ot)
+            await true
+        until ot > 0.99f end
+        repeat
+            increase(- 0.1f)(ot)
+            await true
+        until ot < 0.01f end
+    end
+end

@@ -1,0 +1,22 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B()(o: S)
+    o.i = 7.654f
+    await true
+end
+
+@[EntryPoint]
+activity A()
+    var x: T
+    await true
+    run B()(x.s) // local outarg struct fieldaccess cur
+    await true
+end

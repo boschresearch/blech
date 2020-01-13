@@ -1,0 +1,19 @@
+struct Foo
+    var b: bool
+    var a: int32
+    var r: float32
+end
+
+const aa: [7]int32 = {[2]=5, 8, 9, 8}
+const bb: [2][7]int32 = {[1] = aa}
+
+function f(x: [7]int32)() returns int32
+     return x[4]
+end
+
+@[EntryPoint]
+activity entry()()
+    var ff = f(bb[1])
+    
+    await true
+end

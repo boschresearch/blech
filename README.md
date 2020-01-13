@@ -20,8 +20,8 @@ git clone https://github.com/boschresearch/blech
 ```
 To build the project, you need `.NetCore` installed. Go to the Microsoft website and follow their instructions to install the latest stable `.NetCore` available for your operating system.
 
-Navigate to the folder where you have checked out the Blech repository, by default it is called `blech`. It should contain the file `BlechBoxNetCore.sln`. Now you have choices:
-  * For a simple **debug build** got to your repository and run
+Navigate to the folder where you have checked out the BlechBox project. It should contain the file `Blech.sln`. Now you have choices:
+  * For a simple **debug build** run
     ```
     dotnet build
     ```
@@ -32,7 +32,7 @@ Navigate to the folder where you have checked out the Blech repository, by defau
     ```
   * For a release build additionally use the `-c Release` option.
 
-  * Finally, for a **self-contained release build**, which is dotnet independent but operating system dependent, you need to run `dotnet publish` with a specific runtime identifier like so
+  * Finally, for a **self-contained release build**, which is operating system dependent, you need to run `dotnet publish` with a specific runtime identifier like so
     ```
     dotnet publish -c Release -r win-x64
     ```
@@ -50,14 +50,18 @@ In order to **run the unit tests** execute
 dotnet test
 ```
 This includes parser, name resolution, type checking and causality checking tests.
-
-**Code generation**, however, is tested separately outside this framework. In `./test/blechc` you can find `testCodegenerationAll.bat` which automates testing on windows. It merely is a wrapper for a call to `runTests.fsx` in the same folder.
-
 If you use VisualStudio 2017 or later, you can open the solution file and build the project from within VisualStudio. You can also run the unit tests provided you have installed the `NUnit3 Test Adapter` plugin.
+
+**Code generation**, however, is tested separately outside this framework. In `./test/blechc` invoke 
+```
+dotnet run -- codegeneration tmp
+```
+This (upon first invocation) will interactively create a `config` file, and then compile every file in `codegeneration` to C, compile that to an executable, run it, and compare the resulting trace with the specified trace. In this way we ensure that changes to our backend do not change the behaviour of the generated files.
+The batch script `testCodegenerationAll.bat` automates this testing process on Windows. It ensures that the program is executed from the Developer Command Prompt, that generated files from previous runs are deleted and calls the test framework on every folder.
 
 ### Use blechc
 
-Assuming you have a binary of the Blech Compiler `blechc` for your operating system, or you have built the BlechBox project yourself from sources, this sections tells you how to use it.
+Assuming you have a binary of the Blech Compiler `blechc` for your operating system, or you have built the Blech project yourself from sources, this sections tells you how to use it.
 
 If the `blechc` binary is in your `$PATH`, you can invoke the compiler by simply writing
 ```

@@ -1,0 +1,19 @@
+
+struct S 
+    var n: int32
+    var flag: bool
+end
+
+@[EntryPoint]
+activity main(n: int32, s: S, a: [4]int32)
+    var l: int32 = 42
+    repeat
+        var i = n % 4
+        if s.flag then
+            l = s.n
+        else
+            l = a[i]
+        end
+        await s.flag
+    end
+end

@@ -1,0 +1,13 @@
+const tt = true
+
+function f(x: int32)() returns int32
+    const loc: int32 = 123
+    if tt then return x * loc
+    else return x end
+end
+
+@[EntryPoint]
+activity entry()()
+    await true
+    var t = f(2)
+end

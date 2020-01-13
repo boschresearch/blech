@@ -1,0 +1,40 @@
+/*
+scchart spuriousCycle {
+    int x
+    
+    region {
+      initial state X1 {
+        region {
+          /* await x >= 2 */
+          initial state A1
+          if x >= 2 go to A2
+          final state A2
+        }
+        region {
+          /* repeat x = x + 1 await true end */
+          initial state B1 immediate do x++ go to B2
+          state B2
+          if true go to B1
+          if false go to B3
+          final state B3 
+        }
+      }
+      join to X2
+      state X2 immediate go to X1      
+    }
+}
+*/
+@[EntryPoint]
+activity A ()
+    var x: int32
+    repeat
+        cobegin weak
+            await x >= 2
+        with weak
+            repeat
+                x = x + 1
+                await true
+            end
+        end
+    end
+end

@@ -1,0 +1,36 @@
+@[EntryPoint]
+activity A()
+    var cond = false
+    var i: int32
+    var j: int32
+    cobegin
+        var abortFinished = false
+        repeat
+            when cond abort
+                i = 0
+                repeat
+                    i = i + 1
+                    await true
+                end
+                abortFinished = true
+            end
+        until abortFinished end
+    with
+        await true
+        await true
+        cond = true
+        await true
+        cond = false
+        await true
+        await true
+        await true
+    with
+        when cond reset
+            j = 0
+            repeat
+                j = j + 1
+                await true
+            end
+        end
+    end
+end

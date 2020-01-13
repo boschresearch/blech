@@ -1,0 +1,19 @@
+
+activity add (i: int8)(o: int8)
+    repeat
+        o = o + i
+        await true
+    end
+end
+
+@[EntryPoint]
+activity main ()()
+    var x: int8 = 1
+    var y: int8 = 1
+
+    cobegin
+        run add(x)(y)
+    with
+        run add(prev y)(x)
+    end
+end

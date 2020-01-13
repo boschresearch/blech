@@ -1,0 +1,33 @@
+
+struct S
+    var i: float32 = 7.f
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+activity B(i: S)() returns bool
+    let l = i.i
+    await true
+    return l < 57.654f
+    
+end
+
+activity A()(x: T)
+    x = {x=71.23}
+    if true then
+        var y: bool
+        y = run B(x.s)() // output inarg struct fieldaccess cur
+    end
+    await true
+    
+    await true
+end
+
+@[EntryPoint]
+activity entry()
+    var v: T
+    run A()(v)
+end

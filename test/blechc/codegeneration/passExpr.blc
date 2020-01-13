@@ -1,0 +1,27 @@
+const LEN: int8 = 100
+
+struct S
+    var vec: [LEN]float64
+    var stat: int32
+end
+
+function f(i: int32, v: [LEN]float64)
+
+end
+
+activity a(i: int32, v: [LEN]float64)
+    await true
+end
+
+@[EntryPoint]
+activity E ()()
+    const cS: S = {stat = 32, vec = {1.,2.,3.,4.}}
+    var vS: S = {stat = -19, vec = {[LEN/2]=1.,2.,3.,4.}}
+    f(cS.stat, vS.vec)
+    f(LEN + vS.stat, cS.vec)
+    let asdf = LEN + cS.stat + vS.stat
+    run a(cS.stat + vS.stat, vS.vec)
+    run a(cS.stat + vS.stat, cS.vec)
+    f(1, {cS.vec[2], vS.vec[2]})
+    await false
+end

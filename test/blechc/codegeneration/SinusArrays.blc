@@ -1,0 +1,77 @@
+
+function increase(amount: float32)(x: float32)
+    x = x + amount
+end
+
+activity ramp()(ot: float32)
+    // ramp up and down
+    repeat
+        repeat
+            increase(0.1f)(ot)
+            await true
+        until ot > 0.99 end
+        repeat
+            increase(- 0.1f)(ot)
+            await true
+        until ot < 0.01 end
+    end
+end
+
+activity pid(actual_value: float32, desired_value: float32)(outp: float32)
+    var error_prior: float32 = 0.0f
+    var integral: float32 = 0.0f
+    var KP: float32 = 1.0f
+    var KI: float32 = 1.0f
+    var KD: float32 = 0.0f
+    var iteration_time: float32 = 1.0f
+
+    repeat
+        var error_ = desired_value - actual_value
+        integral = integral + (error_ * iteration_time)
+        var derivative = (error_ - error_prior)/iteration_time
+        outp = KP*error_ + KI*integral + KD*derivative
+        error_prior = error_
+        await true
+    end
+end
+
+function iSumWindow(diff: float32)(arr: [3]float32, idx: int8) returns float32
+    arr[idx] = diff
+    idx = (idx + 1) % 3
+    // var res = 0.0
+    // for i in #arr do
+    //     res = res + arr[i]
+    // end
+    // return res
+    return (arr[0] + arr[1] + arr[2])
+end
+
+activity sumWindow(diff: float32)(sum: float32)
+    var window: [3]float32
+    var idx: int8 = 0
+    repeat
+        sum = iSumWindow(diff)(window, idx)
+        await true
+    end
+end
+
+@[EntryPoint]
+activity main()() 
+    var insig: float32
+    var desired_value: float32 = .5f
+    var diff: float32
+    var result: float32
+    var sum: float32
+    cobegin weak
+        run pid(insig, desired_value)(diff)
+    with weak
+        run ramp()(insig)
+    with weak
+        repeat
+            result = insig + diff
+            await true
+        end
+    with weak
+        run sumWindow(diff)(sum)
+    end
+end

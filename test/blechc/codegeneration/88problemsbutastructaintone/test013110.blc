@@ -1,0 +1,25 @@
+
+struct S
+    var i: int64 = 7
+end
+
+struct T
+    var x: float64 = 42.0
+    var s: S
+end
+
+function g(x: S)() returns int64
+    return x.i * 10
+end
+
+function f(i: T)() returns int64 
+    return g(i.s) //inparam input struct fieldaccess
+end
+
+@[EntryPoint]
+activity entry()()
+    repeat
+        let r = f({x = .5, s = {i = 89} })
+        await true
+    end
+end

@@ -1,0 +1,19 @@
+
+struct S
+    var f: float32
+end
+
+struct T
+    var b: bool
+    var s: S
+end
+
+@[EntryPoint]
+activity A()
+    var l: T
+    var l2: S
+    await true
+    l2 = {f = 0.4217f}
+    l.s = l2 // local lhs struct fieldaccess cur
+    await false
+end
