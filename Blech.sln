@@ -14,20 +14,14 @@ EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "blechc", "src\blechc\blechc.fsproj", "{2785AF65-56A7-4A79-877D-6BFABD36F69A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{202910CC-1558-448C-A7E5-CA9CE6AB592E}"
-	ProjectSection(SolutionItems) = preProject
-		test\migrateToModule.fsx = test\migrateToModule.fsx
-		test\migrateToProgram.fsx = test\migrateToProgram.fsx
-		test\removeEntryPointFromModule.fsx = test\removeEntryPointFromModule.fsx
-		test\updateTraceSpecFromTest.fsx = test\updateTraceSpecFromTest.fsx
-	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "TestPhases", "test\TestPhases\TestPhases.fsproj", "{5DA2757A-F79A-4EBF-B8EB-E5D98613E309}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Common", "src\Common\Common.fsproj", "{94465CC8-2C52-4F82-B20F-97D0BB55EDB9}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TestCodegeneration", "test\blechc\TestCodegeneration.fsproj", "{31486144-3A9A-4014-B9BE-0734C1B0AE09}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "TestCodegeneration", "test\blechc\TestCodegeneration.fsproj", "{31486144-3A9A-4014-B9BE-0734C1B0AE09}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Common.Tests", "test\Common.Tests\Common.Tests.fsproj", "{60EDC7E6-EAE7-4604-B6F9-BDFC8BA8893B}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Common.Tests", "test\Common.Tests\Common.Tests.fsproj", "{60EDC7E6-EAE7-4604-B6F9-BDFC8BA8893B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
