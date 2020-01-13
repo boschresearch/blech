@@ -29,7 +29,6 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Data" Version="3.3.3" />
-    <PackageReference Include="XPlot.Plotly" Version="3.0.1" />
   </ItemGroup>
 
 </Project>
