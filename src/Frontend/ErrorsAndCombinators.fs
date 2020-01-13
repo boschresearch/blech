@@ -192,7 +192,7 @@ type TyCheckError =
             | NeedConstInit (r, n) -> r, sprintf "The initialiser of %s must be constant. Make sure not to use \"let\"-bound or other variables and parameters in it." n.idToString
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
-            | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static paramter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static paramters." name.idToString (checkedInitExpr.ToString())
+            | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
