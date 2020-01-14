@@ -829,6 +829,7 @@ type private ProcessedMembers =
         funacts: Collections.ResizeArray<Result<SubProgramDecl, TyCheckError list>>
         funPrototypes: Collections.ResizeArray<Result<FunctionPrototype, TyCheckError list>>
         variables: Collections.ResizeArray<Result<VarDecl, TyCheckError list>>
+        externalVariables: Collections.ResizeArray<Result<ExternalVarDecl, TyCheckError list>>
         types: Collections.ResizeArray<Result<Types, TyCheckError list>>
         memberPragmas: ResizeArray<Result<Attribute.MemberPragma, TyCheckError list>>
         mutable entryPoint: Result<SubProgramDecl, TyCheckError list> option
@@ -836,6 +837,7 @@ type private ProcessedMembers =
     member this.AddFunAct fa = this.funacts.Add fa
     member this.AddFunPrototype fp = this.funPrototypes.Add fp
     member this.AddVariable v = this.variables.Add v
+    member this.AddExternalVariable v = this.externalVariables.Add v
     member this.AddType t = this.types.Add t
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
@@ -867,6 +869,7 @@ type private ProcessedMembers =
     member this.GetFunActs = List.ofSeq this.funacts
     member this.GetFunPrototypes = List.ofSeq this.funPrototypes
     member this.GetVariables = List.ofSeq this.variables
+    member this.GetExternalVariables = List.ofSeq this.externalVariables
     member this.GetTypes = List.ofSeq this.types
     member this.GetMemberPragmas = List.ofSeq this.memberPragmas
     member this.GetEntryPoint = this.entryPoint
@@ -876,6 +879,7 @@ type private ProcessedMembers =
             funacts = Collections.ResizeArray()
             funPrototypes = Collections.ResizeArray()
             variables = Collections.ResizeArray()
+            externalVariables = Collections.ResizeArray()
             types = Collections.ResizeArray()
             memberPragmas = Collections.ResizeArray()
             entryPoint = None
@@ -893,6 +897,7 @@ let public fPackage lut (pack: AST.Package) =
             typedMembers.GetFunActs,
             typedMembers.GetFunPrototypes,
             typedMembers.GetVariables,
+            typedMembers.GetExternalVariables,
             typedMembers.GetTypes,
             typedMembers.GetMemberPragmas,
             typedMembers.GetEntryPoint
@@ -930,7 +935,12 @@ let public fPackage lut (pack: AST.Package) =
                 //let _ = fClockDecl c
                 () // ignore this member
             | AST.Member.Var v -> 
-                do typedMembers.AddVariable (recVarDecl lut v)
+                if v.isExtern then
+                    chkExternalVarDecl lut v
+                    |> typedMembers.AddExternalVariable
+                else
+                    recVarDecl lut v
+                    |> typedMembers.AddVariable
             | AST.Member.Subprogram a ->
                 let retTypOpt = Option.map (recReturnDecl lut) a.result
                 let funact = 
@@ -952,7 +962,7 @@ let public fPackage lut (pack: AST.Package) =
                 do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
-    let createPackage ((((((modName, funPrototypes), funacts), variables), types), memberPragmas), entryPoint) =
+    let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
     
         assert (List.length types = lut.userTypes.Count)
         {
@@ -961,11 +971,12 @@ let public fPackage lut (pack: AST.Package) =
             funPrototypes = funPrototypes
             funacts = funacts
             variables = variables
+            externalVariables = externalVariables
             memberPragmas = memberPragmas
             entryPoint = entryPoint
         }
     
-    let funacts, funPrototypes, variables, types, memberPragmas, entryPoint = 
+    let funacts, funPrototypes, variables, externalVariables, types, memberPragmas, entryPoint = 
         let typedMembers = ProcessedMembers.Empty ()
         processMembers typedMembers (pack.imports @ pack.members)
     
@@ -976,6 +987,7 @@ let public fPackage lut (pack: AST.Package) =
         |> combine <| contract funPrototypes
         |> combine <| contract funacts
         |> combine <| contract variables
+        |> combine <| contract externalVariables
         |> combine <| contract types
         |> combine <| contract memberPragmas
         |> combine <| ofOption entryPoint

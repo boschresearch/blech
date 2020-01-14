@@ -365,6 +365,7 @@ and BlechModule =
         funPrototypes: FunctionPrototype list
         funacts: SubProgramDecl list
         variables: VarDecl list
+        externalVariables: ExternalVarDecl list
         memberPragmas: Attribute.MemberPragma list
         entryPoint: SubProgramDecl option
     }
@@ -377,6 +378,7 @@ and BlechModule =
         |> List.append <| (this.memberPragmas |> List.map (fun mp -> mp.ToDoc))
         |> List.append <| (this.types |> List.map (fun t -> t.ToDoc))
         |> List.append <| (this.variables |> List.map (fun v -> v.ToDoc))
+        |> List.append <| (this.externalVariables |> List.map (fun v -> v.ToDoc))
         |> List.append <| (this.funPrototypes |> List.map (fun f -> f.ToDoc))
         |> List.append <| (this.funacts |> List.map (fun f -> f.ToDoc))
         |> punctuate line 
