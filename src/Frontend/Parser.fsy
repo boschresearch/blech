@@ -762,7 +762,7 @@ LocalVariable
 
 
 LocalConstant
-    :  OptAnnotations ConstantQualifier OptRef Name TypeAnnotation
+    /* :  OptAnnotations ConstantQualifier OptRef Name TypeAnnotation
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $5.Range
                                                              name = $4
                                                              permission = $2
@@ -770,8 +770,8 @@ LocalConstant
                                                              isExtern = false
                                                              datatype = Some $5
                                                              initialiser = None
-                                                             annotations = $1 } }
-/*    | OptAnnotations EXTERN ConstantQualifier OptRef Name TypeAnnotation
+                                                             annotations = $1 } } */
+    : OptAnnotations EXTERN ConstantQualifier OptRef Name TypeAnnotation
                                                 { LocalVar { VarDecl.range = unionRanges $2 $6.Range
                                                              name = $5
                                                              permission = $3
@@ -779,7 +779,7 @@ LocalConstant
                                                              isExtern = true
                                                              datatype = Some $6
                                                              initialiser = None
-                                                             annotations = $1 } }  */
+                                                             annotations = $1 } } 
 
 
     |  OptAnnotations ConstantQualifier OptRef Name OptTypeAnnotation ASSIGN Expr
