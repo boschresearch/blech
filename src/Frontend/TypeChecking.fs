@@ -380,10 +380,7 @@ let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt v
         match permission with 
         | AST.ReadOnly (ro, _) ->
             match ro with
-            // no external const allowed
-            // (we do not support parsing C macros)
-            // a C const value must be declared as param in Blech
-            | AST.Const -> Error [] // TODO
+            | AST.Const -> Ok Mutability.CompileTimeConstant
             | AST.Let -> Ok Mutability.Immutable
             | AST.Param -> Ok Mutability.StaticParameter
         | AST.ReadWrite _ -> Ok Mutability.Variable
