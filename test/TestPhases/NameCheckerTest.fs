@@ -24,14 +24,14 @@ open Blech.Frontend
 [<TestFixture>]
 type Test() =
 
-    /// load test cases for typeCheckValidFiles test
+    /// load test cases for nameCheckValidFiles test
     static member validFiles =
         TestFiles.validFiles TestFiles.Namecheck
         
-    /// run typeCheckValidFiles
+    /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.typeCheckValidFiles (loadWhat, moduleName, filePath) =
+    member x.nameCheckValidFiles (loadWhat, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
         
         let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
@@ -48,14 +48,14 @@ type Test() =
             printfn "%s" env.Show
             Assert.True true
             
-    /// load test cases for typeCheckInvalidInputs test
+    /// load test cases for nameCheckInvalidInputs test
     static member invalidFiles = 
         TestFiles.invalidFiles TestFiles.Namecheck
         
-    /// run typeCheckInvalidInputs
+    /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.typeCheckInvalidInputs (loadWhat, moduleName, filePath) =
+    member x.nameCheckInvalidInputs (loadWhat, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
         
         let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
