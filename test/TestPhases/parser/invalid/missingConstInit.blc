@@ -1,0 +1,5 @@
+@[EntryPoint]
+activity E ()()
+    const fb: bool 
+    await true
+end
