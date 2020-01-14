@@ -134,32 +134,12 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.VarDecl f -> Some f | _ -> None)
 
-    // Todo: delete this, user constants do not need representation in C code, fjg 18.12.19
-    //let userConst =
-    //    let renderConst v =
-    //        let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
-    //        assert (List.length prereqStmt = 0)
-            
-    //        let macro = 
-    //            txt "#define" <+> ppStaticName v.name <+> processedRhs
-    //            |> groupWith (txt " \\")
-
-    //        cpOptDocComments v.annotation.doc
-    //        |> dpOptLinePrefix
-    //        <| macro
-
-    //    varDecls
-    //    |> Seq.filter (fun vd -> vd.IsConst)
-    //    |> Seq.map renderConst
-    //    |> dpBlock
-
-
     let externConsts = 
-        varDecls
-        |> Seq.filter (fun (ec: VarDecl) -> ec.IsExternConst) 
+        ctx.tcc.nameToDecl.Values
+        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
     
     let externConstMacros = 
-        let renderExternConst (ec: VarDecl) = 
+        let renderExternConst (ec: ExternalVarDecl) = 
             let cexpr = 
                 match ec.annotation.cvardecl with
                 | Some (Attribute.CConst (binding = text)) ->
@@ -218,7 +198,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
     let cHeaders = 
         let hfiles =
             let cCalls = Seq.choose (fun (fp: FunctionPrototype) -> fp.annotation.TryGetCHeader) cCalls
-            let extConsts = Seq.choose (fun (vd: VarDecl) -> vd.annotation.TryGetCHeader) externConsts
+            let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
             let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
             Seq.append extConsts cCalls 

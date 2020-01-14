@@ -244,7 +244,6 @@ type private DeclKind =
     | Local
     | Constant
     | StaticParameter // not in SCODE analysis
-    | ExternConstant  
 
 type private SubProgKind =
     | Function
@@ -280,8 +279,10 @@ let private getDeclKind (ctx: TranslationContext) (name:TypedMemLoc) =
             else InputParam
         | Declarable.VarDecl v when v.mutability.Equals Mutability.CompileTimeConstant -> Constant
         | Declarable.VarDecl v when v.mutability.Equals Mutability.StaticParameter -> StaticParameter
-        | Declarable.VarDecl v when v.mutability.Equals Mutability.ExternConstant -> ExternConstant
-        | Declarable.VarDecl _ -> Local //when not <| v.mutability.Equals Mutability.CompileTimeConstant
+        | Declarable.VarDecl _ -> Local
+        | Declarable.ExternalVarDecl v when v.mutability.Equals Mutability.CompileTimeConstant -> Constant
+        | Declarable.ExternalVarDecl v when v.mutability.Equals Mutability.StaticParameter -> StaticParameter
+        | Declarable.ExternalVarDecl _ -> Local
         | Declarable.SubProgramDecl _
         | Declarable.FunctionPrototype _ -> failwith "The name of a sub program cannot appear where data is expected." 
     with
@@ -386,8 +387,7 @@ let private needDereferencing subProgKind usage timepoint ctx tml =
             else
                 false
         | Constant
-        | StaticParameter // not in SCODE analysis
-        | ExternConstant -> 
+        | StaticParameter -> // not in SCODE analysis
             false
     | Previous ->
         false
@@ -551,14 +551,12 @@ and private selectNameRendererInActivity ctx tml =
     match getDeclKind ctx tml with
     | DeclKind.Local 
     | DeclKind.Constant 
-    | DeclKind.ExternConstant
     | DeclKind.StaticParameter when tml.QNamePrefix.IsDynamic -> ppNameInActivity // see comment on dynamic names in local constants in CommonTypes.fs:38
     | _ -> ppName
     
 and private selectNameRendererInFunction ctx tml =
     match getDeclKind ctx tml with
     | DeclKind.Constant
-    | DeclKind.ExternConstant
     | DeclKind.StaticParameter when tml.QNamePrefix.IsDynamic -> translateQnameToStaticName >> txt // see comment on dynamic names in local constants in CommonTypes.fs:38
     | _ -> ppName
 
@@ -766,7 +764,8 @@ and private cpExpr inFunction ctx expr =
             | Declarable.FunctionPrototype fp -> ppGlobalName whoToCall, fp.returns
             | Declarable.SubProgramDecl s -> ppName whoToCall, s.returns
             | Declarable.ParamDecl _
-            | Declarable.VarDecl _ -> failwith "Expected to call a function but found something else!"
+            | Declarable.VarDecl _ 
+            | Declarable.ExternalVarDecl _ -> failwith "Expected to call a function but found something else!"
         let prereqStmtsLst, transInputs = 
             inputs
             |> List.map (makeTmpForComplexConst inFunction ctx)

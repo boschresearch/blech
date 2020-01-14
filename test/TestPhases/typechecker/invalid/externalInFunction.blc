@@ -1,0 +1,8 @@
+function f ()()
+    extern let c: float32
+end
+@[EntryPoint]
+activity E ()()
+    extern var foo: int32
+    await true
+end

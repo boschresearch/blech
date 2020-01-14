@@ -1,0 +1,6 @@
+@[EntryPoint]
+activity E ()()
+    @[CConst(binding="", header="")]
+    extern const foo: int32
+    await true
+end

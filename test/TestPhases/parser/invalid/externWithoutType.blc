@@ -1,0 +1,5 @@
+@[EntryPoint]
+activity E ()()
+    extern var foo = true
+    await true
+end
