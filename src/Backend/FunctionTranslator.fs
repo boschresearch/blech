@@ -77,7 +77,7 @@ and private translateFunctionStatement ctx curComp stmt =
                 let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
                 let init = cpArrayDecl v.name v.datatype <+> txt "=" <+> processedRhs <^> semi
                 prereqStmt @ [init] |> vsep
-                
+    | Stmt.ExternalVarDecl _ -> failwith "Found an external variable in a function. This should have been detected earlier."            
     // actions
     | Stmt.Assign (r, lhs, rhs) ->
         let norm =

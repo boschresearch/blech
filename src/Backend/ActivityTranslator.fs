@@ -744,6 +744,7 @@ let private translateBlock ctx compilations curComp block =
 
 //    body |> List.map processStmt |> List.concat |> List.distinct
 
+/// Extract all QNames of variables that require a prev location in given code
 // runs on nodes and program graphs instead of statements
 // might change again
 let private collectVarsToPrev2 pg =
@@ -790,6 +791,7 @@ let private collectVarsToPrev2 pg =
         | ActionLocation action ->
             match action with
             | Nothing -> []
+            | ExternalVarDecl _ -> [] // has not init value, if prev'ed it appears in some rhs
             | VarDecl v -> processExpr v.initValue
             | Assert (_, expr, _)
             | Assume (_, expr, _)

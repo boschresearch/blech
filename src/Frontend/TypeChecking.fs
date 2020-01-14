@@ -231,6 +231,38 @@ let private checkStmtsWillPause p name stmts =
         | false -> Error [ActivityHasInstantaneousPath(p, name)]
 
 
+let private determineGlobalOutputs lut bodyRes =
+    let rec searchExternalVarDecl oneStmt =
+        match oneStmt with
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [v]
+        // aggregate globals used in subactivities
+        | ActivityCall (_, name, _, _, _) ->
+            match lut.nameToDecl.[name] with
+            | SubProgramDecl spd -> spd.globalOutputs
+            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        //atomic statements which are not a mutable external variable
+        | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
+        | Await _ -> []
+        // statements containing statements
+        | RepeatUntil (_, stmts, _, _)
+        | Preempt (_,_,_,_,stmts)
+        | WhileRepeat (_, _, stmts)
+        | StmtSequence stmts ->
+            stmts |> List.collect searchExternalVarDecl
+        | ITE (_, _, ifBranch, elseBranch) ->
+            ifBranch @ elseBranch |> List.collect searchExternalVarDecl
+        | Cobegin (_, blocks) ->
+            blocks
+            |> List.unzip
+            |> snd
+            |> List.concat
+            |> List.collect searchExternalVarDecl
+
+    match bodyRes with
+    | Error _ -> []
+    | Ok body -> searchExternalVarDecl (StmtSequence body)
+        
 //=============================================================================
 // Short-hand stuff
 //=============================================================================
@@ -475,7 +507,7 @@ let private fFunPrototype lut pos name inputs outputs retType annotation =
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
-    let createSubProgram (((((qname, ins), outs), ret), stmts), annotation) = 
+    let createSubProgram globalOutputs (((((qname, ins), outs), ret), stmts), annotation) = 
         let funact =
             {
                 SubProgramDecl.isFunction = isFunction
@@ -483,6 +515,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
                 name = qname
                 inputs = ins
                 outputs = outs
+                globalOutputs = globalOutputs
                 body = stmts
                 returns = ret
                 annotation = annotation
@@ -509,20 +542,22 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
         let cb = contract body 
         if isFunction then
             cb
-            |> Result.bind checkAbsenceOfSyncStmts
+            |> Result.bind checkAbsenceOfSyncStmts // also excludes external variables
             |> Result.bind (fun _ -> cb) // if no synchronous statements were found, return the contracted body
         else
             cb
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
+    let globalOutputs = determineGlobalOutputs lut contractedBody
+
     Ok (lut.ncEnv.nameToQname name)
     |> combine <| contract inputs
     |> combine <| contract outputs
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map createSubProgram
+    |> Result.map (createSubProgram globalOutputs)
 
 
 //=============================================================================

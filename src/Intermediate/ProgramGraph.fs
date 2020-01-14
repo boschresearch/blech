@@ -308,6 +308,20 @@ module ProgramGraph =
         inputs |> List.iter (addNameRead context callNode)
         outputs |> List.iter (addNameWritten context callNode)
         retvar |> Option.iter (addNameWritten context callNode)
+
+        // add locally declared external (output) variables
+        let addGlobalOutput (extVarDecl: ExternalVarDecl) =
+            let newLhs =
+                { lhs = LhsCur (Loc extVarDecl.name)
+                  typ = extVarDecl.datatype
+                  range = extVarDecl.pos }
+            addNameWritten context pg.Entry newLhs
+        match context.lut.nameToDecl.[name] with
+        | SubProgramDecl spd ->
+            let globalOutputs = spd.globalOutputs
+            globalOutputs |> List.iter addGlobalOutput
+        | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        
         
         { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 

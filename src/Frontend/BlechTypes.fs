@@ -295,6 +295,7 @@ and SubProgramDecl =
         name: QName
         inputs: ParamDecl list
         outputs: ParamDecl list
+        globalOutputs: ExternalVarDecl list
         body: Stmt list // TODO: maybe turn into stmt?
         returns: ValueTypes
         annotation: Attribute.SubProgram
