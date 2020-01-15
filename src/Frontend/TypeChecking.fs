@@ -233,34 +233,40 @@ let private checkStmtsWillPause p name stmts =
 
 let private determineGlobalOutputs lut bodyRes =
     let rec searchExternalVarDecl oneStmt =
+        let searchUnzipAndCollect xs = 
+            let ll = xs |> List.map searchExternalVarDecl 
+            ll |> List.map fst |> List.concat, 
+            ll |> List.map snd |> List.concat
         match oneStmt with
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [v]
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v]
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[]
         // aggregate globals used in subactivities
         | ActivityCall (_, name, _, _, _) ->
             match lut.nameToDecl.[name] with
-            | SubProgramDecl spd -> spd.globalOutputs
+            | SubProgramDecl spd -> [], spd.globalOutputs
             | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
-        | Await _ -> []
+        | Await _ -> [],[]
         // statements containing statements
         | RepeatUntil (_, stmts, _, _)
         | Preempt (_,_,_,_,stmts)
         | WhileRepeat (_, _, stmts)
         | StmtSequence stmts ->
-            stmts |> List.collect searchExternalVarDecl
+            stmts |> searchUnzipAndCollect
         | ITE (_, _, ifBranch, elseBranch) ->
-            ifBranch @ elseBranch |> List.collect searchExternalVarDecl
+            ifBranch @ elseBranch 
+            |> searchUnzipAndCollect
         | Cobegin (_, blocks) ->
             blocks
             |> List.unzip
             |> snd
             |> List.concat
-            |> List.collect searchExternalVarDecl
+            |> searchUnzipAndCollect
 
     match bodyRes with
-    | Error _ -> []
+    | Error _ -> [],[]
     | Ok body -> searchExternalVarDecl (StmtSequence body)
         
 //=============================================================================
@@ -507,7 +513,7 @@ let private fFunPrototype lut pos name inputs outputs retType annotation =
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
-    let createSubProgram globalOutputs (((((qname, ins), outs), ret), stmts), annotation) = 
+    let createSubProgram (globalInputs, globalOutputs) (((((qname, ins), outs), ret), stmts), annotation) = 
         let funact =
             {
                 SubProgramDecl.isFunction = isFunction
@@ -515,6 +521,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
                 name = qname
                 inputs = ins
                 outputs = outs
+                globalInputs = globalInputs
                 globalOutputs = globalOutputs
                 body = stmts
                 returns = ret
@@ -549,7 +556,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
-    let globalOutputs = determineGlobalOutputs lut contractedBody
+    let globalInputs, globalOutputs = determineGlobalOutputs lut contractedBody
 
     Ok (lut.ncEnv.nameToQname name)
     |> combine <| contract inputs
@@ -557,7 +564,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map (createSubProgram globalOutputs)
+    |> Result.map (createSubProgram (globalInputs, globalOutputs))
 
 
 //=============================================================================

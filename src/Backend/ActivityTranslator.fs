@@ -219,6 +219,48 @@ let private cpResetPc (pc: ParamDecl) =
     let ppPc = cpDeref (ppName pc.name)
     txt "BLC_SWITCH_TO_NEXTSTEP(" <^> ppPc <^> txt ")" <^> semi
 
+let private cpCopyInGlobal (v: ExternalVarDecl) =
+    let name = ppNameInActivity v.name
+    let extInit =
+        v.annotation.TryGetCBinding
+        |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
+        |> txt
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let declare = cpArrayDeclDoc name v.datatype <^> semi
+        let memcpy =
+            txt "memcpy"
+            <+> dpCommaSeparatedInParens
+                [ name
+                  extInit
+                  sizeofMacro v.datatype ]
+            <^> semi
+        declare <..> memcpy
+    | _ ->
+        cpType v.datatype 
+        <+> name <+> txt "=" 
+        <+> extInit <^> semi
+
+let private cpCopyOutGlobal (v: ExternalVarDecl) =
+    let name = ppNameInActivity v.name
+    let extInit =
+        v.annotation.TryGetCBinding
+        |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
+        |> txt
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let memcpy =
+            txt "memcpy"
+            <+> dpCommaSeparatedInParens
+                [ extInit
+                  name
+                  sizeofMacro v.datatype ]
+            <^> semi
+        memcpy
+    | _ ->
+        extInit <+> txt "=" <+> name <^> semi
+    
+
 
 //=============================================================================
 // Helpers for CodeGeneration - which return Docs
@@ -918,6 +960,20 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             |> (fun x -> pc4block x.Payload)
         txt "return" <+> cpDeref mainpc <+> semi
 
+    // copy-in external var/let
+    let copyIn =
+        subProgDecl.globalInputs @ subProgDecl.globalOutputs
+        |> List.map cpCopyInGlobal
+        |> dpBlock
+
+    // write extern var back to environment
+    let copyOut =
+        subProgDecl.globalOutputs
+        |> List.map cpCopyOutGlobal
+        |> dpBlock
+
+    // copy-out external var
+
     // initially declare variables and set the to the "previous" value
     let setPrevVars =
         (!curComp).varsToPrev
@@ -930,7 +986,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         | []
         | [_] -> failwith "An activity must have a non-empty body with at least one await."
         | initBlock :: rest -> 
-            setPrevVars :: txt "loopHead:" :: initBlock :: rest 
+            copyIn :: setPrevVars :: txt "loopHead:" :: initBlock :: rest 
             |> dpBlock
 
     let completeActivityCode =
@@ -940,6 +996,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         <+> cpIface (!curComp).iface
         <+> txt "{"
         <.> cpIndent completeBody
+        <.> cpIndent copyOut
         <.> cpIndent resetPCs
         <.> cpIndent returnPC
         <.> txt "}"
