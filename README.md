@@ -1,4 +1,7 @@
+
 # Blech Compiler
+
+![](https://github.com/boschresearch/blech/workflows/build%20+%20unit%20tests/badge.svg)
 
 Blech is a language for developing reactive, real-time critical embedded software.
 This open source project implements a compiler which translates Blech to C.
@@ -9,8 +12,6 @@ applicable Open Source licenses allow you to adapt the software to your needs.
 Before using it in a safety relevant setting, make sure that the software
 fulfills your requirements and adjust it according to any applicable safety
 standards (e.g. ISO 26262).
-
-![](https://github.com/boschresearch/blech/workflows/build%20+%20unit%20tests/badge.svg)
 
 ## Quick guide to Blech tooling
 
