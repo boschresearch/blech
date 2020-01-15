@@ -10,6 +10,8 @@ Before using it in a safety relevant setting, make sure that the software
 fulfills your requirements and adjust it according to any applicable safety
 standards (e.g. ISO 26262).
 
+![](https://github.com/boschresearch/blech/workflows/build%20+%20unit%20tests/badge.svg)
+
 ## Quick guide to Blech tooling
 
 ### Build the Blech to C compiler blechc
