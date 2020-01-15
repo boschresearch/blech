@@ -269,7 +269,6 @@ and VarDecl =
 and EnumTypeDecl = 
     { 
         range: range
-        isSingleton: bool
         isReference: bool
         name: Name
         rawtype : DataType option
@@ -295,7 +294,6 @@ and TagDecl =
 and StructTypeDecl = 
     { 
         range: range
-        isSingleton: bool
         isReference: bool
         name: Name
         fields: Member list
@@ -309,7 +307,6 @@ and StructTypeDecl =
 and NewTypeDecl = 
     { 
         range: range
-        isSingleton: bool
         isReference: bool
         name: Name
         representation: DataType option
@@ -323,7 +320,6 @@ and NewTypeDecl =
 and TypeDecl = 
     { 
         range: range
-        isSingleton: bool
         isReference: bool
         name: Name
         aliasfor: DataType
@@ -406,6 +402,7 @@ and Prototype =
         range: range
         isExtern: bool
         isSingleton: bool
+        singletons: StaticNamedPath list
         isFunction: bool
         name: Name
         inputs: ParamDecl list
@@ -950,12 +947,10 @@ let numberTypeRange range (optUnitExpr: UnitExpr option) =
 let typeDeclRange (annos: Annotation list) modifiers startRange endRange =
     let fstRng = 
         match annos, modifiers with
-        | [], (None, None) -> 
+        | [], None -> 
             startRange
-        | [], (Some singletonRange, _) ->  
-            singletonRange
-        | [], (_, Some refRange) ->  
-            refRange
+        | [], Some modifierRange ->  
+            modifierRange
         | hd::_, _ ->
             hd.Range
 
@@ -1038,7 +1033,7 @@ let packageRange (imports: Member list) defaultRange (members: Member list) =
         unionRanges (membersRange imports) (membersRange members)
     
 
-let prototypeRange (annos: Annotation list) keywordRange inputsRange  optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option) =
+let externalFunctionRange (annos: Annotation list) externRange inputsRange  optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option) =
     let endRange = 
         if Option.isSome onClock then
             (Option.get onClock).Range
@@ -1050,8 +1045,27 @@ let prototypeRange (annos: Annotation list) keywordRange inputsRange  optOutputs
             inputsRange
     match annos with
     | [] ->
-        unionRanges keywordRange endRange
+        unionRanges externRange endRange
     | hd::_ ->
+        unionRanges hd.Range endRange
+
+let prototypeRange (annos: Annotation list) singleton startRange inputsRange optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option)  =
+    let endRange = 
+        if Option.isSome onClock then
+            (Option.get onClock).Range
+        elif Option.isSome returns then   
+            (Option.get returns).range
+        elif Option.isSome optOutputsRange then
+            Option.get optOutputsRange
+        else
+            inputsRange
+            
+    match annos, singleton with
+    | [], None ->
+        unionRanges startRange endRange
+    | [], Some sgltnRange ->
+        unionRanges sgltnRange endRange
+    | hd::_, _ ->
         unionRanges hd.Range endRange
 
  
