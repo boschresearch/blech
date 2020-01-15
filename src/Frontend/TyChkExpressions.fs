@@ -58,8 +58,11 @@ let internal isLhsMutable lut lhs =
         if found then
             match declarable with
             | Declarable.VarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
-            | ParamDecl p -> p.isMutable, p.datatype
-            | _ -> failwith "Asking for mutability of a subprogram. That cannot be right."
+            | Declarable.ParamDecl p -> p.isMutable, p.datatype
+            | Declarable.ExternalVarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
+            | Declarable.SubProgramDecl _
+            | Declarable.FunctionPrototype _ ->
+                failwith "Asking for mutability of a subprogram. That cannot be right."
         else
             failwith <| sprintf "Lhs %s not in nameToDecl" (qname.ToString())
     | FieldAccess (tml, ident) ->

@@ -568,7 +568,22 @@ and cpRhsInFunction ctx rhs =
 and cpRhsInActivity ctx rhs =
     let timepoint, tml = decomposeRhs rhs
     let renderName = selectNameRendererInActivity ctx tml
-    cpRenderData SubProgKind.Activity Usage.Rhs timepoint ctx tml renderName
+    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
+    match declaration with
+    | Declarable.VarDecl _ 
+    | Declarable.ParamDecl _ -> // regular variable in activity
+        cpRenderData SubProgKind.Activity Usage.Rhs timepoint ctx tml renderName
+    | Declarable.ExternalVarDecl v -> // special case, external variable
+        match v.mutability with
+        | Mutability.CompileTimeConstant
+        | Mutability.StaticParameter -> // treat external constants the same as above
+            cpRenderData SubProgKind.Activity Usage.Rhs timepoint ctx tml renderName
+        | Mutability.Variable
+        | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
+            cpRenderData SubProgKind.Function Usage.Rhs timepoint ctx tml renderName
+    | FunctionPrototype _
+    | SubProgramDecl _ 
+        -> failwith "Tried printing a variable, got something else."
 
 and cpLhsInFunction ctx lhs =
     let timepoint, tml = decomposeLhs lhs
@@ -578,7 +593,22 @@ and cpLhsInFunction ctx lhs =
 and cpLhsInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
-    cpRenderData SubProgKind.Activity Usage.Lhs timepoint ctx tml renderName
+    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
+    match declaration with
+    | Declarable.VarDecl _ 
+    | Declarable.ParamDecl _ -> // regular variable in activity
+        cpRenderData SubProgKind.Activity Usage.Lhs timepoint ctx tml renderName
+    | Declarable.ExternalVarDecl v -> // special case, external variable
+        match v.mutability with
+        | Mutability.CompileTimeConstant
+        | Mutability.StaticParameter -> // treat external constants the same as above
+            cpRenderData SubProgKind.Activity Usage.Lhs timepoint ctx tml renderName
+        | Mutability.Variable
+        | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
+            cpRenderData SubProgKind.Function Usage.Lhs timepoint ctx tml renderName
+    | FunctionPrototype _
+    | SubProgramDecl _ 
+        -> failwith "Tried printing a variable, got something else."
 
 and cpOutputArgInFunction ctx lhs =
     let timepoint, tml = decomposeLhs lhs

@@ -53,7 +53,7 @@ let rec private cpAction ctx curComp action =
         elif v.IsParam then
             txt "/* The local param declaration was lifted to top level */"
         else
-            // Otherwise this Blech variable is mutable or immutable (let), and it becomes a local variable in C
+            // Otherwise this Blech variable is mutable or immutable (let), and it becomes a static variable in C
             // interface of current activity is updated
             let newIface = Iface.addLocals (!curComp).iface {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := {!curComp with iface = newIface}
@@ -86,6 +86,7 @@ let rec private cpAction ctx curComp action =
                         | _ ->
                             cpAssignInActivity ctx lhs.lhs rhs
                     | _ -> failwith "Must be an assignment here!") // not nice
+            // zero out everything that is not set explicitly
             let reinit =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
@@ -93,7 +94,13 @@ let rec private cpAction ctx curComp action =
                     cpMemSet false ctx {lhs = LhsCur(Loc v.name); typ = v.datatype; range = v.pos}
                 | _ -> empty
             reinit :: norm @ [prevInit] |> dpBlock
-        
+
+    | Action.ExternalVarDecl v ->
+        // nothing to do: the external is used like a normal variable but in fact it is an auto C variable
+        // initialisation, prev initialisation happen in every reaction
+        // the code for that is generated in function "translate" below
+        txt "/* The extern declaration is outside the Blech code */"
+            
     | Action.Assign (r, lhs, rhs) ->
         let norm =
             normaliseAssign ctx.tcc (r, lhs, rhs)
