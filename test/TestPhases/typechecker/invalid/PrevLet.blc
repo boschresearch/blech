@@ -1,7 +1,7 @@
-module PrevImmutable
+module PrevLet
 
-param p: int64 = 7
 activity main ()()
+    let p: int64 = 7
     var x: int64
     x = prev p
     await false
