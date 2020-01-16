@@ -314,7 +314,7 @@ module ProgramGraph =
             let newLhs =
                 { lhs = LhsCur (Loc extVarDecl.name)
                   typ = extVarDecl.datatype
-                  range = extVarDecl.pos }
+                  range = pos } // use calling activity's source pos instead of declaration's
             addNameWritten context pg.Entry newLhs
         match context.lut.nameToDecl.[name] with
         | SubProgramDecl spd ->
