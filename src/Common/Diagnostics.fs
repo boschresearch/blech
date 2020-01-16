@@ -177,10 +177,13 @@ module Diagnostics =
         let hasErrors logger =
             logger.errorCount > 0
         
-        let addDiagnostic logger diagnostic  =
-            logger.diagnostics.Add diagnostic
-            if diagnostic.isError then 
-                logger.errorCount <- logger.errorCount + 1
+        let addDiagnostic logger diagnostic =
+            // make sure there are no multiple entried of the same error
+            // may otherwise happen due to symmetric write-write errors and the like
+            if not <| logger.diagnostics.Contains diagnostic then
+                logger.diagnostics.Add diagnostic
+                if diagnostic.isError then 
+                    logger.errorCount <- logger.errorCount + 1
 
         // USAGE: let causalLogErr = log givenLogger Causality Error
         let private log logger phase level (err: IDiagnosable) =
