@@ -406,6 +406,30 @@ let rec private decomposeTml = function
         name, accesses @ [TmlSubstructure.IndexAccess idx]
 
 
+let private isExtCurVar ctx (tml: TypedMemLoc) timepoint =
+    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
+    match declaration with
+    | Declarable.VarDecl _ 
+    | Declarable.ParamDecl _ -> // regular variable in activity
+        false
+    | Declarable.ExternalVarDecl v -> // special case, external variable
+        match v.mutability with
+        | Mutability.CompileTimeConstant
+        | Mutability.StaticParameter -> // treat external constants the same as above
+            false
+        | Mutability.Variable
+        | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
+            match timepoint with
+            | Current -> true
+            | _ -> false
+    | FunctionPrototype _
+    | SubProgramDecl _ 
+        -> failwith "Tried printing a variable, got something else."
+    |> function
+        | true -> SubProgKind.Function
+        | false -> SubProgKind.Activity
+
+
 let private moveConstFields ctx container fields =
     if isConstVarDecl ctx.tcc (Loc container) then
         let rec moveConstField (tml: TypedMemLoc) fs =
@@ -578,29 +602,8 @@ and cpRhsInFunction ctx rhs =
 and cpRhsInActivity ctx rhs =
     let timepoint, tml = decomposeRhs rhs
     let renderName = selectNameRendererInActivity ctx tml
-    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
     // if external && let/var && current, treat like local in activity
-    let isExtCurVar =
-        match declaration with
-        | Declarable.VarDecl _ 
-        | Declarable.ParamDecl _ -> // regular variable in activity
-            false
-        | Declarable.ExternalVarDecl v -> // special case, external variable
-            match v.mutability with
-            | Mutability.CompileTimeConstant
-            | Mutability.StaticParameter -> // treat external constants the same as above
-                false
-            | Mutability.Variable
-            | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
-                match timepoint with
-                | Current -> true
-                | _ -> false
-        | FunctionPrototype _
-        | SubProgramDecl _ 
-            -> failwith "Tried printing a variable, got something else."
-    let subProgKind =
-        if isExtCurVar then SubProgKind.Function
-        else SubProgKind.Activity
+    let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.Rhs timepoint ctx tml renderName
     
 
@@ -613,28 +616,7 @@ and cpLhsInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
     // if external && let/var && current, treat like local in activity
-    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
-    let isExtCurVar =
-        match declaration with
-        | Declarable.VarDecl _ 
-        | Declarable.ParamDecl _ -> // regular variable in activity
-            false
-        | Declarable.ExternalVarDecl v -> // special case, external variable
-            match v.mutability with
-            | Mutability.CompileTimeConstant
-            | Mutability.StaticParameter -> // treat external constants the same as above
-                false
-            | Mutability.Variable
-            | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
-                match timepoint with
-                | Current -> true
-                | _ -> false
-        | FunctionPrototype _
-        | SubProgramDecl _ 
-            -> failwith "Tried printing a variable, got something else."
-    let subProgKind =
-        if isExtCurVar then SubProgKind.Function
-        else SubProgKind.Activity
+    let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.Lhs timepoint ctx tml renderName
 
 and cpOutputArgInFunction ctx lhs =
@@ -646,28 +628,7 @@ and cpOutputArgInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
     // if external && let/var && current, treat like local in activity
-    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
-    let isExtCurVar =
-        match declaration with
-        | Declarable.VarDecl _ 
-        | Declarable.ParamDecl _ -> // regular variable in activity
-            false
-        | Declarable.ExternalVarDecl v -> // special case, external variable
-            match v.mutability with
-            | Mutability.CompileTimeConstant
-            | Mutability.StaticParameter -> // treat external constants the same as above
-                false
-            | Mutability.Variable
-            | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
-                match timepoint with
-                | Current -> true
-                | _ -> false
-        | FunctionPrototype _
-        | SubProgramDecl _ 
-            -> failwith "Tried printing a variable, got something else."
-    let subProgKind =
-        if isExtCurVar then SubProgKind.Function
-        else SubProgKind.Activity
+    let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.OutputArg timepoint ctx tml renderName
 
 and cpMemCpyArr inFunction ctx lhs (rhs: TypedRhs) =
