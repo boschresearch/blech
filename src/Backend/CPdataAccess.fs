@@ -522,6 +522,17 @@ and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (
     else
         // render name as usual
         let container, fields = decomposeTml tml
+        // hack: if prev on external variable, change name and treat as a current local variable
+        let timepoint, container =
+            let isExternal = 
+                match ctx.tcc.nameToDecl.[container] with
+                | Declarable.ExternalVarDecl _ -> true
+                | _ -> false
+            if timepoint.Equals Previous && isExternal then
+                Current, {container with basicId = "prev_" + container.basicId}
+            else
+                timepoint, container
+        // end hack
     
         let prefix = 
             match timepoint with

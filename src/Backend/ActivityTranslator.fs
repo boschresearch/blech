@@ -42,6 +42,24 @@ open CPdataAccess
 open CPrinter
 
 
+let private setExternPrevForNextReaction ctx (v: ExternalVarDecl) =
+    let prevName = {v.name with basicId = "prev_"+v.name.basicId}
+    let name = ppNameInActivity prevName
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let prereqStmts, processedContainer = cpRhsInActivity ctx (RhsCur (Loc v.name))
+        let cpy = 
+            txt "memcpy"
+            <^> dpCommaSeparatedInParens
+                [ name
+                  processedContainer
+                  sizeofMacro v.datatype ]
+            <^> semi
+        prereqStmts @ [cpy] |> dpBlock
+    | _ ->
+        let value = ppNameInActivity v.name
+        txt "*" <^> name <+> txt "=" <+> value <^> semi
+
 let rec private cpAction ctx curComp action =
     match action with
     | Action.Nothing -> txt ""
@@ -96,11 +114,22 @@ let rec private cpAction ctx curComp action =
             reinit :: norm @ [prevInit] |> dpBlock
 
     | Action.ExternalVarDecl v ->
-        // nothing to do: the external is used like a normal variable but in fact it is an auto C variable
-        // initialisation, prev initialisation happen in every reaction
-        // the code for that is generated in function "translate" below
-        txt "/* The extern declaration is outside the Blech code */"
-            
+        if List.contains v.name (!curComp).varsToPrev then
+            // Dually to local variables--prev on external variables are 
+            // generated as static C variables and thus added to the local interface here
+            let prevName = {v.name with basicId = "prev_"+v.name.basicId}
+            let newIface = Iface.addLocals (!curComp).iface {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
+            curComp := {!curComp with iface = newIface}
+            // make sure the prev variable is initialised in the first reaction
+            // this is crucial if the prev value is used in the same block where the variable is declared
+            setExternPrevForNextReaction ctx v
+                
+        else
+            // the external is used like a normal variable but in fact it is an auto C variable
+            // initialisation happens in every reaction
+            // the code for that is generated in function "translate" below
+            txt "/* The extern declaration is outside the Blech code */"
+                    
     | Action.Assign (r, lhs, rhs) ->
         let norm =
             normaliseAssign ctx.tcc (r, lhs, rhs)
@@ -259,7 +288,6 @@ let private cpCopyOutGlobal (v: ExternalVarDecl) =
         memcpy
     | _ ->
         extInit <+> txt "=" <+> name <^> semi
-    
 
 
 //=============================================================================
@@ -795,6 +823,7 @@ let private translateBlock ctx compilations curComp block =
 
 /// Extract all QNames of variables that require a prev location in given code
 // runs on nodes and program graphs instead of statements
+// became necessary when strong abort was translated by introducing a prev on the condition and thus deviating from given source code
 // might change again
 let private collectVarsToPrev2 pg =
     let rec processExpr expr =
@@ -972,12 +1001,25 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         |> List.map cpCopyOutGlobal
         |> dpBlock
 
-    // copy-out external var
-
     // initially declare variables and set the to the "previous" value
     let setPrevVars =
+        let takeOnlyLocal qn =
+            match ctx.tcc.nameToDecl.[qn] with
+            | Declarable.VarDecl _ -> true
+            | _ -> false // exclude ExternVarDecl since they are generated as automatic C vars
         (!curComp).varsToPrev
-        |> Seq.map (fun name -> cpAssignPrevInActivity ctx name)
+        |> Seq.filter takeOnlyLocal
+        |> Seq.map (cpAssignPrevInActivity ctx)
+        |> dpBlock
+
+    let setExternPrevVars =
+        let takeOnlyExtern qn =
+            match ctx.tcc.nameToDecl.[qn] with
+            | Declarable.ExternalVarDecl v -> Some v
+            | _ -> None
+        (!curComp).varsToPrev
+        |> Seq.choose takeOnlyExtern
+        |> Seq.map (setExternPrevForNextReaction ctx)
         |> dpBlock
 
     // insert val declarations and prev updates
@@ -996,6 +1038,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         <+> cpIface (!curComp).iface
         <+> txt "{"
         <.> cpIndent completeBody
+        <.> cpIndent setExternPrevVars // prev on extern is set AT THE END of the reaction
         <.> cpIndent copyOut
         <.> cpIndent resetPCs
         <.> cpIndent returnPC
@@ -1010,7 +1053,8 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     let optDoc = 
         cpOptDocComments subProgDecl.annotation.doc
 
-    curComp := { !curComp with 
+    curComp := { !curComp
+                 with 
                     signature = signature
                     implementation = completeActivityCode
                     doc = optDoc }
