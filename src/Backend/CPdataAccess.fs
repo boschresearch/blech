@@ -493,6 +493,19 @@ and makeTmpForComplexConst inFunction ctx (expr: TypedRhs) =
     | _ -> [], Orig expr
 // factored out name printing decision to a callback function
 and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (tml:TypedMemLoc) renderName =
+    let container, fields = decomposeTml tml
+    // hack: if prev on external variable, change name and treat as a current local variable
+    let timepoint, container =
+        let isExternal = 
+            match ctx.tcc.nameToDecl.[container] with
+            | Declarable.ExternalVarDecl _ -> true
+            | _ -> false
+        if timepoint.Equals Previous && isExternal then
+            Current, {container with basicId = "prev_" + container.basicId}
+        else
+            timepoint, container
+    // end hack
+
     let getAddr doc =
         if needAddress subProgKind usage timepoint ctx tml then
             doc |> parens |> cpRefto
@@ -508,7 +521,6 @@ and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (
     // need generation of tmp vars for constants here according to SCODE analysis
     if not (isTmlOnlyName tml) && isConstVarDecl ctx.tcc tml then
         // make tmp var
-        let container, fields = decomposeTml tml
         let container, fields = moveConstFields ctx container fields
         let prereq, tmpvar =
             makeTmpForComplexConst (subProgKind.Equals SubProgKind.Function) ctx { rhs = RhsCur container; typ = getDatatypeFromTML ctx.tcc container; range = range0}
@@ -521,19 +533,6 @@ and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (
         prereq @ prereq2, tmpvar <^> accesses |> getAddr
     else
         // render name as usual
-        let container, fields = decomposeTml tml
-        // hack: if prev on external variable, change name and treat as a current local variable
-        let timepoint, container =
-            let isExternal = 
-                match ctx.tcc.nameToDecl.[container] with
-                | Declarable.ExternalVarDecl _ -> true
-                | _ -> false
-            if timepoint.Equals Previous && isExternal then
-                Current, {container with basicId = "prev_" + container.basicId}
-            else
-                timepoint, container
-        // end hack
-    
         let prefix = 
             match timepoint with
             | Current ->

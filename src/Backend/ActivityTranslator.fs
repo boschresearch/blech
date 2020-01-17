@@ -1004,9 +1004,10 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     // initially declare variables and set the to the "previous" value
     let setPrevVars =
         let takeOnlyLocal qn =
+            // exclude ExternVarDecl since they are generated as automatic C vars
             match ctx.tcc.nameToDecl.[qn] with
-            | Declarable.VarDecl _ -> true
-            | _ -> false // exclude ExternVarDecl since they are generated as automatic C vars
+            | Declarable.ExternalVarDecl _ -> false
+            | _ -> true // there may be local, Backend-generated prev vars which are not in tcc
         (!curComp).varsToPrev
         |> Seq.filter takeOnlyLocal
         |> Seq.map (cpAssignPrevInActivity ctx)
