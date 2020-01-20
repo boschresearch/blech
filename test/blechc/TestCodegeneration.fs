@@ -18,7 +18,9 @@ let BLECH_SUFFIX = ".blc"
 let C_SUFFIX = ".c"
 let OBJ_SUFFIX = ".obj"
 let EXE_SUFFIX = ".exe"
-let EXT_SUFFIX = ".ext.c"
+let EXT_SUFFIX = ".ext"
+let EXT_C = EXT_SUFFIX + ".c"
+let EXT_H = EXT_SUFFIX + ".h"
 let APP_NAME = "App"
 let SPEC_SUFFIX = ".spec.json"
 let TEST_SUFFIX = ".test.json"
@@ -250,13 +252,17 @@ module CompilationProcedures =
         let sourcePath = System.IO.Path.GetDirectoryName(testcase)
         let appName = inputModule + APP_NAME
         
-        // By convention, external C code, if any, is in file inputModule.ext.c
+        // By convention, external C code, if any, is in files inputModule.ext.c, inputModule.ext.h
         // If that exists, copy it to the destination folder where the C sources are placed
-        let cExtern = System.IO.Path.Combine(sourcePath, inputModule) + EXT_SUFFIX
+        let cExtern = System.IO.Path.Combine(sourcePath, inputModule) + EXT_C
         if System.IO.File.Exists cExtern then
-            let destCextern = System.IO.Path.Combine(outDir, inputModule) + EXT_SUFFIX
+            let destCextern = System.IO.Path.Combine(outDir, inputModule) + EXT_C
             System.IO.File.Copy(cExtern, destCextern, true) // overwrite if already exists
-        
+        let hExtern = System.IO.Path.Combine(sourcePath, inputModule) + EXT_H
+        if System.IO.File.Exists hExtern then
+            let destHextern = System.IO.Path.Combine(outDir, inputModule) + EXT_H
+            System.IO.File.Copy(hExtern, destHextern, true) // overwrite if already exists
+
         // first clean any previous compilation results
         let cCode = System.IO.Path.Combine(outDir, inputModule) + C_SUFFIX
         if System.IO.File.Exists cCode then
@@ -283,7 +289,7 @@ module CompilationProcedures =
             System.IO.File.Delete app
         // now compile the test case
         let moduleName = System.IO.Path.Combine(outDir, noPathtestcase)
-        let cExtern = moduleName + EXT_SUFFIX
+        let cExtern = moduleName + EXT_C
         let maybeExtern =
             if System.IO.File.Exists cExtern then cExtern
             else ""

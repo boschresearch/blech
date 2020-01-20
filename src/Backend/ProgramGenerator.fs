@@ -251,6 +251,7 @@ let internal printState ctx printState entryCompilation =
                 entryCompilation.iface.locals |> List.map (printParamDecl true) 
             ]
             |> List.concat
+            |> List.filter (System.String.IsNullOrWhiteSpace >> not)
             
         match vars with
         | [] ->

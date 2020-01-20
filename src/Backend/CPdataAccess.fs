@@ -694,7 +694,6 @@ and cpMemSetDoc typ lhsDoc =
     <^> semi
 
 and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
-    let subProgKind = if inFunction then SubProgKind.Function else SubProgKind.Activity
     let maybeConstCast =
         match rhs.typ with
         | ValueTypes (ArrayType (size, dty)) ->
@@ -710,6 +709,9 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
     | Prev _ -> // the prev case cannot be matched inside a function context!
         let timepoint, tml = decomposeRhs rhs.rhs
         let renderName = if inFunction then ppName else selectNameRendererInActivity ctx tml
+        // if external && let/var && current, treat like local in activity
+        let subProgKind = 
+            if inFunction then SubProgKind.Function else isExtCurVar ctx tml timepoint
         let prereqStmts, renderedTml = cpRenderData subProgKind Usage.InputArg timepoint ctx tml renderName
         prereqStmts, maybeConstCast <+> renderedTml
     | _ -> cpExpr inFunction ctx rhs
