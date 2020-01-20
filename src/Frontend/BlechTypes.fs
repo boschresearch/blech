@@ -296,7 +296,8 @@ and SubProgramDecl =
         inputs: ParamDecl list
         outputs: ParamDecl list
         globalInputs: ExternalVarDecl list
-        globalOutputs: ExternalVarDecl list
+        globalOutputsInScope: ExternalVarDecl list // for code generation
+        globalOutputsAccumulated: ExternalVarDecl list // for causality checking
         body: Stmt list // TODO: maybe turn into stmt?
         returns: ValueTypes
         annotation: Attribute.SubProgram

@@ -318,8 +318,7 @@ module ProgramGraph =
             addNameWritten context pg.Entry newLhs
         match context.lut.nameToDecl.[name] with
         | SubProgramDecl spd ->
-            let globalOutputs = spd.globalOutputs
-            globalOutputs |> List.iter addGlobalOutput
+            List.iter addGlobalOutput spd.globalOutputsAccumulated
         | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         
         

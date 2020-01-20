@@ -991,13 +991,13 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
 
     // copy-in external var/let
     let copyIn =
-        subProgDecl.globalInputs @ subProgDecl.globalOutputs
+        subProgDecl.globalInputs @ subProgDecl.globalOutputsInScope
         |> List.map cpCopyInGlobal
         |> dpBlock
 
     // write extern var back to environment
     let copyOut =
-        subProgDecl.globalOutputs
+        subProgDecl.globalOutputsInScope
         |> List.map cpCopyOutGlobal
         |> dpBlock
 

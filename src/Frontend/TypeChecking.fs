@@ -235,20 +235,21 @@ let private determineGlobalOutputs lut bodyRes =
     let rec searchExternalVarDecl oneStmt =
         let searchUnzipAndCollect xs = 
             let ll = xs |> List.map searchExternalVarDecl 
-            ll |> List.map fst |> List.concat, 
-            ll |> List.map snd |> List.concat
+            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat, 
+            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat,
+            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat
         match oneStmt with
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v]
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[]
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v],[v] // add v to this scope for code generation and to overall list for causality checking
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[],[]
         // aggregate globals used in subactivities
         | ActivityCall (_, name, _, _, _) ->
             match lut.nameToDecl.[name] with
-            | SubProgramDecl spd -> [], spd.globalOutputs
+            | SubProgramDecl spd -> [], [], spd.globalOutputsAccumulated
             | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
-        | Await _ -> [],[]
+        | Await _ -> [],[],[]
         // statements containing statements
         | RepeatUntil (_, stmts, _, _)
         | Preempt (_,_,_,_,stmts)
@@ -266,7 +267,7 @@ let private determineGlobalOutputs lut bodyRes =
             |> searchUnzipAndCollect
 
     match bodyRes with
-    | Error _ -> [],[]
+    | Error _ -> [],[],[]
     | Ok body -> searchExternalVarDecl (StmtSequence body)
         
 //=============================================================================
@@ -513,7 +514,7 @@ let private fFunPrototype lut pos name inputs outputs retType annotation =
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
-    let createSubProgram (globalInputs, globalOutputs) (((((qname, ins), outs), ret), stmts), annotation) = 
+    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs) (((((qname, ins), outs), ret), stmts), annotation) = 
         let funact =
             {
                 SubProgramDecl.isFunction = isFunction
@@ -522,7 +523,8 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
                 inputs = ins
                 outputs = outs
                 globalInputs = globalInputs
-                globalOutputs = globalOutputs
+                globalOutputsInScope = localGlobalOutputs
+                globalOutputsAccumulated = allGlobalOutputs
                 body = stmts
                 returns = ret
                 annotation = annotation
@@ -556,7 +558,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
-    let globalInputs, globalOutputs = determineGlobalOutputs lut contractedBody
+    let globalInputs, localGlobalOutputs, allGlobalOutputs = determineGlobalOutputs lut contractedBody
 
     Ok (lut.ncEnv.nameToQname name)
     |> combine <| contract inputs
@@ -564,7 +566,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map (createSubProgram (globalInputs, globalOutputs))
+    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs))
 
 
 //=============================================================================
