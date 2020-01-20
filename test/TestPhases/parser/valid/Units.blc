@@ -31,7 +31,7 @@ activity testing()(out1: bool, out2: bool, out3: bool)
     var speed2: float32[kmh]
     speed2 = 4.0 [m/s] - 4.0 [kmh]
 
-    var area: float32[m^2]
+    var area: float32[m**2]
     area = 4.0 [km] * 3.0 [m]
 
     var ratio: float32

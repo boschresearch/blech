@@ -1,6 +1,6 @@
 module structuredData
 
-enum MyNum: uint8
+enum MyNum: nat8
     EINS = 1
     ZWEI = 2
     DREI = 3

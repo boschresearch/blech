@@ -10,13 +10,13 @@ function inOutRanges()
     var g: int64 = -9223372036854775809
     var h: int64 = 9223372036854775808
 
-    var i: uint8 = 256
-    var j: uint16 = 65536
-    var k: uint32 = 4294967296
-    var l: uint64 = 18446744073709551616
+    var i: nat8 = 256
+    var j: nat16 = 65536
+    var k: nat32 = 4294967296
+    var l: nat64 = 18446744073709551616
 
-    var m: uint8 = -1
-    var n: uint16 = -1
-    var o: uint32 = -1
-    var p: uint64 = -1
+    var m: nat8 = -1
+    var n: nat16 = -1
+    var o: nat32 = -1
+    var p: nat64 = -1
 end
