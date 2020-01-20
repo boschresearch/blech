@@ -235,9 +235,9 @@ let private determineGlobalOutputs lut bodyRes =
     let rec searchExternalVarDecl oneStmt =
         let searchUnzipAndCollect xs = 
             let ll = xs |> List.map searchExternalVarDecl 
-            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat, 
-            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat,
-            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat
+            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat |> List.distinct, 
+            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat |> List.distinct,
+            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat |> List.distinct
         match oneStmt with
         | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v],[v] // add v to this scope for code generation and to overall list for causality checking
         | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[],[]
