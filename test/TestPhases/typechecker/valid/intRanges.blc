@@ -11,10 +11,10 @@ activity intRanges()
     var g: int64 = -9223372036854775808
     var h: int64 = 9223372036854775807
 
-    var i: uint8 = 255
-    var j: uint16 = 65535
-    var k: uint32 = 4294967295
-    var l: uint64 = 18446744073709551615
+    var i: nat8 = 255
+    var j: nat16 = 65535
+    var k: nat32 = 4294967295
+    var l: nat64 = 18446744073709551615
 
     await false
 end
