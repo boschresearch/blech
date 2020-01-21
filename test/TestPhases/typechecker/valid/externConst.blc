@@ -1,0 +1,8 @@
+@[CConst(binding="", header="")]
+    extern const foo: int32
+
+@[EntryPoint]
+activity E ()()
+    const fb: bool = true
+    await true
+end

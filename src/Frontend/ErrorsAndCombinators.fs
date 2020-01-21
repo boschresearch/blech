@@ -122,6 +122,7 @@ type TyCheckError =
     | ValueArrayMustHaveValueType of range
     | TooManyInitialisers of range * int
     // statements
+    | ExternalsInFunction of range
     | SynchronousStatementInFunction of range
     | ActivityHasInstantaneousPath of range * Name
     // annotations
@@ -230,6 +231,7 @@ type TyCheckError =
             | ValueArrayMustHaveValueType r -> r, "A value typed array must contain value typed elements."
             | TooManyInitialisers (r, i) -> r, sprintf "More than %d initialisers have been given." i
             // statements
+            | ExternalsInFunction p -> p, "External variables cannot be defined inside functions."
             | SynchronousStatementInFunction p -> p, "Functions must not contain synchronous control flow statements (await, run, abort, cobegin, infinite repeat...end)."
             | ActivityHasInstantaneousPath (p, q) -> p, sprintf "Activity %s has an instantaneous control flow path. Please make sure there at least one await or run statement on every possible path." q.id
             // annotations

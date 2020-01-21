@@ -1,0 +1,16 @@
+
+activity NoSideEffect()()
+    @[CInput(binding="", header="")]
+    extern let foo: float32
+    await false
+end
+
+@[EntryPoint]
+activity E ()()
+    cobegin
+        run NoSideEffect()
+    with
+        run NoSideEffect()
+    end
+    await true
+end

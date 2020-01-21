@@ -72,5 +72,5 @@ let rec internal normaliseAssign ctx (r, lhs, rhs) =
 /// use in activity context only!
 let internal normaliseVarDecl ctx (v: VarDecl) =
     normaliseAssign ctx ( v.pos, 
-                      { lhs = LhsCur (Loc v.name); typ = v.datatype; range = v.pos}, 
-                      v.initValue )
+                          { lhs = LhsCur (Loc v.name); typ = v.datatype; range = v.pos}, 
+                          v.initValue )

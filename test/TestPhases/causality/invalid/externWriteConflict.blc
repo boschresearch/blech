@@ -1,0 +1,16 @@
+
+activity SideEffect()()
+    @[COutput(binding="", header="")]
+    extern var foo: float32
+    await false
+end
+
+@[EntryPoint]
+activity E ()()
+    cobegin
+        run SideEffect()
+    with
+        run SideEffect()
+    end
+    await true
+end

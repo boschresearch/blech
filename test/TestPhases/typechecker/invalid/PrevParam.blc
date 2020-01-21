@@ -1,0 +1,8 @@
+module PrevParam
+
+param p: int64 = 7
+activity main ()()
+    var x: int64
+    x = prev p
+    await false
+end

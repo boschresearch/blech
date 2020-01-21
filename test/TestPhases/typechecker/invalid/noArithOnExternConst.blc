@@ -1,0 +1,10 @@
+@[CConst(binding="", header="")]
+extern const foo: int32
+
+const len: int32 = 8
+
+@[EntryPoint]
+activity E ()()
+    var arr: [foo]float32
+    await true
+end

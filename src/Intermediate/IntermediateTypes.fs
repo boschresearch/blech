@@ -85,6 +85,7 @@ type Action =
     | Nothing
     // initialisation
     | VarDecl of VarDecl
+    | ExternalVarDecl of ExternalVarDecl
     // actions
     | Assign of range * TypedLhs * TypedRhs
     | Assert of range * TypedRhs * string

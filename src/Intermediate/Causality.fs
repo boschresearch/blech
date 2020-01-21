@@ -79,7 +79,7 @@ let private mkDiagnosticWWerror memLoc (nameRange1, _) (nameRange2, n2) : Diagno
           message = sprintf "Write-write conflict. %s is written concurrently." identifier }
     let context: Diagnostics.ContextInformation list =
         [ { range = nameRange1
-            message = "First occurence of written variable."
+            message = "First write access."
             isPrimary = false }
           { range = nameRange2
             message = "Conflicting concurrent write access."

@@ -18,7 +18,6 @@ namespace Blech.Frontend
 
 module Attribute =
     
-    open Blech.Common
     open Blech.Common.PPrint
     open PrettyPrint.DocPrint
     
@@ -36,9 +35,9 @@ module Attribute =
     [<Literal>] 
     let cparam = "CParam"
     [<Literal>] 
-    let cvar = "CVar"
+    let coutput = "COutput"
     [<Literal>] 
-    let clet = "CLet"
+    let cinput = "CInput"
     
     // c pragmas
     [<Literal>]
@@ -70,8 +69,8 @@ module Attribute =
 
         | CConst of binding: string * header: string option
         | CParam of binding: string * header: string option
-        | CVar of binding: string * header: string option
-        | CLet of binding: string * header: string option
+        | COutput of binding: string * header: string option
+        | CInput of binding: string * header: string option
 
         | CFunctionPrototype of binding: string * header: string option
         | CFunctionWrapper of source: string
@@ -114,10 +113,10 @@ module Attribute =
                 dpCBinding (txt cconst) (txt binding) (optStringToDoc header)
             | CParam (binding, header)->
                 dpCBinding (txt cparam) (txt binding) (optStringToDoc header)
-            | CVar (binding, header)->
-                dpCBinding (txt cvar) (txt binding) (optStringToDoc header)
-            | CLet (binding, header)->
-                dpCBinding (txt clet) (txt binding) (optStringToDoc header)
+            | COutput (binding, header)->
+                dpCBinding (txt coutput) (txt binding) (optStringToDoc header)
+            | CInput (binding, header)->
+                dpCBinding (txt cinput) (txt binding) (optStringToDoc header)
             
             | CFunctionPrototype (binding, header) ->
                 dpCBinding (txt cfunction) (txt binding) (optStringToDoc header)
@@ -162,8 +161,8 @@ module Attribute =
         match attr with
         | CConst (binding = binding)
         | CParam (binding = binding)
-        | CVar (binding = binding)
-        | CLet (binding = binding)
+        | COutput (binding = binding)
+        | CInput (binding = binding)
         | CFunctionPrototype (binding = binding) ->
             Some binding
         | _ ->
@@ -173,8 +172,8 @@ module Attribute =
         match attr with
         | CConst (header = Some header)
         | CParam (header = Some header)
-        | CVar (header = Some header)
-        | CLet (header = Some header)
+        | COutput (header = Some header)
+        | CInput (header = Some header)
         | CFunctionPrototype (header = Some header) ->
             Some header
         | _ ->

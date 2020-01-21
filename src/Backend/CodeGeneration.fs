@@ -134,35 +134,18 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.VarDecl f -> Some f | _ -> None)
 
-    // Todo: delete this, user constants do not need representation in C code, fjg 18.12.19
-    //let userConst =
-    //    let renderConst v =
-    //        let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
-    //        assert (List.length prereqStmt = 0)
-            
-    //        let macro = 
-    //            txt "#define" <+> ppStaticName v.name <+> processedRhs
-    //            |> groupWith (txt " \\")
-
-    //        cpOptDocComments v.annotation.doc
-    //        |> dpOptLinePrefix
-    //        <| macro
-
-    //    varDecls
-    //    |> Seq.filter (fun vd -> vd.IsConst)
-    //    |> Seq.map renderConst
-    //    |> dpBlock
-
-
     let externConsts = 
-        varDecls
-        |> Seq.filter (fun (ec: VarDecl) -> ec.IsExternConst) 
+        ctx.tcc.nameToDecl.Values
+        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
     
+    /// C define macros for external constants / params
+    /// e.g. #define blc_MyActivity_myConst &FOO(BAR)
     let externConstMacros = 
-        let renderExternConst (ec: VarDecl) = 
+        let renderExternConst (ec: ExternalVarDecl) = 
             let cexpr = 
                 match ec.annotation.cvardecl with
-                | Some (Attribute.CConst (binding = text)) ->
+                | Some (Attribute.CConst (binding = text))
+                | Some (Attribute.CParam (binding = text)) ->
                     txt text |> parens
                 | _ -> 
                     failwith "This should never happen"            
@@ -172,10 +155,10 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
                 |> groupWith (txt " \\")
             
             cpOptDocComments ec.annotation.doc
-            |> dpOptLinePrefix
-            <| macro
+            |> dpOptLinePrefix <| macro
 
         externConsts
+        |> Seq.filter (fun extVar -> match extVar.mutability with Mutability.CompileTimeConstant | Mutability.StaticParameter -> true | _ -> false)
         |> Seq.map renderExternConst
         |> dpBlock
 
@@ -218,7 +201,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
     let cHeaders = 
         let hfiles =
             let cCalls = Seq.choose (fun (fp: FunctionPrototype) -> fp.annotation.TryGetCHeader) cCalls
-            let extConsts = Seq.choose (fun (vd: VarDecl) -> vd.annotation.TryGetCHeader) externConsts
+            let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
             let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
             Seq.append extConsts cCalls 

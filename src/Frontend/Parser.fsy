@@ -328,19 +328,16 @@ OptTypeAnnotation    /* used e.g. in activity parameter declaration where the ty
     | TypeAnnotation                        { Some $1 }
 
 OptModifiers
-    :                                       { ( None, None )}
-    | REF                                   { ( None, Some $1 ) }
-    | ERROR                                 { ( None, None )}  /* todo: add error modifier to type declaration in AST */
-    | SINGLETON                             { ( Some $1, None ) }
-    | SINGLETON REF                         { ( Some $1, Some $2 ) }
+    :                                       { None }
+    | REF                                   { Some $1 }
+    | ERROR                                 { None }  /* todo: add error modifier to type declaration in AST */
 
 /* ----- user-defined types ----- */
 
 TypeAliasDecl
     : OptAnnotations OptModifiers TYPE Name ASSIGN Type      
                                             { Member.Type { TypeDecl.range = typeNameRange $1 $2 $3 $6
-                                                            isSingleton = fst $2 <> Option.None
-                                                            isReference = snd $2 <> Option.None
+                                                            isReference = $2 <> Option.None
                                                             name = $4
                                                             aliasfor = $6
                                                             members = []
@@ -354,8 +351,7 @@ TypeAliasDecl
 NewTypeDecl
     : OptAnnotations OptModifiers NEWTYPE Name ASSIGN Type      
                                             { Member.NewType { NewTypeDecl.range = typeDeclRange $1 $2 $3 $4.Range
-                                                               isSingleton = fst $2 <> Option.None
-                                                               isReference = snd $2 <> Option.None
+                                                               isReference = $2 <> Option.None
                                                                name = $4
                                                                representation = None 
                                                                members = []
@@ -367,8 +363,7 @@ NewTypeDecl
 NewTypeDef
     : OptAnnotations OptModifiers NEWTYPE Name ASSIGN Type      
                                             { Member.NewType { NewTypeDecl.range = typeNameRange $1 $2 $3 $6
-                                                               isSingleton = fst $2 <> Option.None
-                                                               isReference = snd $2 <> Option.None
+                                                               isReference = $2 <> Option.None
                                                                name = $4
                                                                representation = Some $6 
                                                                members = []
@@ -392,8 +387,7 @@ OptExtensionDecl
 StructDecl
     : OptAnnotations OptModifiers STRUCT Name DynamicMembers OptExtensionDecl END         
                                             { Member.StructType { StructTypeDecl.range = typeDeclRange $1 $2 $3 $7
-                                                                  isSingleton = fst $2 <> Option.None
-                                                                  isReference = snd $2 <> Option.None
+                                                                  isReference = $2 <> Option.None
                                                                   name = $4 
                                                                   fields = $5
                                                                   members = $6
@@ -406,8 +400,7 @@ StructDecl
 StructDef
     : OptAnnotations OptModifiers STRUCT Name DynamicMembers OptExtension END         
                                             { Member.StructType { StructTypeDecl.range = typeDeclRange $1 $2 $3 $7
-                                                                  isSingleton = fst $2 <> Option.None
-                                                                  isReference = snd $2 <> Option.None
+                                                                  isReference = $2 <> Option.None
                                                                   name = $4 
                                                                   fields = $5
                                                                   members = $6 
@@ -430,8 +423,7 @@ ConstantQualifier
 EnumDecl
     :  OptAnnotations OptModifiers ENUM Name OptRawType EnumTagList OptExtensionDecl END              
                                             { Member.EnumType { EnumTypeDecl.range = typeDeclRange $1 $2 $3 $8
-                                                                isSingleton = fst $2 <> Option.None
-                                                                isReference = snd $2 <> Option.None
+                                                                isReference = $2 <> Option.None
                                                                 name = $4
                                                                 rawtype = $5 
                                                                 tags = $6
@@ -445,8 +437,7 @@ EnumDecl
 EnumDef
     :  OptAnnotations OptModifiers ENUM Name OptRawType EnumTagList OptExtension END              
                                             { Member.EnumType { EnumTypeDecl.range = typeDeclRange $1 $2 $3 $8
-                                                                isSingleton = fst $2 <> Option.None
-                                                                isReference = snd $2 <> Option.None
+                                                                isReference = $2 <> Option.None
                                                                 name = $4
                                                                 rawtype = $5 
                                                                 tags = $6
@@ -762,16 +753,7 @@ LocalVariable
 
 
 LocalConstant
-    :  OptAnnotations ConstantQualifier OptRef Name TypeAnnotation
-                                                { LocalVar { VarDecl.range = unionRanges $2.Range $5.Range
-                                                             name = $4
-                                                             permission = $2
-                                                             isReference = $3 <> Option.None
-                                                             isExtern = false
-                                                             datatype = Some $5
-                                                             initialiser = None
-                                                             annotations = $1 } }
-/*    | OptAnnotations EXTERN ConstantQualifier OptRef Name TypeAnnotation
+    : OptAnnotations EXTERN ConstantQualifier OptRef Name TypeAnnotation
                                                 { LocalVar { VarDecl.range = unionRanges $2 $6.Range
                                                              name = $5
                                                              permission = $3
@@ -779,7 +761,7 @@ LocalConstant
                                                              isExtern = true
                                                              datatype = Some $6
                                                              initialiser = None
-                                                             annotations = $1 } }  */
+                                                             annotations = $1 } } 
 
 
     |  OptAnnotations ConstantQualifier OptRef Name OptTypeAnnotation ASSIGN Expr
@@ -1041,16 +1023,24 @@ OptOnClock
 
 /* fjg TODO: add on clock information to AST */
 
-OptSingleton 
+OptSingletonDef 
     :                                   { None }
     | SINGLETON                         { Some $1 }
+
+OptSingletonDecl 
+    :                                   { (None, []) }
+    | SINGLETON PointedNameList         { (Some $1, $2) }
+
+PointedNameList
+    :                                   { [] }
+    | PointedName COMMA PointedNameList { $1::$3 }
 
 OptPartial
     :                                   { None }
     | QUEST                             { Some $1 }
 
 Subprogram                              /* TODO: Add OptPartial and OptThrows to AST, fjg 24.09.19 */
-    : OptAnnotations OptSingleton FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows OptOnClock Block END
+    : OptAnnotations OptSingletonDef FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows OptOnClock Block END
                                         { Member.Subprogram { range = subprogramRange $1 $2 (snd $3) $12
                                                               isSingleton = $2 <> Option.None
                                                               isFunction = fst $3
@@ -1061,16 +1051,16 @@ Subprogram                              /* TODO: Add OptPartial and OptThrows to
                                                               body = $11 
                                                               annotations = $1 } }   
 
-    | OptAnnotations OptSingleton FunOrAct error END
+    | OptAnnotations OptSingletonDef FunOrAct error END
                                         { logParserError (snd $3);
                                           Member.Nothing }
 
-
 ExternalFunction
-    : OptAnnotations EXTERN OptSingleton FUNCTION Name InputParameters OptOutputParameters OptReturns OptOnClock
-                                        { Member.Prototype { Prototype.range = prototypeRange $1 $2 (snd $6) (snd $7) $8 $9
+    : OptAnnotations EXTERN OptSingletonDef FUNCTION Name InputParameters OptOutputParameters OptReturns OptOnClock
+                                        { Member.Prototype { Prototype.range = externalFunctionRange $1 $2 (snd $6) (snd $7) $8 $9
                                                              isExtern = true
                                                              isSingleton = $3 <> Option.None
+                                                             singletons = []
                                                              isFunction = true
                                                              name = $5
                                                              inputs = fst $6
@@ -1078,16 +1068,16 @@ ExternalFunction
                                                              result = $8
                                                              annotations = $1 } }
                                         
-
-    | OptAnnotations EXTERN OptSingleton FUNCTION ErrorBeforeEOL
+    | OptAnnotations EXTERN OptSingletonDef FUNCTION ErrorBeforeEOL
                                         { logParserError $2;
                                           Member.Nothing }
 
 Prototype
-    : OptAnnotations OptSingleton FunOrAct Name InputParameters OptOutputParameters OptReturns OptOnClock
-                                        { Member.Prototype { Prototype.range = prototypeRange $1 (snd $3) (snd $5) (snd $6) $7 $8  // todo: $4 is not correct, just for the moment, adapt function prototypeRange, fjg 5.11.19
+    : OptAnnotations OptSingletonDecl FunOrAct Name InputParameters OptOutputParameters OptReturns OptOnClock
+                                        { Member.Prototype { Prototype.range = prototypeRange $1 (fst $2) (snd $3) (snd $5) (snd $6) $7 $8
                                                              isExtern = false
-                                                             isSingleton = $2 <> Option.None
+                                                             isSingleton = fst $2 <> Option.None
+                                                             singletons = snd $2
                                                              isFunction = fst $3
                                                              name = $4
                                                              inputs = fst $5
@@ -1095,7 +1085,7 @@ Prototype
                                                              result = $7
                                                              annotations = $1 } }
                                         
-    | OptAnnotations OptSingleton FunOrAct ErrorBeforeEOL
+    | OptAnnotations OptSingletonDecl FunOrAct ErrorBeforeEOL
                                         { logParserError (snd $3);
                                           Member.Nothing }
 
@@ -1401,9 +1391,9 @@ ExtensionDecl
 
 ExtensionMemberDecl
     : Prototype                                 { $1 }
-    | ExternalFunction                          { $1 }
+    | ExternalFunction                          { $1 }    // Question: Should this be removed? Only necessary for definitions?, fjg. 15.01.20   
     | Constant                                  { $1 }
-    | TypeAliasDecl                                  { $1 }
+    | TypeAliasDecl                             { $1 }
 
 ExtensionMemberDecls
     :                                           { [] }

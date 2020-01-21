@@ -244,7 +244,6 @@ type private DeclKind =
     | Local
     | Constant
     | StaticParameter // not in SCODE analysis
-    | ExternConstant  
 
 type private SubProgKind =
     | Function
@@ -280,8 +279,10 @@ let private getDeclKind (ctx: TranslationContext) (name:TypedMemLoc) =
             else InputParam
         | Declarable.VarDecl v when v.mutability.Equals Mutability.CompileTimeConstant -> Constant
         | Declarable.VarDecl v when v.mutability.Equals Mutability.StaticParameter -> StaticParameter
-        | Declarable.VarDecl v when v.mutability.Equals Mutability.ExternConstant -> ExternConstant
-        | Declarable.VarDecl _ -> Local //when not <| v.mutability.Equals Mutability.CompileTimeConstant
+        | Declarable.VarDecl _ -> Local
+        | Declarable.ExternalVarDecl v when v.mutability.Equals Mutability.CompileTimeConstant -> Constant
+        | Declarable.ExternalVarDecl v when v.mutability.Equals Mutability.StaticParameter -> StaticParameter
+        | Declarable.ExternalVarDecl _ -> Local
         | Declarable.SubProgramDecl _
         | Declarable.FunctionPrototype _ -> failwith "The name of a sub program cannot appear where data is expected." 
     with
@@ -386,8 +387,7 @@ let private needDereferencing subProgKind usage timepoint ctx tml =
             else
                 false
         | Constant
-        | StaticParameter // not in SCODE analysis
-        | ExternConstant -> 
+        | StaticParameter -> // not in SCODE analysis
             false
     | Previous ->
         false
@@ -404,6 +404,30 @@ let rec private decomposeTml = function
     | TypedMemLoc.ArrayAccess (subtml, idx) ->
         let name, accesses = decomposeTml subtml
         name, accesses @ [TmlSubstructure.IndexAccess idx]
+
+
+let private isExtCurVar ctx (tml: TypedMemLoc) timepoint =
+    let declaration = ctx.tcc.nameToDecl.[tml.QNamePrefix]
+    match declaration with
+    | Declarable.VarDecl _ 
+    | Declarable.ParamDecl _ -> // regular variable in activity
+        false
+    | Declarable.ExternalVarDecl v -> // special case, external variable
+        match v.mutability with
+        | Mutability.CompileTimeConstant
+        | Mutability.StaticParameter -> // treat external constants the same as above
+            false
+        | Mutability.Variable
+        | Mutability.Immutable -> // treat extern let/var in activity like a local in a function
+            match timepoint with
+            | Current -> true
+            | _ -> false
+    | FunctionPrototype _
+    | SubProgramDecl _ 
+        -> failwith "Tried printing a variable, got something else."
+    |> function
+        | true -> SubProgKind.Function
+        | false -> SubProgKind.Activity
 
 
 let private moveConstFields ctx container fields =
@@ -493,6 +517,19 @@ and makeTmpForComplexConst inFunction ctx (expr: TypedRhs) =
     | _ -> [], Orig expr
 // factored out name printing decision to a callback function
 and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (tml:TypedMemLoc) renderName =
+    let container, fields = decomposeTml tml
+    // hack: if prev on external variable, change name and treat as a current local variable
+    let timepoint, container =
+        let isExternal = 
+            match ctx.tcc.nameToDecl.[container] with
+            | Declarable.ExternalVarDecl _ -> true
+            | _ -> false
+        if timepoint.Equals Previous && isExternal then
+            Current, {container with basicId = "prev_" + container.basicId}
+        else
+            timepoint, container
+    // end hack
+
     let getAddr doc =
         if needAddress subProgKind usage timepoint ctx tml then
             doc |> parens |> cpRefto
@@ -508,7 +545,6 @@ and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (
     // need generation of tmp vars for constants here according to SCODE analysis
     if not (isTmlOnlyName tml) && isConstVarDecl ctx.tcc tml then
         // make tmp var
-        let container, fields = decomposeTml tml
         let container, fields = moveConstFields ctx container fields
         let prereq, tmpvar =
             makeTmpForComplexConst (subProgKind.Equals SubProgKind.Function) ctx { rhs = RhsCur container; typ = getDatatypeFromTML ctx.tcc container; range = range0}
@@ -521,8 +557,6 @@ and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (
         prereq @ prereq2, tmpvar <^> accesses |> getAddr
     else
         // render name as usual
-        let container, fields = decomposeTml tml
-    
         let prefix = 
             match timepoint with
             | Current ->
@@ -551,14 +585,12 @@ and private selectNameRendererInActivity ctx tml =
     match getDeclKind ctx tml with
     | DeclKind.Local 
     | DeclKind.Constant 
-    | DeclKind.ExternConstant
     | DeclKind.StaticParameter when tml.QNamePrefix.IsDynamic -> ppNameInActivity // see comment on dynamic names in local constants in CommonTypes.fs:38
     | _ -> ppName
     
 and private selectNameRendererInFunction ctx tml =
     match getDeclKind ctx tml with
     | DeclKind.Constant
-    | DeclKind.ExternConstant
     | DeclKind.StaticParameter when tml.QNamePrefix.IsDynamic -> translateQnameToStaticName >> txt // see comment on dynamic names in local constants in CommonTypes.fs:38
     | _ -> ppName
 
@@ -570,7 +602,10 @@ and cpRhsInFunction ctx rhs =
 and cpRhsInActivity ctx rhs =
     let timepoint, tml = decomposeRhs rhs
     let renderName = selectNameRendererInActivity ctx tml
-    cpRenderData SubProgKind.Activity Usage.Rhs timepoint ctx tml renderName
+    // if external && let/var && current, treat like local in function
+    let subProgKind = isExtCurVar ctx tml timepoint
+    cpRenderData subProgKind Usage.Rhs timepoint ctx tml renderName
+    
 
 and cpLhsInFunction ctx lhs =
     let timepoint, tml = decomposeLhs lhs
@@ -580,7 +615,9 @@ and cpLhsInFunction ctx lhs =
 and cpLhsInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
-    cpRenderData SubProgKind.Activity Usage.Lhs timepoint ctx tml renderName
+    // if external && let/var && current, treat like local in function
+    let subProgKind = isExtCurVar ctx tml timepoint
+    cpRenderData subProgKind Usage.Lhs timepoint ctx tml renderName
 
 and cpOutputArgInFunction ctx lhs =
     let timepoint, tml = decomposeLhs lhs
@@ -590,7 +627,9 @@ and cpOutputArgInFunction ctx lhs =
 and cpOutputArgInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
-    cpRenderData SubProgKind.Activity Usage.OutputArg timepoint ctx tml renderName
+    // if external && let/var && current, treat like local in function
+    let subProgKind = isExtCurVar ctx tml timepoint
+    cpRenderData subProgKind Usage.OutputArg timepoint ctx tml renderName
 
 and cpMemCpyArr inFunction ctx lhs (rhs: TypedRhs) =
     let prereqLhs, processedLhs = 
@@ -655,7 +694,6 @@ and cpMemSetDoc typ lhsDoc =
     <^> semi
 
 and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
-    let subProgKind = if inFunction then SubProgKind.Function else SubProgKind.Activity
     let maybeConstCast =
         match rhs.typ with
         | ValueTypes (ArrayType (size, dty)) ->
@@ -671,6 +709,9 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
     | Prev _ -> // the prev case cannot be matched inside a function context!
         let timepoint, tml = decomposeRhs rhs.rhs
         let renderName = if inFunction then ppName else selectNameRendererInActivity ctx tml
+        // if external && let/var && current, treat like local in function
+        let subProgKind = 
+            if inFunction then SubProgKind.Function else isExtCurVar ctx tml timepoint
         let prereqStmts, renderedTml = cpRenderData subProgKind Usage.InputArg timepoint ctx tml renderName
         prereqStmts, maybeConstCast <+> renderedTml
     | _ -> cpExpr inFunction ctx rhs
@@ -766,7 +807,8 @@ and private cpExpr inFunction ctx expr =
             | Declarable.FunctionPrototype fp -> ppGlobalName whoToCall, fp.returns
             | Declarable.SubProgramDecl s -> ppName whoToCall, s.returns
             | Declarable.ParamDecl _
-            | Declarable.VarDecl _ -> failwith "Expected to call a function but found something else!"
+            | Declarable.VarDecl _ 
+            | Declarable.ExternalVarDecl _ -> failwith "Expected to call a function but found something else!"
         let prereqStmtsLst, transInputs = 
             inputs
             |> List.map (makeTmpForComplexConst inFunction ctx)

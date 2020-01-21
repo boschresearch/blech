@@ -42,6 +42,24 @@ open CPdataAccess
 open CPrinter
 
 
+let private setExternPrevForNextReaction ctx (v: ExternalVarDecl) =
+    let prevName = {v.name with basicId = "prev_"+v.name.basicId}
+    let name = ppNameInActivity prevName
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let prereqStmts, processedContainer = cpRhsInActivity ctx (RhsCur (Loc v.name))
+        let cpy = 
+            txt "memcpy"
+            <^> dpCommaSeparatedInParens
+                [ name
+                  processedContainer
+                  sizeofMacro v.datatype ]
+            <^> semi
+        prereqStmts @ [cpy] |> dpBlock
+    | _ ->
+        let value = ppNameInActivity v.name
+        txt "*" <^> name <+> txt "=" <+> value <^> semi
+
 let rec private cpAction ctx curComp action =
     match action with
     | Action.Nothing -> txt ""
@@ -53,7 +71,7 @@ let rec private cpAction ctx curComp action =
         elif v.IsParam then
             txt "/* The local param declaration was lifted to top level */"
         else
-            // Otherwise this Blech variable is mutable or immutable (let), and it becomes a local variable in C
+            // Otherwise this Blech variable is mutable or immutable (let), and it becomes a static variable in C
             // interface of current activity is updated
             let newIface = Iface.addLocals (!curComp).iface {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := {!curComp with iface = newIface}
@@ -86,6 +104,7 @@ let rec private cpAction ctx curComp action =
                         | _ ->
                             cpAssignInActivity ctx lhs.lhs rhs
                     | _ -> failwith "Must be an assignment here!") // not nice
+            // zero out everything that is not set explicitly
             let reinit =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
@@ -93,7 +112,24 @@ let rec private cpAction ctx curComp action =
                     cpMemSet false ctx {lhs = LhsCur(Loc v.name); typ = v.datatype; range = v.pos}
                 | _ -> empty
             reinit :: norm @ [prevInit] |> dpBlock
-        
+
+    | Action.ExternalVarDecl v ->
+        if List.contains v.name (!curComp).varsToPrev then
+            // Dually to local variables--prev on external variables are 
+            // generated as static C variables and thus added to the local interface here
+            let prevName = {v.name with basicId = "prev_"+v.name.basicId}
+            let newIface = Iface.addLocals (!curComp).iface {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
+            curComp := {!curComp with iface = newIface}
+            // make sure the prev variable is initialised in the first reaction
+            // this is crucial if the prev value is used in the same block where the variable is declared
+            setExternPrevForNextReaction ctx v
+                
+        else
+            // the external is used like a normal variable but in fact it is an auto C variable
+            // initialisation happens in every reaction
+            // the code for that is generated in function "translate" below
+            txt "/* The extern declaration is outside the Blech code */"
+                    
     | Action.Assign (r, lhs, rhs) ->
         let norm =
             normaliseAssign ctx.tcc (r, lhs, rhs)
@@ -211,6 +247,47 @@ let private cpActCall ctx whoToCall inputs outputs locals pcs receiverVar isDumm
 let private cpResetPc (pc: ParamDecl) =
     let ppPc = cpDeref (ppName pc.name)
     txt "BLC_SWITCH_TO_NEXTSTEP(" <^> ppPc <^> txt ")" <^> semi
+
+let private cpCopyInGlobal (v: ExternalVarDecl) =
+    let name = ppNameInActivity v.name
+    let extInit =
+        v.annotation.TryGetCBinding
+        |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
+        |> txt
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let declare = cpArrayDeclDoc name v.datatype <^> semi
+        let memcpy =
+            txt "memcpy"
+            <+> dpCommaSeparatedInParens
+                [ name
+                  extInit
+                  sizeofMacro v.datatype ]
+            <^> semi
+        declare <..> memcpy
+    | _ ->
+        cpType v.datatype 
+        <+> name <+> txt "=" 
+        <+> extInit <^> semi
+
+let private cpCopyOutGlobal (v: ExternalVarDecl) =
+    let name = ppNameInActivity v.name
+    let extInit =
+        v.annotation.TryGetCBinding
+        |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
+        |> txt
+    match v.datatype with
+    | ValueTypes (ArrayType _) ->
+        let memcpy =
+            txt "memcpy"
+            <+> dpCommaSeparatedInParens
+                [ extInit
+                  name
+                  sizeofMacro v.datatype ]
+            <^> semi
+        memcpy
+    | _ ->
+        extInit <+> txt "=" <+> name <^> semi
 
 
 //=============================================================================
@@ -744,7 +821,9 @@ let private translateBlock ctx compilations curComp block =
 
 //    body |> List.map processStmt |> List.concat |> List.distinct
 
+/// Extract all QNames of variables that require a prev location in given code
 // runs on nodes and program graphs instead of statements
+// became necessary when strong abort was translated by introducing a prev on the condition and thus deviating from given source code
 // might change again
 let private collectVarsToPrev2 pg =
     let rec processExpr expr =
@@ -790,6 +869,7 @@ let private collectVarsToPrev2 pg =
         | ActionLocation action ->
             match action with
             | Nothing -> []
+            | ExternalVarDecl _ -> [] // has not init value, if prev'ed it appears in some rhs
             | VarDecl v -> processExpr v.initValue
             | Assert (_, expr, _)
             | Assume (_, expr, _)
@@ -909,10 +989,38 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             |> (fun x -> pc4block x.Payload)
         txt "return" <+> cpDeref mainpc <+> semi
 
+    // copy-in external var/let
+    let copyIn =
+        subProgDecl.globalInputs @ subProgDecl.globalOutputsInScope
+        |> List.map cpCopyInGlobal
+        |> dpBlock
+
+    // write extern var back to environment
+    let copyOut =
+        subProgDecl.globalOutputsInScope
+        |> List.map cpCopyOutGlobal
+        |> dpBlock
+
     // initially declare variables and set the to the "previous" value
     let setPrevVars =
+        let takeOnlyLocal qn =
+            // exclude ExternVarDecl since they are generated as automatic C vars
+            match ctx.tcc.nameToDecl.[qn] with
+            | Declarable.ExternalVarDecl _ -> false
+            | _ -> true // there may be local, Backend-generated prev vars which are not in tcc
         (!curComp).varsToPrev
-        |> Seq.map (fun name -> cpAssignPrevInActivity ctx name)
+        |> Seq.filter takeOnlyLocal
+        |> Seq.map (cpAssignPrevInActivity ctx)
+        |> dpBlock
+
+    let setExternPrevVars =
+        let takeOnlyExtern qn =
+            match ctx.tcc.nameToDecl.[qn] with
+            | Declarable.ExternalVarDecl v -> Some v
+            | _ -> None
+        (!curComp).varsToPrev
+        |> Seq.choose takeOnlyExtern
+        |> Seq.map (setExternPrevForNextReaction ctx)
         |> dpBlock
 
     // insert val declarations and prev updates
@@ -921,7 +1029,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         | []
         | [_] -> failwith "An activity must have a non-empty body with at least one await."
         | initBlock :: rest -> 
-            setPrevVars :: txt "loopHead:" :: initBlock :: rest 
+            copyIn :: setPrevVars :: txt "loopHead:" :: initBlock :: rest 
             |> dpBlock
 
     let completeActivityCode =
@@ -931,6 +1039,8 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         <+> cpIface (!curComp).iface
         <+> txt "{"
         <.> cpIndent completeBody
+        <.> cpIndent setExternPrevVars // prev on extern is set AT THE END of the reaction
+        <.> cpIndent copyOut
         <.> cpIndent resetPCs
         <.> cpIndent returnPC
         <.> txt "}"
@@ -944,7 +1054,8 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     let optDoc = 
         cpOptDocComments subProgDecl.annotation.doc
 
-    curComp := { !curComp with 
+    curComp := { !curComp
+                 with 
                     signature = signature
                     implementation = completeActivityCode
                     doc = optDoc }

@@ -43,7 +43,7 @@ let rec private stmtType stmt =
     match stmt with
     // atomic statements, except "return"
     | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _ | Await _ 
-    | ActivityCall _ | FunctionCall _ -> 
+    | Stmt.ExternalVarDecl _ | ActivityCall _ | FunctionCall _ -> 
         Ok NoReturn
     // the "return" statement
     | Return (pos, exprOpt) ->
@@ -172,10 +172,12 @@ let private checkAbsenceOfSyncStmts stmts =
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | FunctionCall _ | Return _ ->
             Ok ()
+        | Stmt.ExternalVarDecl v ->
+            Error [ExternalsInFunction v.pos]
         // synchronous statements
         | Await (p,_) | ActivityCall (p,_,_,_,_) | Preempt (p,_,_,_,_) | Cobegin (p,_)
         | RepeatUntil (p,_,_, true) -> // since we do not have 'break', there is now way to end a endless loop from within
-            Error [SynchronousStatementInFunction(p)]
+            Error [SynchronousStatementInFunction p]
         // imperative statements containing statements
         | StmtSequence stmts | WhileRepeat (_, _, stmts) 
         | RepeatUntil (_, stmts, _, false) -> 
@@ -200,7 +202,8 @@ let private checkStmtsWillPause p name stmts =
         match oneStmt with
         // immediate statements
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | FunctionCall _ | Return _ | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _ 
+        | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
         // delay statements
         | Await _ | ActivityCall _ -> true
         // statements containing statements
@@ -228,6 +231,45 @@ let private checkStmtsWillPause p name stmts =
         | false -> Error [ActivityHasInstantaneousPath(p, name)]
 
 
+let private determineGlobalOutputs lut bodyRes =
+    let rec searchExternalVarDecl oneStmt =
+        let searchUnzipAndCollect xs = 
+            let ll = xs |> List.map searchExternalVarDecl 
+            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat |> List.distinct, 
+            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat |> List.distinct,
+            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat |> List.distinct
+        match oneStmt with
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v],[v] // add v to this scope for code generation and to overall list for causality checking
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[],[]
+        // aggregate globals used in subactivities
+        | ActivityCall (_, name, _, _, _) ->
+            match lut.nameToDecl.[name] with
+            | SubProgramDecl spd -> [], [], spd.globalOutputsAccumulated
+            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        //atomic statements which are not a mutable external variable
+        | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
+        | Await _ -> [],[],[]
+        // statements containing statements
+        | RepeatUntil (_, stmts, _, _)
+        | Preempt (_,_,_,_,stmts)
+        | WhileRepeat (_, _, stmts)
+        | StmtSequence stmts ->
+            stmts |> searchUnzipAndCollect
+        | ITE (_, _, ifBranch, elseBranch) ->
+            ifBranch @ elseBranch 
+            |> searchUnzipAndCollect
+        | Cobegin (_, blocks) ->
+            blocks
+            |> List.unzip
+            |> snd
+            |> List.concat
+            |> searchUnzipAndCollect
+
+    match bodyRes with
+    | Error _ -> [],[],[]
+    | Ok body -> searchExternalVarDecl (StmtSequence body)
+        
 //=============================================================================
 // Short-hand stuff
 //=============================================================================
@@ -311,13 +353,12 @@ let rec private fDataType lut utyDataType =
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
-let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt vDeclAnno =
+let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
     let mutability =
         match permission with 
         | AST.ReadOnly (ro, _) ->
             match ro with
             | AST.Let -> Mutability.Immutable
-            | AST.Const when isExtern -> Mutability.ExternConstant
             | AST.Const -> Mutability.CompileTimeConstant
             | AST.Param -> Mutability.StaticParameter
         | AST.ReadWrite _ -> Mutability.Variable
@@ -355,25 +396,65 @@ let private fVarDecl lut pos (name: Name) permission isExtern dtyOpt initValOpt 
         alignOptionalTypeAndValue pos name.id dtyOpt initValOpt
         |> Result.bind checkMutabilityCompliance
         
-    let checkUnsupportExterns res =
-        match permission with
-        | AST.ReadOnly (AST.Let, rng) 
-        | AST.ReadWrite (AST.Var, rng) when isExtern ->
-            Error [UnsupportedFeature (pos, "extern variables")]
-        | _ ->
-            Ok res
-
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.bind checkUnsupportExterns 
     |> combine <| dtyAndInit
     |> combine <| vDeclAnno
     |> Result.map createVarDecl
 
 
+let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
+    let dtyGiven =
+        // datatype must be given
+        match dtyOpt with
+        | None -> failwith "It should be syntactically impossible to declare an external variable without an explicit datatype."
+        | Some dty -> dty
+        
+    let checkNoInit =        
+        // no init value is allowed
+        match initValOpt with
+        | Some _ -> failwith "It should be syntactically impossible to declare an external variable with initialisation."
+        | None -> Ok ()
+            
+    let checkMutability =
+        match permission with 
+        | AST.ReadOnly (ro, _) ->
+            match ro with
+            | AST.Const -> Ok Mutability.CompileTimeConstant
+            | AST.Let -> Ok Mutability.Immutable
+            | AST.Param -> Ok Mutability.StaticParameter
+        | AST.ReadWrite _ -> Ok Mutability.Variable
+
+    let createExternalVarDecl ((((qualifiedName, dty),mutability),anno),_)=
+        let v = {
+            pos = pos
+            BlechTypes.ExternalVarDecl.name = qualifiedName
+            datatype = dty
+            mutability = mutability
+            annotation = anno
+            allReferences = HashSet()
+        }    
+        do addDeclToLut lut qualifiedName (Declarable.ExternalVarDecl v)
+        v
+
+    Ok (lut.ncEnv.nameToQname name)
+    |> combine <| dtyGiven
+    |> combine <| checkMutability
+    |> combine <| vDeclAnno
+    |> combine <| checkNoInit
+    |> Result.map createExternalVarDecl
+
 let private recVarDecl lut (v: AST.VarDecl) =
-    fVarDecl lut v.range v.name v.permission v.isExtern
+    assert (not v.isExtern)
+    fVarDecl lut v.range v.name v.permission
     <| Option.map (fDataType lut) v.datatype
-    <| Option.map (checkExpr lut) v.initialiser // >> Result.map(tryEvalConst2 lut) do that within fVarDecl
+    <| Option.map (checkExpr lut) v.initialiser
+    <| Annotation.checkVarDecl lut v 
+
+let private chkExternalVarDecl lut (v: AST.VarDecl) =
+    assert v.isExtern
+    fExternalVarDecl lut v.range v.name v.permission 
+    <| Option.map (fDataType lut) v.datatype
+    <| Option.map (checkExpr lut) v.initialiser
     <| Annotation.checkVarDecl lut v 
 
 
@@ -433,7 +514,7 @@ let private fFunPrototype lut pos name inputs outputs retType annotation =
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
-    let createSubProgram (((((qname, ins), outs), ret), stmts), annotation) = 
+    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs) (((((qname, ins), outs), ret), stmts), annotation) = 
         let funact =
             {
                 SubProgramDecl.isFunction = isFunction
@@ -441,6 +522,9 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
                 name = qname
                 inputs = ins
                 outputs = outs
+                globalInputs = globalInputs
+                globalOutputsInScope = localGlobalOutputs
+                globalOutputsAccumulated = allGlobalOutputs
                 body = stmts
                 returns = ret
                 annotation = annotation
@@ -467,20 +551,22 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
         let cb = contract body 
         if isFunction then
             cb
-            |> Result.bind checkAbsenceOfSyncStmts
+            |> Result.bind checkAbsenceOfSyncStmts // also excludes external variables
             |> Result.bind (fun _ -> cb) // if no synchronous statements were found, return the contracted body
         else
             cb
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
+    let globalInputs, localGlobalOutputs, allGlobalOutputs = determineGlobalOutputs lut contractedBody
+
     Ok (lut.ncEnv.nameToQname name)
     |> combine <| contract inputs
     |> combine <| contract outputs
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map createSubProgram
+    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs))
 
 
 //=============================================================================
@@ -692,8 +778,12 @@ type private ASTStmt = AST.Stmt
 let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending the expression in a "return" statement
     match x with
     | AST.LocalVar vdecl ->
-        recVarDecl lut vdecl
-        |> Result.map (Stmt.VarDecl)
+        if vdecl.isExtern then
+            chkExternalVarDecl lut vdecl
+            |> Result.map (Stmt.ExternalVarDecl)
+        else
+            recVarDecl lut vdecl
+            |> Result.map (Stmt.VarDecl)
     | AST.Assign (range, lhs, rhs) ->
         fAssign lut range
         <| checkAssignLExpr lut lhs
@@ -783,6 +873,7 @@ type private ProcessedMembers =
         funacts: Collections.ResizeArray<Result<SubProgramDecl, TyCheckError list>>
         funPrototypes: Collections.ResizeArray<Result<FunctionPrototype, TyCheckError list>>
         variables: Collections.ResizeArray<Result<VarDecl, TyCheckError list>>
+        externalVariables: Collections.ResizeArray<Result<ExternalVarDecl, TyCheckError list>>
         types: Collections.ResizeArray<Result<Types, TyCheckError list>>
         memberPragmas: ResizeArray<Result<Attribute.MemberPragma, TyCheckError list>>
         mutable entryPoint: Result<SubProgramDecl, TyCheckError list> option
@@ -790,6 +881,7 @@ type private ProcessedMembers =
     member this.AddFunAct fa = this.funacts.Add fa
     member this.AddFunPrototype fp = this.funPrototypes.Add fp
     member this.AddVariable v = this.variables.Add v
+    member this.AddExternalVariable v = this.externalVariables.Add v
     member this.AddType t = this.types.Add t
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
@@ -821,6 +913,7 @@ type private ProcessedMembers =
     member this.GetFunActs = List.ofSeq this.funacts
     member this.GetFunPrototypes = List.ofSeq this.funPrototypes
     member this.GetVariables = List.ofSeq this.variables
+    member this.GetExternalVariables = List.ofSeq this.externalVariables
     member this.GetTypes = List.ofSeq this.types
     member this.GetMemberPragmas = List.ofSeq this.memberPragmas
     member this.GetEntryPoint = this.entryPoint
@@ -830,6 +923,7 @@ type private ProcessedMembers =
             funacts = Collections.ResizeArray()
             funPrototypes = Collections.ResizeArray()
             variables = Collections.ResizeArray()
+            externalVariables = Collections.ResizeArray()
             types = Collections.ResizeArray()
             memberPragmas = Collections.ResizeArray()
             entryPoint = None
@@ -847,6 +941,7 @@ let public fPackage lut (pack: AST.Package) =
             typedMembers.GetFunActs,
             typedMembers.GetFunPrototypes,
             typedMembers.GetVariables,
+            typedMembers.GetExternalVariables,
             typedMembers.GetTypes,
             typedMembers.GetMemberPragmas,
             typedMembers.GetEntryPoint
@@ -884,7 +979,12 @@ let public fPackage lut (pack: AST.Package) =
                 //let _ = fClockDecl c
                 () // ignore this member
             | AST.Member.Var v -> 
-                do typedMembers.AddVariable (recVarDecl lut v)
+                if v.isExtern then
+                    chkExternalVarDecl lut v
+                    |> typedMembers.AddExternalVariable
+                else
+                    recVarDecl lut v
+                    |> typedMembers.AddVariable
             | AST.Member.Subprogram a ->
                 let retTypOpt = Option.map (recReturnDecl lut) a.result
                 let funact = 
@@ -906,7 +1006,7 @@ let public fPackage lut (pack: AST.Package) =
                 do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
-    let createPackage ((((((modName, funPrototypes), funacts), variables), types), memberPragmas), entryPoint) =
+    let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
     
         assert (List.length types = lut.userTypes.Count)
         {
@@ -915,11 +1015,12 @@ let public fPackage lut (pack: AST.Package) =
             funPrototypes = funPrototypes
             funacts = funacts
             variables = variables
+            externalVariables = externalVariables
             memberPragmas = memberPragmas
             entryPoint = entryPoint
         }
     
-    let funacts, funPrototypes, variables, types, memberPragmas, entryPoint = 
+    let funacts, funPrototypes, variables, externalVariables, types, memberPragmas, entryPoint = 
         let typedMembers = ProcessedMembers.Empty ()
         processMembers typedMembers (pack.imports @ pack.members)
     
@@ -930,6 +1031,7 @@ let public fPackage lut (pack: AST.Package) =
         |> combine <| contract funPrototypes
         |> combine <| contract funacts
         |> combine <| contract variables
+        |> combine <| contract externalVariables
         |> combine <| contract types
         |> combine <| contract memberPragmas
         |> combine <| ofOption entryPoint

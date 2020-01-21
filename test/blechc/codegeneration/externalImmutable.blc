@@ -1,0 +1,44 @@
+struct S
+    var s: float32
+end
+
+
+activity A () returns int32
+    @[CInput(binding="c_name_extVarI8", header="externalImmutable.ext.h")]
+    extern let extVarI8: int32
+    
+    await true
+    
+    let foo1 = extVarI8
+
+    await true
+
+    return extVarI8
+end
+
+activity B (myS: S)
+    @[CInput(binding="c_name_extVarArr", header="externalImmutable.ext.h")]
+    extern let extVarArr: [8]int32
+    var res: int32
+
+    if myS.s < 0.0f then _ = run A()
+    else 
+        res = run A()
+        let foo2 = extVarArr
+        let foo3 = extVarArr[0]
+    end
+end
+
+@[EntryPoint]
+activity E ()
+    @[CInput(binding="c_name_S2", header="externalImmutable.ext.h")]
+    extern let extVarS: S
+
+    @[COutput(binding="c_name_S2", header="externalImmutable.ext.h")]
+    extern var extVarS2: S // Oops, pointing to the same external data twice!
+    extVarS2 = {s = 1.7f}
+    let foo4 = extVarS
+    let foo5 = extVarS.s
+    
+    run B(prev extVarS2)
+end

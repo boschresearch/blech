@@ -228,15 +228,19 @@ let internal printState ctx printState entryCompilation =
                 + printArray isLocal (level + 1) n
                 + sprintf """printf("\n%s]");""" ind
             | _ -> failwith "Only value types implemented."
-
-
-        let rec printVar isLocal level (n: TypedMemLoc) (pos: Range.range) =
-            let ind = String.replicate level @"\t"
-            let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
-            sprintf """printf("%s%s");""" ind prefix
-            + printAnything isLocal level n    
             
-        
+        let rec printVar isLocal level (n: TypedMemLoc) (pos: Range.range) =
+            // silently ignore if given tml is not in type check context
+            // this happens for external prev variables that are added
+            // as locals into the iface (after type checking)
+            if ctx.tcc.nameToDecl.ContainsKey n.QNamePrefix then
+                let ind = String.replicate level @"\t"
+                let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
+                sprintf """printf("%s%s");""" ind prefix
+                + printAnything isLocal level n    
+            else
+                ""
+                    
         let printParamDecl isLocal (p: ParamDecl) = 
             printVar isLocal 4 (Loc p.name) p.pos
 
@@ -247,6 +251,7 @@ let internal printState ctx printState entryCompilation =
                 entryCompilation.iface.locals |> List.map (printParamDecl true) 
             ]
             |> List.concat
+            |> List.filter (System.String.IsNullOrWhiteSpace >> not)
             
         match vars with
         | [] ->

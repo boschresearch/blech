@@ -1,0 +1,10 @@
+function f ()()
+    @[CInput(binding="c_name_S2", header="externalImmutable.ext.h")]
+    extern let c: float32
+end
+@[EntryPoint]
+activity E ()()
+    @[COutput(binding="c_name_S2", header="externalImmutable.ext.h")]
+    extern var foo: int32
+    await true
+end

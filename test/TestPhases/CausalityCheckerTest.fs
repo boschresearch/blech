@@ -23,15 +23,15 @@ open Blech.Common
 [<TestFixture>]
 type Test() =
 
-    /// load test cases for typeCheckValidFiles test
+    /// load test cases for causalityCheckValidFiles test
     static member validFiles = 
         TestFiles.validFiles TestFiles.Causality
 
         
-    /// run typeCheckValidFiles
+    /// run causalityCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.typeCheckValidFiles (loadWhat, moduleName, filePath) =
+    member x.causalityCheckValidFiles (loadWhat, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
         
         let ast = 
@@ -65,15 +65,15 @@ type Test() =
             Assert.True false
 
 
-    /// load test cases for typeCheckInvalidInputs test
+    /// load test cases for causalityCheckInvalidInputs test
     static member invalidFiles = 
         TestFiles.invalidFiles TestFiles.Causality
 
         
-    /// run typeCheckInvalidInputs
+    /// run causalityCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.typeCheckInvalidInputs (loadWhat, moduleName, filePath) =
+    member x.causalityCheckInvalidInputs (loadWhat, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
         let ast = 
             Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath

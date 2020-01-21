@@ -77,6 +77,30 @@ module Annotation =
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
                                                   value = AST.String(value = binding)) ] ) ->
             Ok (CConst(binding, None))
+
+        | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+                                                  value = AST.String(value = binding))
+                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
+                                                  value = AST.String(value = header)) ] ) ->
+            Ok (CInput(binding, Some header))
+
+        | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+                                                  value = AST.String(value = binding)) ] ) ->
+            Ok (CInput(binding, None))
+
+        | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+                                                  value = AST.String(value = binding))
+                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
+                                                  value = AST.String(value = header)) ] ) ->
+            Ok (COutput(binding, Some header))
+        
+        | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+                                                  value = AST.String(value = binding)) ] ) ->
+            Ok (COutput(binding, None))
                 
         | _ ->
             Error [UnsupportedAnnotation anno.Range]
@@ -143,7 +167,21 @@ module Annotation =
         let checkVdAnnotation vdattr (anno: AST.Annotation) =
             let checkAttribute (vdattr, attr) =
                 match attr with
-                | CConst (header = header)  when v.isExtern && v.permission.IsConst ->
+                | CConst (header = header) when v.isExtern && v.permission.IsConst ->
+                    if Option.isSome vdattr.cvardecl then
+                        multipleUniqueAnnotation anno
+                    elif Option.isNone header && not (hasInclude lut) then 
+                        missingNamedArgument v.range Attribute.Key.header
+                    else
+                        Ok { vdattr with cvardecl = Some attr }
+                | CInput (header = header) when v.isExtern && v.permission.IsLet ->
+                    if Option.isSome vdattr.cvardecl then
+                        multipleUniqueAnnotation anno
+                    elif Option.isNone header && not (hasInclude lut) then 
+                        missingNamedArgument v.range Attribute.Key.header
+                    else
+                        Ok { vdattr with cvardecl = Some attr }
+                | COutput (header = header) when v.isExtern && v.permission.IsVar ->
                     if Option.isSome vdattr.cvardecl then
                         multipleUniqueAnnotation anno
                     elif Option.isNone header && not (hasInclude lut) then 
@@ -159,15 +197,19 @@ module Annotation =
             combine vdattr (checkAnnotation anno)
             |> Result.bind checkAttribute
 
-        let checkCVarDecl vdattr =
+        let checkExternVarDecl vdattr =
             match vdattr.cvardecl with
             | None when v.isExtern && v.permission.IsConst ->
                 missingAnnotation v.range Attribute.cconst
+            | None when v.isExtern && v.permission.IsLet ->
+                missingAnnotation v.range Attribute.cinput
+            | None when v.isExtern && v.permission.IsVar ->
+                missingAnnotation v.range Attribute.coutput
             | _ ->
                 Ok vdattr
     
         List.fold checkVdAnnotation (Ok VarDecl.Empty) v.annotations
-        |> Result.bind checkCVarDecl
+        |> Result.bind checkExternVarDecl
 
 
     let checkOtherDecl (annotations: AST.Annotation list) =  

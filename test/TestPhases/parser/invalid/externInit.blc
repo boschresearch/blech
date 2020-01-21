@@ -1,0 +1,5 @@
+@[EntryPoint]
+activity E ()()
+    extern var foo: int32 = 7
+    await true
+end

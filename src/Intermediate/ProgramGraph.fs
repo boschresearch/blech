@@ -251,6 +251,12 @@ module ProgramGraph =
                   typ = v.datatype
                   range = v.pos }
             addRandW context pg.Entry v.initValue newLhs
+        | Action.ExternalVarDecl v ->
+            let newLhs =
+                { lhs = LhsCur (Loc v.name)
+                  typ = v.datatype
+                  range = v.pos }
+            addNameWritten context pg.Entry newLhs // no init value to be read
         | Action.Assign (_, tlhs, trhs) -> addRandW context pg.Entry trhs tlhs
         | Action.Assert (_, cond, _)
         | Action.Assume (_, cond, _) -> addNameRead context pg.Entry cond
@@ -302,6 +308,19 @@ module ProgramGraph =
         inputs |> List.iter (addNameRead context callNode)
         outputs |> List.iter (addNameWritten context callNode)
         retvar |> Option.iter (addNameWritten context callNode)
+
+        // add locally declared external (output) variables
+        let addGlobalOutput (extVarDecl: ExternalVarDecl) =
+            let newLhs =
+                { lhs = LhsCur (Loc extVarDecl.name)
+                  typ = extVarDecl.datatype
+                  range = pos } // use calling activity's source pos instead of declaration's
+            addNameWritten context pg.Entry newLhs
+        match context.lut.nameToDecl.[name] with
+        | SubProgramDecl spd ->
+            List.iter addGlobalOutput spd.globalOutputsAccumulated
+        | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        
         
         { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 
@@ -531,6 +550,7 @@ module ProgramGraph =
         match stmt with
         // local variable or object declaration
         | Stmt.VarDecl v -> createAction context v.pos thread (Action.VarDecl v)
+        | Stmt.ExternalVarDecl v -> createAction context v.pos thread (Action.ExternalVarDecl v)
         // actions
         | Stmt.Assign (pos, tlhs, trhs) -> createAction context pos thread (Action.Assign (pos, tlhs, trhs))
         | Stmt.Assert (pos, cond, x) -> createAction context pos thread (Action.Assert (pos, cond, x))
