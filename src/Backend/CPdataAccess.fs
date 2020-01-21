@@ -602,7 +602,7 @@ and cpRhsInFunction ctx rhs =
 and cpRhsInActivity ctx rhs =
     let timepoint, tml = decomposeRhs rhs
     let renderName = selectNameRendererInActivity ctx tml
-    // if external && let/var && current, treat like local in activity
+    // if external && let/var && current, treat like local in function
     let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.Rhs timepoint ctx tml renderName
     
@@ -615,7 +615,7 @@ and cpLhsInFunction ctx lhs =
 and cpLhsInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
-    // if external && let/var && current, treat like local in activity
+    // if external && let/var && current, treat like local in function
     let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.Lhs timepoint ctx tml renderName
 
@@ -627,7 +627,7 @@ and cpOutputArgInFunction ctx lhs =
 and cpOutputArgInActivity ctx lhs =
     let timepoint, tml = decomposeLhs lhs
     let renderName = selectNameRendererInActivity ctx tml
-    // if external && let/var && current, treat like local in activity
+    // if external && let/var && current, treat like local in function
     let subProgKind = isExtCurVar ctx tml timepoint
     cpRenderData subProgKind Usage.OutputArg timepoint ctx tml renderName
 
@@ -709,7 +709,7 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
     | Prev _ -> // the prev case cannot be matched inside a function context!
         let timepoint, tml = decomposeRhs rhs.rhs
         let renderName = if inFunction then ppName else selectNameRendererInActivity ctx tml
-        // if external && let/var && current, treat like local in activity
+        // if external && let/var && current, treat like local in function
         let subProgKind = 
             if inFunction then SubProgKind.Function else isExtCurVar ctx tml timepoint
         let prereqStmts, renderedTml = cpRenderData subProgKind Usage.InputArg timepoint ctx tml renderName
