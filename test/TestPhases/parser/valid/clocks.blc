@@ -17,7 +17,7 @@ function f(x: int32 on ms50) returns int32 on ms30
 end
 
 ref struct Bla
-    extern let x: int32
+    let x: int32
 extension
     activity name(x: int32) returns bool on ms10
     end

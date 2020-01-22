@@ -1,0 +1,9 @@
+struct S
+    extern var s: float32
+end
+
+@[EntryPoint]
+activity A ()
+    var s: S
+    await true
+end

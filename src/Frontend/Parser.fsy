@@ -1244,11 +1244,9 @@ ExtensionMember
     | ExternalConstant                          { $1 } 
     | TypeAliasDecl                             { $1 }
 
-DynamicMember
-    : Variable                                  { $1 }
-/*    | Constant                                  { $1 }   */
-    | ExternalVariable                          { $1 }
-/*    | ExternalConstant                          { $1 }   */
+DynamicMember /* a struct field */
+    : Variable                                  { $1 } /* let or var */
+    /* no constants or externals are allowed inside a struct decl */
 
 ModuleMembers
     :                                           { [] }      
@@ -1262,7 +1260,7 @@ ExtensionMembers
     | Pragma ExtensionMembers                   { $2 }  // TODO: Add pragma to AST
     | SEMICOLON ExtensionMembers                { $2 }
 
-DynamicMembers
+DynamicMembers /* are only used as struct fields */
     :                                           { [] }
     | DynamicMember DynamicMembers              { $1 :: $2 }
     | Pragma DynamicMembers                     { $2 }  // TODO: Add pragma to AST
