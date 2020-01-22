@@ -89,14 +89,14 @@ let internal isLeftSupertypeOfRight typL typR =
     | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
         let requiredSizeForValue = IntType.RequiredType value
         sizeL.GetSize() >= requiredSizeForValue.GetSize()
-    | Types.ValueTypes (UintType sizeL), Types.ValueTypes (UintType sizeR) ->
+    | Types.ValueTypes (NatType sizeL), Types.ValueTypes (NatType sizeR) ->
         sizeL.GetSize() >= sizeR.GetSize()
-    | Types.ValueTypes (UintType sizeL), Types.AnyInt value ->
+    | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
         if value >= 0I then
-            let requiredSizeForValue = UintType.RequiredType value
+            let requiredSizeForValue = NatType.RequiredType value
             sizeL.GetSize() >= requiredSizeForValue.GetSize()
         else
-            false // a negative value may never fit any uint type
+            false // a negative value may never fit any nat type
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
         sizeL.GetSize() >= sizeR.GetSize()
     | a, b when (a = b) -> true
@@ -117,7 +117,7 @@ let rec getDefaultValueFor pos name dty =
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
-        | UintType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
+        | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | FloatType precision ->
             Ok {rhs = FloatConst (FloatConst.Zero precision); typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->

@@ -99,7 +99,7 @@ type ValueTypes =
     | Void // e.g. function return type
     | BoolType    
     | IntType of IntType
-    | UintType of UintType
+    | NatType of NatType
     | FloatType of FloatPrecision
     //structured
     | ArrayType of size:int * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
@@ -115,19 +115,19 @@ type ValueTypes =
         | Void -> "void"
         | BoolType -> "bool"
         | IntType i -> i.ToString()
-        | UintType i -> i.ToString()
+        | NatType i -> i.ToString()
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
         | StructType (_, q, _) -> q.ToString()
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | UintType _ | FloatType _ -> true
+        | Void | BoolType | IntType _ | NatType _ | FloatType _ -> true
         | ArrayType _ | StructType _ -> false
     
     member this.TryRange =
         match this with
-        | Void | BoolType | IntType _ | UintType _ | FloatType _ | ArrayType _ -> None
+        | Void | BoolType | IntType _ | NatType _ | FloatType _ | ArrayType _ -> None
         | StructType (r,_,_) -> Some r
 
 

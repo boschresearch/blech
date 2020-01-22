@@ -371,7 +371,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 name = lhsName
                 datatype = lhsTyp
                 mutability = Mutability.Variable
-                initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (UintType Uint8); range = pos} // that is garbage
+                initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (NatType Nat8); range = pos} // that is garbage
                 annotation = Attribute.VarDecl.Empty
                 allReferences = HashSet() 
             }
@@ -724,7 +724,7 @@ let private translateBlock ctx compilations curComp block =
     let pc =
         { name = mkAuxQNameFrom <| render None (pc4block block)
           pos = range0
-          datatype = Types.ValueTypes (UintType Uint32)
+          datatype = Types.ValueTypes (NatType Nat32)
           isMutable = true
           allReferences = HashSet() }
     let newIface = Iface.addPcs (!curComp).iface pc

@@ -33,10 +33,10 @@ typedef BLC_INT16 blc_int16;
 typedef BLC_INT32 blc_int32;
 typedef BLC_INT64 blc_int64;
 
-typedef BLC_UINT8 blc_uint8;
-typedef BLC_UINT16 blc_uint16;
-typedef BLC_UINT32 blc_uint32;
-typedef BLC_UINT64 blc_uint64;
+typedef BLC_NAT8 blc_nat8;
+typedef BLC_NAT16 blc_nat16;
+typedef BLC_NAT32 blc_nat32;
+typedef BLC_NAT64 blc_nat64;
 
 typedef BLC_BITS8 blc_bits8;
 typedef BLC_BITS16 blc_bits16;

@@ -313,8 +313,8 @@ let rec private fDataType lut utyDataType =
     match utyDataType with
     // simple types
     | AST.BoolType _ -> Types.ValueTypes BoolType |> Ok
-    | AST.SignedType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
-    | AST.UnsignedType (size, _, _) -> UintType size |> Types.ValueTypes |> Ok
+    | AST.IntegerType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
+    | AST.NaturalType (size, _, _) -> NatType size |> Types.ValueTypes |> Ok
     | AST.FloatType (size, _, _) -> FloatType size |> Types.ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
@@ -348,7 +348,7 @@ let rec private fDataType lut utyDataType =
     | AST.BitvecType _
     | AST.SliceType _
     | AST.Signal _ -> 
-        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, uint, float, fixed size array or user defined struct")]
+        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]
 
 
 /// Create a variable declaration. It may be local to a subprogram or global.

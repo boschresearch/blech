@@ -260,8 +260,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | BoolType _
         | BitvecType _ ->
             ctx
-        | UnsignedType (unit = uexp)
-        | SignedType (unit = uexp) 
+        | NaturalType (unit = uexp)
+        | IntegerType (unit = uexp) 
         | FloatType (unit = uexp) ->
             Option.fold checkUnitExpr ctx uexp
         | ArrayType (size = expr; elem = dty) ->

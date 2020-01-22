@@ -155,17 +155,26 @@ module SignaturePrinter =
     
     // --- types
 
-    let private bpUnsignedType = function
-        | Uint8 -> txt "uint8"
-        | Uint16 -> txt "uint16"
-        | Uint32 -> txt "uint32"
-        | Uint64 -> txt "uint64"
+    let private bpNaturalType = function
+        | Nat8 -> txt "nat8"
+        | Nat16 -> txt "nat16"
+        | Nat32 -> txt "nat32"
+        | Nat64 -> txt "nat64"
     
-    let private bpSignedType = function
+
+    let private bpIntegerType = function
         | IntType.Int8 -> txt "int8"
         | IntType.Int16 -> txt "int16"
         | IntType.Int32 -> txt "int32"
         | IntType.Int64 -> txt "int64"
+
+
+    let private bpBitvecType = function
+        | Bits8 -> txt "bits8"
+        | Bits16 -> txt "bits16"
+        | Bits32 -> txt "bits32"
+        | Bits64 -> txt "bits64"
+    
 
     let private bpFloatType = function            
         | FloatPrecision.Single -> txt "float32"
@@ -195,11 +204,12 @@ module SignaturePrinter =
         match typ with
         //| VoidType -> txt "void"
         | AST.BoolType _ -> txt "bool"
-        | AST.BitvecType (len, _) -> txt "bits" <^> fmt "%d" len
-        | AST.UnsignedType (size, optUnit, _) -> 
-            bpUnsignedType size <^> bpOptUnit optUnit
-        | AST.SignedType (size, optUnit, _) ->
-            bpSignedType size <^> bpOptUnit optUnit
+        | AST.BitvecType (size, _) -> 
+            bpBitvecType size 
+        | AST.NaturalType (size, optUnit, _) -> 
+            bpNaturalType size <^> bpOptUnit optUnit
+        | AST.IntegerType (size, optUnit, _) ->
+            bpIntegerType size <^> bpOptUnit optUnit
         | AST.FloatType (precision, optUnit, _) ->
             bpFloatType precision <^> bpOptUnit optUnit
         | AST.ArrayType (length, arrType, _) -> 
@@ -337,8 +347,8 @@ module SignaturePrinter =
             fun p -> bpPrecExpr p lhs <.> txt "%" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["%"]
         | AST.Expr.Pow (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "^" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["^"]
+            fun p -> bpPrecExpr p lhs <.> txt "**" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["**"]
         | AST.Expr.Unm (expr, _) ->
             fun p -> txt "-" <^> bpPrecExpr p expr
             |> dpPrecedence outerPrec dpPrec.["unary"]
@@ -376,8 +386,8 @@ module SignaturePrinter =
             fun p -> bpPrecExpr p lhs <.> txt "|" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["|"]
         | AST.Expr.Bxor (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "~" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["~"]
+            fun p -> bpPrecExpr p lhs <.> txt "^" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["^"]
         | AST.Expr.Shl (lhs, rhs) ->
             fun p -> bpPrecExpr p lhs <.> txt "<<" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["<<"]

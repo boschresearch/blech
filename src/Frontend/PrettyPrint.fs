@@ -39,13 +39,13 @@ module PrettyPrint =
                 ("and", 20);
                 ("<", 30); ("<=", 30); (">", 30); (">=", 30); ("==", 30); ("!=", 30); ("===", 30); ("!==", 30)
                 ("|", 40);
-                ("~", 50); ("#", 50); ("##", 50); // TODO: stimmt das?
+                ("^", 50); ("#", 50); ("##", 50); // TODO: stimmt das?
                 ("&", 60);
                 ("<<", 70); (">>", 70);
                 ("+", 80); ("-", 80);
                 ("*", 90); ("/", 90); ("%", 90);
                 ("unary", 100); ("not", 100);
-                ("^", 110);
+                ("**", 110);
                 ("as", 120);
                 ("max", 1000); ("parens", 1000) // TODO: stimmt das?
                 ]      
@@ -463,18 +463,24 @@ module PrettyPrint =
                 | Some u -> fUnitExpr u |> brackets
 
             // --- types
-
-            let ppUnsignedType = function
-                | Uint8 -> txt "uint8"
-                | Uint16 -> txt "uint16"
-                | Uint32 -> txt "uint32"
-                | Uint64 -> txt "uint64"
-    
-            let ppSignedType = function
+            let ppIntegerType = function
                 | IntType.Int8 -> txt "int8"
                 | IntType.Int16 -> txt "int16"
                 | IntType.Int32 -> txt "int32"
                 | IntType.Int64 -> txt "int64"
+
+            let ppNaturalType = function
+                | Nat8 -> txt "nat8"
+                | Nat16 -> txt "nat16"
+                | Nat32 -> txt "nat32"
+                | Nat64 -> txt "nat64"
+    
+            let ppBitvecType = function
+                | Bits8 -> txt "bits8"
+                | Bits16 -> txt "bits16"
+                | Bits32 -> txt "bits32"
+                | Bits64 -> txt "bits64"
+        
 
             let ppFloatType = function            
                 | FloatPrecision.Single -> txt "float32"
@@ -508,11 +514,12 @@ module PrettyPrint =
                 match typ with
                 //| VoidType -> txt "void"
                 | BoolType _ -> txt "bool"
-                | BitvecType (len, _) -> txt "bits" <^> fmt "%d" len
-                | UnsignedType (size, optUnit, _) -> 
-                    ppUnsignedType size <^> ppOptUnit optUnit
-                | SignedType (size, optUnit, _) ->
-                    ppSignedType size <^> ppOptUnit optUnit
+                | BitvecType (size, _) ->
+                    ppBitvecType size
+                | NaturalType (size, optUnit, _) -> 
+                    ppNaturalType size <^> ppOptUnit optUnit
+                | IntegerType (size, optUnit, _) ->
+                    ppIntegerType size <^> ppOptUnit optUnit
                 | FloatType (precision, optUnit, _) ->
                     ppFloatType precision <^> ppOptUnit optUnit
                 | ArrayType (length, arrType, _) -> 
@@ -686,8 +693,8 @@ module PrettyPrint =
                     fun p -> ppExpr p lhs <.> txt "%" <+> ppExpr p rhs
                     |> dpPrecedence outerPrec dpPrec.["%"]
                 | Pow (lhs, rhs) ->
-                    fun p -> ppExpr p lhs <.> txt "^" <+> ppExpr p rhs
-                    |> dpPrecedence outerPrec dpPrec.["^"]
+                    fun p -> ppExpr p lhs <.> txt "**" <+> ppExpr p rhs
+                    |> dpPrecedence outerPrec dpPrec.["**"]
                 | Unm (expr, _) ->
                     fun p -> txt "-" <^> ppExpr p expr
                     |> dpPrecedence outerPrec dpPrec.["unary"]
@@ -725,8 +732,8 @@ module PrettyPrint =
                     fun p -> ppExpr p lhs <.> txt "|" <+> ppExpr p rhs
                     |> dpPrecedence outerPrec dpPrec.["|"]
                 | Bxor (lhs, rhs) ->
-                    fun p -> ppExpr p lhs <.> txt "~" <+> ppExpr p rhs
-                    |> dpPrecedence outerPrec dpPrec.["~"]
+                    fun p -> ppExpr p lhs <.> txt "^" <+> ppExpr p rhs
+                    |> dpPrecedence outerPrec dpPrec.["^"]
                 | Shl (lhs, rhs) ->
                     fun p -> ppExpr p lhs <.> txt "<<" <+> ppExpr p rhs
                     |> dpPrecedence outerPrec dpPrec.["<<"]

@@ -450,7 +450,7 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 /// If the type is not numeric, an error will be returned instead.
 let private unaryMinus r (expr: TypedRhs) =
     match expr.typ with
-    // no unary minus on unsigned integer since it cannot be used anywhere
+    // no unary minus on natural number since it cannot be used anywhere
     | AnyInt value ->
         { rhs = IntConst -value
           typ = AnyInt -value
@@ -513,9 +513,9 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
     | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
     | Types.ValueTypes (IntType _), Types.AnyInt _
     | Types.AnyInt _, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (UintType _), Types.ValueTypes (UintType _)
-    | Types.ValueTypes (UintType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (UintType _)
+    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
+    | Types.ValueTypes (NatType _), Types.AnyInt _
+    | Types.AnyInt _, Types.ValueTypes (NatType _)
     | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
         eq expr1 expr2 |> resultOk |> Ok
     | Types.ValueTypes lType, Types.ValueTypes rType when lType = rType ->
@@ -536,9 +536,9 @@ let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
     | Types.ValueTypes (IntType _), Types.AnyInt _
     | Types.AnyInt _, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (UintType _), Types.ValueTypes (UintType _)
-    | Types.ValueTypes (UintType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (UintType _)
+    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
+    | Types.ValueTypes (NatType _), Types.AnyInt _
+    | Types.AnyInt _, Types.ValueTypes (NatType _)
     | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
         { rhs = ineqFun expr1 expr2
           typ = Types.ValueTypes BoolType
@@ -570,16 +570,16 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
     match expr1.typ, expr2.typ with
     | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
         genResExpr <| Types.ValueTypes (IntType (commonSize size1 size2))
-    | Types.ValueTypes (UintType size1), Types.ValueTypes (UintType size2) ->
-        genResExpr <| Types.ValueTypes (UintType (commonSize size1 size2))
+    | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
+        genResExpr <| Types.ValueTypes (NatType (commonSize size1 size2))
     | AnyInt value, Types.ValueTypes (IntType size)
     | Types.ValueTypes (IntType size), AnyInt value ->
         let requiredSizeForValue = IntType.RequiredType value
         genResExpr <| Types.ValueTypes (IntType (commonSize requiredSizeForValue size))
-    | AnyInt value, Types.ValueTypes (UintType size)
-    | Types.ValueTypes (UintType size), AnyInt value ->
-        let requiredSizeForValue = UintType.RequiredType value
-        genResExpr <| Types.ValueTypes (UintType (commonSize requiredSizeForValue size))
+    | AnyInt value, Types.ValueTypes (NatType size)
+    | Types.ValueTypes (NatType size), AnyInt value ->
+        let requiredSizeForValue = NatType.RequiredType value
+        genResExpr <| Types.ValueTypes (NatType (commonSize requiredSizeForValue size))
     | AnyInt _, AnyInt _ ->
         let combinedValues = 
             combFun expr1 expr2
@@ -670,7 +670,7 @@ let private checkSimpleLiteral literal =
     | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = Types.ValueTypes BoolType; range = pos } |> Ok
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
-        if MIN_INT64 <= value && value <= MAX_UINT64 then
+        if MIN_INT64 <= value && value <= MAX_NAT64 then
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
@@ -789,7 +789,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 let isIntType = function
                     | AnyInt _
                     | ValueTypes (IntType _)
-                    | ValueTypes (UintType _) -> true
+                    | ValueTypes (NatType _) -> true
                     | _ -> false
                 // check that tml is actually an array
                 tmlAndType

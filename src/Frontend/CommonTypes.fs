@@ -34,14 +34,23 @@ let MAX_INT32 = pown 2I 31 - 1I
 let MIN_INT64 = -pown 2I 63
 let MAX_INT64 = pown 2I 63 - 1I
 
-let MIN_UINT8 = 0I
-let MAX_UINT8 = pown 2I 8 - 1I
-let MIN_UINT16 = 0I
-let MAX_UINT16 = pown 2I 16 - 1I
-let MIN_UINT32 = 0I
-let MAX_UINT32 = pown 2I 32 - 1I
-let MIN_UINT64 = 0I
-let MAX_UINT64 = pown 2I 64 - 1I
+let MIN_NAT8 = 0I
+let MAX_NAT8 = pown 2I 8 - 1I
+let MIN_NAT16 = 0I
+let MAX_NAT16 = pown 2I 16 - 1I
+let MIN_NAT32 = 0I
+let MAX_NAT32 = pown 2I 32 - 1I
+let MIN_NAT64 = 0I
+let MAX_NAT64 = pown 2I 64 - 1I
+
+let MIN_BITS8 = 0I
+let MAX_BITS8 = pown 2I 8 - 1I
+let MIN_BITS16 = 0I
+let MAX_BITS16 = pown 2I 16 - 1I
+let MIN_BITS32 = 0I
+let MAX_BITS32 = pown 2I 32 - 1I
+let MIN_BITS64 = 0I
+let MAX_BITS64 = pown 2I 64 - 1I
 
 let MIN_FLOAT32 = System.Single.MinValue
 let MAX_FLOAT32 = System.Single.MaxValue
@@ -206,23 +215,42 @@ type IntType =
         else Int64
 
 
-type UintType = 
-    | Uint8 | Uint16 | Uint32 | Uint64 // order of tags matters for comparison!
+type NatType = 
+    | Nat8 | Nat16 | Nat32 | Nat64 // order of tags matters for comparison!
 
-    override this.ToString() = "uint" + string(this.GetSize())
+    override this.ToString() = "nat" + string(this.GetSize())
     
     member this.GetSize() =
         match this with
-        | Uint8 -> 8
-        | Uint16 -> 16
-        | Uint32 -> 32
-        | Uint64 -> 64
+        | Nat8 -> 8
+        | Nat16 -> 16
+        | Nat32 -> 32
+        | Nat64 -> 64
     
     static member RequiredType value =
-        if MIN_UINT8 <= value && value <= MAX_UINT8 then Uint8
-        elif MIN_UINT16 <= value && value <= MAX_UINT16 then Uint16
-        elif MIN_UINT32 <= value && value <= MAX_UINT32 then Uint32
-        else Uint64
+        if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+        elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+        elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+        else Nat64
+
+
+type BitsType = 
+    | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
+
+    override this.ToString() = "bits" + string(this.GetSize())
+    
+    member this.GetSize() =
+        match this with
+        | Bits8 -> 8
+        | Bits16 -> 16
+        | Bits32 -> 32
+        | Bits64 -> 64
+    
+    static member RequiredType value =
+        if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
+        elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
+        elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
+        else Bits64
 
 
 type FloatPrecision = 

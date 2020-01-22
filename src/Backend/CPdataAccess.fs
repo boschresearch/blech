@@ -172,12 +172,12 @@ let rec internal cpType typ =
         | Int16 -> txt "blc_int16"
         | Int32 -> txt "blc_int32"
         | Int64 -> txt "blc_int64"
-    | ValueTypes (UintType size) ->
+    | ValueTypes (NatType size) ->
         match size with
-        | Uint8 -> txt "blc_uint8"
-        | Uint16 -> txt "blc_uint16"
-        | Uint32 -> txt "blc_uint32"
-        | Uint64 -> txt "blc_uint64"
+        | Nat8 -> txt "blc_nat8"
+        | Nat16 -> txt "blc_nat16"
+        | Nat32 -> txt "blc_nat32"
+        | Nat64 -> txt "blc_nat64"
     | ValueTypes (FloatType size) ->
         match size with
         | FloatPrecision.Single -> txt "blc_float32"
@@ -305,7 +305,7 @@ let private getElementDatatype (ctx: TranslationContext) (tml:TypedMemLoc) =
     | ValueTypes (ValueTypes.BoolType)
     | ValueTypes (ValueTypes.FloatType _)
     | ValueTypes (ValueTypes.IntType _)
-    | ValueTypes (ValueTypes.UintType _) -> ValueSimple
+    | ValueTypes (ValueTypes.NatType _) -> ValueSimple
     | ValueTypes (ValueTypes.StructType _) -> ValueStruct
     | ValueTypes (ValueTypes.ArrayType _) -> ValueArray
     | ReferenceTypes _ -> failwith "Reference types not yet implemented."
@@ -847,7 +847,7 @@ and private cpExpr inFunction ctx expr =
                     name = lhsName
                     datatype = lhsTyp
                     mutability = Mutability.Variable
-                    initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (UintType Uint8); range = expr.range} // that is garbage
+                    initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (NatType Nat8); range = expr.range} // that is garbage
                     annotation = Attribute.VarDecl.Empty
                     allReferences = HashSet() 
                 }
@@ -894,7 +894,7 @@ and private cpExpr inFunction ctx expr =
         match s1.typ with //do not care about s2, since type checker ensures it is the same
         | ValueTypes BoolType
         | ValueTypes (IntType _)
-        | ValueTypes (UintType _)
+        | ValueTypes (NatType _)
         | ValueTypes (FloatType _) ->
             binExpr inFunction ctx s1 s2 "=="
         | ValueTypes (ValueTypes.StructType _)

@@ -170,9 +170,9 @@ and DynamicAccessPath =
 and DataType =
     // simple types
     | BoolType of range:range
-    | BitvecType of size:int * range:range
-    | UnsignedType of size:UintType * unit:UnitExpr option * range:range
-    | SignedType of size:IntType * unit:UnitExpr option * range:range
+    | BitvecType of size:BitsType * range:range
+    | NaturalType of size:NatType * unit:UnitExpr option * range:range
+    | IntegerType of size:IntType * unit:UnitExpr option * range:range
     | FloatType of size:FloatPrecision * unit:UnitExpr option * range:range
     // built-in generic compound types
     | ArrayType of size:Expr * elem:DataType * range:range // static size, value type
@@ -185,8 +185,8 @@ and DataType =
         match datatype with
         | BoolType (range=r)
         | BitvecType (range=r)
-        | UnsignedType (range=r)
-        | SignedType (range=r)
+        | NaturalType (range=r)
+        | IntegerType (range=r)
         | FloatType (range=r)
         | ArrayType (range=r)
         | SliceType (range=r)
@@ -672,7 +672,7 @@ and Expr =
     // -- bitwise operators --
     | Band of Expr * Expr               // '&' bitwise and 
     | Bor of Expr * Expr                // '|' bitwise or
-    | Bxor of Expr * Expr               // '~' bitwise xor
+    | Bxor of Expr * Expr               // '^' bitwise xor
     | Shl of Expr * Expr                // '<<' left shift
     | Shr of Expr * Expr                // '>>' right shift 
     | Bnot of Expr * range:range        // '~' unary bitwise not  
