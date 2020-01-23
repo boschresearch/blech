@@ -233,13 +233,10 @@ let internal printState ctx printState entryCompilation =
             // silently ignore if given tml is not in type check context
             // this happens for external prev variables that are added
             // as locals into the iface (after type checking)
-            if ctx.tcc.nameToDecl.ContainsKey n.QNamePrefix then
-                let ind = String.replicate level @"\t"
-                let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
-                sprintf """printf("%s%s");""" ind prefix
-                + printAnything isLocal level n    
-            else
-                ""
+            let ind = String.replicate level @"\t"
+            let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
+            sprintf """printf("%s%s");""" ind prefix
+            + printAnything isLocal level n    
                     
         let printParamDecl isLocal (p: ParamDecl) = 
             printVar isLocal 4 (Loc p.name) p.pos

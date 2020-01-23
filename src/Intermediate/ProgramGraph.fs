@@ -538,7 +538,7 @@ module ProgramGraph =
                       initValue = initVal
                       annotation = Attribute.VarDecl.Empty
                       allReferences = HashSet() }
-                context.lut.nameToDecl.Add(qname, Declarable.VarDecl v)
+                TypeCheckContext.addDeclToLut context.lut qname (Declarable.VarDecl v)
                 v
             with _ -> 
                 failwith <| sprintf "Temporary variable %s already exists." (qname.ToString())

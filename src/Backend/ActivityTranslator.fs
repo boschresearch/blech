@@ -375,8 +375,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 annotation = Attribute.VarDecl.Empty
                 allReferences = HashSet() 
             }
-        try ctx.tcc.nameToDecl.Add(lhsName, Declarable.VarDecl v)
-        with _ -> failwith <| sprintf "Temporary variable %s already exists." (lhsName.ToString())
+        TypeCheckContext.addDeclToLut ctx.tcc lhsName (Declarable.VarDecl v)
         let tmpLhs = Some {lhs = LhsCur (Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
         let prereqStmts, translatedCall = cpActCall ctx callee.name inputs outputs lhsLocals lhsPcs tmpLhs true tempVarName
         prereqStmts @ [tmpDecl] |> dpBlock, translatedCall
@@ -923,11 +922,11 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
 /// Generate statements which initialises program counters 
 /// used in the init function
 let internal mainPCinit ctx compilations (entryCompilation: Compilation) =
-        let mainPc = getMainPCinBG compilations entryCompilation.name
-        let initVal = initValue ctx entryCompilation.name
-        let initVal2 = 2 * initVal |> string |> txt
-        mainPc <+> txt "=" <+> initVal2 <^> semi // assignPC won't work here, mind the level of indirection!
-        |> cpIndent
+    let mainPc = getMainPCinBG compilations entryCompilation.name
+    let initVal = initValue ctx entryCompilation.name
+    let initVal2 = 2 * initVal |> string |> txt
+    mainPc <+> txt "=" <+> initVal2 <^> semi // assignPC won't work here, mind the level of indirection!
+    |> cpIndent
 
 
 /// Given a translation context, a list of produced compilations so far,
@@ -949,7 +948,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
                       datatype = Types.ValueTypes subProgDecl.returns
                       isMutable = true 
                       allReferences = HashSet() }
-            ctx.tcc.nameToDecl.Add(qname, Declarable.ParamDecl v)
+            TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v
     
     let iface = {Iface.Empty with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
@@ -957,6 +956,17 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     let curComp = ref {Compilation.Empty with name = name; iface = iface}
         
     let code = translateActivity ctx compilations curComp subProgDecl
+
+    // if this is the entry point activity, add its iface variables to the 
+    // type check context (as we do for activity calls)
+    // this ensures that generated local variables (prev on extern) are add to 
+    // the tcc.
+    if subProgDecl.IsEntryPoint then
+        (!curComp).iface.locals
+        |> List.iter (fun localVar ->
+            try ctx.tcc.nameToDecl.Add(localVar.name, Declarable.ParamDecl localVar)
+            with _ -> () // if this pc is already in there, nothing to do
+            )
     
     // start quick fix: make sure main pc is the first in !curComp.iface
     // this because we rely on the fact that the first pc is the main pc in various places
