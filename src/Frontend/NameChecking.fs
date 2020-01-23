@@ -226,6 +226,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             | Expr.Bxor (s1, s2)
             | Expr.Shl (s1, s2)
             | Expr.Shr (s1, s2)
+            | Expr.Sshr (s1, s2)
+            | Expr.Rotl (s1, s2)
+            | Expr.Rotr (s1, s2)
             | Expr.Eq (s1, s2)
             | Expr.Ieq (s1, s2)
             | Expr.Les (s1, s2)
@@ -239,8 +242,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             | Expr.Mul (s1, s2)
             | Expr.Div (s1, s2)
             | Expr.Mod (s1, s2)
-            | Expr.Pow (s1, s2)
-            | Expr.Elvis (s1, s2) ->
+            | Expr.Pow (s1, s2) ->
                 ctx
                 |> checkExpr <| s1 
                 |> checkExpr <| s2

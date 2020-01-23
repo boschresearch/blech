@@ -915,11 +915,11 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         Error [UnsupportedFeature (expr.Range, "identity operator")]
     // -- remaining bitwise operators --
     | AST.Shl _
-    | AST.Shr _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "shifting operation")]
-    // -- null coalescing operation --
-    | AST.Elvis _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "elvis operator")]
+    | AST.Shr _
+    | AST.Sshr _
+    | AST.Rotl _
+    | AST.Rotr _ -> //TODO
+            Error [UnsupportedFeature (expr.Range, "shifting operation")]
     // -- type conversions --
     | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         Error [UnsupportedFeature (expr.Range, "type conversion")]

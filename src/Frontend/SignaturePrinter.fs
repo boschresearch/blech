@@ -397,10 +397,16 @@ module SignaturePrinter =
         | AST.Expr.Bnot (expr, _) ->
             fun p -> txt "~" <+> bpPrecExpr p expr
             |> dpPrecedence outerPrec dpPrec.["unary"]
-        // -- null coalescing operation --
-        | AST.Expr.Elvis (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "?:" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["elvis"]   
+        // -- advanced bitwise operators
+        | AST.Expr.Sshr (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "+>>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["+>>"]
+        | AST.Expr.Rotl (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "<<>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["<<>"]
+        | AST.Expr.Rotr (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "<>>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["<>>"]
         // --- type conversion
         | AST.Expr.Convert (expr, dataType) ->
             fun p -> bpPrecExpr p expr <+> txt "as" <.> bpDataType dataType

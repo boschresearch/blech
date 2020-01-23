@@ -181,11 +181,10 @@ let tokenTagToString token =
     | TOKEN_COMMA -> ","
     | TOKEN_SEMICOLON -> ";"
     | TOKEN_QUEST -> "?"
-    (* | TOKEN_ELVIS -> "?:" *)
     (* --------- literals --------- *)
-    | TOKEN_BINCONST -> "<binary number>"
-    | TOKEN_OCTCONST -> "<octal number>"
-    | TOKEN_HEXCONST -> "<hexadecimal number>"
+    | TOKEN_BINCONST -> "<binary bits>"
+    | TOKEN_OCTCONST -> "<octal bits>"
+    | TOKEN_HEXCONST -> "<hexadecimal bits>"
     | TOKEN_NATCONST -> "<natural number>"
     | TOKEN_FLOATCONST
     | TOKEN_FLOATCONST32 -> "<floating point number>"

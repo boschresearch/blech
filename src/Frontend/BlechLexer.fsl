@@ -298,7 +298,6 @@ rule Token = parse
     | ","                   { COMMA (getRange lexbuf) }
     | ";"                   { SEMICOLON (getRange lexbuf) }
     | "?"                   { QUEST (getRange lexbuf) }
-  (*  | "?:"                  { ELVIS (getRange lexbuf) }  *)
 
     (* --------- literals --------- *)
 

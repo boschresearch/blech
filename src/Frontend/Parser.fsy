@@ -92,7 +92,6 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> EQU IEQ LES LEQ GRT GEQ
 %token <range> IDEQU IDIEQ
 %token <range> BNOT BAND BOR BXOR SHL SHR SSHR ROTL ROTR
-/* %token <range> ELVIS */
 %token <range> AS
 %token <range> LEN CAP
 
@@ -125,7 +124,6 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %left BOR
 %left BXOR
 %left BAND
-/* %right ELVIS */
 %left SHL SHR SSHR ROTL ROTR
 %left ADD SUB
 %left MUL DIV MOD
@@ -620,11 +618,6 @@ Expr
     | Expr SSHR Expr      %prec SSHR            { $1 }
     | Expr ROTR Expr      %prec ROTR            { $1 }
     | Expr ROTL Expr      %prec ROTL            { $1 }
-
-    /* --- null coalescing operation --- */
-    /* https://en.wikipedia.org/wiki/Null_coalescing_operator */
-    /* https://en.wikipedia.org/wiki/Elvis_operator */
-    /* | Expr ELVIS Expr     %prec ELVIS           { Elvis ($1, $3) } */
 
     /* --- primary expressions --- */
     | PrimaryExpr            %prec UNARY        { $1 }                    

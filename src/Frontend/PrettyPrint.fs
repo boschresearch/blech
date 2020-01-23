@@ -34,14 +34,14 @@ module PrettyPrint =
         /// Operator precedence mapping
         let dpPrec = 
             Map.ofList [ 
-                ("min", 0); ("elvis", 0) // TODO: stimmt das?
+                ("min", 0); 
                 ("or", 10);
                 ("and", 20);
                 ("<", 30); ("<=", 30); (">", 30); (">=", 30); ("==", 30); ("!=", 30); ("===", 30); ("!==", 30)
                 ("|", 40);
                 ("^", 50); ("#", 50); ("##", 50); // TODO: stimmt das?
                 ("&", 60);
-                ("<<", 70); (">>", 70);
+                ("<<", 70); (">>", 70); ("+>>", 70); ("<>>", 70); ("<<>", 70); 
                 ("+", 80); ("-", 80);
                 ("*", 90); ("/", 90); ("%", 90);
                 ("unary", 100); ("not", 100);
@@ -743,10 +743,15 @@ module PrettyPrint =
                 | Bnot (expr, _) ->
                     fun p -> txt "~" <+> ppExpr p expr
                     |> dpPrecedence outerPrec dpPrec.["unary"]
-                // -- null coalescing operation --
-                | Elvis (lhs, rhs) ->
-                    fun p -> ppExpr p lhs <.> txt "?:" <+> ppExpr p rhs
-                    |> dpPrecedence outerPrec dpPrec.["elvis"]   
+                | Sshr (lhs, rhs) ->
+                    fun p -> ppExpr p lhs <.> txt "+>>" <+> ppExpr p rhs
+                    |> dpPrecedence outerPrec dpPrec.["+>>"]
+                | Rotl (lhs, rhs) ->
+                    fun p -> ppExpr p lhs <.> txt "<<>" <+> ppExpr p rhs
+                    |> dpPrecedence outerPrec dpPrec.["<<>"]
+                | Rotr (lhs, rhs) ->
+                    fun p -> ppExpr p lhs <.> txt "<>>" <+> ppExpr p rhs
+                    |> dpPrecedence outerPrec dpPrec.["<>>"]
                 // --- type conversion
                 | Convert (expr, dataType) ->
                     fun p -> ppExpr p expr <+> txt "as" <.> fDataType dataType

@@ -676,8 +676,10 @@ and Expr =
     | Shl of Expr * Expr                // '<<' left shift
     | Shr of Expr * Expr                // '>>' right shift 
     | Bnot of Expr * range:range        // '~' unary bitwise not  
-    // -- null coalescing operation --
-    | Elvis of Expr * Expr              // '?:' extract value from optional or given value if none
+    // -- advanced bitwise operators --
+    | Sshr of Expr * Expr               // '+>>' signed shift right
+    | Rotl of Expr * Expr               // '<<>' rotate left
+    | Rotr of Expr * Expr               // '<>>' rotate right
     // -- type conversions --
     | Convert of Expr * DataType        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
     // -- operators on arrays and slices --
@@ -714,7 +716,9 @@ and Expr =
         | Bxor (l, r)
         | Shl (l, r)
         | Shr (l, r)
-        | Elvis (l, r)
+        | Sshr (l, r)
+        | Rotl (l, r)
+        | Rotr (l, r)
             -> unionRanges l.Range r.Range
         | Convert (expr, datatype)
             -> unionRanges expr.Range datatype.Range
