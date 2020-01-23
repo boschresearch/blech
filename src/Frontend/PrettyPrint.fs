@@ -44,7 +44,7 @@ module PrettyPrint =
                 ("<<", 70); (">>", 70); ("+>>", 70); ("<>>", 70); ("<<>", 70); 
                 ("+", 80); ("-", 80);
                 ("*", 90); ("/", 90); ("%", 90);
-                ("unary", 100); ("not", 100);
+                ("unary", 100); ("not", 100); ("~", 100);
                 ("**", 110);
                 ("as", 120);
                 ("max", 1000); ("parens", 1000) // TODO: stimmt das?
@@ -742,7 +742,7 @@ module PrettyPrint =
                     |> dpPrecedence outerPrec dpPrec.[">>"]
                 | Bnot (expr, _) ->
                     fun p -> txt "~" <+> ppExpr p expr
-                    |> dpPrecedence outerPrec dpPrec.["unary"]
+                    |> dpPrecedence outerPrec dpPrec.["~"]
                 | Sshr (lhs, rhs) ->
                     fun p -> ppExpr p lhs <.> txt "+>>" <+> ppExpr p rhs
                     |> dpPrecedence outerPrec dpPrec.["+>>"]

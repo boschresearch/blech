@@ -234,7 +234,7 @@ rule Token = parse
     | "and"                 { AND (getRange lexbuf) }
     | "or"                  { OR (getRange lexbuf) }
         
-    (* arithmetic saturation operators *)
+    (* arithmetic operators *)
     | "+"                   { ADD (getRange lexbuf) }
     | "-"                   { SUB (getRange lexbuf) } // also unary minus
     | "*"                   { MUL (getRange lexbuf) }
@@ -245,7 +245,7 @@ rule Token = parse
     (* bitwise operators *)
     | "&"                   { BAND (getRange lexbuf) }
     | "|"                   { BOR (getRange lexbuf) }
-    | "^"                   { BXOR (getRange lexbuf) } // also exponentiation for units
+    | "^"                   { BXOR (getRange lexbuf) }
     | "~"                   { BNOT (getRange lexbuf) }
     | "<<"                  { SHL (getRange lexbuf) }
     | ">>"                  { SHR (getRange lexbuf) }
@@ -255,7 +255,7 @@ rule Token = parse
     | "<<>"                  { ROTL (getRange lexbuf) } // rotate left
     | "<>>"                  { ROTR (getRange lexbuf) } // rotate right   
     
-    (* comparison operators *)
+    (* relational operators *)
     | "=="                  { EQU (getRange lexbuf) }
     | "!="                  { IEQ (getRange lexbuf) }
     | "<"                   { LES (getRange lexbuf) }

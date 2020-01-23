@@ -49,10 +49,14 @@ let rec private exprContainsName rhs =
     | StructConst rhsList -> rhsList |> recurFields
     | ArrayConst elems -> elems |> recurFields
     // subexpressions
-    // boolean
-    | Neg a -> exprContainsName a.rhs
-    | Conj (a, b) | Disj (a, b) | Xor (a, b)
-    // relations
+    // unary
+    | Neg a | Bnot a -> exprContainsName a.rhs
+    // logical
+    | Conj (a, b) | Disj (a, b)
+    // bitwise
+    | Band (a, b) | Bor (a, b) | Bxor (a, b)
+    | Shl (a, b) | Shr (a, b) | Sshr (a, b) | Rotl (a, b) | Rotr (a, b)
+    // relational
     | Les (a, b) | Leq (a, b) | Equ (a, b) 
     // arithmetic
     | Add (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->

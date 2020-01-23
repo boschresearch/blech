@@ -105,10 +105,14 @@ let rec private hasNoSideEffect expr =
     // this assumption is only valid when there are not global variables (as is the case in Blech)
     // and no external C variables are written (TODO!)
     | FunCall (_, _, outputs) -> outputs = []
-    // boolean
-    | Neg e -> hasNoSideEffect e
-    | Conj (x, y) | Disj (x, y) | Xor (x, y)
-    // relations
+    // unary 
+    | Neg e | Bnot e -> hasNoSideEffect e
+    // logical
+    | Conj (x, y) | Disj (x, y) 
+    // bitwise 
+    | Band (x, y) | Bor (x, y) | Bxor (x, y)
+    | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y)
+    // relational
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
@@ -137,10 +141,14 @@ let rec internal isStaticExpr lut expr =
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
-    // boolean
-    | Neg e -> isStaticExpr lut e
-    | Conj (x, y) | Disj (x, y) | Xor (x, y)
-    // relations
+    // unary 
+    | Neg e | Bnot e -> isStaticExpr lut e
+    // logical
+    | Conj (x, y) | Disj (x, y) 
+    // bitwise
+    | Band (x, y) | Bor (x, y) | Bxor (x, y) 
+    | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y)
+    // relational
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
@@ -201,7 +209,7 @@ let private neg this =
     match this.rhs with
     | BoolConst b -> BoolConst (not b)
     | Neg b -> b.rhs
-    | Xor (a,b) -> Equ (a, b) // this is not idempotent
+    | Bxor (a,b) -> Equ (a, b) // this is not idempotent
     | _ -> Neg this
 
 let private conj this that =
@@ -218,12 +226,12 @@ let private disj this that =
     | BoolConst true, _ -> BoolConst true // optimisation, note "and then" semantics prohibits to do the same in case of _, true
     | _ -> Disj(this, that)
 
-let private xor this that =
+let private bxor this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a <> b) //covers the case where both are true, NOT redundant as above for conj and disj
     | BoolConst false, t
     | t, BoolConst false -> t
-    | _ -> Xor(this, that)
+    | _ -> Bxor(this, that)
 
 let private less this that =
     match this.rhs, that.rhs with
@@ -311,14 +319,24 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Mul (x, y) -> evalBin x y mul 
     | Div (x, y) -> evalBin x y div 
     | Mod (x, y) -> evalBin x y modus
-    // bool
+    // unary
+    | Bnot x  // todo: go on here
     | Neg x -> 
         let newRhs = tryEvalConst lut x |> neg
         { rhs = newRhs; typ = checkedExpr.typ; range = checkedExpr.Range }
+    // logical
     | Conj (x, y) -> evalBin x y conj
     | Disj (x, y) -> evalBin x y disj
-    | Xor (x, y) -> evalBin x y xor 
-    // compare
+    // bitwise
+    | Band (x, y) // todo: go on here
+    | Bor (x, y)
+    | Shl (x, y)
+    | Shr (x, y)
+    | Sshr (x, y)
+    | Rotl (x, y)
+    | Rotr (x, y)
+    | Bxor (x, y) -> evalBin x y bxor 
+    // relational
     | Les (x, y) -> evalBin x y less 
     | Leq (x, y) -> evalBin x y leq
     | Equ (x, y) -> evalBin x y eq 
@@ -491,7 +509,7 @@ let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
 let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with
     | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = xor expr1 expr2
+        let structure = bxor expr1 expr2
         { rhs = structure; 
           typ = Types.ValueTypes BoolType
           range = Range.unionRanges expr1.Range expr2.Range }

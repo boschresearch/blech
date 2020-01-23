@@ -138,12 +138,22 @@ module TypeCheckContext =
         | Prev tml -> isConstVarDecl ctx tml
         // call
         | FunCall _ -> false
-        // boolean
-        | Neg x -> isConstantExpr ctx x
+        // unary
+        | Neg x 
+        | Bnot x-> isConstantExpr ctx x
+        // logical
         | Conj (x, y)
         | Disj (x, y)
-        | Xor (x, y)
-        // relations
+        // bitwise
+        | Band (x, y)
+        | Bor (x, y)
+        | Bxor (x, y)
+        | Shl (x, y)
+        | Shr (x, y)
+        | Sshr (x, y)
+        | Rotl (x, y)
+        | Rotr (x, y)
+        // relational
         | Les (x, y)
         | Leq (x, y)
         | Equ (x, y)

@@ -852,7 +852,7 @@ let private collectVarsToPrev2 pg =
         | Neg e -> processExpr e
         | Conj (e1, e2) 
         | Disj (e1, e2) 
-        | Xor (e1, e2) 
+        | Bxor (e1, e2) 
         // relations
         | Les (e1, e2) 
         | Leq (e1, e2) 

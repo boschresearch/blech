@@ -887,7 +887,7 @@ and private cpExpr inFunction ctx expr =
         prereqStmts, cpNeg processedExpr
     | Conj(s1, s2) -> binConj inFunction ctx s1 s2 
     | Disj(s1, s2) -> binDisj inFunction ctx s1 s2
-    | Xor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
+    | Bxor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
     | Les (s1, s2) -> binExpr inFunction ctx s1 s2 "<"
     | Leq (s1, s2) -> binExpr inFunction ctx s1 s2 "<="
     | Equ (s1, s2) ->

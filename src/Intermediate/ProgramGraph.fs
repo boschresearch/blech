@@ -168,10 +168,18 @@ module IntermediateContext =
             structFieldExprList |> processFields
         | ArrayConst elems ->
             elems |> processFields
+        | Bnot expr
         | Neg expr -> addNameRead context node expr
         | Conj (ex1, ex2)
         | Disj (ex1, ex2)
-        | Xor (ex1, ex2)
+        | Band (ex1, ex2)
+        | Bor (ex1, ex2)
+        | Bxor (ex1, ex2)
+        | Shl (ex1, ex2)
+        | Shr (ex1, ex2)
+        | Sshr (ex1, ex2)
+        | Rotl (ex1, ex2)
+        | Rotr (ex1, ex2)
         | Les (ex1, ex2)
         | Leq (ex1, ex2)
         | Equ (ex1, ex2)
@@ -383,12 +391,21 @@ module ProgramGraph =
                     cellExpr
                     |> List.map (fun (idx, v) -> (idx, rewriteCond v))
                     |> ArrayConst
-                // boolean
+                // logical
                 | Neg v -> Neg <| rewriteCond v
                 | Conj (v1, v2) -> Conj (rewriteCond v1, rewriteCond v2)
                 | Disj (v1, v2) -> Disj (rewriteCond v1, rewriteCond v2)
-                | Xor (v1, v2) -> Xor (rewriteCond v1, rewriteCond v2)
-                // relations
+                // bitwise
+                | Bnot v -> Bnot <| rewriteCond v
+                | Band (v1, v2) -> Band (rewriteCond v1, rewriteCond v2)
+                | Bor (v1, v2) -> Bor (rewriteCond v1, rewriteCond v2)
+                | Bxor (v1, v2) -> Bxor (rewriteCond v1, rewriteCond v2)
+                | Shl (v1, v2) -> Shl (rewriteCond v1, rewriteCond v2)
+                | Shr (v1, v2) -> Shr (rewriteCond v1, rewriteCond v2)
+                | Sshr (v1, v2) -> Sshr (rewriteCond v1, rewriteCond v2)
+                | Rotl (v1, v2) -> Rotl (rewriteCond v1, rewriteCond v2)
+                | Rotr (v1, v2) -> Rotr (rewriteCond v1, rewriteCond v2)
+                // relational
                 | Les (v1, v2) -> Les (rewriteCond v1, rewriteCond v2)
                 | Leq (v1, v2) -> Leq (rewriteCond v1, rewriteCond v2)
                 | Equ (v1, v2) -> Equ (rewriteCond v1, rewriteCond v2)

@@ -491,12 +491,21 @@ and RhsStructure =
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (int * TypedRhs) list
-    // boolean
+    // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
     | Disj of TypedRhs * TypedRhs
-    | Xor of TypedRhs * TypedRhs
-    // relations
+    // bitwise
+    | Bnot of TypedRhs
+    | Band of TypedRhs * TypedRhs
+    | Bor of TypedRhs * TypedRhs
+    | Bxor of TypedRhs * TypedRhs
+    | Shl of TypedRhs * TypedRhs
+    | Shr of TypedRhs * TypedRhs
+    | Sshr of TypedRhs * TypedRhs
+    | Rotl of TypedRhs * TypedRhs
+    | Rotr of TypedRhs * TypedRhs
+    // relational
     | Les of TypedRhs * TypedRhs
     | Leq of TypedRhs * TypedRhs
     | Equ of TypedRhs * TypedRhs
@@ -534,7 +543,7 @@ and RhsStructure =
             |> List.map (fun elem -> (snd elem).rhs.ppExpr outerPrec)
             |> dpCommaSeparatedInBraces
         // subexpressions
-        // boolean
+        // logical
         | Neg expr ->
             fun p -> txt "not" <+> expr.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["not"]
@@ -544,10 +553,35 @@ and RhsStructure =
         | Disj (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "or" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["or"]
-        | Xor (e1, e2) ->
-            fun p -> e1.rhs.ppExpr p <.> txt "xor" <+> e2.rhs.ppExpr p 
+        // bitwise
+        | Bnot expr ->
+            fun p -> txt "~" <+> expr.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["~"]
-        // relations
+        | Band (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "&" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["&"]
+        | Bor (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "|" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["|"]
+        | Bxor (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "^" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["^"]
+        | Shl (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<<" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<<"]
+        | Shr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt ">>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.[">>"]
+        | Sshr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "+>>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["+>>"]
+        | Rotl (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<<>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<<>"]
+        | Rotr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<>>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<>>"]
+        // relational
         | Les (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "<" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["<"]

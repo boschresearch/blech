@@ -396,7 +396,7 @@ module SignaturePrinter =
             |> dpPrecedence outerPrec dpPrec.[">>"]
         | AST.Expr.Bnot (expr, _) ->
             fun p -> txt "~" <+> bpPrecExpr p expr
-            |> dpPrecedence outerPrec dpPrec.["unary"]
+            |> dpPrecedence outerPrec dpPrec.["~"]
         // -- advanced bitwise operators
         | AST.Expr.Sshr (lhs, rhs) ->
             fun p -> bpPrecExpr p lhs <.> txt "+>>" <+> bpPrecExpr p rhs
