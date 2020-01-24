@@ -682,6 +682,8 @@ and Expr =
     | Rotr of Expr * Expr               // '<>>' rotate right
     // -- type conversions --
     | Convert of Expr * DataType        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
+    // -- type annotation --
+    | HasType of Expr * DataType
     // -- operators on arrays and slices --
     | Len of Expr * range:range         // '#' length
     | Cap of Expr * range:range         // '##' capacity
@@ -721,6 +723,7 @@ and Expr =
         | Rotr (l, r)
             -> unionRanges l.Range r.Range
         | Convert (expr, datatype)
+        | HasType (expr, datatype)
             -> unionRanges expr.Range datatype.Range
         | AggregateConst (range=r)
         | SliceConst (range=r)

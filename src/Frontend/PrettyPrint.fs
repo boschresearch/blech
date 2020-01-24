@@ -35,6 +35,7 @@ module PrettyPrint =
         let dpPrec = 
             Map.ofList [ 
                 ("min", 0); 
+                (":", 5);
                 ("or", 10);
                 ("and", 20);
                 ("<", 30); ("<=", 30); (">", 30); (">=", 30); ("==", 30); ("!=", 30); ("===", 30); ("!==", 30)
@@ -756,6 +757,10 @@ module PrettyPrint =
                 | Convert (expr, dataType) ->
                     fun p -> ppExpr p expr <+> txt "as" <.> fDataType dataType
                     |> dpPrecedence outerPrec dpPrec.["as"]
+                // --- type annotation
+                | HasType (expr, dataType) ->
+                    fun p -> ppExpr p expr <+> txt ":" <.> fDataType dataType
+                    |> dpPrecedence outerPrec dpPrec.[":"]
                 // -- operators on arrays and slices --
                 | Len (expr, _) ->
                     fun p -> txt "#" <+> ppExpr p expr

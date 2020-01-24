@@ -941,6 +941,9 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     // -- type conversions --
     | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         Error [UnsupportedFeature (expr.Range, "type conversion")]
+    // -- type annotation --
+    | AST.HasType (_) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
+        Error [UnsupportedFeature (expr.Range, "type annotation")]
     // -- operators on arrays and slices --
     | AST.Len _
     | AST.Cap _ -> //TODO

@@ -246,7 +246,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx
                 |> checkExpr <| s1 
                 |> checkExpr <| s2
-            | Convert (expr, dty) ->
+            | Convert (expr, dty) 
+            | HasType (expr, dty) ->
                 ctx 
                 |> checkExpr <| expr
                 |> checkDataType <| dty
