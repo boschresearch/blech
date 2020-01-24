@@ -188,7 +188,7 @@ let rec internal cpType typ =
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | AnyComposite 
-    | AnyInt _ -> failwith "Cannot print <Any> type."
+    | AnyInt _ | AnyFloat _ -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
 
 
@@ -300,7 +300,8 @@ let private getElementDatatype (ctx: TranslationContext) (tml:TypedMemLoc) =
     let tml = trimToFirstAccess tml
     match getDatatypeFromTML ctx.tcc tml with
     | AnyComposite 
-    | AnyInt _ -> failwith "Impossible. Cannot print a data item of type Any."
+    | AnyInt _ 
+    | AnyFloat _ -> failwith "Impossible. Cannot print a data item of type Any."
     | ValueTypes (ValueTypes.Void) -> failwith "Impossible. Cannot print a data item of type void."
     | ValueTypes (ValueTypes.BoolType)
     | ValueTypes (ValueTypes.FloatType _)
@@ -906,7 +907,8 @@ and private cpExpr inFunction ctx expr =
             prereqStmts1 @ prereqStmts2, memcmp
         | ValueTypes Void
         | AnyComposite 
-        | AnyInt _ -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
+        | AnyInt _ 
+        | AnyFloat _ -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     | Add (s1, s2) -> binExpr inFunction ctx s1 s2 "+"
     | Sub (s1, s2) -> binExpr inFunction ctx s1 s2 "-"

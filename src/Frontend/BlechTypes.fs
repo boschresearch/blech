@@ -156,7 +156,9 @@ and Types =
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
     | AnyComposite // used for wildcard or compound literals
-    | AnyInt of bigint // used only for untyped numbers
+    | AnyInt of bigint // used only for untyped integer literals
+    | AnyFloat of float // used only for untyped float literals
+    // | AnyBits of bigint 
     
     member this.ToDoc =
         match this with
@@ -164,7 +166,8 @@ and Types =
         | ReferenceTypes r -> r.ToDoc
         | AnyComposite -> txt "any"
         | AnyInt i -> txt <| string i
-    
+        | AnyFloat f -> txt <| string f
+
     override this.ToString() = render None <| this.ToDoc
     
     member this.IsValueType() = 
@@ -179,15 +182,14 @@ and Types =
 
     member this.IsAny =
         match this with
-        | AnyComposite | AnyInt _ -> true
+        | AnyComposite | AnyInt _ | AnyFloat _ -> true
         | ValueTypes _ | ReferenceTypes _ -> false
     
     member this.TryRange =
         match this with
         | ValueTypes v -> v.TryRange
         | ReferenceTypes r -> r.TryRange
-        | AnyComposite 
-        | AnyInt _ -> None
+        | AnyComposite | AnyInt _ | AnyFloat _ -> None
 
 
 //=============================================================================

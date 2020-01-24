@@ -5,7 +5,7 @@ function calc() returns float64
     cobegin
         var x:int8 = 7
     with
-        var y:float32 = -8.0f
+        var y:float32 = -8.0 : float32
     end
     return 123.321
 end

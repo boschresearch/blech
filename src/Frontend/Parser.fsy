@@ -104,7 +104,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 /* Literals */
 %token <string * range> WILDCARD
-%token <string * range> STRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST FLOATCONST32 HEXFLOATCONST HEXFLOATCONST32
+%token <string * range> STRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
 
 /* Identifiers */
 %token <string * range> ID 
@@ -528,11 +528,9 @@ Literal
 /* fjg TODO: eliminate OptUnifDef and introduce rule: expr with OptUnitDef */
 NumberLiteral
   : NATCONST OptUnitDef                         { Literal.Int (parseInteger <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | FLOATCONST OptUnitDef                       { Literal.Double (parseFloat64 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | FLOATCONST32 OptUnitDef                     { Literal.Single (parseFloat32 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | HEXFLOATCONST OptUnitDef                    { Literal.Double (parseHexFloat64 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | HEXFLOATCONST32 OptUnitDef                  { Literal.Single (parseHexFloat32 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-
+  | FLOATCONST OptUnitDef                       { Literal.Float (parseFloat <| fst $1, $2, numberTypeRange (snd $1) $2) }
+  | HEXFLOATCONST OptUnitDef                    { Literal.Float (parseHexFloat <| fst $1, $2, numberTypeRange (snd $1) $2) }
+  
 
 Initialisation
     : SliceInitialiser                          { $1 }
@@ -1475,16 +1473,10 @@ AttributeLiteral
 	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1, 
                                                                 None, 
                                                                 optUnionRanges $1 <| snd $2 ) }
-    | OptSub FLOATCONST32                       { Literal.Single ( parseFloat32 <| fst $2 |> addOptSubDouble $1, 
+    | OptSub FLOATCONST                         { Literal.Float ( parseFloat <| fst $2 |> addOptSubFloat $1, 
                                                                    None,  
                                                                    optUnionRanges $1 <| snd $2 ) }
-	| OptSub FLOATCONST                         { Literal.Double ( parseFloat64 <| fst $2 |> addOptSubDouble $1, 
-                                                                   None,  
-                                                                   optUnionRanges $1 <| snd $2 ) }
-    | OptSub HEXFLOATCONST32                    { Literal.Single ( parseHexFloat32 <| fst $2 |> addOptSubDouble $1, 
-                                                                   None,  
-                                                                   optUnionRanges $1 <| snd $2 ) }
-	| OptSub HEXFLOATCONST                      { Literal.Double ( parseHexFloat64 <| fst $2 |> addOptSubDouble $1, 
+    | OptSub HEXFLOATCONST                      { Literal.Float ( parseHexFloat <| fst $2 |> addOptSubFloat $1, 
                                                                    None,  
                                                                    optUnionRanges $1 <| snd $2 ) }
 

@@ -252,7 +252,7 @@ type BitsType =
         elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
         else Bits64
 
-
+ 
 type FloatPrecision = 
     | Single | Double // order of tags matters for comparison!
 
@@ -263,4 +263,6 @@ type FloatPrecision =
         | Single -> 32
         | Double -> 64
 
+/// Carries the parsed value and the orginal representation
+type FloatValue = float * string 
 

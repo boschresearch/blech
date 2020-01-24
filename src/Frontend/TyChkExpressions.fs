@@ -692,28 +692,34 @@ let private checkSimpleLiteral literal =
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
-    | AST.Single (value, _, pos) ->
-        match value with
-        | Ok number ->
-            if MIN_FLOAT32 <= single number && single number <= MAX_FLOAT32 then
-                { rhs = FloatConst (FloatConst.Single number)
-                  typ = Types.ValueTypes (FloatType FloatPrecision.Single)
-                  range = pos } |> Ok
-            else
-                Error [NumberLargerThanAnyFloat(pos, number)]
-        | Error x ->
-            Error [InvalidFloat(pos, x)]
-    | AST.Double (value, _, pos) ->
-        match value with
-        | Ok number ->
-            if MIN_FLOAT64 <= float number && float number <= MAX_FLOAT64 then
-                { rhs = FloatConst (FloatConst.Double number)
-                  typ = Types.ValueTypes (FloatType FloatPrecision.Double)
-                  range = pos } |> Ok
-            else
-                Error [NumberLargerThanAnyFloat(pos, number)]
-        | Error x ->
-            Error [InvalidFloat(pos, x)]
+    //| AST.Single (value, _, pos) ->
+    //    match value with
+    //    | Ok number ->
+    //        if MIN_FLOAT32 <= single number && single number <= MAX_FLOAT32 then
+    //            { rhs = FloatConst (FloatConst.Single number)
+    //              typ = Types.ValueTypes (FloatType FloatPrecision.Single)
+    //              range = pos } |> Ok
+    //        else
+    //            Error [NumberLargerThanAnyFloat(pos, number)]
+    //    | Error x ->
+    //        Error [InvalidFloat(pos, x)]
+    | AST.Float (number, _, pos) ->
+        let value, repr = number
+        if MIN_FLOAT64 <= value && value <= MAX_FLOAT64 then
+            { rhs = FloatConst <| Double repr; typ = AnyFloat value; range = pos } |> Ok
+        else
+            Error [NumberLargerThanAnyFloat(pos, value.ToString())]
+
+        //match value with
+        //| Ok number ->
+        //    if MIN_FLOAT64 <= float number && float number <= MAX_FLOAT64 then
+        //        { rhs = FloatConst (FloatConst.Double number)
+        //          typ = Types.ValueTypes (FloatType FloatPrecision.Double)
+        //          range = pos } |> Ok
+        //    else
+        //        Error [NumberLargerThanAnyFloat(pos, number)]
+        //| Error x ->
+        //    Error [InvalidFloat(pos, x)]
     | AST.String _
     | AST.Bitvec _ ->
         Error [UnsupportedFeature (literal.Range, "undefined, string or bitvec literal")]
@@ -886,7 +892,8 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                     | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
                 | AnyComposite 
-                | AnyInt _ -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
+                | AnyInt _ 
+                | AnyFloat _ -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
     // -- function call --

@@ -53,7 +53,6 @@ let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let pointfloat = digitpart? fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
 let floatliteral = (pointfloat | exponentfloat)
-let floatliteral32 = floatliteral ('f' | 'F')
 
 (* hexadecimal floating point literals with "_" instead of "'" follow
    C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
@@ -65,7 +64,6 @@ let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
 let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
-let hexfloatliteral32 = hexfloatliteral ('f' | 'F')
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -311,12 +309,8 @@ rule Token = parse
 
     | floatliteral          { FLOATCONST (getLexemeAndRange lexbuf) }
 
-	| floatliteral32        { FLOATCONST32 (getLexemeAndRange lexbuf) }
-
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-	| hexfloatliteral32     { HEXFLOATCONST32 (getLexemeAndRange lexbuf) }
-	
     | '\"' [^ '\"']* '\"'   { let l, r = getLexemeAndRange lexbuf in      
                               (* The string value strips of "", the range contains "" *)
                               STRING (l.Substring(1, l.Length - 2), r) }   

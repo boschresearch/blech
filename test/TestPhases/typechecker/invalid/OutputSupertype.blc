@@ -3,7 +3,7 @@ module OutputSupertype
 activity A(a: int64, b: float64)(x: int16, y: float32) returns bool
     repeat
         x = 12345
-        y = 10.0f
+        y = 10.0 : float32
         await true
     end
     return false
@@ -14,7 +14,7 @@ activity main ()()
     var d: float64
     cobegin
         var ll: int32
-        let c: float32 = 4.2f
+        let c = 4.2 : float32
         _ = run A(i, c)(ll, d)
     with weak
         repeat

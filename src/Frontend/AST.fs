@@ -590,16 +590,14 @@ and Literal =
     | Bitvec of value:bigint * range:range * prefix:Char
     | Int of value:bigint * unit:UnitExpr option * range:range
     // | Single of value:single * range:range  
-    | Single of value:Result<string,string> * unit:UnitExpr option * range:range
-    | Double of value:Result<string,string> * unit:UnitExpr option * range:range
+    | Float of value: FloatValue * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
         | Bool (range=r)
         | String (range=r)
         | Bitvec (range=r)
         | Int (range=r)
-        | Double (range=r)
-        | Single (range=r)
+        | Float (range=r)
             -> r
 
 and LhsInAssignment =
@@ -923,13 +921,18 @@ let addOptSubInt optSub (number: bigint) =
     | None -> number
     | Some _ -> - number
 
-let addOptSubDouble optSub numberResult =
-    match optSub with
-    | None -> numberResult
-    | Some _ ->
-        match numberResult with
-        | Ok x -> Ok ("-"+x)
-        | Error x -> Error ("-"+x)
+let addOptSubFloat optSub (floatVal: FloatValue) =
+    match optSub, floatVal with
+    | None, _ -> floatVal
+    | Some _, (value, repr) -> -value, "-"+repr
+
+//let addOptSubDouble optSub numberResult =
+//    match optSub with
+//    | None -> numberResult
+//    | Some _ ->
+//        match numberResult with
+//        | Ok x -> Ok ("-"+x)
+//        | Error x -> Error ("-"+x)
 
 
 /// unites and optional range and a range

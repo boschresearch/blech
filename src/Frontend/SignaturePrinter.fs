@@ -73,12 +73,8 @@ module SignaturePrinter =
                     bpBitVec i c
                 | AST.Int (value = i) ->
                     string i |> txt
-                | AST.Double (value = s)
-                | AST.Single (value = s) ->
-                    match s with
-                    | Ok number
-                    | Error number ->
-                        txt number 
+                | AST.Float (value = f) ->
+                    string f |> txt
 
 
     let rec bpAttribute attr =

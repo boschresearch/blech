@@ -633,10 +633,8 @@ module PrettyPrint =
                     ppBitVec i c
                 | Int (value = i) ->
                     string i |> txt
-                | Double (value = d) ->
+                | Float (value = d) ->
                     string d |> txt 
-                | Single (value = d) ->
-                    string d |> txt
             and ppOptExpr = function
                 | None -> Empty
                 | Some e -> fExpr e

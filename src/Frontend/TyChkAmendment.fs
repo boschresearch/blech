@@ -115,7 +115,7 @@ let internal isLeftSupertypeOfRight typL typR =
 let rec getDefaultValueFor pos name dty =
     match dty with
     | Types.AnyComposite 
-    | Types.AnyInt _ -> Error [NoDefaultValueForAny (pos, name)]
+    | Types.AnyInt _ | Types.AnyFloat _ -> Error [NoDefaultValueForAny (pos, name)]
     | Types.ValueTypes fce ->
         match fce with
         | Void -> Error [IllegalVoid (pos, name)]                                

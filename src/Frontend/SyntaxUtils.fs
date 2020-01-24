@@ -19,8 +19,7 @@ module Blech.Frontend.SyntaxUtils
 module SyntaxErrors =
     open Blech.Common
     open Blech.Common.Range
-
-
+    
     type ParserError = 
         | InconsistentModuleName of moduleName: AST.StaticNamedPath
         | NotUnitOne of number: string * range: Range.range
@@ -290,22 +289,67 @@ module ParserUtils =
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
 
-
-    let private parseFloat floatParser s = 
+    let parseFloat (s:string) : CommonTypes.FloatValue =
         try
-            ignore <| floatParser((strip_ >> stripF) s, System.Globalization.NumberFormatInfo.InvariantInfo)
-            Ok s
-        with 
-        | _ -> Error s
+            (System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo), s)
+        with
+            | :? System.OverflowException ->
+                (Double.PositiveInfinity, s)
 
-    let parseFloat64 = parseFloat System.Double.Parse
+    //let parseFloat floatParser s = 
+    //    try
+    //        ignore <| floatParser((strip_ >> stripF) s, System.Globalization.NumberFormatInfo.InvariantInfo)
+    //        Ok s
+    //    with 
+    //    | _ -> Error s
 
-    let parseFloat32 =
-        parseFloat System.Single.Parse
-        >> Result.map (fun x -> x.Replace("f","").Replace("F",""))
+    // let parseFloat64 = parseFloat System.Double.Parse
+
+    //let parseFloat32 =
+    //    parseFloat System.Single.Parse
+    //    >> Result.map (fun x -> x.Replace("f","").Replace("F",""))
     
     
-    let private parseHexFloat hexfloat =
+    //let private parseHexFloat hexfloat =
+    //    // Follows the algorithm from 
+    //    // “What Every Computer Scientist Should Know About Floating-Point Arithmetic”
+    //    // http://pages.cs.wisc.edu/~david/courses/cs552/S12/handouts/goldberg-floating-point.pdf
+    //    // adopted  to a hexadecimal representation
+    //    //    First read in all hexadecimal digits as a bigint N, ignoring the hexadecimal point. [..] 
+    //    //    Next, find the appropriate power 2**p necessary to scale N. 
+    //    //    This will be a combination of the exponent of the hexadecimal number, 
+    //    //    together with the position of the (up until now) ignored hexadecimal point. 
+    //    //    [..] Finally, multiply (or divide if p < 0) N and 2**P.
+
+    //    let s = (strip_ hexfloat).[2..]   // Ox1.Fp2 -> 1.Fp2 , 0x8.AF -> 8.AF
+        
+    //    let significant, exponent =
+    //        match s.Split [|'p'; 'P'|] with
+    //        | [|m; e|] -> m    , e      // 1.Fp2 -> 1.F , 2
+    //        | m        -> m.[0], "0"    // 8.AF  -> 8.AF, 0
+            
+    //    let digits, pos = 
+    //        match significant.Split '.' with
+    //        | [|m ; f |] -> m + f, f.Length  // 8AF. -> 8AF, 0 // 8.AF -> 8AF, 2 // .8AF -> 8AF, 3
+    //        | m          -> m.[0], 0         // 8AF  -> 8AF, 0
+
+    //    try 
+    //        let p = Int32.Parse(exponent) - (4 * pos)
+    //        // add a leading '0' to prevent interpretation as a negative number
+    //        let n = BigInteger.Parse("0" + digits, System.Globalization.NumberStyles.AllowHexSpecifier)
+    //        if p < 0 then
+    //            double n / double (2I**(-p))
+    //        else
+    //            double n * double (2I**p)
+    //        |> floatToString |> Ok
+    //    with
+    //        | :? System.OverflowException ->
+    //            Error hexfloat
+
+    //let parseHexFloat64 = parseHexFloat >> Result.bind parseFloat64
+    //let parseHexFloat32 = parseHexFloat >> Result.bind parseFloat32
+    
+    let parseHexFloat (repr: string) : CommonTypes.FloatValue =
         // Follows the algorithm from 
         // “What Every Computer Scientist Should Know About Floating-Point Arithmetic”
         // http://pages.cs.wisc.edu/~david/courses/cs552/S12/handouts/goldberg-floating-point.pdf
@@ -316,7 +360,7 @@ module ParserUtils =
         //    together with the position of the (up until now) ignored hexadecimal point. 
         //    [..] Finally, multiply (or divide if p < 0) N and 2**P.
 
-        let s = (strip_ hexfloat).[2..]   // Ox1.Fp2 -> 1.Fp2 , 0x8.AF -> 8.AF
+        let s = (strip_ repr).[2..]   // Ox1.Fp2 -> 1.Fp2 , 0x8.AF -> 8.AF
         
         let significant, exponent =
             match s.Split [|'p'; 'P'|] with
@@ -328,22 +372,19 @@ module ParserUtils =
             | [|m ; f |] -> m + f, f.Length  // 8AF. -> 8AF, 0 // 8.AF -> 8AF, 2 // .8AF -> 8AF, 3
             | m          -> m.[0], 0         // 8AF  -> 8AF, 0
 
-        try 
-            let p = Int32.Parse(exponent) - (4 * pos)
-            // add a leading '0' to prevent interpretation as a negative number
-            let n = BigInteger.Parse("0" + digits, System.Globalization.NumberStyles.AllowHexSpecifier)
-            if p < 0 then
-                double n / double (2I**(-p))
-            else
-                double n * double (2I**p)
-            |> floatToString |> Ok
-        with
-            | :? System.OverflowException ->
-                Error hexfloat
-
-    let parseHexFloat64 = parseHexFloat >> Result.bind parseFloat64
-    let parseHexFloat32 = parseHexFloat >> Result.bind parseFloat32
-    
+        let value = 
+            try 
+                let p = Int32.Parse(exponent) - (4 * pos)
+                // add a leading '0' to prevent interpretation as a negative number
+                let n = BigInteger.Parse("0" + digits, System.Globalization.NumberStyles.AllowHexSpecifier)
+                if p < 0 then
+                    double n / double (2I**(-p))
+                else
+                    double n * double (2I**p)
+            with
+                | :? System.OverflowException ->
+                    Double.PositiveInfinity
+        (value, repr)
     
     let parseOne (nat: string, r: Range.range) =
         match System.Int32.TryParse(nat) with

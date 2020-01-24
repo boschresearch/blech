@@ -186,10 +186,8 @@ let tokenTagToString token =
     | TOKEN_OCTCONST -> "<octal bits>"
     | TOKEN_HEXCONST -> "<hexadecimal bits>"
     | TOKEN_NATCONST -> "<natural number>"
-    | TOKEN_FLOATCONST
-    | TOKEN_FLOATCONST32 -> "<floating point number>"
-    | TOKEN_HEXFLOATCONST 
-    | TOKEN_HEXFLOATCONST32 -> "<hexadicamal floating point number>"
+    | TOKEN_FLOATCONST -> "<floating point number>"
+    | TOKEN_HEXFLOATCONST -> "<hexadecimal floating point number>"
     | TOKEN_STRING -> "<string constant>"
     | TOKEN_ID -> "<identifier>"
     | TOKEN_WILDCARD -> "<_>"

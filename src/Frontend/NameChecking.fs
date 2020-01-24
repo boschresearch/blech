@@ -160,8 +160,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkLiteral ctx (lit: AST.Literal) = // checked because of units
         match lit with
-        | Literal.Single (unit = ue)
-        | Literal.Double (unit = ue)
+        | Literal.Float (unit = ue)
         | Literal.Int (unit = ue) ->
             Option.fold checkUnitExpr ctx ue
         | _ ->
