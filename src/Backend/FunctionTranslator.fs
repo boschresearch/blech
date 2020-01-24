@@ -204,7 +204,7 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
                       datatype = Types.ValueTypes subProgDecl.returns
                       isMutable = true 
                       allReferences = HashSet() }
-            ctx.tcc.nameToDecl.Add(qname, Declarable.ParamDecl v)
+            TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v, cpType (ValueTypes Void)
     
     let iface = {Iface.Empty with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}

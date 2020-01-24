@@ -852,8 +852,7 @@ and private cpExpr inFunction ctx expr =
                     annotation = Attribute.VarDecl.Empty
                     allReferences = HashSet() 
                 }
-            try ctx.tcc.nameToDecl.Add(lhsName, Declarable.VarDecl v)
-            with _ -> failwith <| sprintf "Temporary variable %s already exists." (lhsName.ToString())
+            TypeCheckContext.addDeclToLut ctx.tcc lhsName (Declarable.VarDecl v)
             let tmpLhs = LhsCur (Loc lhsName)
             let prereqReceiver, processedReceiver =
                 if inFunction then cpOutputArgInFunction ctx tmpLhs
