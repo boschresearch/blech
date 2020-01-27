@@ -4,7 +4,7 @@ struct S
 end
 
 activity A()(r: S)
-    r = {i = 5.7f}
+    r = {i = 5.7}
     let l = r // output rhs struct direct cur
     await true
 end

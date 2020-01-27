@@ -5,7 +5,7 @@ end
 @[EntryPoint]
 activity E(i: int32, a: [8][7]bool, x: ASD)(o:float32, b: [9]float32, z: ASD)
     repeat
-        if i >= 0 then o = 1.f-o end
+        if i >= 0 then o = 1.0-o end
         await true
     end
 end

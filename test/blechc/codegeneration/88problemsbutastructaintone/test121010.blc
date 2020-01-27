@@ -6,7 +6,7 @@ end
 activity A()(r: S)
     var l: float32
     await true
-    r = {i = 4.7f}
+    r = {i = 4.7}
     l = r.i // output rhs simple fieldaccess cur
 end
 

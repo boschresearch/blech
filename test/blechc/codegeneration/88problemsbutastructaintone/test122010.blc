@@ -4,7 +4,7 @@ struct S
 end
 
 activity B()(o: float32)
-    o = 7.654f
+    o = 7.654
     await true
 end
 

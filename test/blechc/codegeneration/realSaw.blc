@@ -8,12 +8,12 @@ activity sin()(ot: float32)
     // ramp up and down
     repeat
         repeat
-            increase(0.1f)(ot)
+            increase(0.1)(ot)
             await true
-        until ot > 0.99f end
+        until ot > 0.99 end
         repeat
-            increase(- 0.1f)(ot)
+            increase(- 0.1)(ot)
             await true
-        until ot < 0.01f end
+        until ot < 0.01 end
     end
 end

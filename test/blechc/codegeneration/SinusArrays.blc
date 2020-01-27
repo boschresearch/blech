@@ -7,23 +7,23 @@ activity ramp()(ot: float32)
     // ramp up and down
     repeat
         repeat
-            increase(0.1f)(ot)
+            increase(0.1)(ot)
             await true
         until ot > 0.99 end
         repeat
-            increase(- 0.1f)(ot)
+            increase(- 0.1)(ot)
             await true
         until ot < 0.01 end
     end
 end
 
 activity pid(actual_value: float32, desired_value: float32)(outp: float32)
-    var error_prior: float32 = 0.0f
-    var integral: float32 = 0.0f
-    var KP: float32 = 1.0f
-    var KI: float32 = 1.0f
-    var KD: float32 = 0.0f
-    var iteration_time: float32 = 1.0f
+    var error_prior: float32 = 0.0
+    var integral: float32 = 0.0
+    var KP: float32 = 1.0
+    var KI: float32 = 1.0
+    var KD: float32 = 0.0
+    var iteration_time: float32 = 1.0
 
     repeat
         var error_ = desired_value - actual_value
@@ -58,7 +58,7 @@ end
 @[EntryPoint]
 activity main()() 
     var insig: float32
-    var desired_value: float32 = .5f
+    var desired_value: float32 = .5
     var diff: float32
     var result: float32
     var sum: float32

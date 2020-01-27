@@ -5,7 +5,7 @@ end
 
 @[EntryPoint]
 activity A()
-    var r: S = {i = 5.7f}
+    var r: S = {i = 5.7}
     let l = r // local rhs struct direct cur
     await true
 end

@@ -4,7 +4,7 @@ struct S
 end
 
 activity B()(o: S)
-    o.i = 7.654f
+    o.i = 7.654
     await true
 end
 
