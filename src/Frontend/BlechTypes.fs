@@ -298,6 +298,7 @@ and SubProgramDecl =
         globalInputs: ExternalVarDecl list
         globalOutputsInScope: ExternalVarDecl list // for code generation
         globalOutputsAccumulated: ExternalVarDecl list // for causality checking
+        singletons: QName list // Singletons called from this subprogram. Includes its own name iff declared as singleton.
         body: Stmt list // TODO: maybe turn into stmt?
         returns: ValueTypes
         annotation: Attribute.SubProgram
@@ -317,7 +318,16 @@ and SubProgramDecl =
                   |> group )
             <.> (this.body |> List.map(fun s -> s.ToDoc) |> vsep |> indent dpTabsize)
             <.> txt "end"
-        
+        let spdoc =
+            if this.IsSingleton then 
+                let singletonsBlock = 
+                    List.map (fun n -> txt (n.ToString())) this.singletons
+                    |> dpCommaSeparatedInBrackets
+                txt "singleton"
+                <+> singletonsBlock
+                <+> spdoc 
+            else spdoc
+
         this.annotation.ToDoc @ [spdoc]
         |> dpToplevelClose
 
@@ -327,10 +337,14 @@ and SubProgramDecl =
     member this.IsEntryPoint =
         Option.isSome this.annotation.entryPoint
 
+    member this.IsSingleton =
+        not this.singletons.IsEmpty
+
 /// Declaration of an externally declared C function
 and FunctionPrototype =
     {
         isFunction: bool // TODO: apart from weird technicalities, why do we need this field? It must always be true, there are no external activities.
+        isSingleton: bool
         pos: range
         name: QName
         inputs: ParamDecl list
@@ -351,6 +365,7 @@ and FunctionPrototype =
                   <.> match this.returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.returns.ToDoc
                   |> align
                   |> group )
+        let fpdoc = if this.isSingleton then txt "singleton" <+> fpdoc else fpdoc
         this.annotation.ToDoc @ [fpdoc]
         |> dpToplevelClose
 

@@ -71,20 +71,42 @@ let private mkDiagnosticAliasWWerror memLoc (nameRange1, _) (nameRange2, n2) : D
       context = context
       note = note }
 
-let private mkDiagnosticWWerror memLoc (nameRange1, _) (nameRange2, n2) : Diagnostics.Diagnostic =
+let private mkDiagnosticWWerror (memLoc: AccessLabel) (nameRange1, _) (nameRange2, n2) : Diagnostics.Diagnostic =
     let secondRange = getRangeOrDieTrying n2
-    let identifier = memLoc.ToString()
-    let mainInfo: Diagnostics.Information =
-        { range = secondRange
-          message = sprintf "Write-write conflict. %s is written concurrently." identifier }
-    let context: Diagnostics.ContextInformation list =
-        [ { range = nameRange1
-            message = "First write access."
-            isPrimary = false }
-          { range = nameRange2
-            message = "Conflicting concurrent write access."
-            isPrimary = true } ]
-    let note = [ "There may be only one writer per variable in the scope of a \"cobegin\" statement." ]
+    let messagesForDataAccess =
+        let identifier = memLoc.ToString()
+        let mainInfo: Diagnostics.Information =
+            { range = secondRange
+              message = sprintf "Write-write conflict. %s is written concurrently." identifier }
+        let context: Diagnostics.ContextInformation list =
+            [ { range = nameRange1
+                message = "First write access."
+                isPrimary = false }
+              { range = nameRange2
+                message = "Conflicting concurrent write access."
+                isPrimary = true } ]
+        let note = [ "There may be only one writer per variable in the scope of a \"cobegin\" statement." ]
+        mainInfo, context, note
+    let messagesForProgramAccess (subProgName: Blech.Frontend.CommonTypes.QName) =
+        let identifier = subProgName.basicId
+        let mainInfo: Diagnostics.Information =
+            { range = secondRange
+              message = sprintf "Singleton subprogram %s cannot be called concurrently." identifier }
+        let context: Diagnostics.ContextInformation list =
+            [ { range = nameRange1
+                message = "First call."
+                isPrimary = false }
+              { range = nameRange2
+                message = "Conflicting concurrent call."
+                isPrimary = true } ]
+        let note = [ "A function or activity is either explicitly declared or inferred as a singleton because it calls singletons. There may be no concurrent calls to the same singleton subprogram." ]
+        mainInfo, context, note
+    let mainInfo, context, note =
+        match memLoc with
+        | SubProg subProgName ->
+            messagesForProgramAccess subProgName
+        | Cur _ | Prev _ | Next _ ->
+            messagesForDataAccess
     { phase = Diagnostics.Phase.Causality
       level = Diagnostics.Level.Error
       main = mainInfo
