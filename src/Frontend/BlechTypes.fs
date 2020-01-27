@@ -58,38 +58,38 @@ type Mutability =
 /// Float constants are represented as strings to ensure that a value's
 /// representation in the generated code is exactly the same as in
 /// the original Blech source code.
-type FloatConst =
-    | Single of string
-    | Double of string
-    override this.ToString () =
-        let dotZero =
-            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
-            elif this.GetString.Contains "." then ""
-            else ".0"
-        match this with
-        | Single s -> s + dotZero + "f"
-        | Double s -> s + dotZero 
-    member this.ToDoc = this.ToString () |> txt
-    member private this.GetString : string =
-        match this with
-        | Single s 
-        | Double s -> s
-    member private this.ReplaceString s =
-        match this with
-        | Single _ -> Single s
-        | Double _ -> Double s
-    member this.ToFloat = this.GetString |> float
-    member this.IsZero =
-        this.ToFloat = 0.0
-    member this.Negate =
-        let s = this.GetString
-        ( if s.StartsWith "-" then s.[1..]
-          else "-" + s )
-        |> this.ReplaceString
-    static member Zero precision =
-        match precision with
-        | FloatPrecision.Single -> FloatConst.Single "0.0"
-        | FloatPrecision.Double -> FloatConst.Double "0.0"
+//type FloatConst =
+//    | Single of string
+//    | Double of string
+//    override this.ToString () =
+//        let dotZero =
+//            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
+//            elif this.GetString.Contains "." then ""
+//            else ".0"
+//        match this with
+//        | Single s -> s + dotZero + "f"
+//        | Double s -> s + dotZero 
+//    member this.ToDoc = this.ToString () |> txt
+//    member private this.GetString : string =
+//        match this with
+//        | Single s 
+//        | Double s -> s
+//    member private this.ReplaceString s =
+//        match this with
+//        | Single _ -> Single s
+//        | Double _ -> Double s
+//    member this.ToFloat = this.GetString |> float
+//    member this.IsZero =
+//        this.ToFloat = 0.0
+//    member this.Negate =
+//        let s = this.GetString
+//        ( if s.StartsWith "-" then s.[1..]
+//          else "-" + s )
+//        |> this.ReplaceString
+//    static member Zero precision =
+//        match precision with
+//        | FloatType.Float32 -> FloatConst.Single "0.0"
+//        | FloatType.Float64 -> FloatConst.Double "0.0"
 
 
 /// Data types
@@ -100,7 +100,7 @@ type ValueTypes =
     | BoolType    
     | IntType of IntType
     | NatType of NatType
-    | FloatType of FloatPrecision
+    | FloatType of FloatType
     //structured
     | ArrayType of size:int * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
                                                   // like 'size-1' or to pass size to functions that expect int
@@ -152,21 +152,22 @@ and ReferenceTypes =
             Some r
 
 
-and Types =
+// TODO: check if simple any types really need to carry their value, fjg. 27.01.20
+and Types = 
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
     | AnyComposite // used for wildcard or compound literals
     | AnyInt of bigint // used only for untyped integer literals
-    | AnyFloat of float // used only for untyped float literals
+    | AnyFloat of Float // used only for untyped float literals
     // | AnyBits of bigint 
     
     member this.ToDoc =
         match this with
         | ValueTypes f -> f.ToDoc
         | ReferenceTypes r -> r.ToDoc
-        | AnyComposite -> txt "any"
-        | AnyInt i -> txt <| string i
-        | AnyFloat f -> txt <| string f
+        | AnyComposite -> txt "any composite"
+        | AnyInt _ -> txt "any integer"
+        | AnyFloat _ -> txt "any float"
 
     override this.ToString() = render None <| this.ToDoc
     
@@ -489,7 +490,7 @@ and RhsStructure =
     // constants and literals
     | BoolConst of bool
     | IntConst of bigint
-    | FloatConst of FloatConst
+    | FloatConst of Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (int * TypedRhs) list
@@ -534,7 +535,7 @@ and RhsStructure =
         // constants and literals
         | BoolConst c -> if c then txt "true" else txt "false"
         | IntConst i -> txt <| i.ToString()
-        | FloatConst f -> f.ToDoc
+        | FloatConst f -> txt <| f.ToString()
         | ResetConst -> [empty] |> dpCommaSeparatedInBraces
         | StructConst structFieldExprList ->
             structFieldExprList

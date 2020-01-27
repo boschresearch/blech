@@ -173,8 +173,8 @@ module SignaturePrinter =
     
 
     let private bpFloatType = function            
-        | FloatPrecision.Single -> txt "float32"
-        | FloatPrecision.Double -> txt "float64"
+        | FloatType.Float32 -> txt "float32"
+        | FloatType.Float64 -> txt "float64"
       
 
     let private bpTemporalQualifier = function

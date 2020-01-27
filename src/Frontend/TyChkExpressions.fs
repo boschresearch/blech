@@ -159,50 +159,50 @@ let rec internal isStaticExpr lut expr =
 /// wrap them back into FloatConst objects, taking original
 /// precision into account
 /// This operation may introduce rounding imprecision!
-let private combineFloat (a: FloatConst) (b: FloatConst) op =
-    let wrapFloat a b (res: float) =
-        let combinePrecision a b =
-            match a, b with
-            | FloatConst.Single _, FloatConst.Single _ -> FloatConst.Single
-            // return double if there was at least one double
-            | _,_ -> FloatConst.Double
+//let private combineFloat (a: FloatConst) (b: FloatConst) op =
+//    let wrapFloat a b (res: float) =
+//        let combinePrecision a b =
+//            match a, b with
+//            | FloatConst.Single _, FloatConst.Single _ -> FloatConst.Single
+//            // return double if there was at least one double
+//            | _,_ -> FloatConst.Double
 
-        res
-        |> floatToString
-        |> combinePrecision a b
-        |> FloatConst
+//        res
+//        |> floatToString
+//        |> combinePrecision a b
+//        |> FloatConst
 
-    op a.ToFloat b.ToFloat
-    |> wrapFloat a b
+//    op a.ToFloat b.ToFloat
+//    |> wrapFloat a b
 
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
-    | FloatConst a, FloatConst b -> combineFloat a b (+)
+    | FloatConst a, FloatConst b -> FloatConst {value = a.value + b.value; repr = None}
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
-    | FloatConst a, FloatConst b -> combineFloat a b (*)
+    | FloatConst a, FloatConst b -> FloatConst {value = a.value * b.value; repr = None}
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
-    | FloatConst a, FloatConst b -> combineFloat a b (/)
+    | FloatConst a, FloatConst b -> FloatConst {value = a.value / b.value; repr = None}
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
-    | FloatConst a, FloatConst b -> combineFloat a b (-)
+    | FloatConst a, FloatConst b -> FloatConst {value = a.value + b.value; repr = None}
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a % b)
-    | FloatConst a, FloatConst b -> combineFloat a b (%) // actually, in Blech we cannot mod floats which is checked before calling this function, so this line is basically dead code
+    | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
     | _ -> Mod(this, that)
 
 let private neg this =
@@ -285,7 +285,7 @@ let rec private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
-    | FloatConst a, FloatConst b -> BoolConst (a = b)
+    | FloatConst a, FloatConst b -> BoolConst (a.value = b.value)
     | ResetConst, ResetConst -> BoolConst true
     | StructConst a, StructConst b -> compareComposite a b
     | ArrayConst a, ArrayConst b -> compareComposite a b
@@ -458,10 +458,10 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         match expr.rhs with
         | IntConst bi -> IntConst -bi
         | _ -> BlechTypes.Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
-    | ValueTypes (FloatType precision) ->
+    | ValueTypes (FloatType _) ->
         match expr.rhs with
-        | FloatConst f -> f.Negate |> FloatConst
-        | _ -> BlechTypes.Sub ({expr with rhs = FloatConst (FloatConst.Zero precision)}, expr) //0 - expr
+        | FloatConst f -> FloatConst f.Negate 
+        | _ -> BlechTypes.Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     
 /// Given a typed Expression, construct its negative.
@@ -607,6 +607,17 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
         genResExpr <| AnyInt combinedValues
     | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
         genResExpr <| Types.ValueTypes (FloatType (commonSize size1 size2))
+    | AnyFloat value, Types.ValueTypes (FloatType size)
+    | Types.ValueTypes (FloatType size), AnyFloat value ->
+        let requiredSizeForValue = FloatType.RequiredType value
+        genResExpr <| Types.ValueTypes (FloatType (commonSize requiredSizeForValue size))
+    | AnyFloat _, AnyFloat _ ->
+        let combinedValues = 
+            combFun expr1 expr2
+            |> function
+                | FloatConst res -> res
+                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
+        genResExpr <| AnyFloat combinedValues
     | t1, t2 when t1 = t2 -> Error [MustBeNumeric(expr1, expr2)]
     | _ -> Error [SameTypeRequired (expr1, expr2)]
 
@@ -692,34 +703,12 @@ let private checkSimpleLiteral literal =
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
-    //| AST.Single (value, _, pos) ->
-    //    match value with
-    //    | Ok number ->
-    //        if MIN_FLOAT32 <= single number && single number <= MAX_FLOAT32 then
-    //            { rhs = FloatConst (FloatConst.Single number)
-    //              typ = Types.ValueTypes (FloatType FloatPrecision.Single)
-    //              range = pos } |> Ok
-    //        else
-    //            Error [NumberLargerThanAnyFloat(pos, number)]
-    //    | Error x ->
-    //        Error [InvalidFloat(pos, x)]
     | AST.Float (number, _, pos) ->
-        let value, repr = number
-        if MIN_FLOAT64 <= value && value <= MAX_FLOAT64 then
-            { rhs = FloatConst <| Double repr; typ = AnyFloat value; range = pos } |> Ok
+        let v = number.value
+        if MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then
+            { rhs = FloatConst number; typ = AnyFloat number; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyFloat(pos, value.ToString())]
-
-        //match value with
-        //| Ok number ->
-        //    if MIN_FLOAT64 <= float number && float number <= MAX_FLOAT64 then
-        //        { rhs = FloatConst (FloatConst.Double number)
-        //          typ = Types.ValueTypes (FloatType FloatPrecision.Double)
-        //          range = pos } |> Ok
-        //    else
-        //        Error [NumberLargerThanAnyFloat(pos, number)]
-        //| Error x ->
-        //    Error [InvalidFloat(pos, x)]
+            Error [NumberLargerThanAnyFloat(pos, string number)]
     | AST.String _
     | AST.Bitvec _ ->
         Error [UnsupportedFeature (literal.Range, "undefined, string or bitvec literal")]
@@ -949,7 +938,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         Error [UnsupportedFeature (expr.Range, "type conversion")]
     // -- type annotation --
-    | AST.HasType (_) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
+    | AST.HasType (e, t) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
         Error [UnsupportedFeature (expr.Range, "type annotation")]
     // -- operators on arrays and slices --
     | AST.Len _

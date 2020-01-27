@@ -173,7 +173,7 @@ and DataType =
     | BitvecType of size:BitsType * range:range
     | NaturalType of size:NatType * unit:UnitExpr option * range:range
     | IntegerType of size:IntType * unit:UnitExpr option * range:range
-    | FloatType of size:FloatPrecision * unit:UnitExpr option * range:range
+    | FloatType of size:FloatType * unit:UnitExpr option * range:range
     // built-in generic compound types
     | ArrayType of size:Expr * elem:DataType * range:range // static size, value type
     // second-class types, elements are always value types
@@ -590,7 +590,7 @@ and Literal =
     | Bitvec of value:bigint * range:range * prefix:Char
     | Int of value:bigint * unit:UnitExpr option * range:range
     // | Single of value:single * range:range  
-    | Float of value: FloatValue * unit:UnitExpr option * range:range
+    | Float of value: Float * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
         | Bool (range=r)
@@ -921,20 +921,11 @@ let addOptSubInt optSub (number: bigint) =
     | None -> number
     | Some _ -> - number
 
-let addOptSubFloat optSub (floatVal: FloatValue) =
-    match optSub, floatVal with
-    | None, _ -> floatVal
-    | Some _, (value, repr) -> -value, "-"+repr
-
-//let addOptSubDouble optSub numberResult =
-//    match optSub with
-//    | None -> numberResult
-//    | Some _ ->
-//        match numberResult with
-//        | Ok x -> Ok ("-"+x)
-//        | Error x -> Error ("-"+x)
-
-
+let addOptSubFloat optSub (float: Float) =
+    match optSub with
+    | None -> float
+    | Some _ -> float.Negate
+    
 /// unites and optional range and a range
 let optUnionRanges optRange range=
     match optRange with

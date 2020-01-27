@@ -290,12 +290,14 @@ module ParserUtils =
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
 
-    let parseFloat (s:string) : FloatValue =
+    let parseFloat (s:string) : Float =
         try
-            (System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo), s)
+            { value = System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo)
+              repr = Some s }
         with
             | :? System.OverflowException ->
-                (Double.PositiveInfinity, s)
+                { value = System.Double.PositiveInfinity
+                  repr = Some s }
 
     //let parseFloat floatParser s = 
     //    try
@@ -350,7 +352,7 @@ module ParserUtils =
     //let parseHexFloat64 = parseHexFloat >> Result.bind parseFloat64
     //let parseHexFloat32 = parseHexFloat >> Result.bind parseFloat32
     
-    let parseHexFloat (repr: string) : FloatValue =
+    let parseHexFloat (repr: string) : Float =
         // Follows the algorithm from 
         // “What Every Computer Scientist Should Know About Floating-Point Arithmetic”
         // http://pages.cs.wisc.edu/~david/courses/cs552/S12/handouts/goldberg-floating-point.pdf
@@ -385,7 +387,7 @@ module ParserUtils =
             with
                 | :? System.OverflowException ->
                     Double.PositiveInfinity
-        (value, repr)
+        {value = value; repr = Some repr}
     
     let parseOne (nat: string, r: Range.range) =
         match System.Int32.TryParse(nat) with

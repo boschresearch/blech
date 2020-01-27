@@ -252,17 +252,46 @@ type BitsType =
         elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
         else Bits64
 
- 
-type FloatPrecision = 
-    | Single | Double // order of tags matters for comparison!
+
+/// Carries the parsed value and the orginal representation
+type Float = 
+    { value: float
+      repr: string option}
+
+    member this.IsOverflow  = 
+        this.value = System.Double.PositiveInfinity
+
+    static member mkOverflow (repr: string option) =
+        { value = System.Double.PositiveInfinity; repr = repr }
+
+    override this.ToString() =
+        match this.repr with
+        | Some s -> s
+        | None -> string this.value
+
+    static member Zero = 
+        { value = 0.0; repr = None }
+
+    member this.Negate =
+        let negVal = - this.value
+        match this.repr with
+        | Some r -> {value = negVal; repr = Some ("-" + r)}
+        | None -> {value = negVal; repr = None}
+
+
+type FloatType = 
+    | Float32 | Float64 // order of tags matters for comparison!
 
     override this.ToString() = "float" + string(this.GetSize())
 
     member this.GetSize() =
         match this with
-        | Single -> 32
-        | Double -> 64
+        | Float32 -> 32
+        | Float64 -> 64
+        
+    static member RequiredType (f : Float) =
+        if float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32 then Float32
+        else Float64
+    
 
-/// Carries the parsed value and the orginal representation
-type FloatValue = float * string 
 

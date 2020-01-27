@@ -103,9 +103,15 @@ let internal isLeftSupertypeOfRight typL typR =
             false // a negative value may never fit any nat type
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
         sizeL.GetSize() >= sizeR.GetSize()
+    | Types.ValueTypes (FloatType sizeL), Types.AnyFloat value ->
+        if value.IsOverflow then
+            false
+        else
+            let requiredSizeForValue = FloatType.RequiredType value
+            sizeL.GetSize() >= requiredSizeForValue.GetSize()
     | a, b when (a = b) -> true
-    | _,_ -> false // this includes the cases that integers shall not 
-                   // implicitly be promoted to floats
+    | _, _ -> false // this includes the cases that integers shall not 
+                    // implicitly be promoted to floats
 
 
 /// Returns default value for given datatype.
@@ -115,15 +121,16 @@ let internal isLeftSupertypeOfRight typL typR =
 let rec getDefaultValueFor pos name dty =
     match dty with
     | Types.AnyComposite 
-    | Types.AnyInt _ | Types.AnyFloat _ -> Error [NoDefaultValueForAny (pos, name)]
+    | Types.AnyInt _ 
+    | Types.AnyFloat _ -> 
+        Error [NoDefaultValueForAny (pos, name)]
     | Types.ValueTypes fce ->
         match fce with
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
-        | FloatType precision ->
-            Ok {rhs = FloatConst (FloatConst.Zero precision); typ = dty; range = pos}
+        | FloatType _ ->Ok {rhs = FloatConst Float.Zero ; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->
             let defaultValues =
                 fields
@@ -155,7 +162,7 @@ let internal getInitValueWithoutZeros pos name dty =
         match expr.rhs with
         | BoolConst false -> None
         | IntConst value when 0I = value -> None
-        | FloatConst s when s.IsZero -> None // fail because s may contain "f" which cannot be parsed by float _
+        | FloatConst value when Float.Zero = value -> None 
         | ResetConst -> None 
         | StructConst assignments -> filterOutZeroFields assignments StructConst
         | ArrayConst assignments -> filterOutZeroFields assignments ArrayConst
@@ -318,11 +325,12 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
         // however if that is a literal we might have not enough information (which int size?)
         match expr.typ with
         | Types.AnyComposite // struct/array const literals will have Any type
-        | Types.AnyInt _ ->
+        | Types.AnyInt _ 
+        | Types.AnyFloat _ ->
             Error [VarDeclRequiresExplicitType (pos, name)]    
-        | ( Types.ValueTypes (IntType _) 
-          | Types.ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
-            Error [VarDeclRequiresExplicitType (pos, name)]
+        //| ( Types.ValueTypes (IntType _) 
+        //  | Types.ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
+        //    Error [VarDeclRequiresExplicitType (pos, name)]
         | _ ->
             Ok (expr.typ, expr)
 

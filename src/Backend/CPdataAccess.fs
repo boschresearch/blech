@@ -180,8 +180,8 @@ let rec internal cpType typ =
         | Nat64 -> txt "blc_nat64"
     | ValueTypes (FloatType size) ->
         match size with
-        | FloatPrecision.Single -> txt "blc_float32"
-        | FloatPrecision.Double -> txt "blc_float64"
+        | FloatType.Float32 -> txt "blc_float32"
+        | FloatType.Float64 -> txt "blc_float64"
     | ValueTypes (ValueTypes.StructType (_, typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
         txt "struct" <+> ppGlobalName typeName
@@ -705,7 +705,7 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
     // simple literals
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
-    | FloatConst f -> [], f.ToDoc
+    | FloatConst f -> [], txt <| string f
     | RhsCur _
     | Prev _ -> // the prev case cannot be matched inside a function context!
         let timepoint, tml = decomposeRhs rhs.rhs
@@ -868,7 +868,7 @@ and private cpExpr inFunction ctx expr =
         
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
-    | FloatConst f -> [], f.ToDoc
+    | FloatConst f -> [], txt <| string f
     | ResetConst -> failwith "By now, the type checker should have substituted reset const by the type's default value."
     | StructConst assignments ->
         let prereqStmtsLst, processedAssignments =
