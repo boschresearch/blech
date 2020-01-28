@@ -484,40 +484,63 @@ let private unaryMinus r (expr: TypedRhs) =
           range = expr.range } |> Ok
     | _ -> // error illegal minus on expr
         Error [CannotInvertSign(r, expr)]
-    
-/// Given two typed expressions, construct their conjunction.
-/// If some of the types is not boolean, an error will be returned instead.
-let private formConjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = conj expr1 expr2
-        { rhs = structure; 
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
 
-/// Given two typed expressions, construct their disjunction.
+/// Given two typed expressions, construct their binary logical operator.
 /// If some of the types is not boolean, an error will be returned instead.
-let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
+let private formLogical operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with
     | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = disj expr1 expr2
-        { rhs = structure; 
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
-
-/// Given two typed expressions, construct their exclusive disjunction.
-/// If some of the types is not boolean, an error will be returned instead.
-let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = bxor expr1 expr2
+        let structure = operator expr1 expr2
         { rhs = structure; 
           typ = Types.ValueTypes BoolType
           range = Range.unionRanges expr1.Range expr2.Range }
         |> Ok
     | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+    
+/// Given two typed expressions, construct their conjunction.
+/// If some of the types is not boolean, an error will be returned instead.
+//let private formConjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
+//    match expr1.typ, expr2.typ with
+//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//        let structure = conj expr1 expr2
+//        { rhs = structure; 
+//          typ = Types.ValueTypes BoolType
+//          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
+//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+
+let private formConjunction = formLogical conj
+
+/// Given two typed expressions, construct their disjunction.
+/// If some of the types is not boolean, an error will be returned instead.
+//let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
+//    match expr1.typ, expr2.typ with
+//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//        let structure = disj expr1 expr2
+//        { rhs = structure; 
+//          typ = Types.ValueTypes BoolType
+//          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
+//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+
+let private formDisjunction = formLogical disj
+
+/// Given two typed expressions, construct their exclusive disjunction.
+/// If some of the types is not boolean, an error will be returned instead.
+//let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
+//    match expr1.typ, expr2.typ with
+//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//        let structure = bxor expr1 expr2
+//        { rhs = structure; 
+//          typ = Types.ValueTypes BoolType
+//          range = Range.unionRanges expr1.Range expr2.Range }
+//        |> Ok
+//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+
+let private formXor = formLogical bxor
+
+
+
+
+
 
 /// Given two typed expressions, construct their equality.
 /// If the two types are not comparable, an error will be returned instead.
@@ -547,19 +570,32 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
             Error[NoComparisonAllowed(expr1, expr2)]
     | _ -> Error [SameTypeRequired (expr1, expr2)]
 
+
+let private mkResultExpr rhs typ range : TyChecked<TypedRhs> =  
+    { rhs = rhs
+      typ = typ
+      range = range } |> Ok
+
+
 /// Given two typed expressions, construct their inequality.
 /// We assume that ineqFun is either 'less' or 'leq' from above.
 /// If the two types are not comparable, an error will be returned instead.
 let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.AnyInt _, Types.AnyInt _
-    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
     | Types.ValueTypes (IntType _), Types.AnyInt _
     | Types.AnyInt _, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
+    
     | Types.ValueTypes (NatType _), Types.AnyInt _
     | Types.AnyInt _, Types.ValueTypes (NatType _)
+    
+    | Types.ValueTypes (NatType _), Types.AnyInt _
+    | Types.AnyInt _, Types.ValueTypes (NatType _)
+    
+    | Types.AnyInt _, Types.AnyInt _
+    | Types.AnyFloat _, Types.AnyFloat _
+    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
+    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
+    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
     | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
         { rhs = ineqFun expr1 expr2
           typ = Types.ValueTypes BoolType
@@ -579,37 +615,44 @@ let private lessEqualThan = inequality leq
 /// return a new typed expression as a combination of the two.
 /// In case of type mismatches an error is returned instead.
 let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
-    let commonRange = Range.unionRanges expr1.Range expr2.Range
-    let genResExpr dty =
-        { rhs = combFun expr1 expr2
-          typ = dty
-          range = commonRange }
-        |> Ok
+    //let genResExpr dty =
+    //    { rhs = combFun expr1 expr2
+    //      typ = dty
+    //      range = commonRange }
+    //    |> Ok
+    let rhs = combFun expr1 expr2
+    let rng = Range.unionRanges expr1.Range expr2.Range
+    
     let commonSize size1 size2 =
         if size1 >= size2 then size1
         else size2
+    
     match expr1.typ, expr2.typ with
     | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
-        genResExpr <| Types.ValueTypes (IntType (commonSize size1 size2))
+        let typ = Types.ValueTypes (IntType (commonSize size1 size2))
+        mkResultExpr rhs typ rng
     
     | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
-        genResExpr <| Types.ValueTypes (NatType (commonSize size1 size2))
+        let typ = Types.ValueTypes (NatType (commonSize size1 size2)) 
+        mkResultExpr rhs typ rng
     
     | AnyInt value, Types.ValueTypes (IntType size)
     | Types.ValueTypes (IntType size), AnyInt value ->
-        let requiredSizeForValue = IntType.RequiredType value
-        if requiredSizeForValue > size then
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
-        else
-            genResExpr <| Types.ValueTypes (IntType (commonSize requiredSizeForValue size))
+        //let requiredSizeForValue = IntType.RequiredType value
+        //if requiredSizeForValue > size then
+        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
+        //else
+            let typ = Types.ValueTypes (IntType size)
+            mkResultExpr rhs typ rng
     
     | AnyInt value, Types.ValueTypes (NatType size)
     | Types.ValueTypes (NatType size), AnyInt value ->
-        let requiredSizeForValue = NatType.RequiredType value
-        if requiredSizeForValue > size then
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-        else
-            genResExpr <| Types.ValueTypes (NatType size)
+        //let requiredSizeForValue = NatType.RequiredType value
+        //if requiredSizeForValue > size then
+        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+        //else
+            let typ = Types.ValueTypes (NatType size)
+            mkResultExpr rhs typ rng
     
     | AnyInt _, AnyInt _ ->
         let combinedValues = 
@@ -617,26 +660,27 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
             |> function
                 | IntConst res -> res
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-        genResExpr <| AnyInt combinedValues
+        mkResultExpr rhs (AnyInt combinedValues) rng
     
     | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
-        genResExpr <| Types.ValueTypes (FloatType (commonSize size1 size2))
-    
+        let typ = Types.ValueTypes (FloatType (commonSize size1 size2))
+        mkResultExpr rhs typ rng
+
     | AnyFloat value, Types.ValueTypes (FloatType size)
     | Types.ValueTypes (FloatType size), AnyFloat value ->
-        let requiredSizeForValue = FloatType.RequiredType value
-        if requiredSizeForValue > size then
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-        else
-            genResExpr <| Types.ValueTypes (FloatType (commonSize requiredSizeForValue size))
-    
+        //let requiredSizeForValue = FloatType.RequiredType value
+        //if requiredSizeForValue > size then
+        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+        //else
+            let typ = Types.ValueTypes (FloatType size)
+            mkResultExpr rhs typ rng
+            
     | AnyFloat _, AnyFloat _ ->
-        let combinedValues = 
-            combFun expr1 expr2
-            |> function
-                | FloatConst res -> res
-                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-        genResExpr <| AnyFloat combinedValues
+        let combinedValues =
+            match rhs with
+            | FloatConst cv -> cv
+            | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
+        mkResultExpr rhs (AnyFloat combinedValues) rng
     
     | t1, t2 when t1 = t2 -> 
         Error [MustBeNumeric(expr1, expr2)]
@@ -645,17 +689,39 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
         Error [SameTypeRequired (expr1, expr2)]
 
 
+/// Checks if literals and constant expression are of suitable size.
+let private checkArithmeticAnySize operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    match expr1.typ, expr2.typ with
+    | AnyInt value, Types.ValueTypes (IntType size)
+    | Types.ValueTypes (IntType size), AnyInt value when IntType.RequiredType value > size ->
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
+    | AnyInt value, Types.ValueTypes (NatType size)
+    | Types.ValueTypes (NatType size), AnyInt value when NatType.RequiredType value > size   ->
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+    | AnyFloat value, Types.ValueTypes (FloatType size)
+    | Types.ValueTypes (FloatType size), AnyFloat value when FloatType.RequiredType value > size->
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+    | t1, t2 -> 
+        combineNumOp expr1 expr2 operator
+
+
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
-let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 add
+// let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 add
+let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize add expr1 expr2
 
 /// Returns the subtraction of two typed expressions or an error in case of type mismatch.
-let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 sub
+//let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 sub
+let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize sub expr1 expr2
 
 /// Returns the product of two typed expressions or an error in case of type mismatch.
-let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 mul
+//let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 mul
+let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize mul expr1 expr2
+
 
 /// Returns the quotient of two typed expressions or an error in case of type mismatch.
-let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 div
+//let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 div
+let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize div expr1 expr2
+
 
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
@@ -665,9 +731,9 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | ValueTypes (FloatType _), AnyFloat _
     | AnyFloat _, AnyFloat _ ->
         Error [CannotModFloats (expr1, expr2)]
-    | _ -> combineNumOp expr1 expr2 modus
+    | _ -> checkArithmeticAnySize modus expr1 expr2
 
-
+        
 //=============================================================================
 // Checking right and left hand side usages (expressions)
 // A function call can be the rhs of an expression and is hence tightly coupled
