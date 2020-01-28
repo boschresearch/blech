@@ -178,25 +178,25 @@ let rec internal isStaticExpr lut expr =
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
-    | FloatConst a, FloatConst b -> FloatConst {value = a.value + b.value; repr = None}
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (+) a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
-    | FloatConst a, FloatConst b -> FloatConst {value = a.value * b.value; repr = None}
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (*) a b
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
-    | FloatConst a, FloatConst b -> FloatConst {value = a.value / b.value; repr = None}
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (/) a b
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
-    | FloatConst a, FloatConst b -> FloatConst {value = a.value + b.value; repr = None}
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (-) a b
     | _ -> Sub(this, that)
 
 let private modus this that =
@@ -237,14 +237,14 @@ let private less this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a < b)
     | IntConst a, IntConst b -> BoolConst (a < b)
-    | FloatConst a, FloatConst b -> BoolConst (a < b)
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<) a b
     | _ -> Les(this, that)
 
 let private leq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a <= b)
     | IntConst a, IntConst b -> BoolConst (a <= b)
-    | FloatConst a, FloatConst b -> BoolConst (a <= b)
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<=) a b
     | _ -> Leq(this, that)
 
 let rec private eq this that =
@@ -285,12 +285,11 @@ let rec private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
-    | FloatConst a, FloatConst b -> BoolConst (a.value = b.value)
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
     | ResetConst, ResetConst -> BoolConst true
     | StructConst a, StructConst b -> compareComposite a b
     | ArrayConst a, ArrayConst b -> compareComposite a b
     | _ -> Equ(this, that)
-
 
 /// Given a typed rhs expression, this function tries to evaluate this 
 /// expression to a constant and return a new TypedRhs such that
@@ -460,7 +459,7 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         | _ -> BlechTypes.Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
     | ValueTypes (FloatType _) ->
         match expr.rhs with
-        | FloatConst f -> FloatConst f.Negate 
+        | FloatConst f -> FloatConst f.UnaryMinus 
         | _ -> BlechTypes.Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     
@@ -472,6 +471,10 @@ let private unaryMinus r (expr: TypedRhs) =
     | AnyInt value ->
         { rhs = IntConst -value
           typ = AnyInt -value
+          range = expr.range } |> Ok
+    | AnyFloat value ->
+        { rhs = FloatConst value.UnaryMinus
+          typ = AnyFloat value.UnaryMinus
           range = expr.range } |> Ok
     | ValueTypes (IntType _)
     | ValueTypes (FloatType _) ->

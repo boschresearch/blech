@@ -924,7 +924,7 @@ let addOptSubInt optSub (number: bigint) =
 let addOptSubFloat optSub (float: Float) =
     match optSub with
     | None -> float
-    | Some _ -> float.Negate
+    | Some _ -> float.UnaryMinus
     
 /// unites and optional range and a range
 let optUnionRanges optRange range=

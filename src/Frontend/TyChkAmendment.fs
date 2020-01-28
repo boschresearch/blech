@@ -34,33 +34,33 @@ module Range = Blech.Common.Range
 /// in a variable declaration such as "var x = 8", we do not merely
 /// look at the type of "8" which is int8 and falsely make x an int8
 /// as well but instead give an error to the user.
-let rec private exprContainsName rhs =
-    let recurFields fs = 
-        fs 
-        |> List.map (fun (_, xs) -> exprContainsName xs.rhs)
-        |> List.forall id
+//let rec private exprContainsName rhs =
+//    let recurFields fs = 
+//        fs 
+//        |> List.map (fun (_, xs) -> exprContainsName xs.rhs)
+//        |> List.forall id
     
-    match rhs with
-    // names
-    | RhsCur _ | Prev _ | FunCall _ -> true
-    // simple literals
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> false
-    // composite literals
-    | StructConst rhsList -> rhsList |> recurFields
-    | ArrayConst elems -> elems |> recurFields
-    // subexpressions
-    // unary
-    | Neg a | Bnot a -> exprContainsName a.rhs
-    // logical
-    | Conj (a, b) | Disj (a, b)
-    // bitwise
-    | Band (a, b) | Bor (a, b) | Bxor (a, b)
-    | Shl (a, b) | Shr (a, b) | Sshr (a, b) | Rotl (a, b) | Rotr (a, b)
-    // relational
-    | Les (a, b) | Leq (a, b) | Equ (a, b) 
-    // arithmetic
-    | Add (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->
-        exprContainsName a.rhs || exprContainsName b.rhs
+//    match rhs with
+//    // names
+//    | RhsCur _ | Prev _ | FunCall _ -> true
+//    // simple literals
+//    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> false
+//    // composite literals
+//    | StructConst rhsList -> rhsList |> recurFields
+//    | ArrayConst elems -> elems |> recurFields
+//    // subexpressions
+//    // unary
+//    | Neg a | Bnot a -> exprContainsName a.rhs
+//    // logical
+//    | Conj (a, b) | Disj (a, b)
+//    // bitwise
+//    | Band (a, b) | Bor (a, b) | Bxor (a, b)
+//    | Shl (a, b) | Shr (a, b) | Sshr (a, b) | Rotl (a, b) | Rotr (a, b)
+//    // relational
+//    | Les (a, b) | Leq (a, b) | Equ (a, b) 
+//    // arithmetic
+//    | Add (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->
+//        exprContainsName a.rhs || exprContainsName b.rhs
 
 
 /// Whenever a composite data type is re-/initialised we need to determine

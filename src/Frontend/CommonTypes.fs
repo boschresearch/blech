@@ -272,12 +272,17 @@ type Float =
     static member Zero = 
         { value = 0.0; repr = None }
 
-    member this.Negate =
+    member this.UnaryMinus =
         let negVal = - this.value
         match this.repr with
         | Some r -> {value = negVal; repr = Some ("-" + r)}
         | None -> {value = negVal; repr = None}
 
+    static member Relational op left right = 
+        op left.value right.value
+    
+    static member Arithmetic op left right =
+        {value = op left.value right.value; repr = None}
 
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
