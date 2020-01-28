@@ -299,10 +299,15 @@ let private determineCalledSingletons lut bodyRes =
         // and no external C variables are written (TODO!)
         | FunCall (name, inputs, _) ->
             processFunCall name inputs
-        // boolean
-        | Neg e -> singletonCalls e
-        | Conj (x, y) | Disj (x, y) | Xor (x, y)
-        // relations
+        // unary
+        | Neg e | Bnot e -> 
+            singletonCalls e
+        // logical
+        | Conj (x, y) | Disj (x, y) 
+        // bitwise
+        | Band (x, y) | Bor(x, y) | Bxor (x, y)
+        | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y) 
+        // relational
         | Les (x, y) | Leq (x, y) | Equ (x, y)
         // arithmetic
         | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
