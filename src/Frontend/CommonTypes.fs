@@ -208,6 +208,7 @@ type IntType =
         | Int16 -> 16
         | Int32 -> 32
         | Int64 -> 64
+
     static member RequiredType value =
         if MIN_INT8 <= value && value <= MAX_INT8 then Int8
         elif MIN_INT16 <= value && value <= MAX_INT16 then Int16

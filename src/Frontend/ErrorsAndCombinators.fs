@@ -200,7 +200,8 @@ type TyCheckError =
             // types
             | TypeMismatch (t, r) -> 
                 match r.typ with
-                | AnyInt _ ->
+                | AnyInt _ 
+                | AnyFloat _ ->
                     r.Range, sprintf "Type mismatch. The given expression %s is outside the range of expected type %s." (r.rhs.ToString())(t.ToString())
                 | _ ->
                     r.Range, sprintf "Type mismatch. %s was expected but the given expression %s is of type %s." (t.ToString())(r.rhs.ToString())(r.typ.ToString())

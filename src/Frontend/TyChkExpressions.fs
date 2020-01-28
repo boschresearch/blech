@@ -591,16 +591,26 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
     match expr1.typ, expr2.typ with
     | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
         genResExpr <| Types.ValueTypes (IntType (commonSize size1 size2))
+    
     | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
         genResExpr <| Types.ValueTypes (NatType (commonSize size1 size2))
+    
     | AnyInt value, Types.ValueTypes (IntType size)
     | Types.ValueTypes (IntType size), AnyInt value ->
         let requiredSizeForValue = IntType.RequiredType value
-        genResExpr <| Types.ValueTypes (IntType (commonSize requiredSizeForValue size))
+        if requiredSizeForValue > size then
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
+        else
+            genResExpr <| Types.ValueTypes (IntType (commonSize requiredSizeForValue size))
+    
     | AnyInt value, Types.ValueTypes (NatType size)
     | Types.ValueTypes (NatType size), AnyInt value ->
         let requiredSizeForValue = NatType.RequiredType value
-        genResExpr <| Types.ValueTypes (NatType (commonSize requiredSizeForValue size))
+        if requiredSizeForValue > size then
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+        else
+            genResExpr <| Types.ValueTypes (NatType size)
+    
     | AnyInt _, AnyInt _ ->
         let combinedValues = 
             combFun expr1 expr2
@@ -608,12 +618,18 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
                 | IntConst res -> res
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
         genResExpr <| AnyInt combinedValues
+    
     | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
         genResExpr <| Types.ValueTypes (FloatType (commonSize size1 size2))
+    
     | AnyFloat value, Types.ValueTypes (FloatType size)
     | Types.ValueTypes (FloatType size), AnyFloat value ->
         let requiredSizeForValue = FloatType.RequiredType value
-        genResExpr <| Types.ValueTypes (FloatType (commonSize requiredSizeForValue size))
+        if requiredSizeForValue > size then
+            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
+        else
+            genResExpr <| Types.ValueTypes (FloatType (commonSize requiredSizeForValue size))
+    
     | AnyFloat _, AnyFloat _ ->
         let combinedValues = 
             combFun expr1 expr2
@@ -621,8 +637,12 @@ let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
                 | FloatConst res -> res
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
         genResExpr <| AnyFloat combinedValues
-    | t1, t2 when t1 = t2 -> Error [MustBeNumeric(expr1, expr2)]
-    | _ -> Error [SameTypeRequired (expr1, expr2)]
+    
+    | t1, t2 when t1 = t2 -> 
+        Error [MustBeNumeric(expr1, expr2)]
+    
+    | _ -> 
+        Error [SameTypeRequired (expr1, expr2)]
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.

@@ -82,7 +82,6 @@ let internal unsafeMergeCompositeLiteral deflt user =
         x
     | _ -> failwith "Whatever we are trying to merge here are neither array nor struct literals."
 
-
 /// Return true iff typL is a supertype of or equal to typR
 /// E.g. Int32 is supertype of Int8
 let internal isLeftSupertypeOfRight typL typR =
