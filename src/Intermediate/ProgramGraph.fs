@@ -128,19 +128,35 @@ module IntermediateContext =
         |> MemoryLabel.mapLst (allMemLocs context)
         |> List.iter (appendValue mem2NodesDict pos node)
     
-    let private appendAllWritten context r memLab node =
-        appendToCtx context.tempNameWrittenByNodes context r memLab node
+    let private appendAllWritten context =
+        appendToCtx context.tempNameWrittenByNodes context
         
-    let private appendAllRead context r memLab node =
-        appendToCtx context.tempNameReadByNodes context r memLab node
+    let private appendAllRead context =
+        appendToCtx context.tempNameReadByNodes context
+
+    let private addSingletonCall context range node name =
+        appendValue context.tempNameWrittenByNodes range node (SubProg name)
+
+    let internal addSingletonCalls context range node whoToCall =
+        // look up what whoToCall is (SubProgramDecl / FunctionPrototype)
+        // and determine the list of singletons downstream
+        let names =
+            match context.lut.nameToDecl.[whoToCall] with
+            | SubProgramDecl s -> s.singletons
+            | FunctionPrototype f -> if f.isSingleton then [f.name] else []
+            | Declarable.VarDecl _ 
+            | Declarable.ExternalVarDecl _ 
+            | Declarable.ParamDecl _ -> failwith "Expected whoToCall to be a a function or activity or prototype declaration."
+        // add each one to given node
+        List.iter (addSingletonCall context range node) names
 
     let internal addNameWritten context node (tlhs: TypedLhs) =
         let addWrittenLabel memLabel =
             do appendAllWritten context tlhs.Range memLabel node
         match tlhs.lhs with
         | Wildcard -> ()
-        | LhsCur tml -> do addWrittenLabel (MemoryLabel.Cur tml)
-        | LhsNext tml -> do addWrittenLabel (MemoryLabel.Next tml) 
+        | LhsCur tml -> do addWrittenLabel (AccessLabel.Cur tml)
+        | LhsNext tml -> do addWrittenLabel (AccessLabel.Next tml) 
 
     let rec internal addNameRead context node trhs =
         let processFields fields =
@@ -154,12 +170,13 @@ module IntermediateContext =
             // check for array index expressions and recursively call addNameRead on them
             tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
             // then add all accessed memory (sub-)locations to this node
-            appendAllRead context trhs.Range (MemoryLabel.Cur tml) node
+            appendAllRead context trhs.Range (AccessLabel.Cur tml) node
         | Prev _ -> () // this is irrelevant for causality
-        | FunCall (_, ins, outs) ->
+        | FunCall (name, ins, outs) ->
             // add local names for this call
             ins |> List.iter (addNameRead context node)
             outs |> List.iter (addNameWritten context node)
+            addSingletonCalls context trhs.Range node name
         | BoolConst _ 
         | IntConst _ 
         | FloatConst _ 
@@ -270,10 +287,11 @@ module ProgramGraph =
         | Action.Assume (_, cond, _) -> addNameRead context pg.Entry cond
         | Action.Print (_, _, y) -> y |> List.iter (addNameRead context pg.Entry)
         // function calling
-        | Action.FunctionCall (_, _, ins, outs) ->
+        | Action.FunctionCall (_, name, ins, outs) ->
             // add local names for this call
             ins |> List.iter (addNameRead context pg.Entry)
             outs |> List.iter (addNameWritten context pg.Entry)
+            addSingletonCalls context line pg.Entry name
         | Action.Return (_, expr) -> match expr with | Some x -> addNameRead context pg.Entry x | None -> ()
         pg
 
@@ -318,15 +336,19 @@ module ProgramGraph =
         retvar |> Option.iter (addNameWritten context callNode)
 
         // add locally declared external (output) variables
-        let addGlobalOutput (extVarDecl: ExternalVarDecl) =
-            let newLhs =
+        let addGlobalOutputs extVarDecls =
+            let createNewLhs (extVarDecl: ExternalVarDecl) =
                 { lhs = LhsCur (Loc extVarDecl.name)
                   typ = extVarDecl.datatype
                   range = pos } // use calling activity's source pos instead of declaration's
-            addNameWritten context pg.Entry newLhs
+            extVarDecls
+            |> List.map createNewLhs
+            |> List.iter (fun lhs -> addNameWritten context pg.Entry lhs; addNameWritten context callNode lhs)
         match context.lut.nameToDecl.[name] with
         | SubProgramDecl spd ->
-            List.iter addGlobalOutput spd.globalOutputsAccumulated
+            addGlobalOutputs spd.globalOutputsAccumulated
+            addSingletonCalls context line pg.Entry name
+            addSingletonCalls context line callNode name
         | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         
         

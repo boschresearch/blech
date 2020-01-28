@@ -78,7 +78,7 @@ module PrettyPrint =
 
 
            
-        let private dpCommaSeparatedInBrackets withBrackets docs =
+        let private _dpCommaSeparatedInBrackets withBrackets docs =
             docs
             |> punctuate comma
             |> vsep
@@ -86,8 +86,9 @@ module PrettyPrint =
             |> withBrackets
             |> group        
 
-        let dpCommaSeparatedInParens = dpCommaSeparatedInBrackets parens
-        let dpCommaSeparatedInBraces = dpCommaSeparatedInBrackets braces
+        let dpCommaSeparatedInParens = _dpCommaSeparatedInBrackets parens
+        let dpCommaSeparatedInBraces = _dpCommaSeparatedInBrackets braces
+        let dpCommaSeparatedInBrackets : (Doc list -> Doc) = _dpCommaSeparatedInBrackets brackets
 
         let dpToplevelClose docs =
             docs

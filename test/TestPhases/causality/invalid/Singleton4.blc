@@ -1,0 +1,18 @@
+singleton activity C()
+    await false
+end
+
+activity B()
+    run C()
+    await true
+    run C()
+end
+
+@[EntryPoint]
+activity A()
+    cobegin
+        run B()
+    with
+        run C()
+    end
+end
