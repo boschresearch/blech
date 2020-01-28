@@ -199,24 +199,23 @@ let buildFromPG (pg: ProgramGraph) =
         |> Seq.toList
     
     for block in context.blockGraph.Nodes do
-        let ancestorOpt = block.Payload.innerNodes.[0].Payload.Thread.Ancestor
-        match ancestorOpt with
+        let forkOpt = block.Payload.innerNodes.[0].Payload.Thread.Fork
+        match forkOpt with
         | None -> () // nothing to do for root thread
-        | Some ancestor ->
-            endOfT
-            |> List.tryFind (fun joinBlock -> joinBlock.Payload.innerNodes.[0].Payload.Thread.ID = ancestor.ID)
-            |> function
-                | Some joinBlock -> 
-                    // here we found a block with a join and a block with direct descendants
-                    // FIXME this is not precise
-                    // FIXME here we simply check if a block is a descendant of the thread of the join node.
-                    // FIXME This includes blocks that come AFTER the join in a later fork.
-                    // TODO to be fixed, works with those extra edges as well, fg. 15.11.19
-                    context.blockGraph.AddEdge Edge block joinBlock // add edge
-                | None -> 
-                    // impossible, by construction, if a thread has an ancestor there should be a corresponding parent thread join
-                    failwith "No ancestor join block was found!"
-    
+        | Some fork ->
+            match fork.Payload.Typ with
+            | CobeginLocation joinNode ->
+                // find the "joinBlock" that contains this joinNode
+                // and add link from block to joinBlock
+                endOfT
+                |> List.tryFind (fun joinBlock -> joinBlock.Payload.innerNodes.[0] = joinNode)
+                |> function
+                    | Some joinBlock -> 
+                        context.blockGraph.AddEdge Edge block joinBlock // add edge
+                    | None ->
+                        // impossible, by construction, if a thread has an ancestor there should be a corresponding parent thread join
+                        failwith "No ancestor join block was found!"
+            | _ -> failwith "A fork node must contain a CobeginLocation payload."
     context
 
 let bgCtxOfPGs (pgs: Dictionary<QName, ProgramGraph>) =

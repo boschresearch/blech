@@ -1,0 +1,14 @@
+@[EntryPoint]
+activity A()
+    cobegin
+        await true
+    with
+        await true
+    end
+
+    cobegin
+        await true
+    with
+        await true
+    end
+end

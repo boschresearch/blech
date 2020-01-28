@@ -39,15 +39,17 @@ module GenericGraph = Blech.Common.GenericGraph
 
 
 /// Identifies a section of memory by a time point and typed memory location
-type MemoryLabel =
+type AccessLabel =
     | Cur of TypedMemLoc
     | Prev of TypedMemLoc
     | Next of TypedMemLoc
+    | SubProg of QName
     override this.ToString() = 
         match this with 
         | Cur tml -> tml.ToBasicString()
         | Prev tml -> "prev " + tml.ToBasicString()
         | Next tml -> "next " + tml.ToBasicString()
+        | SubProg name -> name.ToString()
 
 
 /// May later be used to distinguish awaits in different clocks
@@ -62,7 +64,7 @@ type Transition =
     | ControlFlow of (int * TypedRhs) option // possible guard with priority 1 low (default), the larger number the higher the priority
     | ReturnFlow of (int * TypedRhs) // special edge going back to head of return statement
     | Tick of Clock
-    | DataFlow of MemoryLabel * range * range // memory location that is written and read
+    | DataFlow of AccessLabel * range * range // memory location that is written and read
     | TerminateThread of Strength
     override this.ToString() =
         match this with
@@ -191,7 +193,7 @@ type ProgramGraph =
 
 
 /// Map a memory location to a source text position and graph node wherein this name is used.
-type Mem2Nodes = Dictionary<MemoryLabel, ResizeArray<range * Node>>
+type Mem2Nodes = Dictionary<AccessLabel, ResizeArray<range * Node>>
 
 
 /// The intermediate context is built during program graph creation
@@ -226,3 +228,4 @@ module MemoryLabel =
         | Cur m -> f m |> List.map Cur
         | Prev m -> f m |> List.map Prev
         | Next m -> f m |> List.map Next
+        | SubProg n -> [SubProg n] // nothing to do for a name

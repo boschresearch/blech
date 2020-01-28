@@ -269,6 +269,92 @@ let private determineGlobalOutputs lut bodyRes =
     match bodyRes with
     | Error _ -> [],[],[]
     | Ok body -> searchExternalVarDecl (StmtSequence body)
+
+
+let private determineCalledSingletons lut bodyRes =
+    let rec processFunCall name inputs =
+        match lut.nameToDecl.[name] with
+        | SubProgramDecl spd -> 
+            if spd.IsSingleton then [spd.name] else []
+            @ spd.singletons
+        | FunctionPrototype fp -> if fp.isSingleton then [fp.name] else []
+        | Declarable.VarDecl _ 
+        | Declarable.ExternalVarDecl _ 
+        | Declarable.ParamDecl _ -> failwith "Expected to check a function declaration for singletons."
+        @ List.collect singletonCalls inputs
+    and singletonCalls expr =
+        let recurFields fields =
+            fields
+            |> List.collect (snd >> singletonCalls)
+        match expr.rhs with
+        // locations
+        | RhsCur tml 
+        | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
+        // constants and literals
+        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> []
+        | StructConst fields -> recurFields fields
+        | ArrayConst elems -> recurFields elems
+        // call, has no side-effect IFF it does not write any outputs
+        // this assumption is only valid when there are not global variables (as is the case in Blech)
+        // and no external C variables are written (TODO!)
+        | FunCall (name, inputs, _) ->
+            processFunCall name inputs
+        // boolean
+        | Neg e -> singletonCalls e
+        | Conj (x, y) | Disj (x, y) | Xor (x, y)
+        // relations
+        | Les (x, y) | Leq (x, y) | Equ (x, y)
+        // arithmetic
+        | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
+            singletonCalls x @ singletonCalls y
+
+    let rec searchSingletons oneStmt =
+        match oneStmt with
+        // aggregate singletons from subprograms
+        | ActivityCall (_, name, _, inputs, _) ->
+            match lut.nameToDecl.[name] with
+            | SubProgramDecl spd -> 
+                if spd.IsSingleton then [spd.name] else []
+                @ spd.singletons
+            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+            @ List.collect singletonCalls inputs
+        | FunctionCall (_, name, inputs, _) ->
+            processFunCall name inputs
+        //atomic statements 
+        | Stmt.VarDecl v -> singletonCalls v.initValue
+        | Assign (_,_,rhs) 
+        | Assert (_,rhs,_) 
+        | Assume (_,rhs,_)
+        | Await (_,rhs) -> singletonCalls rhs
+        | Stmt.Print (_, _, rhss) -> List.collect singletonCalls rhss
+        | Stmt.ExternalVarDecl _ -> []
+        | Return (_,rhsOpt) -> 
+            rhsOpt
+            |> Option.map singletonCalls 
+            |> Option.defaultValue []
+        // statements containing statements
+        | RepeatUntil (_, stmts, rhs, _)
+        | Preempt (_,_,rhs,_,stmts)
+        | WhileRepeat (_, rhs, stmts) ->
+            singletonCalls rhs
+            @ List.collect searchSingletons stmts
+        | StmtSequence stmts ->
+            List.collect searchSingletons stmts
+        | ITE (_, rhs, ifBranch, elseBranch) ->
+            singletonCalls rhs
+            @ List.collect searchSingletons (ifBranch @ elseBranch)
+        | Cobegin (_, blocks) ->
+            blocks
+            |> List.unzip
+            |> snd
+            |> List.concat
+            |> List.collect searchSingletons
+
+    match bodyRes with
+    | Error _ -> []
+    | Ok body ->
+        searchSingletons (StmtSequence body) 
+        |> List.distinct // filter out multiple calls to the same function/activity
         
 //=============================================================================
 // Short-hand stuff
@@ -477,12 +563,13 @@ let private fParamDecl lut pos name mutableFlag dtyRes =
 
 
 /// Type check a function prototype
-let private fFunPrototype lut pos name inputs outputs retType annotation =
+let private fFunPrototype lut pos name isSingleton inputs outputs retType annotation =
     let createFunPrototype ((((qname, ins), outs), ret), annotation) = 
         let funPrototype =
             {
                 FunctionPrototype.pos = pos
                 isFunction = true
+                isSingleton = isSingleton
                 name = qname
                 inputs = ins
                 outputs = outs
@@ -513,8 +600,8 @@ let private fFunPrototype lut pos name inputs outputs retType annotation =
 
 
 /// Type check a sub program
-let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
-    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs) (((((qname, ins), outs), ret), stmts), annotation) = 
+let private fSubProgram lut pos isFunction name isSingleton inputs outputs retType body annotation =
+    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons) (((((qname, ins), outs), ret), stmts), annotation) = 
         let funact =
             {
                 SubProgramDecl.isFunction = isFunction
@@ -525,6 +612,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
                 globalInputs = globalInputs
                 globalOutputsInScope = localGlobalOutputs
                 globalOutputsAccumulated = allGlobalOutputs
+                singletons = singletons
                 body = stmts
                 returns = ret
                 annotation = annotation
@@ -559,6 +647,10 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
     let globalInputs, localGlobalOutputs, allGlobalOutputs = determineGlobalOutputs lut contractedBody
+    let singletons = 
+        if isSingleton then [lut.ncEnv.nameToQname name]
+        else []
+        @ determineCalledSingletons lut contractedBody
 
     Ok (lut.ncEnv.nameToQname name)
     |> combine <| contract inputs
@@ -566,7 +658,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs))
+    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons))
 
 
 //=============================================================================
@@ -988,7 +1080,7 @@ let public fPackage lut (pack: AST.Package) =
             | AST.Member.Subprogram a ->
                 let retTypOpt = Option.map (recReturnDecl lut) a.result
                 let funact = 
-                    fSubProgram lut a.range a.isFunction a.name
+                    fSubProgram lut a.range a.isFunction a.name a.isSingleton
                     <| List.map (recParamDecl lut) a.inputs
                     <| List.map (recParamDecl lut) a.outputs
                     <| retTypOpt
@@ -998,7 +1090,7 @@ let public fPackage lut (pack: AST.Package) =
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
                 let funPrototype =
-                    fFunPrototype lut f.range f.name
+                    fFunPrototype lut f.range f.name f.isSingleton
                     <| List.map (recParamDecl lut) f.inputs
                     <| List.map (recParamDecl lut) f.outputs
                     <| Option.map (recReturnDecl lut) f.result

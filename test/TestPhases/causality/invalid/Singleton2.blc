@@ -1,0 +1,23 @@
+singleton function g()
+end    
+
+function f()
+    g()
+end
+
+activity B()
+    f()
+    await true
+    f()
+end
+
+@[EntryPoint]
+activity A()
+    cobegin
+        run B()
+        
+    with
+        await true
+        f()
+    end
+end

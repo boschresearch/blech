@@ -102,6 +102,7 @@ module TypeCheckContext =
         | SubProgramDecl d -> Some {
                 FunctionPrototype.pos = d.pos
                 isFunction = d.isFunction
+                isSingleton = d.IsSingleton
                 name = d.name
                 inputs = d.inputs
                 outputs = d.outputs
