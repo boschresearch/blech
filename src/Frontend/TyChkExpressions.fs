@@ -660,7 +660,10 @@ let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
     match expr1.typ, expr2.typ with
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
+    | ValueTypes (FloatType _), ValueTypes (FloatType _)
+    | AnyFloat _, ValueTypes (FloatType _)
+    | ValueTypes (FloatType _), AnyFloat _
+    | AnyFloat _, AnyFloat _ ->
         Error [CannotModFloats (expr1, expr2)]
     | _ -> combineNumOp expr1 expr2 modus
 
