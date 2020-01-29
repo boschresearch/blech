@@ -537,11 +537,6 @@ let private formDisjunction = formLogical disj
 
 let private formXor = formLogical bxor
 
-
-
-
-
-
 /// Given two typed expressions, construct their equality.
 /// If the two types are not comparable, an error will be returned instead.
 /// Assuming that expressions are reduced to literals before calling this function -
@@ -569,12 +564,6 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
             // disallow runtime comparison of structured values using ==
             Error[NoComparisonAllowed(expr1, expr2)]
     | _ -> Error [SameTypeRequired (expr1, expr2)]
-
-
-let private mkResultExpr rhs typ range : TyChecked<TypedRhs> =  
-    { rhs = rhs
-      typ = typ
-      range = range } |> Ok
 
 
 /// Given two typed expressions, construct their inequality.
@@ -614,113 +603,94 @@ let private lessEqualThan = inequality leq
 /// Given two typed expressions and a combination function indicator
 /// return a new typed expression as a combination of the two.
 /// In case of type mismatches an error is returned instead.
-let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
-    //let genResExpr dty =
-    //    { rhs = combFun expr1 expr2
-    //      typ = dty
-    //      range = commonRange }
-    //    |> Ok
-    let rhs = combFun expr1 expr2
+let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
+
+    let rhs = operator expr1 expr2
     let rng = Range.unionRanges expr1.Range expr2.Range
+    let commonSize size1 size2 = if size1 >= size2 then size1 else size2
     
-    let commonSize size1 size2 =
-        if size1 >= size2 then size1
-        else size2
-    
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
-        let typ = Types.ValueTypes (IntType (commonSize size1 size2))
-        mkResultExpr rhs typ rng
-    
-    | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
-        let typ = Types.ValueTypes (NatType (commonSize size1 size2)) 
-        mkResultExpr rhs typ rng
-    
-    | AnyInt value, Types.ValueTypes (IntType size)
-    | Types.ValueTypes (IntType size), AnyInt value ->
-        //let requiredSizeForValue = IntType.RequiredType value
-        //if requiredSizeForValue > size then
-        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
-        //else
-            let typ = Types.ValueTypes (IntType size)
-            mkResultExpr rhs typ rng
-    
-    | AnyInt value, Types.ValueTypes (NatType size)
-    | Types.ValueTypes (NatType size), AnyInt value ->
-        //let requiredSizeForValue = NatType.RequiredType value
-        //if requiredSizeForValue > size then
-        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-        //else
-            let typ = Types.ValueTypes (NatType size)
-            mkResultExpr rhs typ rng
-    
-    | AnyInt _, AnyInt _ ->
-        let combinedValues = 
-            combFun expr1 expr2
-            |> function
+    let typ = 
+        match expr1.typ, expr2.typ with
+        | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
+            Ok <| Types.ValueTypes (IntType (commonSize size1 size2))
+        | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
+            Ok <| Types.ValueTypes (NatType (commonSize size1 size2)) 
+        | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
+            Ok <| Types.ValueTypes (FloatType (commonSize size1 size2))
+        | AnyInt _, AnyInt _ ->
+            let combinedValues = 
+                match rhs with
                 | IntConst res -> res
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-        mkResultExpr rhs (AnyInt combinedValues) rng
-    
-    | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
-        let typ = Types.ValueTypes (FloatType (commonSize size1 size2))
-        mkResultExpr rhs typ rng
+            Ok <| AnyInt combinedValues
+        | AnyFloat _, AnyFloat _ ->
+            let combinedValues = 
+                match rhs with
+                | FloatConst cv -> cv
+                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
+            Ok <| AnyFloat combinedValues
+        | t1, t2 when t1 = t2 -> 
+            Error [MustBeNumeric(expr1, expr2)]
+        | _ -> 
+            Error [SameTypeRequired (expr1, expr2)]
 
-    | AnyFloat value, Types.ValueTypes (FloatType size)
-    | Types.ValueTypes (FloatType size), AnyFloat value ->
-        //let requiredSizeForValue = FloatType.RequiredType value
-        //if requiredSizeForValue > size then
-        //    Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-        //else
-            let typ = Types.ValueTypes (FloatType size)
-            mkResultExpr rhs typ rng
-            
-    | AnyFloat _, AnyFloat _ ->
-        let combinedValues =
-            match rhs with
-            | FloatConst cv -> cv
-            | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-        mkResultExpr rhs (AnyFloat combinedValues) rng
-    
-    | t1, t2 when t1 = t2 -> 
-        Error [MustBeNumeric(expr1, expr2)]
-    
-    | _ -> 
-        Error [SameTypeRequired (expr1, expr2)]
+    typ |> Result.bind (fun t -> Ok {rhs = rhs; typ = t; range = rng})
 
 
 /// Checks if literals and constant expression are of suitable size.
-let private checkArithmeticAnySize operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    match expr1.typ, expr2.typ with
-    | AnyInt value, Types.ValueTypes (IntType size)
-    | Types.ValueTypes (IntType size), AnyInt value when IntType.RequiredType value > size ->
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20            
-    | AnyInt value, Types.ValueTypes (NatType size)
-    | Types.ValueTypes (NatType size), AnyInt value when NatType.RequiredType value > size   ->
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-    | AnyFloat value, Types.ValueTypes (FloatType size)
-    | Types.ValueTypes (FloatType size), AnyFloat value when FloatType.RequiredType value > size->
-            Error[SameTypeRequired (expr1, expr2)]  // TODO: better error message, fjg. 28.01.20
-    | t1, t2 -> 
-        combineNumOp expr1 expr2 operator
+let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
+    match anyExpr.typ, targetExpr.typ with
+    | AnyInt value, ValueTypes (IntType intX) ->
+        if intX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (IntType intX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyInt value, ValueTypes (NatType natX) ->
+        if natX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (NatType natX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
+            
+    | AnyInt value, ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+   
+    | _, _  ->
+        Ok anyExpr
+        
+
+/// Checks if literals and constant expression are of suitable size.
+let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = adoptAnyToTarget expr1 expr2
+    let e2 = adoptAnyToTarget expr2 expr1
+
+    combine e1 e2
+    |> Result.bind (combineArithmeticOp operator)
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
-// let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 add
-let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize add expr1 expr2
+let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic add expr1 expr2
+
 
 /// Returns the subtraction of two typed expressions or an error in case of type mismatch.
-//let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 sub
-let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize sub expr1 expr2
+let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic sub expr1 expr2
+
 
 /// Returns the product of two typed expressions or an error in case of type mismatch.
-//let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 mul
-let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize mul expr1 expr2
+let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic mul expr1 expr2
 
 
 /// Returns the quotient of two typed expressions or an error in case of type mismatch.
-//let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 div
-let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmeticAnySize div expr1 expr2
+let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic div expr1 expr2
 
 
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
@@ -731,7 +701,7 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | ValueTypes (FloatType _), AnyFloat _
     | AnyFloat _, AnyFloat _ ->
         Error [CannotModFloats (expr1, expr2)]
-    | _ -> checkArithmeticAnySize modus expr1 expr2
+    | _ -> checkArithmetic modus expr1 expr2
 
         
 //=============================================================================

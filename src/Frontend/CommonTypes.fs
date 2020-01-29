@@ -56,6 +56,8 @@ let MIN_FLOAT32 = System.Single.MinValue
 let MAX_FLOAT32 = System.Single.MaxValue
 let MIN_FLOAT64 = System.Double.MinValue
 let MAX_FLOAT64 = System.Double.MaxValue
+let MAX_FLOAT32_INT = pown 2I 24 
+let MAX_FLOAT64_INT = pown 2I 53
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -209,6 +211,13 @@ type IntType =
         | Int32 -> 32
         | Int64 -> 64
 
+    member this.CanRepresent (value: bigint) =
+        match this with
+        | Int8 -> MIN_INT8 <= value && value <= MAX_INT8
+        | Int16 -> MIN_INT16 <= value && value <= MAX_INT16
+        | Int32 -> MIN_INT32 <= value && value <= MAX_INT32
+        | Int64 -> MIN_INT64 <= value && value <= MAX_INT64
+
     static member RequiredType value =
         if MIN_INT8 <= value && value <= MAX_INT8 then Int8
         elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
@@ -228,7 +237,14 @@ type NatType =
         | Nat32 -> 32
         | Nat64 -> 64
     
-    static member RequiredType value =
+    member this.CanRepresent (value: bigint) =
+        match this with
+        | Nat8 -> MIN_NAT8 <= value && value <= MAX_NAT8
+        | Nat16 -> MIN_NAT16 <= value && value <= MAX_NAT16
+        | Nat32 -> MIN_NAT32<= value && value <= MAX_NAT32
+        | Nat64 -> MIN_NAT64 <= value && value <= MAX_NAT64
+
+    static member RequiredType (value: bigint) =
         if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
         elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
         elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
@@ -240,13 +256,14 @@ type BitsType =
 
     override this.ToString() = "bits" + string(this.GetSize())
     
+
     member this.GetSize() =
         match this with
         | Bits8 -> 8
         | Bits16 -> 16
         | Bits32 -> 32
         | Bits64 -> 64
-    
+   
     static member RequiredType value =
         if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
         elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
@@ -257,7 +274,7 @@ type BitsType =
 /// Carries the parsed value and the orginal representation
 type Float = 
     { value: float
-      repr: string option}
+      repr: string option }
 
     member this.IsOverflow  = 
         this.value = System.Double.PositiveInfinity
@@ -279,6 +296,9 @@ type Float =
         | Some r -> {value = negVal; repr = Some ("-" + r)}
         | None -> {value = negVal; repr = None}
 
+    static member CanRepresent (i: bigint) =
+        abs i <= MAX_FLOAT64_INT
+
     static member Relational op left right = 
         op left.value right.value
     
@@ -294,10 +314,24 @@ type FloatType =
         match this with
         | Float32 -> 32
         | Float64 -> 64
-        
+
+    member this.CanRepresent (i: bigint) =
+        match this with
+        | Float32 -> abs i <= MAX_FLOAT32_INT
+        | Float64 -> abs i <= MAX_FLOAT64_INT
+
+    member this.CanRepresent (f: Float) =
+        match this with
+        | Float32 -> float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32
+        | Float64 -> float MIN_FLOAT64 <= f.value && f.value <= float MAX_FLOAT64
+    
+    // todo: deprecate this
     static member RequiredType (f : Float) =
         if float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32 then Float32
         else Float64
     
-
-
+    // todo: deprecate this
+    static member RequiredType (i: bigint) =
+        if abs i <= MAX_FLOAT32_INT then Float32
+        // we assume that bigint fits into float64
+        else Float64

@@ -84,34 +84,25 @@ let internal unsafeMergeCompositeLiteral deflt user =
 
 /// Return true iff typL is a supertype of or equal to typR
 /// E.g. Int32 is supertype of Int8
+// TODO: Rename this function to something more appropriate, fjg. 29.01.20
 let internal isLeftSupertypeOfRight typL typR =
     match typL, typR with
     | Types.AnyComposite, _ -> true // Any is supertype of any other type
     | Types.ValueTypes (IntType sizeL), Types.ValueTypes (IntType sizeR) ->
-        sizeL.GetSize() >= sizeR.GetSize()
+        sizeL >= sizeR
     | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
-        let requiredSizeForValue = IntType.RequiredType value
-        sizeL.GetSize() >= requiredSizeForValue.GetSize()
+        sizeL.CanRepresent value
     | Types.ValueTypes (NatType sizeL), Types.ValueTypes (NatType sizeR) ->
-        sizeL.GetSize() >= sizeR.GetSize()
+        sizeL >= sizeR
     | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
-        if value >= 0I then
-            let requiredSizeForValue = NatType.RequiredType value
-            sizeL.GetSize() >= requiredSizeForValue.GetSize()
-        else
-            false // a negative value may never fit any nat type
+        sizeL.CanRepresent value
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
-        sizeL.GetSize() >= sizeR.GetSize()
+        sizeL >= sizeR
     | Types.ValueTypes (FloatType sizeL), Types.AnyFloat value ->
-        if value.IsOverflow then
-            false
-        else
-            let requiredSizeForValue = FloatType.RequiredType value
-            sizeL.GetSize() >= requiredSizeForValue.GetSize()
+        sizeL.CanRepresent value
     | a, b when (a = b) -> true
     | _, _ -> false // this includes the cases that integers shall not 
                     // implicitly be promoted to floats
-
 
 /// Returns default value for given datatype.
 /// Contains superflous 0 entries, use getInitValueWithoutZeros

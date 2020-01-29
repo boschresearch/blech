@@ -13,7 +13,7 @@ const myVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeee
 const myOooooooooooooooonlyOne: int8 = 1
 const myTwof: float32 = 2.0
 const SIZE: int8 = 3
-const myS: S = {a = myOooooooooooooooonlyOne + 1, b = myTwof + (8.0: float32), c = myVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryTrue}
+const myS: S = {a = myOooooooooooooooonlyOne + 1, b = myTwof + 8.0, c = myVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryVeeeeeeeeeeeeryTrue}
 const myA: [SIZE]int64 = {17, 17+myOooooooooooooooonlyOne}
 const defaultT: T = {ss = {[1]=myS}}
 const threeT: [SIZE]T = {[myOooooooooooooooonlyOne]=defaultT}

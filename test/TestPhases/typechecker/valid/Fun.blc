@@ -1,11 +1,11 @@
 
 struct S
     var mutableField: float32
-    let immutableField: float32 = 88.9 : float32
+    let immutableField: float32 = 88.9
 end
 
 function myFun ()(x: [8]S)
-    x[2] = {mutableField = 2.2f}
+    x[2] = {mutableField = 2.2}
 end
 
 @[EntryPoint]
