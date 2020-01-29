@@ -22,26 +22,26 @@ const threeT: [SIZE]T = {[myOooooooooooooooonlyOne]=defaultT}
 @[EntryPoint]
 activity A ()()
     var foo: int8 = 0
-    if defaultT.ss[myOooooooooooooooonlyOne] == defaultT.ss[0] then
-        foo = 1
-    else
-        foo = 2
-    end
-    await true
-    if defaultT.ss[myOooooooooooooooonlyOne] != defaultT.ss[0] then
-        foo = 11
-    else
-        foo = 22
-    end
-    await true
-    let t2 = threeT[2].ss
-    let t1 = threeT[myOooooooooooooooonlyOne].ss
-    //if t1 == t2 then
-    //    foo = 3
-    //else
-        foo = 4
-    //end
-    await true
+    // if defaultT.ss[myOooooooooooooooonlyOne] == defaultT.ss[0] then
+    //     foo = 1
+    // else
+    //     foo = 2
+    // end
+    // await true
+    // // if defaultT.ss[myOooooooooooooooonlyOne] != defaultT.ss[0] then
+    //     foo = 11
+    // else
+    //     foo = 22
+    // end
+    // await true
+    // let t2 = threeT[2].ss
+    // let t1 = threeT[myOooooooooooooooonlyOne].ss
+    // //if t1 == t2 then
+    // //    foo = 3
+    // //else
+    //     foo = 4
+    // //end
+    // await true
     
     //if t1 != t2 then
         foo = 33

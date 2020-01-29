@@ -1,6 +1,6 @@
 struct S
     var x: int32
-    var y: float32 = 4.f
+    var y: float32 = 4.
 end
 
 struct T
@@ -19,7 +19,7 @@ activity A()
     var s4: S = {x = 34, y = 65.65}
     await true
     s1 = {}
-    s2 = {y = 5.f}
+    s2 = {y = 5.}
     s3 = {x = 789}
     s4 = {x = -32, y=-45.4}
     await true

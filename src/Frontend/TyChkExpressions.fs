@@ -247,49 +247,57 @@ let private leq this that =
     | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<=) a b
     | _ -> Leq(this, that)
 
-let rec private eq this that =
-    let checkField (id1, st1) (id2, st2) =
-        eq st1 st2
-        |> function
-            | BoolConst r -> r && id1 = id2
-            | _ -> false
-    
-    let compareAssignments x y =
-        let sortedA = x |> List.sortBy fst
-        let sortedB = y |> List.sortBy fst
-        (sortedA, sortedB)
-        ||> List.forall2 (fun (id1,e1) (id2,e2) -> checkField (id1,e1) (id2,e2))
-        |> BoolConst
-
-    let compareComposite a b =
-        if isLiteral this && isLiteral that then
-            if List.length a = List.length b then
-                compareAssignments a b
-            else // we have literals where possibly one carries default value that the other does not
-                if this.typ = that.typ then
-                    let defaultComposite = 
-                        match getDefaultValueFor this.range "" this.typ with
-                        | Ok x -> x.rhs 
-                        | Error _ -> failwith "Failed to get default value for composite type."
-                    let explodedA = unsafeMergeCompositeLiteral defaultComposite this.rhs
-                    let explodedB = unsafeMergeCompositeLiteral defaultComposite that.rhs
-                    match explodedA, explodedB with
-                    | StructConst ea, StructConst eb -> compareAssignments ea eb
-                    | ArrayConst ea, ArrayConst eb -> compareAssignments ea eb
-                    | _ -> failwith "Structs exploded in unpredictable ways."
-                else
-                    failwith "incomparable struct sizes"
-        else
-            Equ(this, that)
-    
+let private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
     | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
-    | ResetConst, ResetConst -> BoolConst true
-    | StructConst a, StructConst b -> compareComposite a b
-    | ArrayConst a, ArrayConst b -> compareComposite a b
     | _ -> Equ(this, that)
+
+
+//let rec private eq this that =
+//    let checkField (id1, st1) (id2, st2) =
+//        eq st1 st2
+//        |> function
+//            | BoolConst r -> r && id1 = id2
+//            | _ -> false
+    
+//    let compareAssignments x y =
+//        let sortedA = x |> List.sortBy fst
+//        let sortedB = y |> List.sortBy fst
+//        (sortedA, sortedB)
+//        ||> List.forall2 (fun (id1,e1) (id2,e2) -> checkField (id1,e1) (id2,e2))
+//        |> BoolConst
+
+//    let compareComposite a b =
+//        if isLiteral this && isLiteral that then
+//            if List.length a = List.length b then
+//                compareAssignments a b
+//            else // we have literals where possibly one carries default value that the other does not
+//                if this.typ = that.typ then
+//                    let defaultComposite = 
+//                        match getDefaultValueFor this.range "" this.typ with
+//                        | Ok x -> x.rhs 
+//                        | Error _ -> failwith "Failed to get default value for composite type."
+//                    let explodedA = unsafeMergeCompositeLiteral defaultComposite this.rhs
+//                    let explodedB = unsafeMergeCompositeLiteral defaultComposite that.rhs
+//                    match explodedA, explodedB with
+//                    | StructConst ea, StructConst eb -> compareAssignments ea eb
+//                    | ArrayConst ea, ArrayConst eb -> compareAssignments ea eb
+//                    | _ -> failwith "Structs exploded in unpredictable ways."
+//                else
+//                    failwith "incomparable struct sizes"
+//        else
+//            Equ(this, that)
+    
+//    match this.rhs, that.rhs with
+//    | BoolConst a, BoolConst b -> BoolConst (a = b)
+//    | IntConst a, IntConst b -> BoolConst (a = b)
+//    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
+//    | ResetConst, ResetConst -> BoolConst true
+//    | StructConst a, StructConst b -> compareComposite a b
+//    | ArrayConst a, ArrayConst b -> compareComposite a b
+//    | _ -> Equ(this, that)
 
 /// Given a typed rhs expression, this function tries to evaluate this 
 /// expression to a constant and return a new TypedRhs such that
@@ -438,6 +446,10 @@ and getInitValueForTml lut tml =
 //  Functions that construct typed expressions from subexpressions
 //=========================================================================
 
+// --------------------------------------------------------------------
+// ---  Unary logical and - TODO - bitwise not
+// --------------------------------------------------------------------
+
 /// Given a typed expression, construct its negation.
 /// If the type is not boolean, an error will be returned instead.
 let private negate r (expr: TypedRhs) =
@@ -484,6 +496,10 @@ let private unaryMinus r (expr: TypedRhs) =
           range = expr.range } |> Ok
     | _ -> // error illegal minus on expr
         Error [CannotInvertSign(r, expr)]
+
+// --------------------------------------------------------------------
+// ---  Logical Operators
+// --------------------------------------------------------------------
 
 /// Given two typed expressions, construct their binary logical operator.
 /// If some of the types is not boolean, an error will be returned instead.
@@ -569,36 +585,115 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
 /// Given two typed expressions, construct their inequality.
 /// We assume that ineqFun is either 'less' or 'leq' from above.
 /// If the two types are not comparable, an error will be returned instead.
-let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes (IntType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (IntType _)
+//let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
+//    match expr1.typ, expr2.typ with
+//    | Types.ValueTypes (IntType _), Types.AnyInt _
+//    | Types.AnyInt _, Types.ValueTypes (IntType _)
     
-    | Types.ValueTypes (NatType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (NatType _)
+//    | Types.ValueTypes (NatType _), Types.AnyInt _
+//    | Types.AnyInt _, Types.ValueTypes (NatType _)
     
-    | Types.ValueTypes (NatType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (NatType _)
+//    | Types.ValueTypes (NatType _), Types.AnyInt _
+//    | Types.AnyInt _, Types.ValueTypes (NatType _)
     
-    | Types.AnyInt _, Types.AnyInt _
-    | Types.AnyFloat _, Types.AnyFloat _
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
-        { rhs = ineqFun expr1 expr2
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range }
-        |> Ok
-    | _ -> Error [SameArithmeticTypeRequired (expr1, expr2)]
+//    | Types.AnyInt _, Types.AnyInt _
+//    | Types.AnyFloat _, Types.AnyFloat _
+//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
+//    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
+//    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
+//    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
+//        { rhs = ineqFun expr1 expr2
+//          typ = Types.ValueTypes BoolType
+//          range = Range.unionRanges expr1.Range expr2.Range }
+//        |> Ok
+//    | _ -> Error [SameArithmeticTypeRequired (expr1, expr2)]
 
 /// Given two typed expressions, construct their strict inequality.
 /// If the two types are not comparable, an error will be returned instead.
-let private lessThan = inequality less
+// let private lessThan = inequality less
 
 /// Given two typed expressions, construct their inequality.
 /// If the two types are not comparable, an error will be returned instead.
-let private lessEqualThan = inequality leq
+// let private lessEqualThan = inequality leq
+
+
+/// Checks if literals and constant expression are of suitable size.
+let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
+    match anyExpr.typ, targetExpr.typ with
+    | AnyInt value, ValueTypes (IntType intX) ->
+        if intX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (IntType intX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyInt value, ValueTypes (NatType natX) ->
+        if natX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (NatType natX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
+            
+    | AnyInt value, ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+   
+    | _, _  ->
+        Ok anyExpr
+
+
+// --------------------------------------------------------------------
+// ---  Relational Operators
+// --------------------------------------------------------------------
+
+/// Given two typed expressions, construct their relation.
+/// We assume that operator is either 'less', 'leq', or 'eq' from above.
+/// If the two types are not comparable, an error will be returned instead.
+let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    match expr1.typ, expr2.typ with    
+    | AnyInt _, AnyInt _
+    | AnyFloat _, AnyFloat _
+    | ValueTypes BoolType, ValueTypes BoolType
+    | ValueTypes (IntType _), ValueTypes (IntType _)
+    | ValueTypes (NatType _), ValueTypes (NatType _)
+    | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
+        Ok { rhs = op expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
+
+    | _, _
+        -> Error [SameArithmeticTypeRequired (expr1, expr2)]  // TODO: Same relational type required, fjg. 29.01.20
+
+
+let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = adoptAnyToTarget expr1 expr2
+    let e2 = adoptAnyToTarget expr2 expr1
+
+    combine e1 e2
+    |> Result.bind (combineRelationalOp operator)
+
+
+/// Given two typed expressions, construct their strict inequality.
+/// If the two types are not comparable, an error will be returned instead.
+let private lessThan ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational less expr1 expr2
+
+/// Given two typed expressions, construct their inequality.
+/// If the two types are not comparable, an error will be returned instead.
+let private lessEqualThan ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational leq expr1 expr2
+
+/// Given two typed expressions, construct their equality.
+/// If the two types are not comparable, an error will be returned instead.
+/// Composite literals are currently not compared for equality.
+let private equal ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational eq expr1 expr2
+
+
+// --------------------------------------------------------------------
+// ---  Arithmetic Operators
+// --------------------------------------------------------------------
 
 /// Given two typed expressions and a combination function indicator
 /// return a new typed expression as a combination of the two.
@@ -636,37 +731,6 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
     typ |> Result.bind (fun t -> Ok {rhs = rhs; typ = t; range = rng})
 
-
-/// Checks if literals and constant expression are of suitable size.
-let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
-    match anyExpr.typ, targetExpr.typ with
-    | AnyInt value, ValueTypes (IntType intX) ->
-        if intX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (IntType intX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-    
-    | AnyInt value, ValueTypes (NatType natX) ->
-        if natX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (NatType natX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-            
-    | AnyInt value, ValueTypes (FloatType floatX) ->
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-    
-    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-   
-    | _, _  ->
-        Ok anyExpr
-        
 
 /// Checks if literals and constant expression are of suitable size.
 let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -953,15 +1017,17 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         let resOut = List.map (checkLExpr lut) writeArgs
         checkFunCall false lut r fp resIn resOut
         |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = Types.ValueTypes t; range = r} |> Ok)
-    // -- logical (and some bitwise) operations --
+    // -- logical and bitwise not --
     | AST.Not (subexpr, r)
     | AST.Bnot (subexpr, r) ->
         checkExpr lut subexpr
         |> Result.bind (negate r)
+    // -- logical operators
     | AST.And (e1, e2)
     | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
     | AST.Or (e1, e2)
     | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
+    // -- bitwise operators, TODO: complete this, fjg. 21.01.20
     | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
     // -- numerical operations --
     | AST.Add (e1, e2) -> combineTwoExpr lut e1 e2 addition
@@ -975,11 +1041,17 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         // first check the literal recursively and then apply unaryMinus
         checkExpr lut e
         |> Result.bind (unaryMinus r)
+
     // --- comparison operators
-    | AST.Eq (e1, e2) -> // can be applied to logical, numerical and structured data, yields logical value
-        checkExpr lut e1 |> Result.map (tryEvalConst lut)
-        |> combine <| (checkExpr lut e2 |> Result.map (tryEvalConst lut))
-        |> Result.bind formEquality
+    
+    //| AST.Eq (e1, e2) -> 
+    //    // can be applied to logical, numerical and structured data, yields logical value
+    //    let te1 = checkExpr lut e1 |> Result.map (tryEvalConst lut)
+    //    let te2 = checkExpr lut e2 |> Result.map (tryEvalConst lut)
+    //    combine te1 te2
+    //    |> Result.bind formEquality
+
+    | AST.Eq (e1, e2) -> combineTwoExpr lut e1 e2 equal
     | AST.Ieq (e1, e2) -> checkExpr lut (AST.Not(AST.Eq(e1, e2), Range.unionRanges e1.Range e2.Range))
     | AST.Les (e1, e2) -> combineTwoExpr lut e1 e2 lessThan
     | AST.Leq (e1, e2) -> combineTwoExpr lut e1 e2 lessEqualThan
@@ -995,7 +1067,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Sshr _
     | AST.Rotl _
     | AST.Rotr _ -> //TODO
-            Error [UnsupportedFeature (expr.Range, "shifting operation")]
+        Error [UnsupportedFeature (expr.Range, "shifting operation")]
     // -- type conversions --
     | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         Error [UnsupportedFeature (expr.Range, "type conversion")]

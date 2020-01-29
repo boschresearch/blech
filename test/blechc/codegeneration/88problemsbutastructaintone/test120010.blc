@@ -4,7 +4,7 @@ struct S
 end
 
 activity A()(l: S)
-    l.f = 5.f // output lhs simple fieldaccess cur
+    l.f = 5. // output lhs simple fieldaccess cur
     await true
 end
 

@@ -1,6 +1,6 @@
 
 struct S
-    var i: float32 = 7.f
+    var i: float32 = 7.
 end
 
 activity A()(r: S)
