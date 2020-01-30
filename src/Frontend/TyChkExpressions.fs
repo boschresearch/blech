@@ -448,7 +448,7 @@ and getInitValueForTml lut tml =
 
 
 /// Checks if literals and constant expression are of suitable size.
-let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
+let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
     match anyExpr.typ, targetExpr.typ with
     | AnyInt value, ValueTypes (IntType intX) ->
         if intX.CanRepresent value then
@@ -462,11 +462,11 @@ let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChec
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
             
-    | AnyInt value, ValueTypes (FloatType floatX) ->
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    //| AnyInt value, ValueTypes (FloatType floatX) ->
+    //    if floatX.CanRepresent value then
+    //        Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+    //    else
+    //        Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
     
     | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
         if floatX.CanRepresent value then
@@ -676,8 +676,8 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
 
 
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = adoptAnyToTarget expr1 expr2
-    let e2 = adoptAnyToTarget expr2 expr1
+    let e1 = adoptAnyToTargetExpr expr1 expr2
+    let e2 = adoptAnyToTargetExpr expr2 expr1
 
     combine e1 e2
     |> Result.bind (combineRelationalOp operator)
@@ -740,8 +740,8 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
 /// Checks if literals and constant expression are of suitable size.
 let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = adoptAnyToTarget expr1 expr2
-    let e2 = adoptAnyToTarget expr2 expr1
+    let e1 = adoptAnyToTargetExpr expr1 expr2
+    let e2 = adoptAnyToTargetExpr expr2 expr1
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
@@ -1033,8 +1033,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
     | AST.Or (e1, e2)
     | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
-    // -- bitwise operators, TODO: complete this, fjg. 21.01.20
-    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
+    
     // -- numerical operations --
     | AST.Add (e1, e2) -> combineTwoExpr lut e1 e2 addition
     | AST.Sub (e1, e2) -> combineTwoExpr lut e1 e2 subtraction
@@ -1048,8 +1047,8 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         checkExpr lut e
         |> Result.bind (unaryMinus r)
 
-    // --- comparison operators
-    
+    // --- relational operators
+
     //| AST.Eq (e1, e2) -> 
     //    // can be applied to logical, numerical and structured data, yields logical value
     //    let te1 = checkExpr lut e1 |> Result.map (tryEvalConst lut)
@@ -1063,23 +1062,31 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Leq (e1, e2) -> combineTwoExpr lut e1 e2 lessEqualThan
     | AST.Grt (e1, e2) -> checkExpr lut (AST.Les(e2, e1))
     | AST.Geq (e1, e2) -> checkExpr lut (AST.Leq(e2, e1))
+    
+    
+    // -- bitwise operators, TODO: complete this, fjg. 21.01.20
+    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
+    | AST.Shl _
+    | AST.Shr _
+    // -- Advance bitwise operators
+    | AST.Sshr _
+    | AST.Rotl _
+    | AST.Rotr _ -> //TODO
+        Error [UnsupportedFeature (expr.Range, "advanced bitwise operator: '+>>' or '<<>'  or '<>>'")]
     // --- identity operators
     | AST.Ideq _ 
     | AST.Idieq _ ->
         Error [UnsupportedFeature (expr.Range, "identity operator")]
-    // -- remaining bitwise operators --
-    | AST.Shl _
-    | AST.Shr _
-    | AST.Sshr _
-    | AST.Rotl _
-    | AST.Rotr _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "shifting operation")]
     // -- type conversions --
-    | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
+    | AST.Convert (e, t) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         Error [UnsupportedFeature (expr.Range, "type conversion")]
     // -- type annotation --
     | AST.HasType (e, t) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
-        Error [UnsupportedFeature (expr.Range, "type annotation")]
+        let rhs = checkExpr lut e
+        let lty = checkDataType lut t
+        combine rhs lty
+        |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)  //TODO: refactor amendRhsExpr
+        // Error [UnsupportedFeature (expr.Range, "type annotation")]
     // -- operators on arrays and slices --
     | AST.Len _
     | AST.Cap _ -> //TODO
@@ -1093,10 +1100,10 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
 and internal checkDataType lut utyDataType =
     match utyDataType with
     // simple types
-    | AST.BoolType _ -> Types.ValueTypes BoolType |> Ok
-    | AST.IntegerType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
-    | AST.NaturalType (size, _, _) -> NatType size |> Types.ValueTypes |> Ok
-    | AST.FloatType (size, _, _) -> FloatType size |> Types.ValueTypes |> Ok
+    | AST.BoolType _ -> ValueTypes BoolType |> Ok
+    | AST.IntegerType (size, _, _) -> IntType size |> ValueTypes |> Ok
+    | AST.NaturalType (size, _, _) -> NatType size |> ValueTypes |> Ok
+    | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
         let ensurePositive num =
@@ -1113,7 +1120,7 @@ and internal checkDataType lut utyDataType =
                 match dty with
                 | ValueTypes sth ->
                     ArrayType (checkedSize, sth)
-                    |> Types.ValueTypes
+                    |> ValueTypes
                     |> Ok 
                 | _ -> Error [ValueArrayMustHaveValueType pos]
                 )
