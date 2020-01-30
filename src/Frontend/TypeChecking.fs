@@ -400,47 +400,9 @@ let private unsupported9 str r _ _ _ _ _ _ _ _ = Error [UnsupportedFeature (r, s
 //=============================================================================
 // Creating variable or subprogram declarations
 //=============================================================================
-let rec private fDataType lut utyDataType =
-    match utyDataType with
-    // simple types
-    | AST.BoolType _ -> Types.ValueTypes BoolType |> Ok
-    | AST.IntegerType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
-    | AST.NaturalType (size, _, _) -> NatType size |> Types.ValueTypes |> Ok
-    | AST.FloatType (size, _, _) -> FloatType size |> Types.ValueTypes |> Ok
-    // structured types
-    | AST.ArrayType (size, elemDty, pos) ->
-        let ensurePositive num =
-            if num > 0 then Ok num
-            else Error [PositiveSizeExpected(pos, num)]
-        let checkSize =
-            checkExpr lut 
-            >> Result.bind (evalCompTimeInt lut)
-            >> Result.bind ensurePositive
-        checkSize size
-        |> Result.bind(fun checkedSize ->
-            fDataType lut elemDty
-            |> Result.bind(fun dty -> 
-                match dty with
-                | ValueTypes sth ->
-                    ArrayType (checkedSize, sth)
-                    |> Types.ValueTypes
-                    |> Ok 
-                | _ -> Error [ValueArrayMustHaveValueType pos]
-                )
-            )
-    | AST.TypeName spath ->
-        // look up given static name in the dict of known named types (user types)
-        let found, typ =
-            lut.ncEnv.spathToQname spath
-            |> lut.userTypes.TryGetValue
-        if found then Ok typ
-        else failwith <| sprintf "Did not find a type under the name %s." spath.dottedPathToString
-    // unsupported now:
-    | AST.BitvecType _
-    | AST.SliceType _
-    | AST.Signal _ -> 
-        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]
 
+/// Check a type annotation
+let rec private fDataType  = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).

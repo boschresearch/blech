@@ -446,6 +446,38 @@ and getInitValueForTml lut tml =
 //  Functions that construct typed expressions from subexpressions
 //=========================================================================
 
+
+/// Checks if literals and constant expression are of suitable size.
+let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
+    match anyExpr.typ, targetExpr.typ with
+    | AnyInt value, ValueTypes (IntType intX) ->
+        if intX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (IntType intX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyInt value, ValueTypes (NatType natX) ->
+        if natX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (NatType natX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
+            
+    | AnyInt value, ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+   
+    | _, _  ->
+        Ok anyExpr
+
+
 // --------------------------------------------------------------------
 // ---  Unary logical and - TODO - bitwise not
 // --------------------------------------------------------------------
@@ -551,6 +583,11 @@ let private formDisjunction = formLogical disj
 //        |> Ok
 //    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
 
+
+// --------------------------------------------------------------------
+// ---  TODO: Logical Operators, fjg. 21.01.20
+// --------------------------------------------------------------------
+
 let private formXor = formLogical bxor
 
 /// Given two typed expressions, construct their equality.
@@ -615,37 +652,6 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
 /// Given two typed expressions, construct their inequality.
 /// If the two types are not comparable, an error will be returned instead.
 // let private lessEqualThan = inequality leq
-
-
-/// Checks if literals and constant expression are of suitable size.
-let private adoptAnyToTarget (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
-    match anyExpr.typ, targetExpr.typ with
-    | AnyInt value, ValueTypes (IntType intX) ->
-        if intX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (IntType intX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-    
-    | AnyInt value, ValueTypes (NatType natX) ->
-        if natX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (NatType natX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-            
-    | AnyInt value, ValueTypes (FloatType floatX) ->
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-    
-    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-   
-    | _, _  ->
-        Ok anyExpr
 
 
 // --------------------------------------------------------------------
@@ -1082,6 +1088,48 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Expr.Parens (expr, _) ->
         checkExpr lut expr
         |> Result.map (fun e -> e.SetRange expr.Range)
+
+/// Given an untyped datatype, return a type checked datatype .
+and internal checkDataType lut utyDataType =
+    match utyDataType with
+    // simple types
+    | AST.BoolType _ -> Types.ValueTypes BoolType |> Ok
+    | AST.IntegerType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
+    | AST.NaturalType (size, _, _) -> NatType size |> Types.ValueTypes |> Ok
+    | AST.FloatType (size, _, _) -> FloatType size |> Types.ValueTypes |> Ok
+    // structured types
+    | AST.ArrayType (size, elemDty, pos) ->
+        let ensurePositive num =
+            if num > 0 then Ok num
+            else Error [PositiveSizeExpected(pos, num)]
+        let checkSize =
+            checkExpr lut 
+            >> Result.bind (evalCompTimeInt lut)
+            >> Result.bind ensurePositive
+        checkSize size
+        |> Result.bind(fun checkedSize ->
+            checkDataType lut elemDty
+            |> Result.bind(fun dty -> 
+                match dty with
+                | ValueTypes sth ->
+                    ArrayType (checkedSize, sth)
+                    |> Types.ValueTypes
+                    |> Ok 
+                | _ -> Error [ValueArrayMustHaveValueType pos]
+                )
+            )
+    | AST.TypeName spath ->
+        // look up given static name in the dict of known named types (user types)
+        let found, typ =
+            lut.ncEnv.spathToQname spath
+            |> lut.userTypes.TryGetValue
+        if found then Ok typ
+        else failwith <| sprintf "Did not find a type under the name %s." spath.dottedPathToString
+    // unsupported now:
+    | AST.BitvecType _
+    | AST.SliceType _
+    | AST.Signal _ -> 
+        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]
 
 
 /// Type check expressions that appear on the left hand side.
