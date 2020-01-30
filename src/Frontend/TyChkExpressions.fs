@@ -1086,7 +1086,6 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         let lty = checkDataType lut t
         combine rhs lty
         |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)  //TODO: refactor amendRhsExpr
-        // Error [UnsupportedFeature (expr.Range, "type annotation")]
     // -- operators on arrays and slices --
     | AST.Len _
     | AST.Cap _ -> //TODO
