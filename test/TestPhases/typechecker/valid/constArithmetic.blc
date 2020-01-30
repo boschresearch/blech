@@ -13,10 +13,10 @@ end
 const myS: S = {s1 = {1.,2.,3.}, s2 = THREE != ONE}
 const arr1: [2]int32 = {THREE * THREE, THREE * THREE + ONE}
 const arr2: [2]int32 = {9, 10}
-const eq = arr1 == arr2
+// const eq = arr1 == arr2
 
 const anotherS: S = {s1 = {1.000000 , 2.000000 , 3.000000 },s2 = true}
-const eq2 = myS == anotherS
+// const eq2 = myS == anotherS
 
 struct Wheel 
     let isLeft: bool
