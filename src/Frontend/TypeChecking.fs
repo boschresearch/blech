@@ -291,7 +291,7 @@ let private determineCalledSingletons lut bodyRes =
         | RhsCur tml 
         | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
         // constants and literals
-        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> []
+        | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | ResetConst _ -> []
         | StructConst fields -> recurFields fields
         | ArrayConst elems -> recurFields elems
         // call, has no side-effect IFF it does not write any outputs

@@ -100,6 +100,7 @@ type ValueTypes =
     | BoolType    
     | IntType of IntType
     | NatType of NatType
+    | BitsType of BitsType
     | FloatType of FloatType
     //structured
     | ArrayType of size:int * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
@@ -116,18 +117,19 @@ type ValueTypes =
         | BoolType -> "bool"
         | IntType i -> i.ToString()
         | NatType i -> i.ToString()
+        | BitsType b -> b.ToString()    
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
         | StructType (_, q, _) -> q.ToString()
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | FloatType _ -> true
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ -> true
         | ArrayType _ | StructType _ -> false
     
     member this.TryRange =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | FloatType _ | ArrayType _ -> None
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
         | StructType (r,_,_) -> Some r
 
 
@@ -158,8 +160,8 @@ and Types =
     | ReferenceTypes of ReferenceTypes
     | AnyComposite // used for wildcard or compound literals
     | AnyInt of bigint // used only for untyped integer literals
-    | AnyFloat of Float // used only for untyped float literals
-    // | AnyBits of bigint 
+    | AnyBits of bigint // used only for untyped bits literals 
+    | AnyFloat of double // used only for untyped float literals
     
     member this.ToDoc =
         match this with
@@ -167,6 +169,7 @@ and Types =
         | ReferenceTypes r -> r.ToDoc
         | AnyComposite -> txt "any composite"
         | AnyInt _ -> txt "any integer"
+        | AnyBits _ -> txt "any bits"
         | AnyFloat _ -> txt "any float"
 
     override this.ToString() = render None <| this.ToDoc
@@ -183,14 +186,14 @@ and Types =
 
     member this.IsAny =
         match this with
-        | AnyComposite | AnyInt _ | AnyFloat _ -> true
+        | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> true
         | ValueTypes _ | ReferenceTypes _ -> false
     
     member this.TryRange =
         match this with
         | ValueTypes v -> v.TryRange
         | ReferenceTypes r -> r.TryRange
-        | AnyComposite | AnyInt _ | AnyFloat _ -> None
+        | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> None
 
 
 //=============================================================================
@@ -505,6 +508,7 @@ and RhsStructure =
     // constants and literals
     | BoolConst of bool
     | IntConst of bigint
+    | BitsConst of Bits
     | FloatConst of Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
@@ -550,6 +554,7 @@ and RhsStructure =
         // constants and literals
         | BoolConst c -> if c then txt "true" else txt "false"
         | IntConst i -> txt <| i.ToString()
+        | BitsConst b -> txt <| b.ToString()
         | FloatConst f -> txt <| f.ToString()
         | ResetConst -> [empty] |> dpCommaSeparatedInBraces
         | StructConst structFieldExprList ->

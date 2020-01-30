@@ -98,7 +98,7 @@ let rec private hasNoSideEffect expr =
     | RhsCur tml 
     | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
     // constants and literals
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _  | ResetConst _ -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     // call, has no side-effect IFF it does not write any outputs
@@ -137,7 +137,7 @@ let rec internal isStaticExpr lut expr =
         | Some Mutability.Immutable
         | Some Mutability.Variable -> false
     | Prev _ -> false // prev exists only on var
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | ResetConst _ -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
@@ -316,7 +316,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
           range = checkedExpr.Range }
     match checkedExpr.rhs with
     // simple literal
-    | IntConst _ | BoolConst _ | FloatConst _ | ResetConst -> checkedExpr
+    | IntConst _ | BoolConst _ | BitsConst _ | FloatConst _ | ResetConst -> checkedExpr
     // composite literal
     | StructConst fields -> recurFields StructConst fields
     | ArrayConst fields -> recurFields ArrayConst fields
@@ -501,31 +501,28 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         match expr.rhs with
         | IntConst bi -> IntConst -bi
         | _ -> BlechTypes.Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
+    | AnyFloat _ 
     | ValueTypes (FloatType _) ->
         match expr.rhs with
         | FloatConst f -> FloatConst f.UnaryMinus 
         | _ -> BlechTypes.Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     
+
 /// Given a typed Expression, construct its negative.
 /// If the type is not numeric, an error will be returned instead.
 let private unaryMinus r (expr: TypedRhs) =
     match expr.typ with
     // no unary minus on natural number since it cannot be used anywhere
     | AnyInt value ->
-        { rhs = IntConst -value
-          typ = AnyInt -value
-          range = expr.range } |> Ok
+        Ok { rhs = IntConst -value
+             typ = AnyInt -value
+             range = expr.range }
     | AnyFloat value ->
-        { rhs = FloatConst value.UnaryMinus
-          typ = AnyFloat value.UnaryMinus
-          range = expr.range } |> Ok
+        Ok { expr with rhs = unsafeUnaryMinus expr; typ = AnyFloat -value }
     | ValueTypes (IntType _)
     | ValueTypes (FloatType _) ->
-        let structure = unsafeUnaryMinus expr
-        { rhs = structure
-          typ = expr.typ
-          range = expr.range } |> Ok
+        Ok { expr with rhs = unsafeUnaryMinus expr }
     | _ -> // error illegal minus on expr
         Error [CannotInvertSign(r, expr)]
 
@@ -725,11 +722,11 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
             Ok <| AnyInt combinedValues
         | AnyFloat _, AnyFloat _ ->
-            let combinedValues = 
+            let combinedValue = 
                 match rhs with
-                | FloatConst cv -> cv
+                | FloatConst cv -> cv.value
                 | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-            Ok <| AnyFloat combinedValues
+            Ok <| AnyFloat combinedValue
         | t1, t2 when t1 = t2 -> 
             Error [MustBeNumeric(expr1, expr2)]
         | _ -> 
@@ -835,15 +832,20 @@ let private checkSimpleLiteral literal =
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
+    | AST.Bits (bits, pos) ->
+        let v = bits.value
+        if MIN_INT64 <= v && v <= MAX_NAT64 then
+            { rhs = BitsConst bits; typ = AnyBits v; range = pos } |> Ok
+        else
+            Error [NumberLargerThanAnyInt(pos, v.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
         let v = number.value
         if MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then
-            { rhs = FloatConst number; typ = AnyFloat number; range = pos } |> Ok
+            { rhs = FloatConst number; typ = AnyFloat v; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, string number)]
-    | AST.String _
-    | AST.Bitvec _ ->
-        Error [UnsupportedFeature (literal.Range, "undefined, string or bitvec literal")]
+    | AST.String _ ->
+        Error [UnsupportedFeature (literal.Range, "undefined, string literal")]
 
 
 /// Given some {...} literal, evaluate its fields and construct an Any typed literal
@@ -1013,7 +1015,8 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                     | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
                 | AnyComposite 
-                | AnyInt _ 
+                | AnyInt _
+                | AnyBits _ 
                 | AnyFloat _ -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
@@ -1024,16 +1027,12 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         checkFunCall false lut r fp resIn resOut
         |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = Types.ValueTypes t; range = r} |> Ok)
     // -- logical and bitwise not --
-    | AST.Not (subexpr, r)
-    | AST.Bnot (subexpr, r) ->
+    | AST.Not (subexpr, r) ->
         checkExpr lut subexpr
         |> Result.bind (negate r)
     // -- logical operators
-    | AST.And (e1, e2)
-    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
-    | AST.Or (e1, e2)
-    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
-    
+    | AST.And (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
+    | AST.Or (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction    
     // -- numerical operations --
     | AST.Add (e1, e2) -> combineTwoExpr lut e1 e2 addition
     | AST.Sub (e1, e2) -> combineTwoExpr lut e1 e2 subtraction
@@ -1065,9 +1064,15 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     
     
     // -- bitwise operators, TODO: complete this, fjg. 21.01.20
+    | AST.Bnot (subexpr, r) ->
+        checkExpr lut subexpr
+        |> Result.bind (negate r)
+    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
+    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
     | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
     | AST.Shl _
-    | AST.Shr _
+    | AST.Shr _  
+    
     // -- Advance bitwise operators
     | AST.Sshr _
     | AST.Rotl _
@@ -1102,6 +1107,7 @@ and internal checkDataType lut utyDataType =
     | AST.BoolType _ -> ValueTypes BoolType |> Ok
     | AST.IntegerType (size, _, _) -> IntType size |> ValueTypes |> Ok
     | AST.NaturalType (size, _, _) -> NatType size |> ValueTypes |> Ok
+    | AST.BitvecType (size, _) -> BitsType size |> ValueTypes |> Ok
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
@@ -1132,7 +1138,6 @@ and internal checkDataType lut utyDataType =
         if found then Ok typ
         else failwith <| sprintf "Did not find a type under the name %s." spath.dottedPathToString
     // unsupported now:
-    | AST.BitvecType _
     | AST.SliceType _
     | AST.Signal _ -> 
         Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]

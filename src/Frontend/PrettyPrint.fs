@@ -630,12 +630,16 @@ module PrettyPrint =
                     txt "false"
                 | String (value = text) ->
                     txt text |> dquotes
-                | Bitvec (value = i; prefix = c) ->
-                    ppBitVec i c
+                | Bits (value = bits) ->
+                    match bits.repr with
+                    | Some repr -> txt repr
+                    | None -> failwith "A bits literal should always have a representation"
                 | Int (value = i) ->
                     string i |> txt
-                | Float (value = d) ->
-                    string d |> txt 
+                | Float (value = lit) ->
+                    match lit.repr with
+                    | Some repr -> txt repr
+                    | None -> failwith "A float literal should always have a represention"
             and ppOptExpr = function
                 | None -> Empty
                 | Some e -> fExpr e

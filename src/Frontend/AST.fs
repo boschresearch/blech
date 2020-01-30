@@ -587,15 +587,14 @@ and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range
     // -- numerical constants --
-    | Bitvec of value:bigint * range:range * prefix:Char
+    | Bits of value:Bits * range:range
     | Int of value:bigint * unit:UnitExpr option * range:range
-    // | Single of value:single * range:range  
     | Float of value: Float * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
         | Bool (range=r)
         | String (range=r)
-        | Bitvec (range=r)
+        | Bits (range=r)
         | Int (range=r)
         | Float (range=r)
             -> r

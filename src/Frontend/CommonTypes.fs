@@ -250,13 +250,32 @@ type NatType =
         elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
         else Nat64
 
+type Bits = 
+    { value: bigint 
+      repr: string option }
+
+    override this.ToString() =
+        match this.repr with
+        | Some s -> s
+        | None -> string this.value
+
+    static member Zero = 
+        { value = 0I; repr = None }
+
+    member this.IsZero = 
+        this.value = 0I
+
+    member this.UnaryMinus =
+        let negVal = - this.value
+        match this.repr with
+        | Some r -> {value = negVal; repr = Some ("-" + r)}
+        | None -> {value = negVal; repr = None}
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
 
     override this.ToString() = "bits" + string(this.GetSize())
     
-
     member this.GetSize() =
         match this with
         | Bits8 -> 8
@@ -290,6 +309,9 @@ type Float =
     static member Zero = 
         { value = 0.0; repr = None }
 
+    member this.IsZero =
+        this.value = 0.0
+
     member this.UnaryMinus =
         let negVal = - this.value
         match this.repr with
@@ -320,10 +342,10 @@ type FloatType =
         | Float32 -> abs i <= MAX_FLOAT32_INT
         | Float64 -> abs i <= MAX_FLOAT64_INT
 
-    member this.CanRepresent (f: Float) =
+    member this.CanRepresent (value: double) =
         match this with
-        | Float32 -> float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32
-        | Float64 -> float MIN_FLOAT64 <= f.value && f.value <= float MAX_FLOAT64
+        | Float32 -> float MIN_FLOAT32 <= value && value <= float MAX_FLOAT32
+        | Float64 -> float MIN_FLOAT64 <= value && value <= float MAX_FLOAT64
     
     // todo: deprecate this
     static member RequiredType (f : Float) =

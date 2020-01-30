@@ -69,13 +69,16 @@ module SignaturePrinter =
                     txt "false"
                 | AST.String (value = text) ->
                     txt text |> dquotes
-                | AST.Bitvec (value = i; prefix = c) ->
-                    bpBitVec i c
                 | AST.Int (value = i) ->
                     string i |> txt
-                | AST.Float (value = f) ->
-                    string f |> txt
-
+                | AST.Bits (value = lit) ->
+                    match lit.repr with
+                    | Some repr -> txt repr
+                    | None -> failwith "A bits literal should always have a representation"
+                | AST.Float (value = lit) ->
+                    match lit.repr with
+                    | Some repr -> txt repr
+                    | None -> failwith "A float literal should always have a represention"
 
     let rec bpAttribute attr =
         let ppKey = function

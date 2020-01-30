@@ -520,9 +520,9 @@ OptAccess
 Literal
   : TRUE                                        { Literal.Bool (true, $1) }
   | FALSE                                       { Literal.Bool (false, $1) }
-  | BINCONST                                    { Literal.Bitvec (parseBin <| fst $1, snd $1, 'b') }
-  | OCTCONST                                    { Literal.Bitvec (parseOct <| fst $1, snd $1, 'o') }
-  | HEXCONST                                    { Literal.Bitvec (parseHex <| fst $1, snd $1, 'x') }
+  | BINCONST                                    { Literal.Bits (parseBin <| fst $1, snd $1) }
+  | OCTCONST                                    { Literal.Bits (parseOct <| fst $1, snd $1) }
+  | HEXCONST                                    { Literal.Bits (parseHex <| fst $1, snd $1) }
   | NumberLiteral                               { $1 }
 
 /* fjg TODO: eliminate OptUnifDef and introduce rule: expr with OptUnitDef */
@@ -1464,11 +1464,11 @@ AttributeLiteral
     
     | FALSE                                     { Literal.Bool (false, $1) }
     
-    | BINCONST                                  { Literal.Bitvec (parseBin <| fst $1, snd $1, 'b') }
+    | BINCONST                                  { Literal.Bits (parseBin <| fst $1, snd $1) }
     
-    | OCTCONST                                  { Literal.Bitvec (parseOct <| fst $1, snd $1, 'o') }
+    | OCTCONST                                  { Literal.Bits (parseOct <| fst $1, snd $1) }
 
-    | HEXCONST                                  { Literal.Bitvec (parseHex <| fst $1, snd $1, 'x') }
+    | HEXCONST                                  { Literal.Bits (parseHex <| fst $1, snd $1) }
 
 	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1, 
                                                                 None, 

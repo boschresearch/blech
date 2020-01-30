@@ -76,7 +76,7 @@ let private cpMainIface scalarPassByPointer (iface: Iface) =
 
 let private staticStateToArgument (p: ParamDecl) =
     match p.datatype with
-    | ValueTypes BoolType | ValueTypes (IntType _) | ValueTypes (NatType _) | ValueTypes (FloatType _) 
+    | ValueTypes BoolType | ValueTypes (IntType _) | ValueTypes (NatType _) | ValueTypes (BitsType _) | ValueTypes (FloatType _) 
         when not p.isMutable ->
         ppNameInGlobalCall p.name
     | ValueTypes (ArrayType _) -> ppNameInGlobalCall p.name
@@ -176,6 +176,10 @@ let internal printState ctx printState entryCompilation =
             | Types.ValueTypes (NatType Nat32) -> "%lu"
             | Types.ValueTypes (NatType Nat16) -> "%hu"
             | Types.ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
+            | Types.ValueTypes (BitsType Bits64) -> "%llu"
+            | Types.ValueTypes (BitsType Bits32) -> "%lu"
+            | Types.ValueTypes (BitsType Bits16) -> "%hu"
+            | Types.ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
             | _ -> failwithf "No format string for composite data type %A." dty
 
         let printPrimitive isLocal (n: TypedMemLoc) =

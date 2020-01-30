@@ -112,6 +112,7 @@ let rec getDefaultValueFor pos name dty =
     match dty with
     | Types.AnyComposite 
     | Types.AnyInt _ 
+    | Types.AnyBits _ 
     | Types.AnyFloat _ -> 
         Error [NoDefaultValueForAny (pos, name)]
     | Types.ValueTypes fce ->
@@ -119,6 +120,7 @@ let rec getDefaultValueFor pos name dty =
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
+        | BitsType _ -> Ok {rhs = BitsConst Bits.Zero; typ = dty; range = pos}
         | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | FloatType _ ->Ok {rhs = FloatConst Float.Zero ; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->
@@ -151,8 +153,9 @@ let internal getInitValueWithoutZeros pos name dty =
                 | xs -> Some {expr with rhs = constBuilder xs}
         match expr.rhs with
         | BoolConst false -> None
-        | IntConst value when 0I = value -> None
-        | FloatConst value when Float.Zero = value -> None 
+        | IntConst value when value.IsZero -> None
+        | BitsConst value when value.IsZero-> None
+        | FloatConst value when value.IsZero -> None
         | ResetConst -> None 
         | StructConst assignments -> filterOutZeroFields assignments StructConst
         | ArrayConst assignments -> filterOutZeroFields assignments ArrayConst
@@ -316,6 +319,7 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
         match expr.typ with
         | Types.AnyComposite // struct/array const literals will have Any type
         | Types.AnyInt _ 
+        | Types.AnyBits _
         | Types.AnyFloat _ ->
             Error [VarDeclRequiresExplicitType (pos, name)]    
         //| ( Types.ValueTypes (IntType _) 

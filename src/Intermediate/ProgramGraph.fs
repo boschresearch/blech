@@ -178,7 +178,8 @@ module IntermediateContext =
             outs |> List.iter (addNameWritten context node)
             addSingletonCalls context trhs.Range node name
         | BoolConst _ 
-        | IntConst _ 
+        | IntConst _
+        | BitsConst _
         | FloatConst _ 
         | ResetConst _ -> ()
         | StructConst structFieldExprList ->
@@ -403,6 +404,7 @@ module ProgramGraph =
                 // constants and literals
                 | BoolConst _
                 | IntConst _
+                | BitsConst _ 
                 | FloatConst _
                 | ResetConst -> expr.rhs
                 | StructConst fieldExprs ->

@@ -178,6 +178,12 @@ let rec internal cpType typ =
         | Nat16 -> txt "blc_nat16"
         | Nat32 -> txt "blc_nat32"
         | Nat64 -> txt "blc_nat64"
+    | ValueTypes (BitsType size) ->
+           match size with
+           | Bits8 -> txt "blc_bits8"
+           | Bits16 -> txt "blc_bits16"
+           | Bits32 -> txt "blc_bits32"
+           | Bits64 -> txt "blc_bits64"
     | ValueTypes (FloatType size) ->
         match size with
         | FloatType.Float32 -> txt "blc_float32"
@@ -188,7 +194,7 @@ let rec internal cpType typ =
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | AnyComposite 
-    | AnyInt _ | AnyFloat _ -> failwith "Cannot print <Any> type."
+    | AnyInt _ | AnyBits _ | AnyFloat _ -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
 
 
@@ -301,12 +307,14 @@ let private getElementDatatype (ctx: TranslationContext) (tml:TypedMemLoc) =
     match getDatatypeFromTML ctx.tcc tml with
     | AnyComposite 
     | AnyInt _ 
+    | AnyBits _
     | AnyFloat _ -> failwith "Impossible. Cannot print a data item of type Any."
     | ValueTypes (ValueTypes.Void) -> failwith "Impossible. Cannot print a data item of type void."
     | ValueTypes (ValueTypes.BoolType)
-    | ValueTypes (ValueTypes.FloatType _)
     | ValueTypes (ValueTypes.IntType _)
-    | ValueTypes (ValueTypes.NatType _) -> ValueSimple
+    | ValueTypes (ValueTypes.NatType _)
+    | ValueTypes (ValueTypes.BitsType _)
+    | ValueTypes (ValueTypes.FloatType _) -> ValueSimple
     | ValueTypes (ValueTypes.StructType _) -> ValueStruct
     | ValueTypes (ValueTypes.ArrayType _) -> ValueArray
     | ReferenceTypes _ -> failwith "Reference types not yet implemented."
@@ -868,6 +876,7 @@ and private cpExpr inFunction ctx expr =
         
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
+    | BitsConst b -> [], txt <| string b
     | FloatConst f -> [], txt <| string f
     | ResetConst -> failwith "By now, the type checker should have substituted reset const by the type's default value."
     | StructConst assignments ->
@@ -895,6 +904,7 @@ and private cpExpr inFunction ctx expr =
         | ValueTypes BoolType
         | ValueTypes (IntType _)
         | ValueTypes (NatType _)
+        | ValueTypes (BitsType _)
         | ValueTypes (FloatType _) ->
             binExpr inFunction ctx s1 s2 "=="
         | ValueTypes (ValueTypes.StructType _)
@@ -907,6 +917,7 @@ and private cpExpr inFunction ctx expr =
         | ValueTypes Void
         | AnyComposite 
         | AnyInt _ 
+        | AnyBits _
         | AnyFloat _ -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     | Add (s1, s2) -> binExpr inFunction ctx s1 s2 "+"

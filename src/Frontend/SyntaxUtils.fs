@@ -266,26 +266,24 @@ module ParserUtils =
     let private strip_ s =
         String.collect (fun c -> if c = '_' then "" else string c) s
 
-    let private stripF s =
-        String.collect (fun c -> if c = 'f' || c = 'F' then "" else string c) s
-
-    let parseBin (s:string): bigint =
+    let parseBin (s:string): Bits =
         let bits = String.explode (strip_ s).[2..]
         let pows, _ = List.mapFoldBack (fun b i -> (if b = '1' then i else 0I),  i*2I) bits 1I
-        List.sum pows
+        { value = List.sum pows
+          repr = Some s }
 
-
-    let parseOct (s:string): bigint =
+    let parseOct (s:string): Bits =
         let octs = String.explode (strip_ s).[2..]
         // 48 is the ascii offset for digits
         let pows, _ = List.mapFoldBack (fun b i ->  bigint (int b - 48) * i,  i*8I) octs 1I
-        List.sum pows
+        { value = List.sum pows
+          repr = Some s }
     
 
-    let parseHex (s:string): bigint =
+    let parseHex (s:string): Bits =
         // add a leading '0' to prevent interpretation as negative number
-        BigInteger.Parse("0" + (strip_ s).[2..], System.Globalization.NumberStyles.AllowHexSpecifier)
-
+        { value = BigInteger.Parse("0" + (strip_ s).[2..], System.Globalization.NumberStyles.AllowHexSpecifier)
+          repr = Some s }
 
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
