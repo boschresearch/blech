@@ -678,10 +678,10 @@ and Expr =
     | Sshr of Expr * Expr               // '+>>' signed shift right
     | Rotl of Expr * Expr               // '<<>' rotate left
     | Rotr of Expr * Expr               // '<>>' rotate right
+    // -- type annotation --
+    | HasType of Expr * DataType        // ':' define the type for an expression, e.g. "0x_1 : bits8"  
     // -- type conversions --
     | Convert of Expr * DataType        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
-    // -- type annotation --
-    | HasType of Expr * DataType
     // -- operators on arrays and slices --
     | Len of Expr * range:range         // '#' length
     | Cap of Expr * range:range         // '##' capacity

@@ -612,10 +612,10 @@ Expr
     | Expr SHR Expr       %prec SHR             { Shr ($1, $3) }
     | Expr SHL Expr       %prec SHL             { Shl ($1, $3) }
 
-    /* --- advanced bitwise operations --- */ /* todo: add these to the AST, fjg. 20.01.20 */
-    | Expr SSHR Expr      %prec SSHR            { $1 }
-    | Expr ROTR Expr      %prec ROTR            { $1 }
-    | Expr ROTL Expr      %prec ROTL            { $1 }
+    /* --- advanced bitwise operations --- */
+    | Expr SSHR Expr      %prec SSHR            { Sshr ($1, $3) }
+    | Expr ROTL Expr      %prec ROTR            { Rotl ($1, $3) }
+    | Expr ROTR Expr      %prec ROTL            { Rotr ($1, $3) }
 
     /* --- primary expressions --- */
     | PrimaryExpr            %prec UNARY        { $1 }                    
@@ -627,7 +627,7 @@ Expr
     | Expr AS Datatype        %prec AS          { Convert($1, $3) }
 
     /* --- tenary expression ---*/              
-    | IF Expr THEN Expr ELSE Expr %prec IF      { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
+    | IF Expr THEN Expr ELSE Expr   %prec IF    { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
 
     /* --- try else expression, substitute for elvis --- */
     | TRY Expr ELSE Expr          %prec TRY     { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
