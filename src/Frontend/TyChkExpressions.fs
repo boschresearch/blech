@@ -493,19 +493,25 @@ let private negate r (expr: TypedRhs) =
           range = expr.Range } |> Ok
     | _ -> Error [ExpectedBoolCond (r, expr)]
 
-/// Unsafe unaryMinus, we assume structure has numeric type. This must be
+/// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
 let private unsafeUnaryMinus (expr: TypedRhs) = 
     match expr.typ with
     | ValueTypes (IntType _) ->
         match expr.rhs with
         | IntConst bi -> IntConst -bi
-        | _ -> BlechTypes.Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
+        | _ -> Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
+
+    | ValueTypes (BitsType size) ->
+        match expr.rhs with
+        | BitsConst b -> BitsConst <| b.UnaryMinus size.MaxValue            // numeric wrap-around
+        | _ -> Sub ({expr with rhs = BitsConst Bits.Zero}, expr) //0 - expr
+        
     | AnyFloat _ 
     | ValueTypes (FloatType _) ->
         match expr.rhs with
         | FloatConst f -> FloatConst f.UnaryMinus 
-        | _ -> BlechTypes.Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
+        | _ -> Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     
 
@@ -519,8 +525,11 @@ let private unaryMinus r (expr: TypedRhs) =
              typ = AnyInt -value
              range = expr.range }
     | AnyFloat value ->
-        Ok { expr with rhs = unsafeUnaryMinus expr; typ = AnyFloat -value }
+        Ok { rhs = unsafeUnaryMinus expr 
+             typ = AnyFloat -value 
+             range = expr.range }
     | ValueTypes (IntType _)
+    | ValueTypes (BitsType _)
     | ValueTypes (FloatType _) ->
         Ok { expr with rhs = unsafeUnaryMinus expr }
     | _ -> // error illegal minus on expr
@@ -828,19 +837,19 @@ let private checkSimpleLiteral literal =
     | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = Types.ValueTypes BoolType; range = pos } |> Ok
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
-        if MIN_INT64 <= value && value <= MAX_NAT64 then
+        if MIN_INT64 <= value && value <= MAX_NAT64 then // Int literals allow an unary minus in attributes
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
     | AST.Bits (bits, pos) ->
         let v = bits.value
-        if MIN_INT64 <= v && v <= MAX_NAT64 then
+        if MIN_BITS64 <= v && v <= MAX_BITS64 then // Bits literals are always >= 0                    
             { rhs = BitsConst bits; typ = AnyBits v; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, v.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
         let v = number.value
-        if MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then
+        if MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then // Float literals allow an unary minus in attributes
             { rhs = FloatConst number; typ = AnyFloat v; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, string number)]

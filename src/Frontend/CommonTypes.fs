@@ -265,11 +265,10 @@ type Bits =
     member this.IsZero = 
         this.value = 0I
 
-    member this.UnaryMinus =
-        let negVal = - this.value
-        match this.repr with
-        | Some r -> {value = negVal; repr = Some ("-" + r)}
-        | None -> {value = negVal; repr = None}
+    member this.UnaryMinus maxSize : Bits =
+        { value = maxSize + 1I - this.value // numeric wrap-around
+          repr = None } // there is no representation, like '- 0xFF' 
+
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
@@ -282,7 +281,22 @@ type BitsType =
         | Bits16 -> 16
         | Bits32 -> 32
         | Bits64 -> 64
-   
+
+    member this.MaxValue: bigint =
+        match this with
+        | Bits8 -> MAX_BITS8
+        | Bits16 -> MAX_BITS16
+        | Bits32 -> MAX_BITS32
+        | Bits64 -> MAX_BITS64
+
+    
+    member this.CanRepresent (value: bigint) =
+        match this with
+        | Bits8 -> MIN_INT8 <= value && value <= MAX_NAT8
+        | Bits16 -> MIN_INT16 <= value && value <= MAX_NAT16
+        | Bits32 -> MIN_INT32<= value && value <= MAX_NAT32
+        | Bits64 -> MIN_INT64 <= value && value <= MAX_NAT64
+
     static member RequiredType value =
         if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
         elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
@@ -312,7 +326,7 @@ type Float =
     member this.IsZero =
         this.value = 0.0
 
-    member this.UnaryMinus =
+    member this.UnaryMinus : Float =
         let negVal = - this.value
         match this.repr with
         | Some r -> {value = negVal; repr = Some ("-" + r)}
@@ -345,15 +359,16 @@ type FloatType =
     member this.CanRepresent (value: double) =
         match this with
         | Float32 -> float MIN_FLOAT32 <= value && value <= float MAX_FLOAT32
-        | Float64 -> float MIN_FLOAT64 <= value && value <= float MAX_FLOAT64
+        | Float64 -> MIN_FLOAT64 <= value && value <= MAX_FLOAT64
     
+    member this.Max =
+        match this with
+        | Float32 -> MAX_BITS8
+        | Float64 -> MAX_BITS16
+        
     // todo: deprecate this
     static member RequiredType (f : Float) =
         if float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32 then Float32
         else Float64
     
-    // todo: deprecate this
-    static member RequiredType (i: bigint) =
-        if abs i <= MAX_FLOAT32_INT then Float32
-        // we assume that bigint fits into float64
-        else Float64
+    

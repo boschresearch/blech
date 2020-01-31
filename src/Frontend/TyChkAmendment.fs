@@ -87,20 +87,33 @@ let internal unsafeMergeCompositeLiteral deflt user =
 // TODO: Rename this function to something more appropriate, fjg. 29.01.20
 let internal isLeftSupertypeOfRight typL typR =
     match typL, typR with
-    | Types.AnyComposite, _ -> true // Any is supertype of any other type
     | Types.ValueTypes (IntType sizeL), Types.ValueTypes (IntType sizeR) ->
         sizeL >= sizeR
-    | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
-        sizeL.CanRepresent value
     | Types.ValueTypes (NatType sizeL), Types.ValueTypes (NatType sizeR) ->
         sizeL >= sizeR
-    | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
-        sizeL.CanRepresent value
+    | Types.ValueTypes (BitsType sizeL), Types.ValueTypes (BitsType sizeR) ->
+        sizeL >= sizeR
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
         sizeL >= sizeR
-    | Types.ValueTypes (FloatType sizeL), Types.AnyFloat value ->
+
+    | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
+        // AnyBits cannot be used as IntType, because their size is undefined
+        sizeL.CanRepresent value 
+    | Types.ValueTypes (NatType sizeL), Types.AnyBits value
+    | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
         sizeL.CanRepresent value
+    | Types.ValueTypes (BitsType sizeL), Types.AnyInt value
+    | Types.ValueTypes (BitsType sizeL), Types.AnyBits value ->
+        // AnyInt can be used as BitsType, we assume 2s complement representation for literals
+        sizeL.CanRepresent value
+    | Types.ValueTypes (FloatType sizeL), Types.AnyFloat value ->
+        // We may loose precision but decimal float literals are always imprecise
+        sizeL.CanRepresent value
+    
+    | Types.AnyComposite, _ -> true      // Any is supertype of any other type
+    
     | a, b when (a = b) -> true
+    
     | _, _ -> false // this includes the cases that integers shall not 
                     // implicitly be promoted to floats
 
