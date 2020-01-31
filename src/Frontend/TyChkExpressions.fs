@@ -483,7 +483,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
    
-    | _, _, _  ->
+    | _, _  ->
         Ok anyExpr
 
 
