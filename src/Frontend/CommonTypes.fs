@@ -265,10 +265,12 @@ type Bits =
     member this.IsZero = 
         this.value = 0I
 
-    member this.UnaryMinus maxSize : Bits =
-        { value = maxSize + 1I - this.value // numeric wrap-around
+    member this.UnaryMinus maxValue : Bits =
+        { value = maxValue + 1I - this.value // numeric wrap-around
           repr = None } // there is no representation, like '- 0xFF' 
 
+    static member Relational op left right = 
+        op left.value right.value
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
@@ -294,7 +296,7 @@ type BitsType =
         match this with
         | Bits8 -> MIN_INT8 <= value && value <= MAX_NAT8
         | Bits16 -> MIN_INT16 <= value && value <= MAX_NAT16
-        | Bits32 -> MIN_INT32<= value && value <= MAX_NAT32
+        | Bits32 -> MIN_INT32 <= value && value <= MAX_NAT32
         | Bits64 -> MIN_INT64 <= value && value <= MAX_NAT64
 
     static member RequiredType value =

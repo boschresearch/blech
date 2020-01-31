@@ -237,6 +237,7 @@ let private less this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a < b)
     | IntConst a, IntConst b -> BoolConst (a < b)
+    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<) a b
     | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<) a b
     | _ -> Les(this, that)
 
@@ -244,6 +245,7 @@ let private leq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a <= b)
     | IntConst a, IntConst b -> BoolConst (a <= b)
+    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<=) a b
     | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<=) a b
     | _ -> Leq(this, that)
 
@@ -251,6 +253,7 @@ let private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
+    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (=) a b
     | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
     | _ -> Equ(this, that)
 
@@ -461,12 +464,18 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
             Ok {anyExpr with typ = ValueTypes (NatType natX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-            
-    //| AnyInt value, ValueTypes (FloatType floatX) ->
-    //    if floatX.CanRepresent value then
-    //        Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-    //    else
-    //        Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
+    
+    | AnyBits value, ValueTypes (BitsType bitX) ->
+        if bitX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
+    
+    | AnyBits value, ValueTypes (NatType natX) ->
+        if natX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (NatType natX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
     | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
         if floatX.CanRepresent value then
@@ -474,7 +483,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
    
-    | _, _  ->
+    | _, _, _  ->
         Ok anyExpr
 
 
@@ -671,9 +680,11 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with    
     | AnyInt _, AnyInt _
     | AnyFloat _, AnyFloat _
+    | AnyBits _, AnyBits _
     | ValueTypes BoolType, ValueTypes BoolType
     | ValueTypes (IntType _), ValueTypes (IntType _)
     | ValueTypes (NatType _), ValueTypes (NatType _)
+    | ValueTypes (BitsType _), ValueTypes (BitsType _)
     | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
         Ok { rhs = op expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
 
@@ -718,12 +729,14 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
     
     let typ = 
         match expr1.typ, expr2.typ with
-        | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
-            Ok <| Types.ValueTypes (IntType (commonSize size1 size2))
-        | Types.ValueTypes (NatType size1), Types.ValueTypes (NatType size2) ->
-            Ok <| Types.ValueTypes (NatType (commonSize size1 size2)) 
-        | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
-            Ok <| Types.ValueTypes (FloatType (commonSize size1 size2))
+        | ValueTypes (IntType size1), ValueTypes (IntType size2) ->
+            Ok <| ValueTypes (IntType (commonSize size1 size2))
+        | ValueTypes (NatType size1), ValueTypes (NatType size2) ->
+            Ok <| ValueTypes (NatType (commonSize size1 size2)) 
+        | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
+            Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
+        | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
+            Ok <| ValueTypes (FloatType (commonSize size1 size2))
         | AnyInt _, AnyInt _ ->
             let combinedValues = 
                 match rhs with
