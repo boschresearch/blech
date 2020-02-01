@@ -262,6 +262,7 @@ type Bits =
 
     static member Zero size = 
         { value = 0I; size = size; repr = None }
+    
     member this.IsZero = 
         this.value = 0I
 
@@ -300,13 +301,6 @@ type BitsType =
         | Bits16 -> 16
         | Bits32 -> 32
         | Bits64 -> 64
-
-    member this.WrapAround: bigint =
-        match this with
-        | Bits8 -> MAX_BITS8 + 1I
-        | Bits16 -> MAX_BITS16 + 1I
-        | Bits32 -> MAX_BITS32 + 1I
-        | Bits64 -> MAX_BITS64 + 1I
     
     member this.CanRepresent (value: bigint) =
         match this with
@@ -378,13 +372,8 @@ type FloatType =
         match this with
         | Float32 -> float MIN_FLOAT32 <= value && value <= float MAX_FLOAT32
         | Float64 -> MIN_FLOAT64 <= value && value <= MAX_FLOAT64
-    
-    member this.Max =
-        match this with
-        | Float32 -> MAX_BITS8
-        | Float64 -> MAX_BITS16
+   
         
-    // todo: deprecate this
     static member RequiredType (f : Float) =
         if float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32 then Float32
         else Float64
