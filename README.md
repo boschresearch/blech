@@ -13,7 +13,7 @@ Before using it in a safety relevant setting, make sure that the software
 fulfills your requirements and adjust it according to any applicable safety
 standards (e.g. ISO 26262).
 
-## Quick guide to Blech tooling
+## Quick guide to the Blech compiler
 
 ### Build the Blech to C compiler blechc
 
