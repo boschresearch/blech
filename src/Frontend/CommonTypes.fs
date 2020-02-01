@@ -252,6 +252,7 @@ type NatType =
 
 type Bits = 
     { value: bigint 
+      size: int        // size: 8, 16, 32, 64, needed for operators
       repr: string option }
 
     override this.ToString() =
@@ -259,38 +260,53 @@ type Bits =
         | Some s -> s
         | None -> string this.value
 
-    static member Zero = 
-        { value = 0I; repr = None }
-
+    static member Zero size = 
+        { value = 0I; size = size; repr = None }
     member this.IsZero = 
         this.value = 0I
 
-    member this.UnaryMinus maxValue : Bits =
-        { value = maxValue + 1I - this.value // numeric wrap-around
+    member this.UnaryMinus: Bits =
+        let wrapAround = pown 2I this.size
+        { value = wrapAround - this.value // numeric wrap-around
+          size = this.size
           repr = None } // there is no representation, like '- 0xFF' 
 
-    static member Relational op left right = 
+    static member FromInteger (value: bigint) (size: int) : Bits =
+        { value = value
+          size = size 
+          repr = None }
+
+    static member Arithmetic operator (left: Bits) (right: Bits) : Bits =
+        let size = if left.size >= right.size then left.size else right.size // typechecker guarantees this
+        let wrapAround = pown 2I size
+        let numericVal = operator left.value right.value
+        let value = if numericVal <= 0I then wrapAround - numericVal
+                    else numericVal % wrapAround
+        { value = value 
+          size = size
+          repr = None }
+
+    static member Relational op left right : bool = 
         op left.value right.value
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
 
-    override this.ToString() = "bits" + string(this.GetSize())
+    override this.ToString() = "bits" + string this.GetSize
     
-    member this.GetSize() =
+    member this.GetSize : int =
         match this with
         | Bits8 -> 8
         | Bits16 -> 16
         | Bits32 -> 32
         | Bits64 -> 64
 
-    member this.MaxValue: bigint =
+    member this.WrapAround: bigint =
         match this with
-        | Bits8 -> MAX_BITS8
-        | Bits16 -> MAX_BITS16
-        | Bits32 -> MAX_BITS32
-        | Bits64 -> MAX_BITS64
-
+        | Bits8 -> MAX_BITS8 + 1I
+        | Bits16 -> MAX_BITS16 + 1I
+        | Bits32 -> MAX_BITS32 + 1I
+        | Bits64 -> MAX_BITS64 + 1I
     
     member this.CanRepresent (value: bigint) =
         match this with

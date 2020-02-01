@@ -133,7 +133,7 @@ let rec getDefaultValueFor pos name dty =
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
-        | BitsType _ -> Ok {rhs = BitsConst Bits.Zero; typ = dty; range = pos}
+        | BitsType size -> Ok {rhs = BitsConst <| Bits.Zero size.GetSize; typ = dty; range = pos}
         | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | FloatType _ ->Ok {rhs = FloatConst Float.Zero ; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->

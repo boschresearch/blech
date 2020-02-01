@@ -25,6 +25,7 @@ open TypeCheckContext
 open TyChkAmendment
 
 
+
 //=========================================================================
 // Functions for checking type and expression properties
 //=========================================================================
@@ -175,33 +176,51 @@ let rec internal isStaticExpr lut expr =
 //    op a.ToFloat b.ToFloat
 //    |> wrapFloat a b
 
+let private bigintToBits (value: bigint) : Bits =  
+    Bits.FromInteger value (BitsType.RequiredType value).GetSize
+
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (+) a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (+) (bigintToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (+) a (bigintToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (+) a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (*) a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (*) (bigintToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (*) a (bigintToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (*) a b
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (/) a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (/) (bigintToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (/) a (bigintToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (/) a b
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (-) a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (-) (bigintToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (-) a (bigintToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (-) a b
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a % b)
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (%) a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (%) (bigintToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (%) a (bigintToBits b)        
     | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
     | _ -> Mod(this, that)
 
@@ -465,6 +484,12 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
+    | AnyInt value, ValueTypes (BitsType bitX) ->
+        if bitX.CanRepresent value then
+            Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
+        else
+            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
+    
     | AnyBits value, ValueTypes (BitsType bitX) ->
         if bitX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
@@ -513,8 +538,8 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 
     | ValueTypes (BitsType size) ->
         match expr.rhs with
-        | BitsConst b -> BitsConst <| b.UnaryMinus size.MaxValue            // numeric wrap-around
-        | _ -> Sub ({expr with rhs = BitsConst Bits.Zero}, expr) //0 - expr
+        | BitsConst b -> BitsConst <| b.UnaryMinus // numeric wrap-around
+        | _ -> Sub ({expr with rhs = BitsConst <| Bits.Zero size.GetSize }, expr) //0 - expr
         
     | AnyFloat _ 
     | ValueTypes (FloatType _) ->
@@ -1120,7 +1145,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     // -- parentheses --
     | AST.Expr.Parens (expr, _) ->
         checkExpr lut expr
-        |> Result.map (fun e -> e.SetRange expr.Range)
+        |> Result.map (fun e -> e.SetRange expr.Range) // TODO: This seems wrong, range should be _, check this. fjg, 31.01.20
 
 /// Given an untyped datatype, return a type checked datatype .
 and internal checkDataType lut utyDataType =
