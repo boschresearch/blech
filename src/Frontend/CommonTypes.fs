@@ -267,13 +267,17 @@ type Bits =
         this.value = 0I
 
     member this.UnaryMinus: Bits =
+        printfn "Bits size: %s" <| string this.size
         let wrapAround = pown 2I this.size
         { value = wrapAround - this.value // numeric wrap-around
           size = this.size
           repr = None } // there is no representation, like '- 0xFF' 
 
     static member FromInteger (value: bigint) (size: int) : Bits =
-        { value = value
+        let wrapAround = pown 2I size
+        let wrapped = if value < 0I then wrapAround + value else value
+        // printfn "Required Size: %s Bits form integer: %s -> %s" (string size) (string value) (string wrapped)
+        { value = wrapped
           size = size 
           repr = None }
 
@@ -281,7 +285,7 @@ type Bits =
         let size = if left.size >= right.size then left.size else right.size // typechecker guarantees this
         let wrapAround = pown 2I size
         let numericVal = operator left.value right.value
-        let value = if numericVal <= 0I then wrapAround - numericVal
+        let value = if numericVal <= 0I then wrapAround + numericVal
                     else numericVal % wrapAround
         { value = value 
           size = size
@@ -310,9 +314,9 @@ type BitsType =
         | Bits64 -> MIN_INT64 <= value && value <= MAX_NAT64
 
     static member RequiredType value =
-        if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
-        elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
-        elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
+        if MIN_INT8 <= value && value <= MAX_NAT8 then Bits8
+        elif MIN_INT16 <= value && value <= MAX_NAT16 then Bits16
+        elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
         else Bits64
 
 

@@ -24,8 +24,22 @@ open TyChecked
 open TypeCheckContext
 open TyChkAmendment
 
+//=========================================================================
+// Some debug helpers
+//=========================================================================
 
-
+let private debugShowConstExpr typedRhs =
+    match typedRhs.rhs with
+    | IntConst i ->
+        printfn "IntConst: %s" <| string i
+    | BitsConst b ->
+        printfn "BitsConst: %s" <| string b
+    | FloatConst f ->
+        printfn "FloatConst: %s" <| string f
+    | _ ->
+        ()
+        
+    Ok typedRhs
 //=========================================================================
 // Functions for checking type and expression properties
 //=========================================================================
@@ -512,6 +526,14 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
         Ok anyExpr
 
 
+let private makeAnyTypeFromConstExpr (rhs: RhsStructure) : Types =  
+    match rhs with
+    | IntConst i -> AnyInt i
+    | FloatConst f -> AnyFloat f.value
+    | _ -> failwith "Evaluation of numbers resulted in not a number" // cannot happen
+
+
+
 // --------------------------------------------------------------------
 // ---  Unary logical and - TODO - bitwise not
 // --------------------------------------------------------------------
@@ -762,18 +784,10 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
             Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
-        | AnyInt _, AnyInt _ ->
-            let combinedValues = 
-                match rhs with
-                | IntConst res -> res
-                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-            Ok <| AnyInt combinedValues
-        | AnyFloat _, AnyFloat _ ->
-            let combinedValue = 
-                match rhs with
-                | FloatConst cv -> cv.value
-                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-            Ok <| AnyFloat combinedValue
+        | AnyInt i, AnyInt j ->
+            Ok <| makeAnyTypeFromConstExpr rhs
+         | AnyFloat _, AnyFloat _ ->
+            Ok <| makeAnyTypeFromConstExpr rhs
         | t1, t2 when t1 = t2 -> 
             Error [MustBeNumeric(expr1, expr2)]
         | _ -> 
@@ -1021,7 +1035,7 @@ and private checkUntimedDynamicAccessPath lut dname =
 and private combineTwoExpr lut e1 e2 f =
     combine (checkExpr lut e1) (checkExpr lut e2)
     |> Result.bind f
-
+    // |> Result.bind debugShowConstExpr
 
 /// Given an untyped AST.Expr, return a typed expression.
 /// We guarantee that compile time expressions are evaluated to a literal
