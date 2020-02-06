@@ -22,6 +22,7 @@
 ///============================================================================
 module Blech.Frontend.TyChkAmendment
 
+open Constants
 open CommonTypes
 open BlechTypes
 open TyChecked

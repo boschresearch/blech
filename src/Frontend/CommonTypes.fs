@@ -21,43 +21,44 @@
 module Blech.Frontend.CommonTypes
 
 open Blech.Common
+open Constants
 
-//=========================================================================
-// predefined constants TODO: actually, this should be part of blechconf.h
-//=========================================================================
-let MIN_INT8 = -pown 2I 7
-let MAX_INT8 = pown 2I 7 - 1I
-let MIN_INT16 = -pown 2I 15
-let MAX_INT16 = pown 2I 15 - 1I
-let MIN_INT32 = -pown 2I 31
-let MAX_INT32 = pown 2I 31 - 1I
-let MIN_INT64 = -pown 2I 63
-let MAX_INT64 = pown 2I 63 - 1I
+////=========================================================================
+//// predefined constants TODO: actually, this should be part of blechconf.h
+////=========================================================================
+//let MIN_INT8 = -pown 2I 7
+//let MAX_INT8 = pown 2I 7 - 1I
+//let MIN_INT16 = -pown 2I 15
+//let MAX_INT16 = pown 2I 15 - 1I
+//let MIN_INT32 = -pown 2I 31
+//let MAX_INT32 = pown 2I 31 - 1I
+//let MIN_INT64 = -pown 2I 63
+//let MAX_INT64 = pown 2I 63 - 1I
 
-let MIN_NAT8 = 0I
-let MAX_NAT8 = pown 2I 8 - 1I
-let MIN_NAT16 = 0I
-let MAX_NAT16 = pown 2I 16 - 1I
-let MIN_NAT32 = 0I
-let MAX_NAT32 = pown 2I 32 - 1I
-let MIN_NAT64 = 0I
-let MAX_NAT64 = pown 2I 64 - 1I
+//let MIN_NAT8 = 0I
+//let MAX_NAT8 = pown 2I 8 - 1I
+//let MIN_NAT16 = 0I
+//let MAX_NAT16 = pown 2I 16 - 1I
+//let MIN_NAT32 = 0I
+//let MAX_NAT32 = pown 2I 32 - 1I
+//let MIN_NAT64 = 0I
+//let MAX_NAT64 = pown 2I 64 - 1I
 
-let MIN_BITS8 = 0I
-let MAX_BITS8 = pown 2I 8 - 1I
-let MIN_BITS16 = 0I
-let MAX_BITS16 = pown 2I 16 - 1I
-let MIN_BITS32 = 0I
-let MAX_BITS32 = pown 2I 32 - 1I
-let MIN_BITS64 = 0I
-let MAX_BITS64 = pown 2I 64 - 1I
+//let MIN_BITS8 = 0I
+//let MAX_BITS8 = pown 2I 8 - 1I
+//let MIN_BITS16 = 0I
+//let MAX_BITS16 = pown 2I 16 - 1I
+//let MIN_BITS32 = 0I
+//let MAX_BITS32 = pown 2I 32 - 1I
+//let MIN_BITS64 = 0I
+//let MAX_BITS64 = pown 2I 64 - 1I
 
-let MIN_FLOAT32 = System.Single.MinValue
-let MAX_FLOAT32 = System.Single.MaxValue
-let MIN_FLOAT64 = System.Double.MinValue
-let MAX_FLOAT64 = System.Double.MaxValue
-let MAX_FLOAT32_INT = pown 2I 24 
-let MAX_FLOAT64_INT = pown 2I 53
+//let MIN_FLOAT32 = System.Single.MinValue
+//let MAX_FLOAT32 = System.Single.MaxValue
+//let MIN_FLOAT64 = System.Double.MinValue
+//let MAX_FLOAT64 = System.Double.MaxValue
+//let MAX_FLOAT32_INT = pown 2I 24 
+//let MAX_FLOAT64_INT = pown 2I 53
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -195,6 +196,20 @@ type Moment =
     | After
     | OnNext
 
+/// This type represents integer constants
+/// They as integer literals of type AnyInt,
+/// or as integer constants of type IntX or NatX
+type Integer = 
+    { value: bigint }
+    
+    override this.ToString() =
+        string this.value
+
+    static member Zero = 
+        { value = 0I }
+      
+    member this.IsZero = 
+        this.value = 0I
 
 /// This enum reflects the possible sizes of an IntExpr.
 /// The numbers are chosen such that type A is supertype of B if A >= B.
@@ -281,15 +296,14 @@ type Bits =
           size = size 
           repr = None }
 
-    static member Arithmetic operator (left: Bits) (right: Bits) : Bits =
+
+    static member Arithmetic (operator: Constants.Arithmetic) (left: Bits) (right: Bits) : Bits =
         let size = if left.size >= right.size then left.size else right.size // typechecker guarantees this
-        let wrapAround = pown 2I size
-        let numericVal = operator left.value right.value
-        let value = if numericVal <= 0I then wrapAround + numericVal
-                    else numericVal % wrapAround
+        let value = operator.binaryBits size left.value right.value
         { value = value 
           size = size
           repr = None }
+
 
     static member Relational op left right : bool = 
         op left.value right.value
@@ -319,43 +333,6 @@ type BitsType =
         elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
         else Bits64
 
-
-/// Carries the parsed value and the orginal representation
-type Float = 
-    { value: float
-      repr: string option }
-
-    member this.IsOverflow  = 
-        this.value = System.Double.PositiveInfinity
-
-    static member mkOverflow (repr: string option) =
-        { value = System.Double.PositiveInfinity; repr = repr }
-
-    override this.ToString() =
-        match this.repr with
-        | Some s -> s
-        | None -> string this.value
-
-    static member Zero = 
-        { value = 0.0; repr = None }
-
-    member this.IsZero =
-        this.value = 0.0
-
-    member this.UnaryMinus : Float =
-        let negVal = - this.value
-        match this.repr with
-        | Some r -> {value = negVal; repr = Some ("-" + r)}
-        | None -> {value = negVal; repr = None}
-
-    static member CanRepresent (i: bigint) =
-        abs i <= MAX_FLOAT64_INT
-
-    static member Relational op left right = 
-        op left.value right.value
-    
-    static member Arithmetic op left right =
-        {value = op left.value right.value; repr = None}
 
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!

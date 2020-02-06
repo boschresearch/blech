@@ -589,7 +589,7 @@ and Literal =
     // -- numerical constants --
     | Bits of value:Bits * range:range
     | Int of value:bigint * unit:UnitExpr option * range:range
-    | Float of value: Float * unit:UnitExpr option * range:range
+    | Float of value: Constants.Float * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
         | Bool (range=r)
@@ -920,7 +920,7 @@ let addOptSubInt optSub (number: bigint) =
     | None -> number
     | Some _ -> - number
 
-let addOptSubFloat optSub (float: Float) =
+let addOptSubFloat optSub (float: Constants.Float) =
     match optSub with
     | None -> float
     | Some _ -> float.UnaryMinus

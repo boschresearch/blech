@@ -294,7 +294,7 @@ module ParserUtils =
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
 
-    let parseFloat (s:string) : Float =
+    let parseFloat (s:string) : Constants.Float =
         try
             { value = System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo)
               repr = Some s }
@@ -356,7 +356,7 @@ module ParserUtils =
     //let parseHexFloat64 = parseHexFloat >> Result.bind parseFloat64
     //let parseHexFloat32 = parseHexFloat >> Result.bind parseFloat32
     
-    let parseHexFloat (repr: string) : Float =
+    let parseHexFloat (repr: string) : Constants.Float =
         // Follows the algorithm from 
         // “What Every Computer Scientist Should Know About Floating-Point Arithmetic”
         // http://pages.cs.wisc.edu/~david/courses/cs552/S12/handouts/goldberg-floating-point.pdf

@@ -509,7 +509,7 @@ and RhsStructure =
     | BoolConst of bool
     | IntConst of bigint
     | BitsConst of Bits
-    | FloatConst of Float
+    | FloatConst of Constants.Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (int * TypedRhs) list

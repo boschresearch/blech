@@ -18,6 +18,7 @@ module Blech.Frontend.TyChkExpressions
 
 open Blech.Common
 
+open Constants
 open CommonTypes
 open BlechTypes
 open TyChecked
@@ -37,9 +38,10 @@ let private debugShowConstExpr typedRhs =
     | FloatConst f ->
         printfn "FloatConst: %s" <| string f
     | _ ->
-        ()
-        
+        () 
     Ok typedRhs
+
+
 //=========================================================================
 // Functions for checking type and expression properties
 //=========================================================================
@@ -190,51 +192,51 @@ let rec internal isStaticExpr lut expr =
 //    op a.ToFloat b.ToFloat
 //    |> wrapFloat a b
 
-let private bigintToBits (value: bigint) : Bits =  
-    Bits.FromInteger value (BitsType.RequiredType value).GetSize
+let private IntToBits (value: bigint) : Bits =  
+    Bits.FromInteger value (BitsType.RequiredType value).GetSize  //TODO: this seams to be wrong, fjg. 6.2.20
 
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (+) a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (+) (bigintToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (+) a (bigintToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Add a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (+) a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (*) a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (*) (bigintToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (*) a (bigintToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Mul a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Add a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (*) a b
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (/) a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (/) (bigintToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (/) a (bigintToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Div a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Div (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Div a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (/) a b
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (-) a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (-) (bigintToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (-) a (bigintToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (-) a b
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a % b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (%) a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic (%) (bigintToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic (%) a (bigintToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Mod a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a (IntToBits b)        
     | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
     | _ -> Mod(this, that)
 
