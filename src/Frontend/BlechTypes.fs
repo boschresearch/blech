@@ -29,6 +29,7 @@ open System.Collections.Generic
 open Blech.Common.PPrint
 open Blech.Common.Range
 
+open Constants
 open CommonTypes
 open PrettyPrint.DocPrint
 
@@ -508,7 +509,7 @@ and RhsStructure =
     // constants and literals
     | BoolConst of bool
     | IntConst of bigint
-    | BitsConst of Bits
+    | BitsConst of Constants.Bits
     | FloatConst of Constants.Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list

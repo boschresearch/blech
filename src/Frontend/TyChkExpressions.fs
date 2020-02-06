@@ -198,45 +198,45 @@ let private IntToBits (value: bigint) : Bits =
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Add a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (+) a b
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a (IntToBits b)        
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Add a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Mul a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Add (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Add a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (*) a b
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a (IntToBits b)        
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Mul a b
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Div a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Div (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Div a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (/) a b
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a (IntToBits b)        
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Div a b
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic (-) a b
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a (IntToBits b)        
+    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Sub a b
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a % b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Mod a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Constants.Sub (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Constants.Sub a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a b
+    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod (IntToBits a) b 
+    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a (IntToBits b)        
     | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
     | _ -> Mod(this, that)
 
@@ -565,11 +565,15 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         | BitsConst b -> BitsConst <| b.UnaryMinus // numeric wrap-around
         | _ -> Sub ({expr with rhs = BitsConst <| Bits.Zero size.GetSize }, expr) //0 - expr
         
-    | AnyFloat _ 
-    | ValueTypes (FloatType _) ->
+    //| AnyFloat
+    | ValueTypes (FloatType ft) ->
         match expr.rhs with
         | FloatConst f -> FloatConst f.UnaryMinus 
-        | _ -> Sub ({expr with rhs = FloatConst Float.Zero}, expr) //0 - expr
+        | _ -> Sub ({expr with rhs = FloatConst <| Float.Zero ft.GetSize}, expr) //0 - expr
+    | AnyFloat _ ->
+        match expr.rhs with
+        | FloatConst f -> FloatConst f.UnaryMinus 
+        | _ -> failwith "AnyFloat should be always a FloatConst"
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     
 

@@ -15,6 +15,8 @@
 // limitations under the License.
 
 module Blech.Frontend.SyntaxUtils
+
+open Constants
 open CommonTypes
 
 module SyntaxErrors =
@@ -294,13 +296,15 @@ module ParserUtils =
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
 
-    let parseFloat (s:string) : Constants.Float =
+    let parseFloat (s:string) : Float =
         try
             { value = System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo)
+              size = 64 // a float literal has always precision float64
               repr = Some s }
         with
             | :? System.OverflowException ->
                 { value = System.Double.PositiveInfinity
+                  size = 64 
                   repr = Some s }
 
     //let parseFloat floatParser s = 
@@ -356,7 +360,7 @@ module ParserUtils =
     //let parseHexFloat64 = parseHexFloat >> Result.bind parseFloat64
     //let parseHexFloat32 = parseHexFloat >> Result.bind parseFloat32
     
-    let parseHexFloat (repr: string) : Constants.Float =
+    let parseHexFloat (repr: string) : Float =
         // Follows the algorithm from 
         // “What Every Computer Scientist Should Know About Floating-Point Arithmetic”
         // http://pages.cs.wisc.edu/~david/courses/cs552/S12/handouts/goldberg-floating-point.pdf
@@ -391,7 +395,9 @@ module ParserUtils =
             with
                 | :? System.OverflowException ->
                     Double.PositiveInfinity
-        {value = value; repr = Some repr}
+        { value = value
+          size = 64  // TODO: A hex float literal should have its minimal size, compute this, fjg. 6.2.20  
+          repr = Some repr}
     
     let parseOne (nat: string, r: Range.range) =
         match System.Int32.TryParse(nat) with

@@ -18,8 +18,10 @@ module Blech.Frontend.AST
 
 open Blech.Common
 open Blech.Common.Range
+
+open Constants
 open CommonTypes
-open System
+
 
 /// This module contains the (untyped) abstract syntax tree of Blech.
 /// The module has three parts:
@@ -587,7 +589,7 @@ and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range
     // -- numerical constants --
-    | Bits of value:Bits * range:range
+    | Bits of value: Bits * range:range
     | Int of value:bigint * unit:UnitExpr option * range:range
     | Float of value: Constants.Float * unit:UnitExpr option * range:range
     member l.Range = 

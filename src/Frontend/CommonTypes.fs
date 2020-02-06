@@ -196,20 +196,6 @@ type Moment =
     | After
     | OnNext
 
-/// This type represents integer constants
-/// They as integer literals of type AnyInt,
-/// or as integer constants of type IntX or NatX
-type Integer = 
-    { value: bigint }
-    
-    override this.ToString() =
-        string this.value
-
-    static member Zero = 
-        { value = 0I }
-      
-    member this.IsZero = 
-        this.value = 0I
 
 /// This enum reflects the possible sizes of an IntExpr.
 /// The numbers are chosen such that type A is supertype of B if A >= B.
@@ -265,48 +251,6 @@ type NatType =
         elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
         else Nat64
 
-type Bits = 
-    { value: bigint 
-      size: int        // size: 8, 16, 32, 64, needed for operators
-      repr: string option }
-
-    override this.ToString() =
-        match this.repr with
-        | Some s -> s
-        | None -> string this.value
-
-    static member Zero size = 
-        { value = 0I; size = size; repr = None }
-    
-    member this.IsZero = 
-        this.value = 0I
-
-    member this.UnaryMinus: Bits =
-        printfn "Bits size: %s" <| string this.size
-        let wrapAround = pown 2I this.size
-        { value = wrapAround - this.value // numeric wrap-around
-          size = this.size
-          repr = None } // there is no representation, like '- 0xFF' 
-
-    static member FromInteger (value: bigint) (size: int) : Bits =
-        let wrapAround = pown 2I size
-        let wrapped = if value < 0I then wrapAround + value else value
-        // printfn "Required Size: %s Bits form integer: %s -> %s" (string size) (string value) (string wrapped)
-        { value = wrapped
-          size = size 
-          repr = None }
-
-
-    static member Arithmetic (operator: Constants.Arithmetic) (left: Bits) (right: Bits) : Bits =
-        let size = if left.size >= right.size then left.size else right.size // typechecker guarantees this
-        let value = operator.binaryBits size left.value right.value
-        { value = value 
-          size = size
-          repr = None }
-
-
-    static member Relational op left right : bool = 
-        op left.value right.value
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
@@ -337,9 +281,9 @@ type BitsType =
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
 
-    override this.ToString() = "float" + string(this.GetSize())
+    override this.ToString() = "float" + string this.GetSize
 
-    member this.GetSize() =
+    member this.GetSize =
         match this with
         | Float32 -> 32
         | Float64 -> 64
