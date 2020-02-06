@@ -86,6 +86,7 @@ type TyCheckError =
     | PrevOnParam of range * QName
     | PrevOnImmutable of range * QName
     | PrevOnlyOnValueTypes of range * Types
+    | PrevInFunction of range
     | NeedConstInit of range * Name
     | MustBeConst of TypedRhs
     | ConstArrayRequiresConstIndex of range
@@ -190,6 +191,7 @@ type TyCheckError =
             | PrevOnParam (r, q) -> r, sprintf "The prev operator can only be applied to local variables, however here it used on parameter %s." (q.ToString())
             | PrevOnImmutable (r, q) -> r, sprintf "The prev operator cannot be applied to immutable variable %s." (q.ToString())
             | PrevOnlyOnValueTypes (r, t) -> r, sprintf "The prev operator can only be applied to value typed variables, however here it used on type %s." (t.ToString())
+            | PrevInFunction r -> r, "Operator prev cannot be used inside a function."
             | NeedConstInit (r, n) -> r, sprintf "The initialiser of %s must be constant. Make sure not to use \"let\"-bound or other variables and parameters in it." n.idToString
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."

@@ -161,29 +161,85 @@ let private checkStmtsMatchReturn pos body retType =
 /// Checks whether the lists of statements does not contain any synchronous
 /// statements. This check is required for function bodies.
 let private checkAbsenceOfSyncStmts stmts = 
+    let applyToList f =
+        List.map f
+        >> contract
+        >> Result.bind (fun _ -> Ok ()) // in case we succeeded on every 
+                                        // statement, simply indicate success
+    let rec checkLhsRhs lhss rhss =
+        let resIn = rhss |> applyToList checkAbsenceOfSyncExpr
+        let checkLhs out =
+            match out.lhs with
+            | Wildcard -> Ok ()
+            | LhsCur tml
+            | LhsNext tml ->
+                match tml with
+                | Loc _
+                | FieldAccess _ -> Ok ()
+                | ArrayAccess (_, idx) -> checkAbsenceOfSyncExpr idx
+        let resOut = lhss |> applyToList checkLhs
+        [resIn; resOut] |> applyToList id
+    and checkAbsenceOfSyncExpr expr =
+        match expr.rhs with
+        | Prev _ -> Error [PrevInFunction expr.Range]
+        | RhsCur tml ->
+            match tml with
+            | Loc _
+            | FieldAccess _ -> Ok ()
+            | ArrayAccess (_, idx) -> checkAbsenceOfSyncExpr idx
+        | FunCall (_, ins, outs) -> checkLhsRhs outs ins
+        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> Ok ()
+        | StructConst fields ->
+            applyToList (snd >> checkAbsenceOfSyncExpr) fields
+        | ArrayConst fields ->
+            applyToList (snd >> checkAbsenceOfSyncExpr) fields
+        | Neg e -> checkAbsenceOfSyncExpr e
+        | Conj (e1, e2)
+        | Disj (e1, e2)
+        | Xor (e1, e2)
+        | Les (e1, e2)
+        | Leq (e1, e2)
+        | Equ (e1, e2)
+        | Add (e1, e2)
+        | Sub (e1, e2)
+        | Mul (e1, e2)
+        | Div (e1, e2)
+        | Mod (e1, e2) ->
+            [e1; e2] |> applyToList checkAbsenceOfSyncExpr
+
     let rec checkAbsenceOfSyncStmt oneStmt =
-        let checkStmts =
-            List.map checkAbsenceOfSyncStmt
-            >> contract
-            >> Result.bind (fun _ -> Ok ()) // in case we succeeded on every 
-                                            // statement, simply indicate success
         match oneStmt with
         // atomic imperative statements are Ok
-        | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | FunctionCall _ | Return _ ->
-            Ok ()
+        | Stmt.VarDecl v ->
+            checkAbsenceOfSyncExpr v.initValue
+        | Assert (_,cond,_) | Assume (_,cond,_) ->
+            checkAbsenceOfSyncExpr cond
+        | Assign (_,lhs,rhs) -> checkLhsRhs [lhs] [rhs]
+        | Stmt.Print (_,_,exprLst) ->
+            applyToList checkAbsenceOfSyncExpr exprLst
+        | FunctionCall (_, _, ins, outs) ->
+            checkLhsRhs outs ins
+        | Return (_,exprOpt) ->
+            exprOpt 
+            |> Option.map checkAbsenceOfSyncExpr 
+            |> Option.defaultValue (Ok ())
         | Stmt.ExternalVarDecl v ->
             Error [ExternalsInFunction v.pos]
         // synchronous statements
         | Await (p,_) | ActivityCall (p,_,_,_,_) | Preempt (p,_,_,_,_) | Cobegin (p,_)
-        | RepeatUntil (p,_,_, true) -> // since we do not have 'break', there is now way to end a endless loop from within
+        | RepeatUntil (p,_,_, true) -> // we do not care about prev in args when the stmt is sychronous
             Error [SynchronousStatementInFunction p]
         // imperative statements containing statements
-        | StmtSequence stmts | WhileRepeat (_, _, stmts) 
-        | RepeatUntil (_, stmts, _, false) -> 
-            checkStmts stmts
-        | ITE (_, _, ifBranch, elseBranch) ->
-            ifBranch @ elseBranch |> checkStmts
+        | StmtSequence stmts -> applyToList checkAbsenceOfSyncStmt stmts
+        | WhileRepeat (_, cond, stmts) 
+        | RepeatUntil (_, stmts, cond, false) -> 
+            [ checkAbsenceOfSyncExpr cond
+              applyToList checkAbsenceOfSyncStmt stmts ]
+            |> applyToList id
+        | ITE (_, cond, ifBranch, elseBranch) ->
+            [ checkAbsenceOfSyncExpr cond
+              ifBranch @ elseBranch |> applyToList checkAbsenceOfSyncStmt ]
+            |> applyToList id
 
     checkAbsenceOfSyncStmt (StmtSequence stmts)
 
@@ -288,7 +344,7 @@ let private determineCalledSingletons lut bodyRes =
             |> List.collect (snd >> singletonCalls)
         match expr.rhs with
         // locations
-        | RhsCur tml 
+        | RhsCur tml // TODO: look into the TMLs (index exprs)
         | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
         // constants and literals
         | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> []
@@ -297,7 +353,7 @@ let private determineCalledSingletons lut bodyRes =
         // call, has no side-effect IFF it does not write any outputs
         // this assumption is only valid when there are not global variables (as is the case in Blech)
         // and no external C variables are written (TODO!)
-        | FunCall (name, inputs, _) ->
+        | FunCall (name, inputs, _) -> // TODO: look into lhs TMLs (index exprs)
             processFunCall name inputs
         // boolean
         | Neg e -> singletonCalls e
