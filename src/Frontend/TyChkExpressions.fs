@@ -273,7 +273,7 @@ let private less this that =
     | BoolConst a, BoolConst b -> BoolConst (a < b)
     | IntConst a, IntConst b -> BoolConst (a < b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<) a b
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Lt a b
     | _ -> Les(this, that)
 
 let private leq this that =
@@ -281,7 +281,7 @@ let private leq this that =
     | BoolConst a, BoolConst b -> BoolConst (a <= b)
     | IntConst a, IntConst b -> BoolConst (a <= b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<=) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (<=) a b
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Le a b
     | _ -> Leq(this, that)
 
 let private eq this that =
@@ -289,7 +289,7 @@ let private eq this that =
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (=) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
+    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Eq a b
     | _ -> Equ(this, that)
 
 
@@ -531,7 +531,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
 let private makeAnyTypeFromConstExpr (rhs: RhsStructure) : Types =  
     match rhs with
     | IntConst i -> AnyInt i
-    | FloatConst f -> AnyFloat f.value
+    | FloatConst fc -> AnyFloat fc.GetValueForAnyFloat
     | _ -> failwith "Evaluation of numbers resulted in not a number" // cannot happen
 
 
@@ -566,10 +566,10 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         | _ -> Sub ({expr with rhs = BitsConst <| Bits.Zero size.GetSize }, expr) //0 - expr
         
     //| AnyFloat
-    | ValueTypes (FloatType ft) ->
+    | ValueTypes (FloatType size) ->
         match expr.rhs with
         | FloatConst f -> FloatConst f.UnaryMinus 
-        | _ -> Sub ({expr with rhs = FloatConst <| Float.Zero ft.GetSize}, expr) //0 - expr
+        | _ -> Sub ( {expr with rhs = FloatConst size.Zero}, expr) //0 - expr
     | AnyFloat _ ->
         match expr.rhs with
         | FloatConst f -> FloatConst f.UnaryMinus 
@@ -587,8 +587,9 @@ let private unaryMinus r (expr: TypedRhs) =
              typ = AnyInt -value
              range = expr.range }
     | AnyFloat value ->
-        Ok { rhs = unsafeUnaryMinus expr 
-             typ = AnyFloat -value 
+        let rhs = unsafeUnaryMinus expr
+        Ok { rhs = rhs
+             typ = makeAnyTypeFromConstExpr rhs
              range = expr.range }
     | ValueTypes (IntType _)
     | ValueTypes (BitsType _)
@@ -776,7 +777,7 @@ let private equal ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational eq ex
 /// In case of type mismatches an error is returned instead.
 let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
-    let rhs = operator expr1 expr2
+    let rhs = operator expr1 expr2  
     let rng = Range.unionRanges expr1.Range expr2.Range
     let commonSize size1 size2 = if size1 >= size2 then size1 else size2
     
@@ -901,13 +902,13 @@ let private checkSimpleLiteral literal =
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
     | AST.Bits (bits, pos) ->
         let v = bits.value
-        if MIN_BITS64 <= v && v <= MAX_BITS64 then // Bits literals are always >= 0                    
+        if MIN_BITS64 <= v && v <= MAX_BITS64 then // Bits literals are always >= 0                     
             { rhs = BitsConst bits; typ = AnyBits v; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, v.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
         let v = number.value
-        if MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then // Float literals allow an unary minus in attributes
+        if Float64.CanRepresent v then // Float literals allow an unary minus in attributes
             { rhs = FloatConst number; typ = AnyFloat v; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, string number)]

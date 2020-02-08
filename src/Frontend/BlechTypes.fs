@@ -162,7 +162,7 @@ and Types =
     | AnyComposite // used for wildcard or compound literals
     | AnyInt of bigint // used only for untyped integer literals
     | AnyBits of bigint // used only for untyped bits literals 
-    | AnyFloat of double // used only for untyped float literals
+    | AnyFloat of FloatWidth // used only for untyped float literals
     
     member this.ToDoc =
         match this with

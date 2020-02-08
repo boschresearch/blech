@@ -277,7 +277,6 @@ type BitsType =
         elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
         else Bits64
 
-
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
 
@@ -288,19 +287,27 @@ type FloatType =
         | Float32 -> 32
         | Float64 -> 64
 
+    member this.Zero =
+        match this with
+        | Float32 -> Float.Zero32
+        | Float64 -> Float.Zero64
+
     member this.CanRepresent (i: bigint) =
         match this with
         | Float32 -> abs i <= MAX_FLOAT32_INT
         | Float64 -> abs i <= MAX_FLOAT64_INT
 
-    member this.CanRepresent (value: double) =
-        match this with
-        | Float32 -> float MIN_FLOAT32 <= value && value <= float MAX_FLOAT32
-        | Float64 -> MIN_FLOAT64 <= value && value <= MAX_FLOAT64
-   
+    member this.CanRepresent (value: FloatWidth) =
+        match this, value with
+        | Float64, FloatWidth.Float64 v -> MIN_FLOAT64 <= v && value.GetFloat <= MAX_FLOAT64
+        | Float32, FloatWidth.Float64 v -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
+        | _, FloatWidth.Float32 _ -> failwith "AnyFloat is always a Float64 value"    
         
     static member RequiredType (f : Float) =
-        if float MIN_FLOAT32 <= f.value && f.value <= float MAX_FLOAT32 then Float32
-        else Float64
+        match f.value with
+        | FloatWidth.Float32 _ -> 
+            Float32
+        | FloatWidth.Float64 v -> 
+            if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
     
     
