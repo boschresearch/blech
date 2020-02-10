@@ -135,7 +135,7 @@ let rec internal isStaticExpr lut expr =
         | Some Mutability.Immutable
         | Some Mutability.Variable -> false
     | Prev _ -> false // prev exists only on var
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> true
+    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
