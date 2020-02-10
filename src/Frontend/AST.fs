@@ -589,7 +589,7 @@ and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range
     // -- numerical constants --
-    | Bits of value: Bits * range:range
+    | Bits of value: Constants.Bits * range:range
     | Int of value:bigint * unit:UnitExpr option * range:range
     | Float of value: Constants.Float * unit:UnitExpr option * range:range
     member l.Range = 
@@ -925,8 +925,12 @@ let addOptSubInt optSub (number: bigint) =
 let addOptSubFloat optSub (float: Constants.Float) =
     match optSub with
     | None -> float
-    | Some _ -> float.UnaryMinus
-    
+    | Some _ -> 
+        match float.value, float.repr with
+        | Constants.F64 v, Some s ->
+            { value = Constants.F64 -v; repr = Some ("-" + s) }
+        | _ -> failwith "Illegal use of minus for attribute literals"
+
 /// unites and optional range and a range
 let optUnionRanges optRange range=
     match optRange with

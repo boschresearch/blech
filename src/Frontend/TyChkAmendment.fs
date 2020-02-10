@@ -136,7 +136,7 @@ let rec getDefaultValueFor pos name dty =
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | BitsType size -> Ok {rhs = BitsConst <| Bits.Zero size.GetSize; typ = dty; range = pos}
         | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
-        | FloatType size ->Ok {rhs = FloatConst size.Zero; typ = dty; range = pos}
+        | FloatType size ->Ok {rhs = FloatConst <| Evaluation.Constant.FloatZero size; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->
             let defaultValues =
                 fields

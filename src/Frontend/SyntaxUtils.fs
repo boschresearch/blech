@@ -298,12 +298,12 @@ module ParserUtils =
 
     let parseFloat (s:string) : Float =
         try
-            { value = FloatWidth.Float64 <| System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo)
+            { value = FloatWidth.F64 <| System.Double.Parse((strip_ s), System.Globalization.NumberFormatInfo.InvariantInfo)
               // size = 64 // a float literal has always precision float64
               repr = Some s }
         with
             | :? System.OverflowException ->
-                { value = FloatWidth.Float64 System.Double.PositiveInfinity
+                { value = FloatWidth.F64 System.Double.PositiveInfinity
                   // size = 64 
                   repr = Some s }
 
@@ -395,7 +395,7 @@ module ParserUtils =
             with
                 | :? System.OverflowException ->
                     Double.PositiveInfinity
-        { value = FloatWidth.Float64 value
+        { value = FloatWidth.F64 value
           repr = Some repr}
     
     let parseOne (nat: string, r: Range.range) =

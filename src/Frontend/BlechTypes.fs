@@ -773,6 +773,7 @@ let rec public isLiteral expr =
     match expr.rhs with
     | IntConst _ 
     | BoolConst _
+    | BitsConst _
     | FloatConst _
     | ResetConst -> true
     | StructConst fields -> 

@@ -287,10 +287,10 @@ type FloatType =
         | Float32 -> 32
         | Float64 -> 64
 
-    member this.Zero =
-        match this with
-        | Float32 -> Float.Zero32
-        | Float64 -> Float.Zero64
+    //member this.Zero =
+    //    match this with
+    //    | Float32 -> Float.Zero32
+    //    | Float64 -> Float.Zero64
 
     member this.CanRepresent (i: bigint) =
         match this with
@@ -299,15 +299,15 @@ type FloatType =
 
     member this.CanRepresent (value: FloatWidth) =
         match this, value with
-        | Float64, FloatWidth.Float64 v -> MIN_FLOAT64 <= v && value.GetFloat <= MAX_FLOAT64
-        | Float32, FloatWidth.Float64 v -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
-        | _, FloatWidth.Float32 _ -> failwith "AnyFloat is always a Float64 value"    
+        | Float64, F64 v -> MIN_FLOAT64 <= v && v <= MAX_FLOAT64
+        | Float32, F64 v -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
+        | _, FloatWidth.F32 _ -> failwith "AnyFloat is always a Float64 value"    
         
     static member RequiredType (f : Float) =
         match f.value with
-        | FloatWidth.Float32 _ -> 
+        | F32 _ -> 
             Float32
-        | FloatWidth.Float64 v -> 
+        | F64 v -> 
             if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
     
     

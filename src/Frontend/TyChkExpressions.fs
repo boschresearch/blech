@@ -201,7 +201,7 @@ let private add this that =
     | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a b
     | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add (IntToBits a) b 
     | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Add a b
+    | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Add.BinaryFloat a b
     | _ -> Add(this, that)
 
 let private mul this that =
@@ -210,7 +210,7 @@ let private mul this that =
     | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a b
     | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul (IntToBits a) b 
     | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Mul a b
+    | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Mul.BinaryFloat a b
     | _ -> Mul(this, that)
 
 let private div this that =
@@ -219,7 +219,7 @@ let private div this that =
     | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a b
     | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div (IntToBits a) b 
     | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Div a b
+    | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Div.BinaryFloat a b
     | _ -> Div(this, that)
 
 let private sub this that =
@@ -228,7 +228,7 @@ let private sub this that =
     | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a b
     | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub (IntToBits a) b 
     | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a (IntToBits b)        
-    | FloatConst a, FloatConst b -> FloatConst <| Float.Arithmetic Arithmetic.Sub a b
+    | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Sub.BinaryFloat a b
     | _ -> Sub(this, that)
 
 let private modus this that =
@@ -273,7 +273,7 @@ let private less this that =
     | BoolConst a, BoolConst b -> BoolConst (a < b)
     | IntConst a, IntConst b -> BoolConst (a < b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Lt a b
+    | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Lt.RelationalFloat a b
     | _ -> Les(this, that)
 
 let private leq this that =
@@ -281,7 +281,7 @@ let private leq this that =
     | BoolConst a, BoolConst b -> BoolConst (a <= b)
     | IntConst a, IntConst b -> BoolConst (a <= b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<=) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Le a b
+    | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Le.RelationalFloat a b
     | _ -> Leq(this, that)
 
 let private eq this that =
@@ -289,7 +289,7 @@ let private eq this that =
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
     | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (=) a b
-    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational Relational.Eq a b
+    | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Eq.RelationalFloat a b
     | _ -> Equ(this, that)
 
 
@@ -568,11 +568,11 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
     //| AnyFloat
     | ValueTypes (FloatType size) ->
         match expr.rhs with
-        | FloatConst f -> FloatConst f.UnaryMinus 
-        | _ -> Sub ( {expr with rhs = FloatConst size.Zero}, expr) //0 - expr
+        | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20  
+        | _ -> Sub ( {expr with rhs = FloatConst <| Evaluation.Constant.FloatZero size}, expr) //0 - expr
     | AnyFloat _ ->
         match expr.rhs with
-        | FloatConst f -> FloatConst f.UnaryMinus 
+        | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20
         | _ -> failwith "AnyFloat should be always a FloatConst"
     | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
     

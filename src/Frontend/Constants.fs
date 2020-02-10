@@ -72,18 +72,21 @@ type BitsWidth =
     | Bits64 of uint64
 
 type FloatWidth = 
-    | Float32 of float32
-    | Float64 of float
+    | F32 of float32
+    | F64 of float
+    | FAny of value: float * repr: string 
 
     member this.IsZero =
         match this with
-        | Float32 v -> v = 0.0f
-        | Float64 v -> v = 0.0
+        | F32 v -> v = 0.0f
+        | F64 v -> v = 0.0
+        | FAny (value = v) -> v = 0.0
 
-    member this.GetFloat : float = /// TODO: only needed to construct an an AnyFloat type, get rid of this, fjg. 8.2.20
-        match this with
-        | Float32 v -> float v
-        | Float64 v -> v
+    member this.PromoteTo (other: FloatWidth) : FloatWidth = 
+        match this, other with
+        | F32 v, F64 _ -> F64 <| float v
+        | _ -> this  // no promotion necessary
+
 
 /// This type represents integer constants
 /// They as integer literals of type AnyInt,
@@ -160,14 +163,11 @@ and Float =
     { value: FloatWidth
       repr: string option }
 
-    //static member mkOverflow (repr: string option) =
-    //    { value = System.Double.PositiveInfinity; size = 0; repr = repr }
-
     override this.ToString() =
         match this.repr, this.value with
         | Some s, _ -> s
-        | None, Float32 value -> string value
-        | None, Float64 value -> string value
+        | None, F32 value -> string value
+        | None, F64 value -> string value
         
     //static member Zero size = 
     //    { value = 0.0; size = size; repr = None }
@@ -176,31 +176,35 @@ and Float =
         this.value.IsZero
 
     static member Zero32: Float = 
-        { value = Float32 0.0f; repr = None}
+        { value = F32 0.0f; repr = None}
 
     static member Zero64: Float = 
-        { value = Float64 0.0; repr = None}
+        { value = F64 0.0; repr = None}
 
     member this.GetValueForAnyFloat = 
         match this.value with
-        | Float64 v -> this.value
-        | Float32 _ -> failwith "Float const of any type is always a Float64"
+        | F64 v -> this.value
+        | F32 _ -> failwith "Float const of any type is always a Float64"
 
-    member this.UnaryMinus : Float =
-        let negVal = Unm.UnaryMinusFloat this.value
-        match this.repr with
-        | Some r -> {value = negVal; repr = Some ("-" + r)}
-        | None -> {value = negVal; repr = None}
+    //member this.UnaryMinus : Float =
+    //    let negVal = Unm.UnaryMinusFloat this.value
+    //    match this.repr with
+    //    | Some r -> {value = negVal; repr = Some ("-" + r)}
+    //    | None -> {value = negVal; repr = None}
+
+    member this.PromoteTo (other: Float) : Float =
+        { value = this.value.PromoteTo other.value
+          repr = this.repr }
 
     static member CanRepresent (i: bigint) =
         abs i <= MAX_FLOAT64_INT
 
-    static member Relational (op: Relational) left right = 
-        op.RelationalFloat left.value right.value
+    //static member Relational (op: Relational) left right = 
+    //    op.RelationalFloat left.value right.value
     
-    static member Arithmetic (op: Arithmetic) left right : Float =
-        let value = op.BinaryFloat left.value right.value
-        {value = value; repr = None}
+    //static member Arithmetic (op: Arithmetic) left right =
+    //    let value = op.BinaryFloat left.value right.value
+    //    {value = value; repr = None}
 
 
 and Arithmetic =
@@ -261,25 +265,27 @@ and Arithmetic =
         | Mod -> lv % rv
         | Unm -> failwith "Unm is not a binary integer operator"
         
-    member this.UnaryMinusFloat (value: FloatWidth) : FloatWidth =
-        match this, value with
-        | Unm, Float32 v-> Float32 -v 
-        | Unm, Float64 v -> Float64 -v
-        | _ -> failwith "Not an unary minus operator"
+    //member this.UnaryMinusFloat (value: FloatWidth) : FloatWidth =
+    //    match this, value with
+    //    | Unm, F32 v-> F32 -v 
+    //    | Unm, F64 v -> F64 -v
+    //    | _ -> failwith "Not an unary minus operator"
 
-    member this.BinaryFloat (left: FloatWidth) (right: FloatWidth): FloatWidth =
-        match this, left, right with
-        | Add, Float32 lv, Float32 rv -> Float32 <| lv + rv
-        | Add, Float64 lv, Float64 rv -> Float64 <| lv + rv
-        | Sub, Float32 lv, Float32 rv -> Float32 <| lv - rv
-        | Sub, Float64 lv, Float64 rv -> Float64 <| lv - rv
-        | Mul, Float32 lv, Float32 rv -> Float32 <| lv * rv
-        | Mul, Float64 lv, Float64 rv -> Float64 <| lv * rv
-        | Div, Float32 lv, Float32 rv -> Float32 <| lv / rv
-        | Div, Float64 lv, Float64 rv -> Float64 <| lv / rv
-        | Mod, _, _ -> failwith "Modulo '%' is not allowed for floats"
-        | Unm, _, _ -> failwith "Unm is not a binary float operator"
-        | _, _, _ -> failwith "Not a valid width combination"    
+    //member this.BinaryFloat (left: FloatWidth) (right: FloatWidth): FloatWidth =
+    //    let l = left.PromoteTo right
+    //    let r = right.PromoteTo left
+    //    match this, l, r with
+    //    | Add, F32 lv, F32 rv -> F32 <| lv + rv
+    //    | Add, F64 lv, F64 rv -> F64 <| lv + rv
+    //    | Sub, F32 lv, F32 rv -> F32 <| lv - rv
+    //    | Sub, F64 lv, F64 rv -> F64 <| lv - rv
+    //    | Mul, F32 lv, F32 rv -> F32 <| lv * rv
+    //    | Mul, F64 lv, F64 rv -> F64 <| lv * rv
+    //    | Div, F32 lv, F32 rv -> F32 <| lv / rv
+    //    | Div, F64 lv, F64 rv -> F64 <| lv / rv
+    //    | Mod, _, _ -> failwith "Modulo '%' is not allowed for floats"
+    //    | Unm, _, _ -> failwith "Unm is not a binary float operator"
+    //    | _, _, _ -> failwith "Not a valid width combination"    
 
 
 and Logical =
@@ -287,19 +293,19 @@ and Logical =
     | And 
     | Or
 
-and Relational = 
-    | Eq
-    | Lt
-    | Le
-    member this.RelationalFloat (left: FloatWidth) (right: FloatWidth): bool =
-        match this, left, right with
-        | Eq, Float32 lv, Float32 rv -> lv = rv
-        | Eq, Float64 lv, Float64 rv -> lv = rv
-        | Lt, Float32 lv, Float32 rv -> lv < rv
-        | Lt, Float64 lv, Float64 rv -> lv < rv
-        | Le, Float32 lv, Float32 rv -> lv <= rv
-        | Le, Float64 lv, Float64 rv -> lv <= rv
-        | _, _, _ -> failwith "Not a valid width combination"    
+//and Relational = 
+//    | Eq
+//    | Lt
+//    | Le
+//    member this.RelationalFloat (left: FloatWidth) (right: FloatWidth): bool =
+//        match this, left, right with
+//        | Eq, F32 lv, F32 rv -> lv = rv
+//        | Eq, F64 lv, F64 rv -> lv = rv
+//        | Lt, F32 lv, F32 rv -> lv < rv
+//        | Lt, F64 lv, F64 rv -> lv < rv
+//        | Le, F32 lv, F32 rv -> lv <= rv
+//        | Le, F64 lv, F64 rv -> lv <= rv
+//        | _, _, _ -> failwith "Not a valid width combination"    
 
 and Bitwise =  
     | Bnot

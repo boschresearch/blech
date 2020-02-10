@@ -46,6 +46,7 @@
     <Compile Include="SignaturePrinter.fs" />
     <Compile Include="ErrorsAndCombinators.fs" />
     <Compile Include="TypeCheckContext.fs" />
+    <Compile Include="Evaluation.fs" />
     <Compile Include="TyChkAmendment.fs" />
     <Compile Include="TyChkExpressions.fs" />
     <Compile Include="Annotation.fs" />
