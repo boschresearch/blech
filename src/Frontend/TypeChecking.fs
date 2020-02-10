@@ -326,7 +326,7 @@ let private determineGlobalOutputs lut bodyRes =
 
 
 let private determineCalledSingletons lut bodyRes =
-    let rec processFunCall name inputs =
+    let rec processFunCall name inputs outputs =
         match lut.nameToDecl.[name] with
         | SubProgramDecl spd -> 
             if spd.IsSingleton then [spd.name] else []
@@ -336,6 +336,7 @@ let private determineCalledSingletons lut bodyRes =
         | Declarable.ExternalVarDecl _ 
         | Declarable.ParamDecl _ -> failwith "Expected to check a function declaration for singletons."
         @ List.collect singletonCalls inputs
+        @ checkLhs outputs
     and checkLhs lhss =
         let checkLhs out =
             match out.lhs with
@@ -360,8 +361,8 @@ let private determineCalledSingletons lut bodyRes =
         // call, has no side-effect IFF it does not write any outputs
         // this assumption is only valid when there are not global variables (as is the case in Blech)
         // and no external C variables are written (TODO!)
-        | FunCall (name, inputs, _) -> // TODO: look into lhs TMLs (index exprs)
-            processFunCall name inputs
+        | FunCall (name, inputs, outputs) ->
+            processFunCall name inputs outputs
         // boolean
         | Neg e -> singletonCalls e
         | Conj (x, y) | Disj (x, y) | Xor (x, y)
@@ -385,11 +386,13 @@ let private determineCalledSingletons lut bodyRes =
             let resReceiver = receiverOpt |> Option.toList |> checkLhs
             let resOutputs = outputs |> checkLhs
             recSingletons @ resReceiver @ resInputs @ resOutputs
-        | FunctionCall (_, name, inputs, _) -> // TODO outputs lhs
-            processFunCall name inputs
+        | FunctionCall (_, name, inputs, outputs) ->
+            processFunCall name inputs outputs
         //atomic statements 
         | Stmt.VarDecl v -> singletonCalls v.initValue
-        | Assign (_,_,rhs) // TODO lhs!
+        | Assign (_,lhs,rhs) ->
+            List.collect singletonCalls [rhs]
+            @ checkLhs [lhs]
         | Assert (_,rhs,_) 
         | Assume (_,rhs,_)
         | Await (_,rhs) -> singletonCalls rhs

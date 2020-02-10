@@ -98,13 +98,15 @@ let rec private hasNoSideEffect expr =
     | RhsCur tml 
     | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
     // constants and literals
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> true
+    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     // call, has no side-effect IFF it does not write any outputs
     // this assumption is only valid when there are not global variables (as is the case in Blech)
     // and no external C variables are written (TODO!)
-    | FunCall (_, _, outputs) -> outputs = []
+    | FunCall (_, inputs, outputs) ->
+        outputs = []
+        && List.forall hasNoSideEffect inputs
     // boolean
     | Neg e -> hasNoSideEffect e
     | Conj (x, y) | Disj (x, y) | Xor (x, y)

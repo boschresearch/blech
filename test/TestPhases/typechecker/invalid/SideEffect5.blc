@@ -1,0 +1,14 @@
+function f(a: int32)(b: int32) returns int32
+    b = a
+    return a
+end
+
+function g(b: int32) returns int32
+    return 17
+end
+
+@[EntryPoint]
+activity P(a: int32)(x: int32)
+    
+    await g(f(a)(x)) > 0
+end
