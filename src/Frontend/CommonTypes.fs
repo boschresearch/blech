@@ -238,6 +238,14 @@ type NatType =
         | Nat32 -> 32
         | Nat64 -> 64
     
+    member this.CanRepresent (anyBits: Bits) =
+        match this, anyBits with
+        | Nat8, BAny (value, _) -> MIN_NAT8 <= value && value <= MAX_NAT8
+        | Nat16, BAny (value, _) -> MIN_NAT16 <= value && value <= MAX_NAT16
+        | Nat32, BAny (value, _) -> MIN_NAT32 <= value && value <= MAX_NAT32
+        | Nat64, BAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for BAny values"
+   
     member this.CanRepresent (value: bigint) =
         match this with
         | Nat8 -> MIN_NAT8 <= value && value <= MAX_NAT8
@@ -264,7 +272,15 @@ type BitsType =
         | Bits32 -> 32
         | Bits64 -> 64
     
-    member this.CanRepresent (value: bigint) =
+    member this.CanRepresent (anyBits: Bits) =
+        match this, anyBits with
+        | Bits8, BAny (value, _) -> MIN_BITS8 <= value && value <= MAX_BITS8
+        | Bits16, BAny (value, _) -> MIN_BITS16 <= value && value <= MAX_BITS16
+        | Bits32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_BITS32
+        | Bits64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_BITS64
+        | _ -> failwith "This is only used for BAny values"
+    
+    member this.CanRepresent (value: bigint) = 
         match this with
         | Bits8 -> MIN_INT8 <= value && value <= MAX_NAT8
         | Bits16 -> MIN_INT16 <= value && value <= MAX_NAT16

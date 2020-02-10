@@ -73,9 +73,9 @@ module SignaturePrinter =
                 | AST.Int (value = i) ->
                     string i |> txt
                 | AST.Bits (value = lit) ->
-                    match lit.repr with
-                    | Some repr -> txt repr
-                    | None -> failwith "A bits literal should always have a representation"
+                    match lit with
+                    | BAny (_, repr) -> txt repr
+                    | _ -> failwith "A bits literal should always have a representation"
                 | AST.Float (value = lit) ->
                     match lit with
                     | FAny (_, Some repr) -> txt repr

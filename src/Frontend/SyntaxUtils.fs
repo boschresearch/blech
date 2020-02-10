@@ -272,27 +272,21 @@ module ParserUtils =
         let bits = String.explode (strip_ s).[2..]
         let pows, _ = List.mapFoldBack (fun b i -> (if b = '1' then i else 0I),  i*2I) bits 1I
         let value = List.sum pows
-        { value = value
-          size = (BitsType.RequiredType value).GetSize
-          repr = Some s }
-
+        BAny (value, s)
+        
     let parseOct (s:string): Bits =
         let octs = String.explode (strip_ s).[2..]
         // 48 is the ascii offset for digits
         let pows, _ = List.mapFoldBack (fun b i ->  bigint (int b - 48) * i,  i*8I) octs 1I
         let value = List.sum pows
-        { value = value
-          size = (BitsType.RequiredType value).GetSize
-          repr = Some s }
-    
+        BAny (value, s)
+        
 
     let parseHex (s:string): Bits =
         // add a leading '0' to prevent interpretation as negative number
         let value = BigInteger.Parse("0" + (strip_ s).[2..], System.Globalization.NumberStyles.AllowHexSpecifier)
-        { value = value
-          size = (BitsType.RequiredType value).GetSize    
-          repr = Some s }
-
+        BAny (value, s)
+        
     let parseInteger (s:string): bigint =
         BigInteger.Parse (strip_ s)
 

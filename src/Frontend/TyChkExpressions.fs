@@ -192,51 +192,51 @@ let rec internal isStaticExpr lut expr =
 //    op a.ToFloat b.ToFloat
 //    |> wrapFloat a b
 
-let private IntToBits (value: bigint) : Bits =  
-    Bits.FromInteger value (BitsType.RequiredType value).GetSize  //TODO: this seams to be wrong, fjg. 6.2.20
+//let private IntToBits (value: bigint) : Bits =  
+//    Bits.FromInteger value (BitsType.RequiredType value).GetSize  //TODO: this seams to be wrong, fjg. 6.2.20
 
 let private add this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a + b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Add.BinaryBits a b
+    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add (IntToBits a) b 
+    //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Add.BinaryFloat a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a * b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Mul.BinaryBits a b
+    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul (IntToBits a) b 
+    //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Mul.BinaryFloat a b
     | _ -> Mul(this, that)
 
 let private div this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a / b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Div.BinaryBits a b
+    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div (IntToBits a) b 
+    //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Div.BinaryFloat a b
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a - b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Sub.BinaryBits a b
+    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub (IntToBits a) b 
+    //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Sub.BinaryFloat a b
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
     | IntConst a, IntConst b -> IntConst (a % b)
-    | BitsConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a b
-    | IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod (IntToBits a) b 
-    | BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a (IntToBits b)        
+    | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Mod.BinaryBits a b
+    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod (IntToBits a) b 
+    //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a (IntToBits b)        
     | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
     | _ -> Mod(this, that)
 
@@ -272,7 +272,7 @@ let private less this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a < b)
     | IntConst a, IntConst b -> BoolConst (a < b)
-    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<) a b
+    | BitsConst a, BitsConst b -> BoolConst <| Evaluation.Relational.Lt.RelationalBits a b
     | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Lt.RelationalFloat a b
     | _ -> Les(this, that)
 
@@ -280,7 +280,7 @@ let private leq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a <= b)
     | IntConst a, IntConst b -> BoolConst (a <= b)
-    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (<=) a b
+    | BitsConst a, BitsConst b -> BoolConst <| Evaluation.Relational.Le.RelationalBits a b
     | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Le.RelationalFloat a b
     | _ -> Leq(this, that)
 
@@ -288,7 +288,7 @@ let private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
     | IntConst a, IntConst b -> BoolConst (a = b)
-    | BitsConst a, BitsConst b -> BoolConst <| Bits.Relational (=) a b
+    | BitsConst a, BitsConst b -> BoolConst <| Evaluation.Relational.Eq.RelationalBits a b
     | FloatConst a, FloatConst b -> BoolConst <| Evaluation.Relational.Eq.RelationalFloat a b
     | _ -> Equ(this, that)
 
@@ -562,8 +562,8 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 
     | ValueTypes (BitsType size) ->
         match expr.rhs with
-        | BitsConst b -> BitsConst <| b.UnaryMinus // numeric wrap-around
-        | _ -> Sub ({expr with rhs = BitsConst <| Bits.Zero size.GetSize }, expr) //0 - expr
+        | BitsConst b -> BitsConst <| Evaluation.Unm.UnaryMinusBits b  // numeric wrap-around
+        | _ -> Sub ({expr with rhs = BitsConst <| Evaluation.Constant.BitsZero size }, expr) //0 - expr
         
     //| AnyFloat
     | ValueTypes (FloatType size) ->
@@ -901,11 +901,10 @@ let private checkSimpleLiteral literal =
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
     | AST.Bits (bits, pos) ->
-        let v = bits.value
-        if MIN_BITS64 <= v && v <= MAX_BITS64 then // Bits literals are always >= 0                     
-            { rhs = BitsConst bits; typ = AnyBits v; range = pos } |> Ok
+        if Bits64.CanRepresent bits then // Bits literals are always >= 0                     
+            { rhs = BitsConst bits; typ = AnyBits bits; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyInt(pos, v.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
+            Error [NumberLargerThanAnyInt(pos, bits.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
         if Float64.CanRepresent number then // Float literals allow an unary minus in attributes
             { rhs = FloatConst number; typ = AnyFloat number; range = pos } |> Ok

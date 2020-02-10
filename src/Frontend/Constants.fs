@@ -58,35 +58,6 @@ let MAX_FLOAT64 = System.Double.MaxValue
 let MAX_FLOAT32_INT = pown 2I 24 
 let MAX_FLOAT64_INT = pown 2I 53
 
-type IntWidth =
-    | Int8 of int8
-    | Int16 of int16
-    | Int32 of int32
-    | Int64 of int64
-    | IntAny of bigint
-
-type BitsWidth = 
-    | Bits8 of uint8
-    | Bits16 of uint16
-    | Bits32 of uint32
-    | Bits64 of uint64
-
-//type FloatWidth = 
-//    | F32 of float32
-//    | F64 of float
-//    | FAny of value: float * repr: string 
-
-//    member this.IsZero =
-//        match this with
-//        | F32 v -> v = 0.0f
-//        | F64 v -> v = 0.0
-//        | FAny (value = v) -> v = 0.0
-
-//    member this.PromoteTo (other: FloatWidth) : FloatWidth = 
-//        match this, other with
-//        | F32 v, F64 _ -> F64 <| float v
-//        | _ -> this  // no promotion necessary
-
 
 /// This type represents integer constants
 /// They as integer literals of type AnyInt,
@@ -114,46 +85,80 @@ type Integer =
 /// They appear as bits literals of type AnyBit,
 /// or as bits constants of type bits8, bits16, bits32, bits64
 and Bits = 
-    { value: bigint 
-      size: int        // size: 8, 16, 32, 64, needed for operators
-      repr: string option }
+    | B8 of uint8
+    | B16 of uint16
+    | B32 of uint32
+    | B64 of uint64
+    | BAny of bigint * string // No operations allowed for BAny constants, therefore string not optional
+
+    //{ value: bigint 
+    //  size: int        // size: 8, 16, 32, 64, needed for operators
+    //  repr: string option }
 
     override this.ToString() =
-        match this.repr with
-        | Some s -> s
-        | None -> string this.value
-
-    static member Zero size = 
-        { value = 0I; size = size; repr = None }
-    
-    member this.IsZero = this.value.IsZero
-
-    member this.UnaryMinus: Bits =
-        printfn "Bits size: %s" <| string this.size
-        let value = Arithmetic.UnaryMinusBits this
-        { value = value // numeric wrap-around
-          size = this.size
-          repr = None } // there is no representation, like '- 0xFF' 
-
-    static member FromInteger (value: bigint) (size: int) : Bits =
-        let wrapAround = pown 2I size
-        let wrapped = if value < 0I then wrapAround + value else value
-        // printfn "Required Size: %s Bits form integer: %s -> %s" (string size) (string value) (string wrapped)
-        { value = wrapped
-          size = size 
-          repr = None }
+        match this with
+        | B8 v -> string v
+        | B16 v -> string v
+        | B32 v -> string v
+        | B64 v -> string v
+        | BAny (_, s) -> s 
 
 
-    static member Arithmetic (operator: Arithmetic) (left: Bits) (right: Bits) : Bits =
-        let size = if left.size > right.size then left.size else right.size
-        let value = operator.BinaryBits size left right
-        { value = value 
-          size = size
-          repr = None }
+    static member Zero8 = B8 0uy
+    static member Zero16 = B16 0us
+    static member Zero32 = B32 0u
+    static member Zero64 = B64 0UL
+
+    member this.IsZero = 
+        match this with
+        | B8 v -> v = 0uy
+        | B16 v -> v = 0us
+        | B32 v -> v = 0u
+        | B64 v -> v = 0UL
+        | BAny (v, _) -> v = 0I 
+
+    //member this.UnaryMinus: Bits =
+    //    printfn "Bits size: %s" <| string this.size
+    //    let value = Arithmetic.UnaryMinusBits this
+    //    { value = value // numeric wrap-around
+    //      size = this.size
+    //      repr = None } // there is no representation, like '- 0xFF' 
+
+    member this.PromoteTo (other: Bits) : Bits = 
+        match this, other with
+        | B8 v, B16 _ -> B16 <| uint16 v
+        | B8 v, B32 _ -> B32 <| uint32 v
+        | B8 v, B64 _ -> B64 <| uint64 v
+        | B16 v, B32 _ -> B32 <| uint32 v
+        | B16 v, B64 _ -> B64 <| uint64 v
+        | B32 v, B64 _ -> B64 <| uint64 v
+        | BAny (v, _), B8 _ -> B8 <| uint8 v   // typecheck ensures fitting values 
+        | BAny (v, _), B16 _ -> B16 <| uint16 v  // typecheck ensures fitting values 
+        | BAny (v, _), B32 _ -> B32 <| uint32 v  // typecheck ensures fitting values 
+        | BAny (v, _), B64 _ -> B64 <| uint64 v  // typecheck ensures fitting values
+        | _ -> this  // no promotion necessary
 
 
-    static member Relational op left right : bool = 
-        op left.value right.value
+    //static member FromInteger (value: bigint) (size: int) : Bits =
+    //    let wrapAround = pown 2I size
+    //    let wrapped = if value < 0I then wrapAround + value else value
+    //    // printfn "Required Size: %s Bits form integer: %s -> %s" (string size) (string value) (string wrapped)
+    //    { value = wrapped
+    //      size = size 
+    //      repr = None }
+
+
+    //static member Arithmetic (operator: Arithmetic) (left: Bits) (right: Bits) : Bits =
+    //    let size = if left.size > right.size then left.size else right.size
+    //    let value = operator.BinaryBits size left right
+    //    { value = value 
+    //      size = size
+    //      repr = None }
+
+
+    //static member Relational op left right : bool = 
+    //    op left.value right.value    //static member Relational op left right : bool = 
+    //    op left.value right.value
 
 
 /// This type represents float constants
@@ -208,41 +213,41 @@ and Arithmetic =
     | Div
     | Mod
 
-    static member UnaryMinusBits(bits: Bits) = 
-        let bv = bits.value
-        match bits.size with
-        | 8 -> 0uy - uint8 bv |> uint32 |> bigint
-        | 16 -> 0us - uint16 bv |> uint32 |> bigint
-        | 32 -> 0u - uint32 bv |> bigint
-        | 64 -> 0UL - uint64 bv |> bigint
-        | _ -> failwith "Not a valid size"
+    //static member UnaryMinusBits(bits: Bits) = 
+    //    let bv = bits.value
+    //    match bits.size with
+    //    | 8 -> 0uy - uint8 bv |> uint32 |> bigint
+    //    | 16 -> 0us - uint16 bv |> uint32 |> bigint
+    //    | 32 -> 0u - uint32 bv |> bigint
+    //    | 64 -> 0UL - uint64 bv |> bigint
+    //    | _ -> failwith "Not a valid size"
 
-    member this.BinaryBits (size: int) (left: Bits) (right: Bits) : bigint =
-        let lv = left.value
-        let rv = right.value
-        match this, size with
-        | Add, 8 -> uint8 lv + uint8 rv |> uint32 |> bigint 
-        | Add, 16 -> uint16 lv + uint16 rv |> uint32 |> bigint 
-        | Add, 32 -> uint32 lv + uint32 rv |> bigint 
-        | Add, 64 -> uint64 lv + uint64 rv |> bigint 
-        | Sub, 8 -> uint8 lv - uint8 rv |> uint32 |> bigint 
-        | Sub, 16 -> uint16 lv - uint16 rv |> uint32 |> bigint 
-        | Sub, 32 -> uint32 lv - uint32 rv |> bigint 
-        | Sub, 64 -> uint64 lv - uint64 rv |> bigint 
-        | Mul, 8 -> uint8 lv * uint8 rv |> uint32 |> bigint 
-        | Mul, 16 -> uint16 lv * uint16 rv |> uint32 |> bigint 
-        | Mul, 32 -> uint32 lv * uint32 rv |> bigint 
-        | Mul, 64 -> uint64 lv * uint64 rv |> bigint 
-        | Div, 8 -> uint8 lv / uint8 rv |> uint32 |> bigint 
-        | Div, 16 -> uint16 lv / uint16 rv |> uint32 |> bigint 
-        | Div, 32 -> uint32 lv / uint32 rv |> bigint 
-        | Div, 64 -> uint64 lv / uint64 rv |> bigint 
-        | Mod, 8 -> uint8 lv % uint8 rv |> uint32 |> bigint 
-        | Mod, 16 -> uint16 lv % uint16 rv |> uint32 |> bigint 
-        | Mod, 32 -> uint32 lv % uint32 rv |> bigint 
-        | Mod, 64 -> uint64 lv % uint64 rv |> bigint 
-        | Unm, _ -> failwith "Unm is not a binary bits operator"
-        | _, _ -> failwith "Not a valid size"
+    //member this.BinaryBits (size: int) (left: Bits) (right: Bits) : bigint =
+    //    let lv = left.value
+    //    let rv = right.value
+    //    match this, size with
+    //    | Add, 8 -> uint8 lv + uint8 rv |> uint32 |> bigint 
+    //    | Add, 16 -> uint16 lv + uint16 rv |> uint32 |> bigint 
+    //    | Add, 32 -> uint32 lv + uint32 rv |> bigint 
+    //    | Add, 64 -> uint64 lv + uint64 rv |> bigint 
+    //    | Sub, 8 -> uint8 lv - uint8 rv |> uint32 |> bigint 
+    //    | Sub, 16 -> uint16 lv - uint16 rv |> uint32 |> bigint 
+    //    | Sub, 32 -> uint32 lv - uint32 rv |> bigint 
+    //    | Sub, 64 -> uint64 lv - uint64 rv |> bigint 
+    //    | Mul, 8 -> uint8 lv * uint8 rv |> uint32 |> bigint 
+    //    | Mul, 16 -> uint16 lv * uint16 rv |> uint32 |> bigint 
+    //    | Mul, 32 -> uint32 lv * uint32 rv |> bigint 
+    //    | Mul, 64 -> uint64 lv * uint64 rv |> bigint 
+    //    | Div, 8 -> uint8 lv / uint8 rv |> uint32 |> bigint 
+    //    | Div, 16 -> uint16 lv / uint16 rv |> uint32 |> bigint 
+    //    | Div, 32 -> uint32 lv / uint32 rv |> bigint 
+    //    | Div, 64 -> uint64 lv / uint64 rv |> bigint 
+    //    | Mod, 8 -> uint8 lv % uint8 rv |> uint32 |> bigint 
+    //    | Mod, 16 -> uint16 lv % uint16 rv |> uint32 |> bigint 
+    //    | Mod, 32 -> uint32 lv % uint32 rv |> bigint 
+    //    | Mod, 64 -> uint64 lv % uint64 rv |> bigint 
+    //    | Unm, _ -> failwith "Unm is not a binary bits operator"
+    //    | _, _ -> failwith "Not a valid size"
 
     static member UnaryMinusInteger (i: Integer): bigint = 
         - i.value
@@ -281,10 +286,10 @@ and Arithmetic =
     //    | _, _, _ -> failwith "Not a valid width combination"    
 
 
-and Logical =
-    | Not
-    | And 
-    | Or
+//and Logical =
+//    | Not
+//    | And 
+//    | Or
 
 //and Relational = 
 //    | Eq
@@ -300,51 +305,51 @@ and Logical =
 //        | Le, F64 lv, F64 rv -> lv <= rv
 //        | _, _, _ -> failwith "Not a valid width combination"    
 
-and Bitwise =  
-    | Bnot
-    | Band
-    | Bor
-    | Bxor
-    | Shl
-    | Shr
-    | Ashr
-    | Rotl
-    | Rotr
+//and Bitwise =  
+//    | Bnot
+//    | Band
+//    | Bor
+//    | Bxor
+//    | Shl
+//    | Shr
+//    | Ashr
+//    | Rotl
+//    | Rotr
 
-    member this.BnotBits8 (bits: uint8) =
-        match this with
-        | Bnot -> ~~~ bits
-        | _ -> failwith "Not the bitwise not operator"
+//    member this.BnotBits8 (bits: uint8) =
+//        match this with
+//        | Bnot -> ~~~ bits
+//        | _ -> failwith "Not the bitwise not operator"
     
-    member this.BnotBits16 (bits: uint16) =
-        match this with
-        | Bnot -> ~~~ bits
-        | _ -> failwith "Not the bitwise not operator"
+//    member this.BnotBits16 (bits: uint16) =
+//        match this with
+//        | Bnot -> ~~~ bits
+//        | _ -> failwith "Not the bitwise not operator"
     
-    member this.BinaryBits (left: Bits) (right: Bits): bigint =
-        let size = if left.size > right.size then left.size else right.size
-        let lv = left.value
-        let rv = right.value
-        match this, size with
-        | Bor, 8 -> uint8 lv ||| uint8 rv |> uint32 |> bigint
-        | Band, 8-> uint8 lv &&& uint8 rv |> uint32 |> bigint
-        | Bxor, 8 -> uint8 lv ^^^ uint8 rv |> uint32 |> bigint
-        | _ -> failwith "Not a bitwise binary operator"
+//    member this.BinaryBits (left: Bits) (right: Bits): bigint =
+//        let size = if left.size > right.size then left.size else right.size
+//        let lv = left.value
+//        let rv = right.value
+//        match this, size with
+//        | Bor, 8 -> uint8 lv ||| uint8 rv |> uint32 |> bigint
+//        | Band, 8-> uint8 lv &&& uint8 rv |> uint32 |> bigint
+//        | Bxor, 8 -> uint8 lv ^^^ uint8 rv |> uint32 |> bigint
+//        | _ -> failwith "Not a bitwise binary operator"
 
-    member this.ShiftBits (bits: Bits) (amount: int32) =
-        let size = bits.size
-        match this, size with
-        | Shl, 8 -> uint8 bits.value <<< amount |> uint32 |> bigint
-        | Shr, 8 -> uint8 bits.value >>> amount |> uint32 |> bigint
-        | _ -> failwith "Not a shift operator"
+//    member this.ShiftBits (bits: Bits) (amount: int32) =
+//        let size = bits.size
+//        match this, size with
+//        | Shl, 8 -> uint8 bits.value <<< amount |> uint32 |> bigint
+//        | Shr, 8 -> uint8 bits.value >>> amount |> uint32 |> bigint
+//        | _ -> failwith "Not a shift operator"
 
-    member this.AdvancedShiftBits (bits: Bits) (amount: int32) : bigint = 
-        let size = bits.size
-        let b = bits.value
-        match this, size with
-        | Ashr, 8 -> (int8 b) >>> amount |> uint8 |> uint32 |> bigint 
-        // TODO: lookup rotate algorithms in Hacker's Delight, fjg. 6.2.20
-        | Rotl, _ -> failwith "Not yet implemented"
-        | Rotr, _ -> failwith "Not yet implemented"
-        | _ -> failwith "Not an advanced shift operator"
+//    member this.AdvancedShiftBits (bits: Bits) (amount: int32) : bigint = 
+//        let size = bits.size
+//        let b = bits.value
+//        match this, size with
+//        | Ashr, 8 -> (int8 b) >>> amount |> uint8 |> uint32 |> bigint 
+//        // TODO: lookup rotate algorithms in Hacker's Delight, fjg. 6.2.20
+//        | Rotl, _ -> failwith "Not yet implemented"
+//        | Rotr, _ -> failwith "Not yet implemented"
+//        | _ -> failwith "Not an advanced shift operator"
     

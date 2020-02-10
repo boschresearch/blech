@@ -632,9 +632,9 @@ module PrettyPrint =
                 | String (value = text) ->
                     txt text |> dquotes
                 | Bits (value = bits) ->
-                    match bits.repr with
-                    | Some repr -> txt repr
-                    | None -> failwith "A bits literal should always have a representation"
+                    match bits with
+                    | BAny (_, repr) -> txt repr
+                    | _ -> failwith "A bits literal should always have a representation"
                 | Int (value = i) ->
                     string i |> txt
                 | Float (value = lit) ->

@@ -100,10 +100,12 @@ let internal isLeftSupertypeOfRight typL typR =
     | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
         // AnyBits cannot be used as IntType, because their size is undefined
         sizeL.CanRepresent value 
-    | Types.ValueTypes (NatType sizeL), Types.AnyBits value
+    | Types.ValueTypes (NatType sizeL), Types.AnyBits value ->
+        sizeL.CanRepresent value
     | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
         sizeL.CanRepresent value
-    | Types.ValueTypes (BitsType sizeL), Types.AnyInt value
+    | Types.ValueTypes (BitsType sizeL), Types.AnyInt value ->
+        sizeL.CanRepresent value
     | Types.ValueTypes (BitsType sizeL), Types.AnyBits value ->
         // AnyInt can be used as BitsType, we assume 2s complement representation for literals
         sizeL.CanRepresent value
@@ -134,7 +136,7 @@ let rec getDefaultValueFor pos name dty =
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
         | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
-        | BitsType size -> Ok {rhs = BitsConst <| Bits.Zero size.GetSize; typ = dty; range = pos}
+        | BitsType size -> Ok {rhs = BitsConst <| Evaluation.Constant.BitsZero size; typ = dty; range = pos}
         | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
         | FloatType size ->Ok {rhs = FloatConst <| Evaluation.Constant.FloatZero size; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->

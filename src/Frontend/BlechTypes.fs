@@ -161,7 +161,7 @@ and Types =
     | ReferenceTypes of ReferenceTypes
     | AnyComposite // used for wildcard or compound literals
     | AnyInt of bigint // used only for untyped integer literals
-    | AnyBits of bigint // used only for untyped bits literals 
+    | AnyBits of Bits // used only for untyped bits literals 
     | AnyFloat of Float // used only for untyped float literals
     
     member this.ToDoc =
