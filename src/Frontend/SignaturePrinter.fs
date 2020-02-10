@@ -21,6 +21,7 @@ module SignaturePrinter =
     open Blech.Common
     open Blech.Common.PPrint
     
+    open Constants
     open CommonTypes
     open PrettyPrint.DocPrint
     
@@ -76,9 +77,9 @@ module SignaturePrinter =
                     | Some repr -> txt repr
                     | None -> failwith "A bits literal should always have a representation"
                 | AST.Float (value = lit) ->
-                    match lit.repr with
-                    | Some repr -> txt repr
-                    | None -> failwith "A float literal should always have a represention"
+                    match lit with
+                    | FAny (_, Some repr) -> txt repr
+                    | _ -> failwith "A float literal should always have a represention"
 
     let rec bpAttribute attr =
         let ppKey = function

@@ -71,34 +71,31 @@ type Arithmetic =
         | Unm -> failwith "Unm is not a binary integer operator"
         
     member this.UnaryMinusFloat (f : Float) : Float =
-        let value = 
-            match this, f.value with
-            | Unm, F32 v -> F32 -v 
-            | Unm, F64 v -> F64 -v
-            | _ -> failwith "Not an unary minus operator"
-        let repr =
-            match f.repr with
-            | Some s -> Some ("-" + s)
-            | None -> None
-        { value = value; repr = repr }
+        match this, f with
+        | Unm, F32 v -> F32 -v 
+        | Unm, F64 v -> F64 -v
+        | Unm, FAny (v, Some s) -> FAny (-v, Some <| "-" + s) 
+        | _ -> failwith "Not an unary minus operator"
 
     member this.BinaryFloat (left: Float) (right: Float): Float =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
-        let value = 
-            match this, l.value , r.value with
-            | Add, F32 lv, F32 rv -> F32 <| lv + rv
-            | Add, F64 lv, F64 rv -> F64 <| lv + rv
-            | Sub, F32 lv, F32 rv -> F32 <| lv - rv
-            | Sub, F64 lv, F64 rv -> F64 <| lv - rv
-            | Mul, F32 lv, F32 rv -> F32 <| lv * rv
-            | Mul, F64 lv, F64 rv -> F64 <| lv * rv
-            | Div, F32 lv, F32 rv -> F32 <| lv / rv
-            | Div, F64 lv, F64 rv -> F64 <| lv / rv
-            | Mod, _, _ -> failwith "Modulo '%' is not allowed for floats"
-            | Unm, _, _ -> failwith "Unm is not a binary float operator"
-            | _, _, _ -> failwith "Not a valid width combination"    
-        { value = value; repr = None }
+        match this, l , r with
+        | Add, F32 lv, F32 rv -> F32 <| lv + rv
+        | Add, F64 lv, F64 rv -> F64 <| lv + rv
+        | Add, FAny (lv, _), FAny (rv, _) -> FAny (lv + rv, None)
+        | Sub, F32 lv, F32 rv -> F32 <| lv - rv
+        | Sub, F64 lv, F64 rv -> F64 <| lv - rv
+        | Sub, FAny (lv, _), FAny (rv, _) -> FAny (lv - rv, None)
+        | Mul, F32 lv, F32 rv -> F32 <| lv * rv
+        | Mul, F64 lv, F64 rv -> F64 <| lv * rv
+        | Mul, FAny (lv, _), FAny (rv, _) -> FAny (lv * rv, None)
+        | Div, F32 lv, F32 rv -> F32 <| lv / rv
+        | Div, F64 lv, F64 rv -> F64 <| lv / rv
+        | Div, FAny (lv, _), FAny (rv, _) -> FAny (lv / rv, None)
+        | Mod, _, _ -> failwith "Modulo '%' is not allowed for floats"
+        | Unm, _, _ -> failwith "Unm is not a binary float operator"
+        | _, _, _ -> failwith "Not a valid width combination"    
 
 and Logical =
     | Not
@@ -112,13 +109,16 @@ and Relational =
     member this.RelationalFloat (left: Float) (right: Float): bool =
         let l = left.PromoteTo right
         let r = right.PromoteTo left    
-        match this, l.value, r.value with
+        match this, l, r with
         | Eq, F32 lv, F32 rv -> lv = rv
         | Eq, F64 lv, F64 rv -> lv = rv
+        | Eq, FAny (lv, _), FAny (rv, _) -> lv = rv
         | Lt, F32 lv, F32 rv -> lv < rv
         | Lt, F64 lv, F64 rv -> lv < rv
+        | Lt, FAny (lv, _), FAny (rv, _) -> lv < rv
         | Le, F32 lv, F32 rv -> lv <= rv
         | Le, F64 lv, F64 rv -> lv <= rv
+        | Le, FAny (lv, _), FAny (rv, _) -> lv <= rv
         | _, _, _ -> failwith "Not a valid width combination"    
 
 

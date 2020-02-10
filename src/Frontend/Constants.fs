@@ -71,21 +71,21 @@ type BitsWidth =
     | Bits32 of uint32
     | Bits64 of uint64
 
-type FloatWidth = 
-    | F32 of float32
-    | F64 of float
-    | FAny of value: float * repr: string 
+//type FloatWidth = 
+//    | F32 of float32
+//    | F64 of float
+//    | FAny of value: float * repr: string 
 
-    member this.IsZero =
-        match this with
-        | F32 v -> v = 0.0f
-        | F64 v -> v = 0.0
-        | FAny (value = v) -> v = 0.0
+//    member this.IsZero =
+//        match this with
+//        | F32 v -> v = 0.0f
+//        | F64 v -> v = 0.0
+//        | FAny (value = v) -> v = 0.0
 
-    member this.PromoteTo (other: FloatWidth) : FloatWidth = 
-        match this, other with
-        | F32 v, F64 _ -> F64 <| float v
-        | _ -> this  // no promotion necessary
+//    member this.PromoteTo (other: FloatWidth) : FloatWidth = 
+//        match this, other with
+//        | F32 v, F64 _ -> F64 <| float v
+//        | _ -> this  // no promotion necessary
 
 
 /// This type represents integer constants
@@ -160,51 +160,44 @@ and Bits =
 /// They appear as float literals of type AnyFloat,
 /// or as float constants of type float32 or float64
 and Float = 
-    { value: FloatWidth
-      repr: string option }
-
+    | F32 of float32
+    | F64 of float
+    | FAny of float * string option 
+    
     override this.ToString() =
-        match this.repr, this.value with
-        | Some s, _ -> s
-        | None, F32 value -> string value
-        | None, F64 value -> string value
-        
-    //static member Zero size = 
-    //    { value = 0.0; size = size; repr = None }
+        match this with
+        | F32 v -> string v
+        | F64 v -> string v
+        | FAny (_, Some s)-> s
+        | FAny (v, None) -> string v
+
+    member this.IsAny =
+        match this with
+        | FAny _ -> true
+        | _ -> false
 
     member this.IsZero =
-        this.value.IsZero
+        match this with
+        | F32 v -> v = 0.0f
+        | F64 v -> v = 0.0
+        | FAny (v, _) -> v = 0.0
+    
+    member this.PromoteTo (other: Float) : Float = 
+        match this, other with
+        | F32 v, F64 _ -> F64 <| float v
+        | FAny (v, _), F32 _ -> F32 <| float32 v  // typecheck ensures fitting values 
+        | FAny (v, _), F64 _ -> F64 v             // typecheck ensures fitting values
+        | _ -> this  // no promotion necessary
 
-    static member Zero32: Float = 
-        { value = F32 0.0f; repr = None}
 
-    static member Zero64: Float = 
-        { value = F64 0.0; repr = None}
+    static member Zero32: Float = F32 0.0f
 
-    member this.GetValueForAnyFloat = 
-        match this.value with
-        | F64 v -> this.value
-        | F32 _ -> failwith "Float const of any type is always a Float64"
+    static member Zero64: Float = F64 0.0
 
-    //member this.UnaryMinus : Float =
-    //    let negVal = Unm.UnaryMinusFloat this.value
-    //    match this.repr with
-    //    | Some r -> {value = negVal; repr = Some ("-" + r)}
-    //    | None -> {value = negVal; repr = None}
-
-    member this.PromoteTo (other: Float) : Float =
-        { value = this.value.PromoteTo other.value
-          repr = this.repr }
-
+    // Todo: Get rid of this, fjg. 10.02.20
     static member CanRepresent (i: bigint) =
         abs i <= MAX_FLOAT64_INT
 
-    //static member Relational (op: Relational) left right = 
-    //    op.RelationalFloat left.value right.value
-    
-    //static member Arithmetic (op: Arithmetic) left right =
-    //    let value = op.BinaryFloat left.value right.value
-    //    {value = value; repr = None}
 
 
 and Arithmetic =

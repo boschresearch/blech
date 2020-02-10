@@ -223,6 +223,7 @@ module PrettyPrint =
         open Blech.Common.PPrint
     
         open DocPrint
+        open Constants
         open CommonTypes
         open AST
     
@@ -637,9 +638,9 @@ module PrettyPrint =
                 | Int (value = i) ->
                     string i |> txt
                 | Float (value = lit) ->
-                    match lit.repr with
-                    | Some repr -> txt repr
-                    | None -> failwith "A float literal should always have a represention"
+                    match lit with
+                    | FAny (_, Some repr) -> txt repr
+                    | _ -> failwith "A float literal should always have a represention"
             and ppOptExpr = function
                 | None -> Empty
                 | Some e -> fExpr e

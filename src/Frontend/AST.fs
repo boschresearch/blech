@@ -926,9 +926,8 @@ let addOptSubFloat optSub (float: Constants.Float) =
     match optSub with
     | None -> float
     | Some _ -> 
-        match float.value, float.repr with
-        | Constants.F64 v, Some s ->
-            { value = Constants.F64 -v; repr = Some ("-" + s) }
+        match float with
+        | FAny (v, Some s) -> FAny (-v, Some <| "-" + s)
         | _ -> failwith "Illegal use of minus for attribute literals"
 
 /// unites and optional range and a range

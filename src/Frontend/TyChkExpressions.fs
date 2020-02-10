@@ -531,7 +531,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
 let private makeAnyTypeFromConstExpr (rhs: RhsStructure) : Types =  
     match rhs with
     | IntConst i -> AnyInt i
-    | FloatConst fc -> AnyFloat fc.GetValueForAnyFloat
+    | FloatConst f when f.IsAny -> AnyFloat f
     | _ -> failwith "Evaluation of numbers resulted in not a number" // cannot happen
 
 
@@ -907,9 +907,8 @@ let private checkSimpleLiteral literal =
         else
             Error [NumberLargerThanAnyInt(pos, v.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
-        let v = number.value
-        if Float64.CanRepresent v then // Float literals allow an unary minus in attributes
-            { rhs = FloatConst number; typ = AnyFloat v; range = pos } |> Ok
+        if Float64.CanRepresent number then // Float literals allow an unary minus in attributes
+            { rhs = FloatConst number; typ = AnyFloat number; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, string number)]
     | AST.String _ ->

@@ -297,17 +297,18 @@ type FloatType =
         | Float32 -> abs i <= MAX_FLOAT32_INT
         | Float64 -> abs i <= MAX_FLOAT64_INT
 
-    member this.CanRepresent (value: FloatWidth) =
+    /// Checks if a given float types can represent a AnyFloat value
+    member this.CanRepresent (value: Float) =
         match this, value with
-        | Float64, F64 v -> MIN_FLOAT64 <= v && v <= MAX_FLOAT64
-        | Float32, F64 v -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
-        | _, FloatWidth.F32 _ -> failwith "AnyFloat is always a Float64 value"    
+        | Float64, FAny (v, _) -> MIN_FLOAT64 <= v && v <= MAX_FLOAT64
+        | Float32, FAny (v, _) -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
+        | _, _-> failwith "This is only used for FAny values"    
         
     static member RequiredType (f : Float) =
-        match f.value with
+        match f with
         | F32 _ -> 
             Float32
-        | F64 v -> 
+        | F64 v
+        | FAny (v, _) ->
             if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
-    
-    
+        
