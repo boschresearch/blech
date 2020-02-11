@@ -58,13 +58,27 @@ let MAX_FLOAT64 = System.Double.MaxValue
 let MAX_FLOAT32_INT = pown 2I 24 
 let MAX_FLOAT64_INT = pown 2I 53
 
+type Any =
+    | IAny of bigint * string option
+    | BAny of bigint * string option
+    | FAny of double * string option
+
+    override this.ToString() =
+        match this with
+        | IAny (_, Some s)
+        | BAny (_, Some s)
+        | FAny (_, Some s) -> s
+        | IAny (v, None) -> string v
+        | BAny (v, None)-> string v
+        | FAny (v, None) -> string v
+
 
 /// This type represents integer constants
 /// They as integer literals of type AnyInt,
 /// or as integer constants of type IntX or NatX
-type Integer = 
+type Int = 
     { value: bigint }
-    
+
     override this.ToString() =
         string this.value
 
@@ -77,9 +91,12 @@ type Integer =
     member this.UnaryMinus =
         { value = Arithmetic.UnaryMinusInteger this }
 
-    static member Arithmetic (operator: Arithmetic) (left: Integer) (right: Integer) : Integer =
+    static member Arithmetic (operator: Arithmetic) (left: Int) (right: Int) : Int =
         { value = operator.BinaryInteger left right }
       
+    member this.PromoteTo (bits: Bits) =
+        true
+
 
 /// This type represents integer constants
 /// They appear as bits literals of type AnyBit,
@@ -249,10 +266,10 @@ and Arithmetic =
     //    | Unm, _ -> failwith "Unm is not a binary bits operator"
     //    | _, _ -> failwith "Not a valid size"
 
-    static member UnaryMinusInteger (i: Integer): bigint = 
+    static member UnaryMinusInteger (i: Int): bigint = 
         - i.value
 
-    member this.BinaryInteger (left: Integer) (right: Integer): bigint =
+    member this.BinaryInteger (left: Int) (right: Int): bigint =
         let lv = left.value
         let rv = right.value
         match this with
