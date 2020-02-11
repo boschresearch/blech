@@ -160,32 +160,84 @@ let private checkStmtsMatchReturn pos body retType =
 
 /// Checks whether the lists of statements does not contain any synchronous
 /// statements. This check is required for function bodies.
-let private checkAbsenceOfSyncStmts stmts = 
+let rec private checkAbsenceOfSyncStmts stmts = 
+    let applyToList f =
+        List.map f
+        >> contract
+        >> Result.bind (fun _ -> Ok ()) // in case we succeeded on every 
+                                        // statement, simply indicate success
+    let rec checkLhsRhs lhss rhss =
+        let resIn = rhss |> applyToList checkAbsenceOfSyncExpr
+        let checkLhs out =
+            match out.lhs with
+            | Wildcard -> Ok ()
+            | LhsCur tml
+            | LhsNext tml ->
+                tml.FindAllIndexExpr
+                |> applyToList checkAbsenceOfSyncExpr
+        let resOut = lhss |> applyToList checkLhs
+        [resIn; resOut] |> applyToList id
+    and checkAbsenceOfSyncExpr expr =
+        match expr.rhs with
+        | Prev _ -> Error [PrevInFunction expr.Range]
+        | RhsCur tml ->
+            tml.FindAllIndexExpr
+            |> applyToList checkAbsenceOfSyncExpr
+        | FunCall (_, ins, outs) -> checkLhsRhs outs ins
+        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> Ok ()
+        | StructConst fields ->
+            applyToList (snd >> checkAbsenceOfSyncExpr) fields
+        | ArrayConst fields ->
+            applyToList (snd >> checkAbsenceOfSyncExpr) fields
+        | Neg e -> checkAbsenceOfSyncExpr e
+        | Conj (e1, e2)
+        | Disj (e1, e2)
+        | Xor (e1, e2)
+        | Les (e1, e2)
+        | Leq (e1, e2)
+        | Equ (e1, e2)
+        | Add (e1, e2)
+        | Sub (e1, e2)
+        | Mul (e1, e2)
+        | Div (e1, e2)
+        | Mod (e1, e2) ->
+            [e1; e2] |> applyToList checkAbsenceOfSyncExpr
+
     let rec checkAbsenceOfSyncStmt oneStmt =
-        let checkStmts =
-            List.map checkAbsenceOfSyncStmt
-            >> contract
-            >> Result.bind (fun _ -> Ok ()) // in case we succeeded on every 
-                                            // statement, simply indicate success
         match oneStmt with
         // atomic imperative statements are Ok
-        | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | FunctionCall _ | Return _ ->
-            Ok ()
+        | Stmt.VarDecl v ->
+            checkAbsenceOfSyncExpr v.initValue
+        | Assert (_,cond,_) | Assume (_,cond,_) ->
+            checkAbsenceOfSyncExpr cond
+        | Assign (_,lhs,rhs) -> checkLhsRhs [lhs] [rhs]
+        | Stmt.Print (_,_,exprLst) ->
+            applyToList checkAbsenceOfSyncExpr exprLst
+        | FunctionCall (_, _, ins, outs) ->
+            checkLhsRhs outs ins
+        | Return (_,exprOpt) ->
+            exprOpt 
+            |> Option.map checkAbsenceOfSyncExpr 
+            |> Option.defaultValue (Ok ())
         | Stmt.ExternalVarDecl v ->
             Error [ExternalsInFunction v.pos]
         // synchronous statements
         | Await (p,_) | ActivityCall (p,_,_,_,_) | Preempt (p,_,_,_,_) | Cobegin (p,_)
-        | RepeatUntil (p,_,_, true) -> // since we do not have 'break', there is now way to end a endless loop from within
+        | RepeatUntil (p,_,_, true) -> // we do not care about prev in args when the stmt is sychronous
             Error [SynchronousStatementInFunction p]
         // imperative statements containing statements
-        | StmtSequence stmts | WhileRepeat (_, _, stmts) 
-        | RepeatUntil (_, stmts, _, false) -> 
-            checkStmts stmts
-        | ITE (_, _, ifBranch, elseBranch) ->
-            ifBranch @ elseBranch |> checkStmts
+        | StmtSequence stmts -> checkAbsenceOfSyncStmts stmts
+        | WhileRepeat (_, cond, stmts) 
+        | RepeatUntil (_, stmts, cond, false) -> 
+            [ checkAbsenceOfSyncExpr cond
+              checkAbsenceOfSyncStmts stmts ]
+            |> applyToList id
+        | ITE (_, cond, ifBranch, elseBranch) ->
+            [ checkAbsenceOfSyncExpr cond
+              ifBranch @ elseBranch |> checkAbsenceOfSyncStmts ]
+            |> applyToList id
 
-    checkAbsenceOfSyncStmt (StmtSequence stmts)
+    applyToList checkAbsenceOfSyncStmt stmts
 
 
 /// An activity must have some synchronous delay statement on every possible 
@@ -250,6 +302,8 @@ let private determineGlobalOutputs lut bodyRes =
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
         | Await _ -> [],[],[]
+        // note that since external variables cannot appear inside functions, we ignore function calls
+        // on the statement level AND all expressions that could call functions
         // statements containing statements
         | RepeatUntil (_, stmts, _, _)
         | Preempt (_,_,_,_,stmts)
@@ -272,7 +326,7 @@ let private determineGlobalOutputs lut bodyRes =
 
 
 let private determineCalledSingletons lut bodyRes =
-    let rec processFunCall name inputs =
+    let rec processFunCall name inputs outputs =
         match lut.nameToDecl.[name] with
         | SubProgramDecl spd -> 
             if spd.IsSingleton then [spd.name] else []
@@ -282,13 +336,23 @@ let private determineCalledSingletons lut bodyRes =
         | Declarable.ExternalVarDecl _ 
         | Declarable.ParamDecl _ -> failwith "Expected to check a function declaration for singletons."
         @ List.collect singletonCalls inputs
+        @ checkLhs outputs
+    and checkLhs lhss =
+        let checkLhs out =
+            match out.lhs with
+            | Wildcard -> []
+            | LhsCur tml
+            | LhsNext tml ->
+                tml.FindAllIndexExpr
+                |> List.collect singletonCalls
+        lhss |> List.collect checkLhs 
     and singletonCalls expr =
         let recurFields fields =
             fields
             |> List.collect (snd >> singletonCalls)
         match expr.rhs with
         // locations
-        | RhsCur tml 
+        | RhsCur tml
         | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
         // constants and literals
         | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | ResetConst _ -> []
@@ -297,8 +361,8 @@ let private determineCalledSingletons lut bodyRes =
         // call, has no side-effect IFF it does not write any outputs
         // this assumption is only valid when there are not global variables (as is the case in Blech)
         // and no external C variables are written (TODO!)
-        | FunCall (name, inputs, _) ->
-            processFunCall name inputs
+        | FunCall (name, inputs, outputs) ->
+            processFunCall name inputs outputs
         // unary
         | Neg e | Bnot e -> 
             singletonCalls e
@@ -316,18 +380,24 @@ let private determineCalledSingletons lut bodyRes =
     let rec searchSingletons oneStmt =
         match oneStmt with
         // aggregate singletons from subprograms
-        | ActivityCall (_, name, _, inputs, _) ->
-            match lut.nameToDecl.[name] with
-            | SubProgramDecl spd -> 
-                if spd.IsSingleton then [spd.name] else []
-                @ spd.singletons
-            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
-            @ List.collect singletonCalls inputs
-        | FunctionCall (_, name, inputs, _) ->
-            processFunCall name inputs
+        | ActivityCall (_, name, receiverOpt, inputs, outputs) ->
+            let recSingletons = 
+                match lut.nameToDecl.[name] with
+                | SubProgramDecl spd -> 
+                    if spd.IsSingleton then [spd.name] else []
+                    @ spd.singletons
+                | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+            let resInputs = List.collect singletonCalls inputs
+            let resReceiver = receiverOpt |> Option.toList |> checkLhs
+            let resOutputs = outputs |> checkLhs
+            recSingletons @ resReceiver @ resInputs @ resOutputs
+        | FunctionCall (_, name, inputs, outputs) ->
+            processFunCall name inputs outputs
         //atomic statements 
         | Stmt.VarDecl v -> singletonCalls v.initValue
-        | Assign (_,_,rhs) 
+        | Assign (_,lhs,rhs) ->
+            List.collect singletonCalls [rhs]
+            @ checkLhs [lhs]
         | Assert (_,rhs,_) 
         | Assume (_,rhs,_)
         | Await (_,rhs) -> singletonCalls rhs

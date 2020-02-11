@@ -1,0 +1,6 @@
+function f()
+    var x: int8 = 8
+    var y = prev x
+end
+@[EntryPoint]
+activity A() await false end

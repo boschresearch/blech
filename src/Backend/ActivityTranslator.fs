@@ -825,7 +825,14 @@ let private translateBlock ctx compilations curComp block =
 // became necessary when strong abort was translated by introducing a prev on the condition and thus deviating from given source code
 // might change again
 let private collectVarsToPrev2 pg =
-    let rec processExpr expr =
+    let rec processLhs lhs =
+        match lhs.lhs with
+        | Wildcard -> []
+        | LhsCur tml
+        | LhsNext tml ->
+            tml.FindAllIndexExpr
+            |> List.fold (fun processedExprs nextSubExpr -> processedExprs @ processExpr nextSubExpr) []
+    and processExpr expr =
         match expr.rhs with
         // locations
         | RhsCur tml ->
@@ -836,8 +843,9 @@ let private collectVarsToPrev2 pg =
             |> List.fold (fun processedExprs nextSubExpr -> processedExprs @ processExpr nextSubExpr) []
             |> (@) <| [tml.QNamePrefix]
         // call
-        | FunCall (_, inputs, _) ->
-            inputs |> List.map processExpr |> List.concat   
+        | FunCall (_, inputs, outputs) ->
+            (inputs |> List.map processExpr |> List.concat)
+            @ (outputs |> List.map processLhs |> List.concat)
         // constants and literals
         | BoolConst _
         | IntConst _

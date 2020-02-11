@@ -1,0 +1,27 @@
+@[CFunction(binding="",header="")]
+extern singleton function g()
+    
+
+function f()
+    g()
+end
+
+function h() returns uint8
+    g()
+    return 7
+end
+
+activity B(x: uint8)(y: uint8)
+    await true
+end
+
+@[EntryPoint]
+activity A()
+    var foo: [30]uint8
+    cobegin
+        run B(7)(foo[h()])
+    with
+        await true
+        f()
+    end
+end

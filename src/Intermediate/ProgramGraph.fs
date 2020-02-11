@@ -150,15 +150,19 @@ module IntermediateContext =
         // add each one to given node
         List.iter (addSingletonCall context range node) names
 
-    let internal addNameWritten context node (tlhs: TypedLhs) =
+    let rec internal addNameWritten context node (tlhs: TypedLhs) =
         let addWrittenLabel memLabel =
             do appendAllWritten context tlhs.Range memLabel node
         match tlhs.lhs with
         | Wildcard -> ()
-        | LhsCur tml -> do addWrittenLabel (AccessLabel.Cur tml)
-        | LhsNext tml -> do addWrittenLabel (AccessLabel.Next tml) 
+        | LhsCur tml ->
+            tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
+            do addWrittenLabel (AccessLabel.Cur tml)
+        | LhsNext tml -> 
+            tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
+            do addWrittenLabel (AccessLabel.Next tml) 
 
-    let rec internal addNameRead context node trhs =
+    and internal addNameRead context node trhs =
         let processFields fields =
             fields
             |> List.unzip
@@ -170,7 +174,7 @@ module IntermediateContext =
             // check for array index expressions and recursively call addNameRead on them
             tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
             // then add all accessed memory (sub-)locations to this node
-            appendAllRead context trhs.Range (AccessLabel.Cur tml) node
+            do appendAllRead context trhs.Range (AccessLabel.Cur tml) node
         | Prev _ -> () // this is irrelevant for causality
         | FunCall (name, ins, outs) ->
             // add local names for this call

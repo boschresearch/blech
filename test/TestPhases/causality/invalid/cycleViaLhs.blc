@@ -1,0 +1,19 @@
+function f (i: int8) returns uint8
+    return 6
+end
+
+activity B (b1: int8)(b2: int8) await false end
+activity C (c1: int8)(c2: int8) await false end
+
+@[EntryPoint]
+activity A ()()
+    var y: int8
+    var x: [10]int8
+    var z: int8
+    cobegin
+        run B(x[0])(y)
+    with
+        run C(z)(x[f(y)])
+    end
+    await false
+end
