@@ -192,7 +192,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
         | Neg e -> checkAbsenceOfSyncExpr e
         | Conj (e1, e2)
         | Disj (e1, e2)
-        | Xor (e1, e2)
+        | Bxor (e1, e2)
         | Les (e1, e2)
         | Leq (e1, e2)
         | Equ (e1, e2)
