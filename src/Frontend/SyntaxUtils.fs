@@ -287,8 +287,9 @@ module ParserUtils =
         let value = BigInteger.Parse("0" + (strip_ s).[2..], System.Globalization.NumberStyles.AllowHexSpecifier)
         BAny (value, s)
         
-    let parseInteger (s:string): bigint =
-        BigInteger.Parse (strip_ s)
+    let parseInteger (s:string): Int =
+        let value = BigInteger.Parse (strip_ s)
+        IAny (value, Some s)
 
     let parseFloat (s:string) : Float =
         try

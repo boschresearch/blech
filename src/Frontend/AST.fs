@@ -544,7 +544,7 @@ and UnitExpr =
     | Parens of UnitExpr * range:range
     | UnitMul of UnitExpr * UnitExpr
     | UnitDiv of UnitExpr * UnitExpr
-    | UnitExp of UnitExpr * bigint * range:range
+    | UnitExp of UnitExpr * Int * range:range
         
     member uexpr.Range =
         match uexpr with
@@ -562,9 +562,9 @@ and UnitExpr =
 
 and ClockExpr =
     | ClockName of StaticNamedPath
-    | Count of bigint * range:range
-    | UpSample of StaticNamedPath * bigint * range:range
-    | DownSample of StaticNamedPath * bigint * (bigint option) * range:range
+    | Count of Int * range:range
+    | UpSample of StaticNamedPath * Int * range:range
+    | DownSample of StaticNamedPath * Int * (Int option) * range:range
     | Parens of ClockExpr * range:range
     | Join of ClockExpr list  // list is never empty
     | Meet of ClockExpr list
@@ -590,7 +590,7 @@ and Literal =
     | String of value:string * range:range
     // -- numerical constants --
     | Bits of value: Constants.Bits * range:range
-    | Int of value:bigint * unit:UnitExpr option * range:range
+    | Int of value: Constants.Int * unit:UnitExpr option * range:range
     | Float of value: Constants.Float * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
@@ -917,11 +917,15 @@ let mkFromPointedNameAndOptArrayAccess temporalQualifier (staticPath: StaticName
     nameList @ nameOrExList |> mkDynamicAccessPath temporalQualifier
 
 /// Add unary minus to attribute literal
-let addOptSubInt optSub (number: bigint) =
+let addOptSubInt optSub (number: Int) =
     match optSub with
     | None -> number
-    | Some _ -> - number
+    | Some _ ->
+        match number with
+        | IAny (v, Some s) -> IAny (-v, Some <| "-" + s)
+        | _ -> failwith "Illegal use of minus for attribute literals"
 
+/// Add unary minus to attribute literal
 let addOptSubFloat optSub (float: Constants.Float) =
     match optSub with
     | None -> float

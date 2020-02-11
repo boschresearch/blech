@@ -58,130 +58,18 @@ let MAX_FLOAT64 = System.Double.MaxValue
 let MAX_FLOAT32_INT = pown 2I 24 
 let MAX_FLOAT64_INT = pown 2I 53
 
-type Any =
-    | IAny of bigint * string option
-    | BAny of bigint * string option
-    | FAny of double * string option
-
-    override this.ToString() =
-        match this with
-        | IAny (_, Some s)
-        | BAny (_, Some s)
-        | FAny (_, Some s) -> s
-        | IAny (v, None) -> string v
-        | BAny (v, None)-> string v
-        | FAny (v, None) -> string v
 
 
-/// This type represents integer constants
-/// They as integer literals of type AnyInt,
-/// or as integer constants of type IntX or NatX
-type Int = 
-    { value: bigint }
-
-    override this.ToString() =
-        string this.value
-
-    static member Zero = 
-        { value = 0I }
-      
-    member this.IsZero = 
-        this.value = 0I
-
-    member this.UnaryMinus =
-        { value = Arithmetic.UnaryMinusInteger this }
-
-    static member Arithmetic (operator: Arithmetic) (left: Int) (right: Int) : Int =
-        { value = operator.BinaryInteger left right }
-      
-    member this.PromoteTo (bits: Bits) =
-        true
-
-
-/// This type represents integer constants
-/// They appear as bits literals of type AnyBit,
-/// or as bits constants of type bits8, bits16, bits32, bits64
-and Bits = 
-    | B8 of uint8
-    | B16 of uint16
-    | B32 of uint32
-    | B64 of uint64
-    | BAny of bigint * string // No operations allowed for BAny constants, therefore string not optional
-
-    //{ value: bigint 
-    //  size: int        // size: 8, 16, 32, 64, needed for operators
-    //  repr: string option }
-
-    override this.ToString() =
-        match this with
-        | B8 v -> string v
-        | B16 v -> string v
-        | B32 v -> string v
-        | B64 v -> string v
-        | BAny (_, s) -> s 
-
-
-    static member Zero8 = B8 0uy
-    static member Zero16 = B16 0us
-    static member Zero32 = B32 0u
-    static member Zero64 = B64 0UL
-
-    member this.IsZero = 
-        match this with
-        | B8 v -> v = 0uy
-        | B16 v -> v = 0us
-        | B32 v -> v = 0u
-        | B64 v -> v = 0UL
-        | BAny (v, _) -> v = 0I 
-
-    //member this.UnaryMinus: Bits =
-    //    printfn "Bits size: %s" <| string this.size
-    //    let value = Arithmetic.UnaryMinusBits this
-    //    { value = value // numeric wrap-around
-    //      size = this.size
-    //      repr = None } // there is no representation, like '- 0xFF' 
-
-    member this.PromoteTo (other: Bits) : Bits = 
-        match this, other with
-        | B8 v, B16 _ -> B16 <| uint16 v
-        | B8 v, B32 _ -> B32 <| uint32 v
-        | B8 v, B64 _ -> B64 <| uint64 v
-        | B16 v, B32 _ -> B32 <| uint32 v
-        | B16 v, B64 _ -> B64 <| uint64 v
-        | B32 v, B64 _ -> B64 <| uint64 v
-        | BAny (v, _), B8 _ -> B8 <| uint8 v   // typecheck ensures fitting values 
-        | BAny (v, _), B16 _ -> B16 <| uint16 v  // typecheck ensures fitting values 
-        | BAny (v, _), B32 _ -> B32 <| uint32 v  // typecheck ensures fitting values 
-        | BAny (v, _), B64 _ -> B64 <| uint64 v  // typecheck ensures fitting values
-        | _ -> this  // no promotion necessary
-
-
-    //static member FromInteger (value: bigint) (size: int) : Bits =
-    //    let wrapAround = pown 2I size
-    //    let wrapped = if value < 0I then wrapAround + value else value
-    //    // printfn "Required Size: %s Bits form integer: %s -> %s" (string size) (string value) (string wrapped)
-    //    { value = wrapped
-    //      size = size 
-    //      repr = None }
-
-
-    //static member Arithmetic (operator: Arithmetic) (left: Bits) (right: Bits) : Bits =
-    //    let size = if left.size > right.size then left.size else right.size
-    //    let value = operator.BinaryBits size left right
-    //    { value = value 
-    //      size = size
-    //      repr = None }
-
-
-    //static member Relational op left right : bool = 
-    //    op left.value right.value    //static member Relational op left right : bool = 
-    //    op left.value right.value
-
+/// This type represents constants for array indexes.
+/// Bits, Nat, Int can be used for an array index.
+type Size = uint64
+let SizeZero : Size = 0uL
+let SizeOne : Size = 1uL
 
 /// This type represents float constants
 /// They appear as float literals of type AnyFloat,
 /// or as float constants of type float32 or float64
-and Float = 
+type Float = 
     | F32 of float32
     | F64 of float
     | FAny of float * string option 
@@ -220,153 +108,209 @@ and Float =
     static member CanRepresent (i: bigint) =
         abs i <= MAX_FLOAT64_INT
 
+/// This type represents sizes.
+/// They appear as array size and array index
+/// The type checker ensures the limitation to the word size of the target machine.
 
+/// This type represents natural constants
+/// They appear constants of type Nx
+type Nat = 
+    | N8 of uint8
+    | N16 of uint16
+    | N32 of uint32
+    | N64 of uint64
 
-and Arithmetic =
-    | Unm
-    | Add
-    | Sub
-    | Mul
-    | Div
-    | Mod
-
-    //static member UnaryMinusBits(bits: Bits) = 
-    //    let bv = bits.value
-    //    match bits.size with
-    //    | 8 -> 0uy - uint8 bv |> uint32 |> bigint
-    //    | 16 -> 0us - uint16 bv |> uint32 |> bigint
-    //    | 32 -> 0u - uint32 bv |> bigint
-    //    | 64 -> 0UL - uint64 bv |> bigint
-    //    | _ -> failwith "Not a valid size"
-
-    //member this.BinaryBits (size: int) (left: Bits) (right: Bits) : bigint =
-    //    let lv = left.value
-    //    let rv = right.value
-    //    match this, size with
-    //    | Add, 8 -> uint8 lv + uint8 rv |> uint32 |> bigint 
-    //    | Add, 16 -> uint16 lv + uint16 rv |> uint32 |> bigint 
-    //    | Add, 32 -> uint32 lv + uint32 rv |> bigint 
-    //    | Add, 64 -> uint64 lv + uint64 rv |> bigint 
-    //    | Sub, 8 -> uint8 lv - uint8 rv |> uint32 |> bigint 
-    //    | Sub, 16 -> uint16 lv - uint16 rv |> uint32 |> bigint 
-    //    | Sub, 32 -> uint32 lv - uint32 rv |> bigint 
-    //    | Sub, 64 -> uint64 lv - uint64 rv |> bigint 
-    //    | Mul, 8 -> uint8 lv * uint8 rv |> uint32 |> bigint 
-    //    | Mul, 16 -> uint16 lv * uint16 rv |> uint32 |> bigint 
-    //    | Mul, 32 -> uint32 lv * uint32 rv |> bigint 
-    //    | Mul, 64 -> uint64 lv * uint64 rv |> bigint 
-    //    | Div, 8 -> uint8 lv / uint8 rv |> uint32 |> bigint 
-    //    | Div, 16 -> uint16 lv / uint16 rv |> uint32 |> bigint 
-    //    | Div, 32 -> uint32 lv / uint32 rv |> bigint 
-    //    | Div, 64 -> uint64 lv / uint64 rv |> bigint 
-    //    | Mod, 8 -> uint8 lv % uint8 rv |> uint32 |> bigint 
-    //    | Mod, 16 -> uint16 lv % uint16 rv |> uint32 |> bigint 
-    //    | Mod, 32 -> uint32 lv % uint32 rv |> bigint 
-    //    | Mod, 64 -> uint64 lv % uint64 rv |> bigint 
-    //    | Unm, _ -> failwith "Unm is not a binary bits operator"
-    //    | _, _ -> failwith "Not a valid size"
-
-    static member UnaryMinusInteger (i: Int): bigint = 
-        - i.value
-
-    member this.BinaryInteger (left: Int) (right: Int): bigint =
-        let lv = left.value
-        let rv = right.value
+    override this.ToString() =
         match this with
-        | Add -> lv + rv
-        | Sub -> lv - rv
-        | Mul -> lv * rv
-        | Div -> lv / rv
-        | Mod -> lv % rv
-        | Unm -> failwith "Unm is not a binary integer operator"
+        | N8 v -> string v
+        | N16 v -> string v
+        | N32 v -> string v
+        | N64 v -> string v
+
+    static member Zero8 = N8 0uy
+    static member Zero16 = N16 0us
+    static member Zero32 = N32 0u
+    static member Zero64 = N64 0uL
+    
+    member this.IsZero = 
+        match this with
+        | N8 v -> v = 0uy
+        | N16 v -> v = 0us
+        | N32 v -> v = 0u
+        | N64 v -> v = 0uL
+
+    member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
+
+    /// This extracts the Size from a Nat constant.
+    member this.GetSize : Size =
+        match this with
+        | N8 v -> uint64 v
+        | N16 v -> uint64 v
+        | N32 v -> uint64 v 
+        | N64 v -> uint64 v
+
+    member this.PromoteTo (other: Nat) : Nat = 
+        match this, other with
+        | N8 v, N16 _ -> N16 <| uint16 v
+        | N8 v, N32 _ -> N32 <| uint32 v
+        | N8 v, N64 _ -> N64 <| uint64 v
+        | N16 v, N32 _ -> N32 <| uint32 v
+        | N16 v, N64 _ -> N64 <| uint64 v
+        | N32 v, N64 _ -> N64 <| uint64 v
+        | _ -> this
+
+
+/// This type represents integer constants
+/// They appear as bits literals of type AnyBit,
+/// or as bits constants of type bits8, bits16, bits32, bits64
+type Bits = 
+    | B8 of uint8
+    | B16 of uint16
+    | B32 of uint32
+    | B64 of uint64
+    | BAny of bigint * string // No operations allowed for BAny constants, therefore string not optional
+
+    override this.ToString() =
+        match this with
+        | B8 v -> string v
+        | B16 v -> string v
+        | B32 v -> string v
+        | B64 v -> string v
+        | BAny (_, s) -> s 
+
+
+    static member Zero8 = B8 0uy
+    static member Zero16 = B16 0us
+    static member Zero32 = B32 0u
+    static member Zero64 = B64 0uL
+
+    member this.IsZero = 
+        match this with
+        | B8 v -> v = 0uy
+        | B16 v -> v = 0us
+        | B32 v -> v = 0u
+        | B64 v -> v = 0uL
+        | BAny (v, _) -> v = 0I 
+
+    /// This extracts the Size from an Bits constant.
+    /// The typechecker must guarantee, that no overflow occurs
+    member this.GetSize : Size =
+        try 
+            match this with
+            | B8 v -> uint64 v 
+            | B16 v -> uint64 v
+            | B32 v -> uint64 v
+            | B64 v -> uint64 v 
+            | BAny (v, _) -> uint64 v
+        with
+        | :? System.OverflowException ->
+            failwith "Called on unchecked size constant"
+
+
+    member this.PromoteTo (other: Bits) : Bits = 
+        match this, other with
+        | B8 v, B16 _ -> B16 <| uint16 v
+        | B8 v, B32 _ -> B32 <| uint32 v
+        | B8 v, B64 _ -> B64 <| uint64 v
+        | B16 v, B32 _ -> B32 <| uint32 v
+        | B16 v, B64 _ -> B64 <| uint64 v
+        | B32 v, B64 _ -> B64 <| uint64 v
+        | BAny (v, _), B8 _ -> B8 <| uint8 v   // typecheck ensures fitting values 
+        | BAny (v, _), B16 _ -> B16 <| uint16 v  // typecheck ensures fitting values 
+        | BAny (v, _), B32 _ -> B32 <| uint32 v  // typecheck ensures fitting values 
+        | BAny (v, _), B64 _ -> B64 <| uint64 v  // typecheck ensures fitting values
+        | _ -> this  // no promotion necessary
+
+
+/// This type represents integer constants
+/// They appear as integer literals of type IAny,
+/// or as integer constants of type Ix
+type Int = 
+    | I8 of int8
+    | I16 of int16
+    | I32 of int32
+    | I64 of int64
+    | IAny of bigint * string option
+    
+    override this.ToString() =
+        match this with
+        | I8 v -> string v
+        | I16 v -> string v
+        | I32 v -> string v
+        | I64 v -> string v
+        | IAny (v, None) -> string v
+        | IAny (_, Some s) -> s
+
+    static member Zero8 = I8 0y
+    static member Zero16 = I16 0s
+    static member Zero32 = I32 0
+    static member Zero64 = I64 0L
+      
+    member this.IsZero = 
+        match this with
+        | I8 v -> v = 0y
+        | I16 v -> v = 0s
+        | I32 v -> v = 0
+        | I64 v -> v = 0L
+        | IAny (v, _) -> v = 0I
         
-    //member this.UnaryMinusFloat (value: FloatWidth) : FloatWidth =
-    //    match this, value with
-    //    | Unm, F32 v-> F32 -v 
-    //    | Unm, F64 v -> F64 -v
-    //    | _ -> failwith "Not an unary minus operator"
-
-    //member this.BinaryFloat (left: FloatWidth) (right: FloatWidth): FloatWidth =
-    //    let l = left.PromoteTo right
-    //    let r = right.PromoteTo left
-    //    match this, l, r with
-    //    | Add, F32 lv, F32 rv -> F32 <| lv + rv
-    //    | Add, F64 lv, F64 rv -> F64 <| lv + rv
-    //    | Sub, F32 lv, F32 rv -> F32 <| lv - rv
-    //    | Sub, F64 lv, F64 rv -> F64 <| lv - rv
-    //    | Mul, F32 lv, F32 rv -> F32 <| lv * rv
-    //    | Mul, F64 lv, F64 rv -> F64 <| lv * rv
-    //    | Div, F32 lv, F32 rv -> F32 <| lv / rv
-    //    | Div, F64 lv, F64 rv -> F64 <| lv / rv
-    //    | Mod, _, _ -> failwith "Modulo '%' is not allowed for floats"
-    //    | Unm, _, _ -> failwith "Unm is not a binary float operator"
-    //    | _, _, _ -> failwith "Not a valid width combination"    
-
-
-//and Logical =
-//    | Not
-//    | And 
-//    | Or
-
-//and Relational = 
-//    | Eq
-//    | Lt
-//    | Le
-//    member this.RelationalFloat (left: FloatWidth) (right: FloatWidth): bool =
-//        match this, left, right with
-//        | Eq, F32 lv, F32 rv -> lv = rv
-//        | Eq, F64 lv, F64 rv -> lv = rv
-//        | Lt, F32 lv, F32 rv -> lv < rv
-//        | Lt, F64 lv, F64 rv -> lv < rv
-//        | Le, F32 lv, F32 rv -> lv <= rv
-//        | Le, F64 lv, F64 rv -> lv <= rv
-//        | _, _, _ -> failwith "Not a valid width combination"    
-
-//and Bitwise =  
-//    | Bnot
-//    | Band
-//    | Bor
-//    | Bxor
-//    | Shl
-//    | Shr
-//    | Ashr
-//    | Rotl
-//    | Rotr
-
-//    member this.BnotBits8 (bits: uint8) =
-//        match this with
-//        | Bnot -> ~~~ bits
-//        | _ -> failwith "Not the bitwise not operator"
+    member this.IsAny =
+        match this with
+        | IAny _ -> true
+        | _ -> false
     
-//    member this.BnotBits16 (bits: uint16) =
-//        match this with
-//        | Bnot -> ~~~ bits
-//        | _ -> failwith "Not the bitwise not operator"
+    /// This extracts the Size from an Int constant.
+    /// The typechecker must guarantee, that no overflow occurs
+    member this.GetSize : Size =
+        try 
+            match this with
+            | I8 v -> uint64 v
+            | I16 v -> uint64 v
+            | I32 v -> uint64 v
+            | I64 v -> uint64 v
+            | IAny (v, _) -> uint64 v 
+        with
+        | :? System.OverflowException ->
+            failwith "Called on unchecked size constant"  //
+
+    member this.PromoteTo (nat: Nat) =
+        // typechecker ensures that this can be represented as Bits
+        match this, nat with
+        | IAny (v, _), N8 _ -> N8 <| uint8 v
+        | IAny (v, _), N16 _ -> N16 <| uint16 v
+        | IAny (v, _), N32 _ -> N32 <| uint32 v
+        | IAny (v, _), N64 _ -> N64 <| uint64 v
+        | _ -> failwith "Only IAny can be promoted to Nat"
+
+    member this.PromoteTo (bits: Bits) : Bits =
+        // typechecker ensures that this can be represented as Bits
+        match this, bits with
+        | IAny (v, _), B8 _ -> B8 <| uint8 v
+        | IAny (v, _), B16 _ -> B16 <| uint16 v
+        | IAny (v, _), B32 _ -> B32 <| uint32 v
+        | IAny (v, _), B64 _ -> B64 <| uint64 v
+        | _ -> failwith "Only IAny can be promoted to Bits"
+
+    member this.PromoteTo (bits: Float) : Float =
+        // typechecker ensures that this can be represented as Float
+        match this, bits with
+        | IAny (v, _), F32 _ -> F32 <| float32 v
+        | IAny (v, _), F64 _ -> F64 <| float v
+        | _ -> failwith "Only IAny can be promoted to Float"
     
-//    member this.BinaryBits (left: Bits) (right: Bits): bigint =
-//        let size = if left.size > right.size then left.size else right.size
-//        let lv = left.value
-//        let rv = right.value
-//        match this, size with
-//        | Bor, 8 -> uint8 lv ||| uint8 rv |> uint32 |> bigint
-//        | Band, 8-> uint8 lv &&& uint8 rv |> uint32 |> bigint
-//        | Bxor, 8 -> uint8 lv ^^^ uint8 rv |> uint32 |> bigint
-//        | _ -> failwith "Not a bitwise binary operator"
-
-//    member this.ShiftBits (bits: Bits) (amount: int32) =
-//        let size = bits.size
-//        match this, size with
-//        | Shl, 8 -> uint8 bits.value <<< amount |> uint32 |> bigint
-//        | Shr, 8 -> uint8 bits.value >>> amount |> uint32 |> bigint
-//        | _ -> failwith "Not a shift operator"
-
-//    member this.AdvancedShiftBits (bits: Bits) (amount: int32) : bigint = 
-//        let size = bits.size
-//        let b = bits.value
-//        match this, size with
-//        | Ashr, 8 -> (int8 b) >>> amount |> uint8 |> uint32 |> bigint 
-//        // TODO: lookup rotate algorithms in Hacker's Delight, fjg. 6.2.20
-//        | Rotl, _ -> failwith "Not yet implemented"
-//        | Rotr, _ -> failwith "Not yet implemented"
-//        | _ -> failwith "Not an advanced shift operator"
+    member this.PromoteTo (bits: Int) : Int =
+        // typechecker ensures that this can be represented as Bits
+        match this, bits with
+        | I8 v, I16 _ -> I16 <| int16 v
+        | I8 v, I32 _ -> I32 <| int32 v
+        | I8 v, I64 _ -> I64 <| int64 v
+        | I16 v, I32 _ -> I32 <| int32 v
+        | I16 v, I64 _ -> I64 <| int64 v
+        | I32 v, I64 _ -> I64 <| int64 v
+        // typecheck ensures that any values can be represented
+        | IAny (v, _), I8 _ -> I8 <| int8 v
+        | IAny (v, _), I16 _ -> I16 <| int16 v
+        | IAny (v, _), I32 _ -> I32 <| int32 v
+        | IAny (v, _), I64 _ -> I64 <| int64 v
+        | _ -> this // no promotion necessary 
     

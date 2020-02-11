@@ -25,6 +25,7 @@ namespace Blech.Frontend
 open Blech.Common
 open Blech.Common.Range
 
+open Constants
 open CommonTypes
 open BlechTypes
 
@@ -74,15 +75,15 @@ type TyCheckError =
     | FieldNotAMember of Name * TypedMemLoc
     | FieldNotAMember2 of range * QName * Identifier
     | IndexMustBeInteger of range * TypedRhs * TypedMemLoc
-    | StaticArrayOutOfBounds of range * TypedRhs * TypedMemLoc * int
+    | StaticArrayOutOfBounds of range * TypedRhs * TypedMemLoc * Size
     | AssignmentToImmutable of range * Identifier
     | ImmutableOutArg of range * TypedLhs
     | ConditionHasSideEffect of TypedRhs
     | InitialisationHasSideEffect of TypedRhs
-    | NotACompileTimeInt of TypedRhs
-    | PositiveSizeExpected of range * int
-    | NonNegIdxExpected of range * int
-    | ReInitArrayIndex of range * int * int
+    | NotACompileTimeSize of TypedRhs
+    | PositiveSizeExpected of range * Size
+    | NonNegIdxExpected of range * Size
+    | ReInitArrayIndex of range * Size * Size
     | PrevOnParam of range * QName
     | PrevOnImmutable of range * QName
     | PrevOnlyOnValueTypes of range * Types
@@ -121,7 +122,7 @@ type TyCheckError =
     | MayOrMayNotReturn of range * ValueTypes * ValueTypes
     | ValueStructContainsRef of Name * VarDecl
     | ValueArrayMustHaveValueType of range
-    | TooManyInitialisers of range * int
+    | TooManyInitialisers of range * Size
     // statements
     | ExternalsInFunction of range
     | SynchronousStatementInFunction of range
@@ -184,7 +185,7 @@ type TyCheckError =
             | ImmutableOutArg(p, l) -> p, sprintf "Read-only location %s cannot be passed as an output argument." (l.ToString())
             | ConditionHasSideEffect cond -> cond.Range, sprintf "The condition %s has a side-effect. This is not allowed." (cond.ToString())
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())
-            | NotACompileTimeInt expr -> expr.Range, sprintf "The expression %s cannot be evaluated to an integer number at compile time. If you used \"let\" to declare it, use \"const\" instead." (expr.ToString())
+            | NotACompileTimeSize expr -> expr.Range, sprintf "The expression %s cannot be evaluated to a size number at compile time. If you used \"let\" to declare it, use \"const\" instead." (expr.ToString())
             | PositiveSizeExpected (r, i) -> r, sprintf "A size must be positive but %d was given." i
             | NonNegIdxExpected (r, d) -> r, sprintf "An index must be non-negative, but %d was given." d
             | ReInitArrayIndex (r, given, counter) -> r, sprintf "The array cell in position %d cannot be redefined. The given index must be at least %d at this point." given counter

@@ -856,7 +856,7 @@ and private cpExpr inFunction ctx expr =
                     name = lhsName
                     datatype = lhsTyp
                     mutability = Mutability.Variable
-                    initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (NatType Nat8); range = expr.range} // that is garbage
+                    initValue = {rhs = NatConst Constants.Nat.Zero8; typ = Types.ValueTypes (NatType Nat8); range = expr.range} // that is garbage
                     annotation = Attribute.VarDecl.Empty
                     allReferences = HashSet() 
                 }

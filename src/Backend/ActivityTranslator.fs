@@ -371,7 +371,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 name = lhsName
                 datatype = lhsTyp
                 mutability = Mutability.Variable
-                initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (NatType Nat8); range = pos} // that is garbage
+                initValue = {rhs = NatConst <| Constants.Nat.Zero8; typ = Types.ValueTypes (NatType Nat8); range = pos} // that is a dummy/garbage
                 annotation = Attribute.VarDecl.Empty
                 allReferences = HashSet() 
             }

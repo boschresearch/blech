@@ -129,6 +129,7 @@ module TypeCheckContext =
         | IntConst _ 
         | BoolConst _
         | BitsConst _
+        | NatConst _ 
         | FloatConst _
         | ResetConst -> true
         | StructConst fields -> 

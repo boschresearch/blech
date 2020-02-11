@@ -16,7 +16,9 @@
 
 namespace Blech.Intermediate
 
+open Blech.Frontend.Constants
 open Blech.Frontend.BlechTypes
+
 
 module GenericGraph = Blech.Common.GenericGraph
 module Range = Blech.Common.Range
@@ -184,6 +186,7 @@ module IntermediateContext =
         | BoolConst _ 
         | IntConst _
         | BitsConst _
+        | NatConst _
         | FloatConst _ 
         | ResetConst _ -> ()
         | StructConst structFieldExprList ->
@@ -325,7 +328,7 @@ module ProgramGraph =
         do connect pg pg.Entry pgAwait.Entry
         do replaceExitBy pgAwait callNode
         let termVarExpr = {rhs = RhsCur(Loc termVar); typ = ValueTypes (IntType Int32); range = line}
-        let zeroExpr = {rhs = IntConst 0I; typ = ValueTypes (IntType Int32); range = line}
+        let zeroExpr = {rhs = IntConst Int.Zero32 ; typ = ValueTypes (IntType Int32); range = line}
         let termCond = {rhs = Equ (zeroExpr, termVarExpr); typ = ValueTypes BoolType; range = line}
         do guardedConnect termCond pg callNode pg.Exit
         let pauseCond = { termCond with rhs = unsafeNeg termCond }
@@ -408,7 +411,8 @@ module ProgramGraph =
                 // constants and literals
                 | BoolConst _
                 | IntConst _
-                | BitsConst _ 
+                | BitsConst _
+                | NatConst _
                 | FloatConst _
                 | ResetConst -> expr.rhs
                 | StructConst fieldExprs ->

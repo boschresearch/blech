@@ -1470,7 +1470,7 @@ AttributeLiteral
 
     | HEXCONST                                  { Literal.Bits (parseHex <| fst $1, snd $1) }
 
-	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1, 
+	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1,
                                                                 None, 
                                                                 optUnionRanges $1 <| snd $2 ) }
     | OptSub FLOATCONST                         { Literal.Float ( parseFloat <| fst $2 |> addOptSubFloat $1, 

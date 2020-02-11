@@ -115,7 +115,7 @@ let rec private hasNoSideEffect expr =
     | RhsCur tml 
     | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
     // constants and literals
-    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _  | ResetConst -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _  | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     // call, has no side-effect IFF it does not write any outputs
@@ -156,7 +156,7 @@ let rec internal isStaticExpr lut expr =
         | Some Mutability.Immutable
         | Some Mutability.Variable -> false
     | Prev _ -> false // prev exists only on var
-    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | ResetConst -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | NatConst _ | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
@@ -199,16 +199,16 @@ let rec internal isStaticExpr lut expr =
 
 let private add this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a + b)
+    | IntConst a, IntConst b -> IntConst <| Evaluation.Arithmetic.Add.BinaryInt a b
     | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Add.BinaryBits a b
-    //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add (IntToBits a) b 
+    //| IntConst a, BitsConst b -> BitsConst <|  Evaluation.Arithmetic.Add.BinaryBits a.P
     //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Add a (IntToBits b)        
     | FloatConst a, FloatConst b -> FloatConst <| Evaluation.Arithmetic.Add.BinaryFloat a b
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a * b)
+    | IntConst a, IntConst b -> IntConst <| Evaluation.Arithmetic.Mul.BinaryInt a b
     | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Mul.BinaryBits a b
     //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul (IntToBits a) b 
     //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mul a (IntToBits b)        
@@ -217,7 +217,7 @@ let private mul this that =
 
 let private div this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a / b)
+    | IntConst a, IntConst b -> IntConst <| Evaluation.Arithmetic.Div.BinaryInt a b
     | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Div.BinaryBits a b
     //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div (IntToBits a) b 
     //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Div a (IntToBits b)        
@@ -226,7 +226,7 @@ let private div this that =
 
 let private sub this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a - b)
+    | IntConst a, IntConst b -> IntConst <| Evaluation.Arithmetic.Sub.BinaryInt a b
     | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Sub.BinaryBits a b
     //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub (IntToBits a) b 
     //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Sub a (IntToBits b)        
@@ -235,7 +235,7 @@ let private sub this that =
 
 let private modus this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a % b)
+    | IntConst a, IntConst b -> IntConst <| Evaluation.Arithmetic.Mod.BinaryInt a b
     | BitsConst a, BitsConst b -> BitsConst <| Evaluation.Arithmetic.Mod.BinaryBits a b
     //| IntConst a, BitsConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod (IntToBits a) b 
     //| BitsConst a, IntConst b -> BitsConst <| Bits.Arithmetic Arithmetic.Mod a (IntToBits b)        
@@ -356,7 +356,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
           range = checkedExpr.Range }
     match checkedExpr.rhs with
     // simple literal
-    | IntConst _ | BoolConst _ | BitsConst _ | FloatConst _ | ResetConst -> checkedExpr
+    | IntConst _ | BoolConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst -> checkedExpr
     // composite literal
     | StructConst fields -> recurFields StructConst fields
     | ArrayConst fields -> recurFields ArrayConst fields
@@ -413,17 +413,29 @@ and internal evalConst lut expr =
     else Error[MustBeConst(expr)]
 
 
-/// This tries to evaluate expr to a constant integer value
+/// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
 /// and returns a NotACompileTimeInt if the result is not an integer.
-and internal evalCompTimeInt lut expr =
+and internal evalCompTimeSize lut expr =   
+    let ensureNonNegSize pos num =
+        let ok =
+            match num.rhs with
+            | IntConst i -> Evaluation.Le.RelationalInt (Evaluation.Constant.IntZero Int8) i
+            | NatConst n -> Evaluation.Le.RelationalNat (Evaluation.Constant.NatZero Nat8) n
+            | BitsConst b -> Evaluation.Le.RelationalBits (Evaluation.Constant.BitsZero Bits8) b
+            | _ -> failwith ""
+        if ok then Ok num
+        else Error [ NonNegIdxExpected (pos, 42uL) ]
+    
     evalConst lut expr
+    |> Result.bind (ensureNonNegSize expr.Range)
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
-        | IntConst i -> Ok <| (int)i
-        | _ -> Error [NotACompileTimeInt expr]
+        | IntConst i -> Ok i.GetSize
+        | NatConst n -> Ok n.GetSize
+        | BitsConst b -> Ok b.GetSize
+        | _ -> Error [NotACompileTimeSize expr]
     )
-
 
 /// Retrieves the initial value for a given TML
 /// Returns an error, if the TML is an array access where the index is not constant
@@ -466,7 +478,7 @@ and getInitValueForTml lut tml =
         |> Result.bind (fun v ->
             match v.rhs with
             | ArrayConst lst ->
-                evalCompTimeInt lut idx
+                evalCompTimeSize lut idx
                 |> Result.bind (fun constIdx ->
                     // either the value for that index is user defined, or return a default value for the element type
                     lst
@@ -532,7 +544,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
 
 let private makeAnyTypeFromConstExpr (rhs: RhsStructure) : Types =  
     match rhs with
-    | IntConst i -> AnyInt i
+    | IntConst i when i.IsAny -> AnyInt i
     | FloatConst f when f.IsAny -> AnyFloat f
     | _ -> failwith "Evaluation of numbers resulted in not a number" // cannot happen
 
@@ -557,21 +569,22 @@ let private negate r (expr: TypedRhs) =
 /// ensured by the caller.
 let private unsafeUnaryMinus (expr: TypedRhs) = 
     match expr.typ with
-    | ValueTypes (IntType _) ->
+    | ValueTypes (IntType size) ->
         match expr.rhs with
-        | IntConst bi -> IntConst -bi
-        | _ -> Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
-
+        | IntConst i -> IntConst <| Evaluation.Unm.UnaryMinusInt i
+        | _ -> Sub ({expr with rhs = IntConst <| Evaluation.Constant.IntZero size }, expr) //0 - expr
     | ValueTypes (BitsType size) ->
         match expr.rhs with
         | BitsConst b -> BitsConst <| Evaluation.Unm.UnaryMinusBits b  // numeric wrap-around
-        | _ -> Sub ({expr with rhs = BitsConst <| Evaluation.Constant.BitsZero size }, expr) //0 - expr
-        
-    //| AnyFloat
+        | _ -> Sub ({expr with rhs = BitsConst <| Evaluation.Constant.BitsZero size }, expr) //0 - expr        
     | ValueTypes (FloatType size) ->
         match expr.rhs with
         | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20  
         | _ -> Sub ( {expr with rhs = FloatConst <| Evaluation.Constant.FloatZero size}, expr) //0 - expr
+    | AnyInt _ ->
+        match expr.rhs with
+        | IntConst i -> IntConst <| Evaluation.Unm.UnaryMinusInt i // TODO: Import Evaluation, fjg. 10.02.20
+        | _ -> failwith "AnyFloat should be always a FloatConst"
     | AnyFloat _ ->
         match expr.rhs with
         | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20
@@ -585,8 +598,9 @@ let private unaryMinus r (expr: TypedRhs) =
     match expr.typ with
     // no unary minus on natural number since it cannot be used anywhere
     | AnyInt value ->
-        Ok { rhs = IntConst -value
-             typ = AnyInt -value
+        let rhs = unsafeUnaryMinus expr
+        Ok { rhs = rhs
+             typ = makeAnyTypeFromConstExpr rhs
              range = expr.range }
     | AnyFloat value ->
         let rhs = unsafeUnaryMinus expr
@@ -898,7 +912,7 @@ let private checkSimpleLiteral literal =
     | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = Types.ValueTypes BoolType; range = pos } |> Ok
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
-        if MIN_INT64 <= value && value <= MAX_NAT64 then // Int literals allow an unary minus in attributes
+        if Int64.CanRepresent value || Nat64.CanRepresent value then // Int literals allow an unary minus in attributes
             { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
@@ -935,13 +949,13 @@ let rec private checkAggregateLiteral lut al r =
         //      - that number is at least as large as the running index counter,
         //        and update the index counter
         | AST.ArrayFields fields ->
-            let ensureNonNeg pos num =
-                if num >= 0 then Ok num
-                else Error [NonNegIdxExpected(pos, num)]
+            //let ensureNonNegSize pos num =
+            //    if num >= Constants.SizeZero then Ok num
+            //    else Error [NonNegIdxExpected(pos, num)]
             let checkIdx idx =
                 checkExpr lut idx 
-                |> Result.bind (evalCompTimeInt lut)
-                |> Result.bind (ensureNonNeg idx.Range)
+                |> Result.bind (evalCompTimeSize lut)
+            //    |> Result.bind (ensureNonNegSize idx.Range)
             // Check that indices, if there are any, are non-negative compile time constants
             // and in order and do not repeat.
             // Note that the exact array length is unknown at this point, nor do we know the
@@ -965,10 +979,10 @@ let rec private checkAggregateLiteral lut al r =
                         (combine 
                         <| Ok thisFieldNum
                         <| checkExpr lut field.value) // yields a pair of index and typechecked value 
-                        :: checkFields (thisFieldNum + 1) rest // continue with the next array index
+                        :: checkFields (thisFieldNum + Constants.SizeOne) rest // continue with the next array index
                     | Error x -> [Error x] // in case of error, just wrap it in a list and stop recursion
             
-            checkFields 0 fields
+            checkFields Constants.SizeZero fields
             |> contract
             |> Result.map (fun ckdFields -> { rhs = ArrayConst ckdFields; typ = AnyComposite; range = r})
 
@@ -1014,13 +1028,14 @@ and private checkUntimedDynamicAccessPath lut dname =
                         checkExpr lut idx
                         |> Result.bind (fun trhs -> // evaluate the index expression
                             if isIntType trhs.typ then // make sure it is an integer
-                                match evalCompTimeInt lut trhs with // if it is constant we can even check boundaries
+                                match evalCompTimeSize lut trhs with // if it is constant we can even check boundaries
                                 | Ok actualIndex ->
-                                    if 0 <= actualIndex && actualIndex < asize then
-                                        let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
+                                    if Constants.SizeZero <= actualIndex && actualIndex < asize then
+                                        // let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
+                                        let constIdx = {rhs = NatConst <| N64 actualIndex; typ = trhs.typ; range = trhs.range}
                                         Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
                                     else
-                                        Error [StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - 1)] // -1 since we need the maximal index in the error message
+                                        Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message
                                 | Error es -> // the index is determined at runtime
                                     if isConstVarDecl lut tml then // but then the array must not be constant
                                         ConstArrayRequiresConstIndex dname.Range :: es |> Error
@@ -1179,13 +1194,13 @@ and internal checkDataType lut utyDataType =
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
-        let ensurePositive num =
-            if num > 0 then Ok num
+        let ensurePositiveSize num =
+            if num > Constants.SizeZero then Ok num
             else Error [PositiveSizeExpected(pos, num)]
         let checkSize =
             checkExpr lut 
-            >> Result.bind (evalCompTimeInt lut)
-            >> Result.bind ensurePositive
+            >> Result.bind (evalCompTimeSize lut)
+            >> Result.bind ensurePositiveSize
         checkSize size
         |> Result.bind(fun checkedSize ->
             checkDataType lut elemDty

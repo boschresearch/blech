@@ -104,7 +104,7 @@ type ValueTypes =
     | BitsType of BitsType
     | FloatType of FloatType
     //structured
-    | ArrayType of size:int * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
+    | ArrayType of size: Size * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
                                                   // like 'size-1' or to pass size to functions that expect int
                                                   // such as List.replicate
     | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
@@ -160,7 +160,7 @@ and Types =
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
     | AnyComposite // used for wildcard or compound literals
-    | AnyInt of bigint // used only for untyped integer literals
+    | AnyInt of Int // used only for untyped integer literals
     | AnyBits of Bits // used only for untyped bits literals 
     | AnyFloat of Float // used only for untyped float literals
     
@@ -494,10 +494,13 @@ and LhsStructure =
         | LhsCur t -> LhsCur (t.AddArrayAccess idx)
         | LhsNext t -> LhsNext (t.AddArrayAccess idx)
     
-    member this.AddArrayAccess (idx: int) = 
-        let i = bigint idx
-        let idx = {rhs = IntConst i; typ = ValueTypes (IntType (IntType.RequiredType i)); range = range0}
-        this.AddArrayAccess idx
+    member this.AddArrayAccess (idx: Int) = 
+        let rhs = {rhs = IntConst idx; typ = ValueTypes (IntType (IntType.RequiredType idx)); range = range0}
+        this.AddArrayAccess rhs
+
+    member this.AddArrayAccess (idx: Nat) = 
+        let rhs = {rhs = NatConst idx; typ = ValueTypes (NatType (NatType.RequiredType idx)); range = range0}
+        this.AddArrayAccess rhs
 
 /// right hand side expression, in assignments, arguments to subprograms or index of array access    
 and RhsStructure =
@@ -508,12 +511,13 @@ and RhsStructure =
     | FunCall of QName * TypedRhs list * TypedLhs list
     // constants and literals
     | BoolConst of bool
-    | IntConst of bigint
+    | NatConst of Constants.Nat // Todo: check correct usage everywhere, fjg. 11.02.20
+    | IntConst of Constants.Int
     | BitsConst of Constants.Bits
     | FloatConst of Constants.Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
-    | ArrayConst of (int * TypedRhs) list
+    | ArrayConst of (Constants.Size * TypedRhs) list
     // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
@@ -556,6 +560,7 @@ and RhsStructure =
         | BoolConst c -> if c then txt "true" else txt "false"
         | IntConst i -> txt <| i.ToString()
         | BitsConst b -> txt <| b.ToString()
+        | NatConst n -> txt <| n.ToString()
         | FloatConst f -> txt <| f.ToString()
         | ResetConst -> [empty] |> dpCommaSeparatedInBraces
         | StructConst structFieldExprList ->

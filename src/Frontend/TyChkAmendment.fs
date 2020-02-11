@@ -135,9 +135,9 @@ let rec getDefaultValueFor pos name dty =
         match fce with
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
-        | IntType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
+        | IntType size -> Ok {rhs = IntConst <| Evaluation.Constant.IntZero size; typ = dty; range = pos}
         | BitsType size -> Ok {rhs = BitsConst <| Evaluation.Constant.BitsZero size; typ = dty; range = pos}
-        | NatType _ -> Ok {rhs = IntConst 0I; typ = dty; range = pos}
+        | NatType size -> Ok {rhs = NatConst <| Evaluation.Constant.NatZero size; typ = dty; range = pos}
         | FloatType size ->Ok {rhs = FloatConst <| Evaluation.Constant.FloatZero size; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->
             let defaultValues =
@@ -145,13 +145,13 @@ let rec getDefaultValueFor pos name dty =
                 |> List.map (fun f -> f.name.basicId, f.initValue)
             Ok {rhs = StructConst defaultValues; typ = dty; range = pos}
         | ValueTypes.ArrayType (size, elemDty) ->
-            let idxList = [0..1..size-1]
             getDefaultValueFor pos name (ValueTypes elemDty)
-            |> Result.map (List.replicate size >> List.zip idxList)
-            |> Result.bind (fun lst -> Ok { rhs = ArrayConst lst; typ = dty; range = pos })
+            |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
+            |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
     | Types.ReferenceTypes s ->
         Error [NoDefaultValueForSecondClassType (pos, name, s)]
 
+  
 
 /// Returns the default initial value of a value type where
 /// 0's are removed from composite literals.
@@ -248,7 +248,7 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
 /// size - array's length
 /// datatype - array's elements' type
 /// kvps - list of index-value pairs in the rhs array literal
-and private amendArray inInitMode lTyp pos size datatype (kvps: (int * TypedRhs) list) =
+and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * TypedRhs) list) =
     let merge checkedUserInput = 
         getInitValueWithoutZeros Range.range0 "" lTyp // TODO: this is a hacky use of API, fg 16.04.19
         |> Result.map (fun r -> unsafeMergeCompositeLiteral r.rhs (ArrayConst checkedUserInput))
@@ -259,21 +259,24 @@ and private amendArray inInitMode lTyp pos size datatype (kvps: (int * TypedRhs)
             | Error _ -> failwith "Failed merging array literals."
     
     // check there are no more element initialisers than the size of array
-    if kvps.Length <= size && (List.last kvps |> fst) < size then
-        // check all elements fit datatype
-        let indices, values = kvps |> List.unzip
+    try 
+        if kvps.Length <= int size && (List.last kvps |> fst) < size then 
+            // check all elements fit datatype
+            let indices, values = kvps |> List.unzip
                      
-        values 
-        |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
-        |> contract
-        |> Result.map (
-            List.zip indices
-            >> merge // fill up array initialisers if necessary
-            >> (fun literal -> { rhs = ArrayConst literal; typ = lTyp; range = pos })
-            )
-    else
-        Error [TooManyInitialisers(pos, size)]
-
+            values 
+            |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
+            |> contract
+            |> Result.map (
+                List.zip indices
+                >> merge // fill up array initialisers if necessary
+                >> (fun literal -> { rhs = ArrayConst literal; typ = lTyp; range = pos })
+                )
+        else
+            Error [TooManyInitialisers(pos, size)]
+    with
+        | :? System.OverflowException ->  
+            failwith "Array literal with more elements than an int can represent" // this will certainly never happen
 
 /// With structured literals we may need to "fill them up" since a user may 
 /// provide only some of the structure or array fields.

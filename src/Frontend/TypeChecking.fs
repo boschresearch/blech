@@ -184,7 +184,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
             tml.FindAllIndexExpr
             |> applyToList checkAbsenceOfSyncExpr
         | FunCall (_, ins, outs) -> checkLhsRhs outs ins
-        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> Ok ()
+        | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst -> Ok ()
         | StructConst fields ->
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
         | ArrayConst fields ->
@@ -355,7 +355,7 @@ let private determineCalledSingletons lut bodyRes =
         | RhsCur tml
         | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
         // constants and literals
-        | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | ResetConst _ -> []
+        | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst _ -> []
         | StructConst fields -> recurFields fields
         | ArrayConst elems -> recurFields elems
         // call, has no side-effect IFF it does not write any outputs

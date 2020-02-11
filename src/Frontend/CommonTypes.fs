@@ -212,18 +212,25 @@ type IntType =
         | Int32 -> 32
         | Int64 -> 64
 
-    member this.CanRepresent (value: bigint) =
-        match this with
-        | Int8 -> MIN_INT8 <= value && value <= MAX_INT8
-        | Int16 -> MIN_INT16 <= value && value <= MAX_INT16
-        | Int32 -> MIN_INT32 <= value && value <= MAX_INT32
-        | Int64 -> MIN_INT64 <= value && value <= MAX_INT64
+    member this.CanRepresent (anyInt: Int) =
+        match this, anyInt with
+        | Int8, IAny (value, _) -> MIN_INT8 <= value && value <= MAX_INT8
+        | Int16, IAny (value, _) -> MIN_INT16 <= value && value <= MAX_INT16
+        | Int32, IAny (value, _) -> MIN_INT32 <= value && value <= MAX_INT32
+        | Int64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_INT64
+        | _ -> failwith "This is only used for IAny values"
 
-    static member RequiredType value =
-        if MIN_INT8 <= value && value <= MAX_INT8 then Int8
-        elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
-        elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
-        else Int64
+    static member RequiredType (value: Int) =
+        match value with
+        | I8 _ -> Int8
+        | I16 _ -> Int16
+        | I32 _ -> Int32
+        | I64 _ -> Int64
+        | IAny (value, _) ->
+            if MIN_INT8 <= value && value <= MAX_INT8 then Int8
+            elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
+            elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
+            else Int64
 
 
 type NatType = 
@@ -246,18 +253,25 @@ type NatType =
         | Nat64, BAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
         | _ -> failwith "This is only used for BAny values"
    
-    member this.CanRepresent (value: bigint) =
-        match this with
-        | Nat8 -> MIN_NAT8 <= value && value <= MAX_NAT8
-        | Nat16 -> MIN_NAT16 <= value && value <= MAX_NAT16
-        | Nat32 -> MIN_NAT32<= value && value <= MAX_NAT32
-        | Nat64 -> MIN_NAT64 <= value && value <= MAX_NAT64
+    member this.CanRepresent (anyInt: Int) =
+        match this, anyInt with
+        | Nat8, IAny (value, _) -> MIN_NAT8 <= value && value <= MAX_NAT8
+        | Nat16, IAny (value, _) -> MIN_NAT16 <= value && value <= MAX_NAT16
+        | Nat32, IAny (value, _) -> MIN_NAT32<= value && value <= MAX_NAT32
+        | Nat64, IAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for IAny values"
 
-    static member RequiredType (value: bigint) =
-        if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
-        elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
-        elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
-        else Nat64
+    static member RequiredType (value: Nat) =
+        match value with
+        | N8 _ -> Nat8
+        | N16 _ -> Nat16
+        | N32 _ -> Nat32
+        | N64 _ -> Nat64 
+
+        //if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+        //elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+        //elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+        //else Nat64
 
 
 type BitsType = 
@@ -280,12 +294,13 @@ type BitsType =
         | Bits64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_BITS64
         | _ -> failwith "This is only used for BAny values"
     
-    member this.CanRepresent (value: bigint) = 
-        match this with
-        | Bits8 -> MIN_INT8 <= value && value <= MAX_NAT8
-        | Bits16 -> MIN_INT16 <= value && value <= MAX_NAT16
-        | Bits32 -> MIN_INT32 <= value && value <= MAX_NAT32
-        | Bits64 -> MIN_INT64 <= value && value <= MAX_NAT64
+    member this.CanRepresent (anyInt: Int) = 
+        match this, anyInt with
+        | Bits8, IAny (value, _) -> MIN_INT8 <= value && value <= MAX_NAT8
+        | Bits16, IAny (value, _) -> MIN_INT16 <= value && value <= MAX_NAT16
+        | Bits32, IAny (value, _) -> MIN_INT32 <= value && value <= MAX_NAT32
+        | Bits64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for IAny values"
 
     static member RequiredType value =
         if MIN_INT8 <= value && value <= MAX_NAT8 then Bits8
