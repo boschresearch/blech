@@ -185,7 +185,13 @@ and Types =
         | ValueTypes v -> v.IsPrimitive
         | _ -> false
 
-    member this.IsAny =
+    member this.IsWildcard = 
+        this = AnyComposite 
+
+    member this.IsCompoundLiteral =
+        this = AnyComposite
+
+    member this.IsAny = 
         match this with
         | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> true
         | ValueTypes _ | ReferenceTypes _ -> false

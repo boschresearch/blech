@@ -27,7 +27,7 @@ type Constant =
     //static member SizeZero : Size = 0uL
     //static member SizeOne : Size = 1uL
 
-    static member IntZero (size: CommonTypes.IntType) =
+    static member IntZero (size: CommonTypes.IntType) : Int =
         match size with
         | Int8 -> Int.Zero8
         | Int16 -> Int.Zero16
@@ -68,7 +68,7 @@ type Arithmetic =
         | Unm, B16 v -> B16 <| 0us - v        
         | Unm, B32 v -> B32 <| 0u - v 
         | Unm, B64 v -> B64 <| 0UL - v
-        | Unm, _ -> failwith "Unary Minus for BAny not allowed"
+        | Unm, BAny _ -> failwith "Unary Minus for BAny not allowed"
         | _ -> failwith "Not the unary minus operator "
 
     member this.BinaryBits (left: Bits) (right: Bits) : Bits =

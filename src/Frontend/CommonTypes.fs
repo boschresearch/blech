@@ -232,6 +232,13 @@ type IntType =
             elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
             else Int64
 
+    member this.AdoptAny (any: Int) : Int =
+        match this, any with
+        | Int8, IAny _ -> any.PromoteTo Int.Zero8
+        | Int16, IAny _ -> any.PromoteTo Int.Zero16
+        | Int32, IAny _ -> any.PromoteTo Int.Zero32
+        | Int64, IAny _ -> any.PromoteTo Int.Zero64
+        | _ -> failwith "Adoption of any not allowed"
 
 type NatType = 
     | Nat8 | Nat16 | Nat32 | Nat64 // order of tags matters for comparison!
@@ -273,6 +280,23 @@ type NatType =
         //elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
         //else Nat64
 
+    member this.AdoptAny (any: Int) : Nat =
+        match this, any with
+        | Nat8, IAny _ -> any.PromoteTo Nat.Zero8
+        | Nat16, IAny _ -> any.PromoteTo Nat.Zero16
+        | Nat32, IAny _ -> any.PromoteTo Nat.Zero32
+        | Nat64, IAny _ -> any.PromoteTo Nat.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    
+    member this.AdoptAny (any: Bits) : Nat =
+        match this, any with
+        | Nat8, BAny _ -> any.PromoteTo Nat.Zero8
+        | Nat16, BAny _ -> any.PromoteTo Nat.Zero16
+        | Nat32, BAny _ -> any.PromoteTo Nat.Zero32
+        | Nat64, BAny _ -> any.PromoteTo Nat.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
 
 type BitsType = 
     | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
@@ -308,6 +332,23 @@ type BitsType =
         elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
         else Bits64
 
+    member this.AdoptAny (any: Int) : Bits =
+        match this, any with
+        | Bits8, IAny _ -> any.PromoteTo Bits.Zero8
+        | Bits16, IAny _ -> any.PromoteTo Bits.Zero16
+        | Bits32, IAny _ -> any.PromoteTo Bits.Zero32
+        | Bits64, IAny _ -> any.PromoteTo Bits.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    member this.AdoptAny (any: Bits) : Bits =
+        match this, any with
+        | Bits8, BAny _ -> any.PromoteTo Bits.Zero8
+        | Bits16, BAny _ -> any.PromoteTo Bits.Zero16
+        | Bits32, BAny _ -> any.PromoteTo Bits.Zero32
+        | Bits64, BAny _ -> any.PromoteTo Bits.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
 
@@ -342,4 +383,9 @@ type FloatType =
         | F64 v
         | FAny (v, _) ->
             if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
-        
+     
+     member this.AdoptAny (any: Float) : Float =
+         match this, any with
+         | Float32, FAny _ -> any.PromoteTo Float.Zero32
+         | Float64, FAny _ -> any.PromoteTo Float.Zero64
+         | _ -> failwith "Adoption of any not allowed"

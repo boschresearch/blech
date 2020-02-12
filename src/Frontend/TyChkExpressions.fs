@@ -763,8 +763,10 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
 
 
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = adoptAnyToTargetExpr expr1 expr2
-    let e2 = adoptAnyToTargetExpr expr2 expr1
+    //let e1 = adoptAnyToTargetExpr expr1 expr2
+    //let e2 = adoptAnyToTargetExpr expr2 expr1
+    let e1 = amendPrimitiveAny false expr2.typ expr1
+    let e2 = amendPrimitiveAny false expr1.typ expr2
 
     combine e1 e2
     |> Result.bind (combineRelationalOp operator)
@@ -821,8 +823,10 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
 /// Checks if literals and constant expression are of suitable size.
 let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = adoptAnyToTargetExpr expr1 expr2
-    let e2 = adoptAnyToTargetExpr expr2 expr1
+    //let e1 = adoptAnyToTargetExpr expr1 expr2
+    //let e2 = adoptAnyToTargetExpr expr2 expr1
+    let e1 = amendPrimitiveAny false expr2.typ expr1
+    let e2 = amendPrimitiveAny false expr1.typ expr2
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)

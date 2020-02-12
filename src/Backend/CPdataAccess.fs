@@ -876,6 +876,7 @@ and private cpExpr inFunction ctx expr =
         
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
+    | NatConst n -> [], txt <| string n
     | BitsConst b -> [], txt <| string b
     | FloatConst f -> [], txt <| string f
     | ResetConst -> failwith "By now, the type checker should have substituted reset const by the type's default value."

@@ -24,6 +24,7 @@ module Blech.Frontend.Constants
 //=========================================================================
 // predefined constants TODO: actually, this should be part of blechconf.h
 //=========================================================================
+
 let MIN_INT8 = -pown 2I 7
 let MAX_INT8 = pown 2I 7 - 1I
 let MIN_INT16 = -pown 2I 15
@@ -58,8 +59,26 @@ let MAX_FLOAT64 = System.Double.MaxValue
 let MAX_FLOAT32_INT = pown 2I 24 
 let MAX_FLOAT64_INT = pown 2I 53
 
+/// Converts a bigint to an uint8 assuming it fits
+let private bigint2uint8 v =
+    if v < 0I then uint8 <| pown 2I 8 + v
+    else uint8 v
 
+/// Converts a bigint to an uint16 assuming it fits
+let private bigint2uint16 v =
+    if v < 0I then uint16 <| pown 2I 16 + v
+    else uint16 v
 
+/// Converts a bigint to an uint32 assuming it fits
+let private bigint2uint32 v =
+    if v < 0I then uint32 <| pown 2I 32 + v
+    else uint32 v
+
+/// Converts a bigint to an uint64 assuming it fits
+let private bigint2uint64 v =
+    if v < 0I then uint64 <| pown 2I 64 + v
+    else uint64 v
+    
 /// This type represents constants for array indexes.
 /// Bits, Nat, Int can be used for an array index.
 type Size = uint64
@@ -206,6 +225,14 @@ type Bits =
         | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
 
+    member this.PromoteTo (nat: Nat) =
+        // typechecker ensures that this can be represented as Bits
+        match this, nat with
+        | BAny (v, _), N8 _ -> N8 <| uint8 v
+        | BAny (v, _), N16 _ -> N16 <| uint16 v
+        | BAny (v, _), N32 _ -> N32 <| uint32 v
+        | BAny (v, _), N64 _ -> N64 <| uint64 v
+        | _ -> failwith "Only BAny can be promoted to Nat"
 
     member this.PromoteTo (other: Bits) : Bits = 
         match this, other with
@@ -284,11 +311,12 @@ type Int =
 
     member this.PromoteTo (bits: Bits) : Bits =
         // typechecker ensures that this can be represented as Bits
+        // Assume 2s complement conversion for negative values
         match this, bits with
-        | IAny (v, _), B8 _ -> B8 <| uint8 v
-        | IAny (v, _), B16 _ -> B16 <| uint16 v
-        | IAny (v, _), B32 _ -> B32 <| uint32 v
-        | IAny (v, _), B64 _ -> B64 <| uint64 v
+        | IAny (v, _), B8 _ -> B8 <| bigint2uint8 v
+        | IAny (v, _), B16 _ -> B16 <| bigint2uint16 v
+        | IAny (v, _), B32 _ -> B32 <| bigint2uint32 v
+        | IAny (v, _), B64 _ -> B64 <| bigint2uint64 v
         | _ -> failwith "Only IAny can be promoted to Bits"
 
     member this.PromoteTo (bits: Float) : Float =
@@ -298,9 +326,9 @@ type Int =
         | IAny (v, _), F64 _ -> F64 <| float v
         | _ -> failwith "Only IAny can be promoted to Float"
     
-    member this.PromoteTo (bits: Int) : Int =
+    member this.PromoteTo (int: Int) : Int =
         // typechecker ensures that this can be represented as Bits
-        match this, bits with
+        match this, int with
         | I8 v, I16 _ -> I16 <| int16 v
         | I8 v, I32 _ -> I32 <| int32 v
         | I8 v, I64 _ -> I64 <| int64 v

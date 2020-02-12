@@ -849,8 +849,9 @@ let private collectVarsToPrev2 pg =
         // constants and literals
         | BoolConst _
         | IntConst _
-        | FloatConst _
+        | NatConst _
         | BitsConst _ 
+        | FloatConst _
         | ResetConst -> []
         | StructConst fields ->
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
