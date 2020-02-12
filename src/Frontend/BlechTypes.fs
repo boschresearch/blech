@@ -159,15 +159,17 @@ and ReferenceTypes =
 and Types = 
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
-    | AnyComposite // used for wildcard or compound literals
-    | AnyInt of Int // used only for untyped integer literals
-    | AnyBits of Bits // used only for untyped bits literals 
-    | AnyFloat of Float // used only for untyped float literals
+    | Any // used for wildcard
+    | AnyComposite // compound literals
+    | AnyInt of Int // used for untyped integer literals
+    | AnyBits of Bits // used for untyped bits literals 
+    | AnyFloat of Float // used for untyped float literals
     
     member this.ToDoc =
         match this with
         | ValueTypes f -> f.ToDoc
         | ReferenceTypes r -> r.ToDoc
+        | Any -> txt "wildcard"
         | AnyComposite -> txt "any composite"
         | AnyInt _ -> txt "any integer"
         | AnyBits _ -> txt "any bits"
@@ -186,21 +188,26 @@ and Types =
         | _ -> false
 
     member this.IsWildcard = 
-        this = AnyComposite 
+        this = Any
 
     member this.IsCompoundLiteral =
         this = AnyComposite
 
-    member this.IsAny = 
+    member this.IsPrimitiveAny = 
         match this with
-        | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> true
+        | AnyInt _ | AnyBits _ | AnyFloat _ -> true
+        | _ -> false
+    
+    member this.IsSomeAny = 
+        match this with
+        | Any | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> true
         | ValueTypes _ | ReferenceTypes _ -> false
     
     member this.TryRange =
         match this with
         | ValueTypes v -> v.TryRange
         | ReferenceTypes r -> r.TryRange
-        | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> None
+        | Any | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> None
 
 
 //=============================================================================

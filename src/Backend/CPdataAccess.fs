@@ -193,6 +193,7 @@ let rec internal cpType typ =
         txt "struct" <+> ppGlobalName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
+    | Any
     | AnyComposite 
     | AnyInt _ | AnyBits _ | AnyFloat _ -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
@@ -305,6 +306,7 @@ let rec private trimToFirstAccess (tml: TypedMemLoc) =
 let private getElementDatatype (ctx: TranslationContext) (tml:TypedMemLoc) =
     let tml = trimToFirstAccess tml
     match getDatatypeFromTML ctx.tcc tml with
+    | Any
     | AnyComposite 
     | AnyInt _ 
     | AnyBits _
@@ -916,6 +918,7 @@ and private cpExpr inFunction ctx expr =
             let memcmp = txt "0 == memcmp" <^> dpCommaSeparatedInParens [processedExpr1; processedExpr2; length]
             prereqStmts1 @ prereqStmts2, memcmp
         | ValueTypes Void
+        | Any
         | AnyComposite 
         | AnyInt _ 
         | AnyBits _

@@ -1101,6 +1101,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                     | Declarable.SubProgramDecl _
                     | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
+                | Any
                 | AnyComposite 
                 | AnyInt _
                 | AnyBits _ 
@@ -1243,7 +1244,7 @@ and internal checkLExpr lut (dname: AST.DynamicAccessPath) =
 
 and internal checkAssignLExpr lut lhs =
     match lhs with
-    | AST.Wildcard _ -> Ok { lhs = Wildcard; typ = AnyComposite; range = lhs.Range }
+    | AST.Wildcard _ -> Ok { lhs = Wildcard; typ = Any; range = lhs.Range }
     | AST.Loc dname
     | AST.EventLoc dname ->
         checkLExpr lut dname
@@ -1301,7 +1302,7 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
             leftExprRes |> Result.bind (
                 fun lexpr -> 
                     match lexpr.typ with 
-                    | Types.AnyComposite when lexpr.lhs = Wildcard ->
+                    | Types.Any -> // wildcard
                         Ok None
                     | Types.ValueTypes _ ->
                         Ok (Some lexpr) 

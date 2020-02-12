@@ -113,7 +113,7 @@ let internal isLeftSupertypeOfRight typL typR =
         // We may loose precision but decimal float literals are always imprecise
         sizeL.CanRepresent value
     
-    | Types.AnyComposite, _ -> true      // AnyComposite is supertype of any other type
+    | Types.Any, _ -> true      // wildcard hast type Any which is supertype of any other type
     
     | a, b when (a = b) -> true
     
@@ -126,6 +126,7 @@ let internal isLeftSupertypeOfRight typL typR =
 /// pos and name are for error messages only
 let rec getDefaultValueFor pos name dty =
     match dty with
+    | Types.Any
     | Types.AnyComposite 
     | Types.AnyInt _ 
     | Types.AnyBits _ 
@@ -332,11 +333,11 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
         // if left hand side is _, its type is any and we need to keep the rhs type
         // if right hand side is 8 or 4.2f, we need to take the more concrete type of the lhs
         // if we write _ = 7 amending fails
-        if lTyp.IsWildcard && rExpr.typ.IsAny then 
+        if lTyp.IsWildcard && rExpr.typ.IsSomeAny then 
             Error [VarDeclMissingTypeOrValue (rExpr.range, rExpr.ToString())]
         elif lTyp.IsWildcard then 
             Ok rExpr
-        elif rExpr.typ.IsAny then // primitive any
+        elif rExpr.typ.IsPrimitiveAny then // primitive any
             amendPrimitiveAny inInitMode lTyp rExpr
         else 
             Ok {rExpr with typ = lTyp}
@@ -382,7 +383,8 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)
         match expr.typ with
-        | Types.AnyComposite // struct/array const literals will have Any type
+        | Types.Any // wildcard
+        | Types.AnyComposite // struct/array const literals
         | Types.AnyInt _ 
         | Types.AnyBits _
         | Types.AnyFloat _ ->
