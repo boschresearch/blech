@@ -359,15 +359,11 @@ type FloatType =
         | Float32 -> 32
         | Float64 -> 64
 
-    //member this.Zero =
-    //    match this with
-    //    | Float32 -> Float.Zero32
-    //    | Float64 -> Float.Zero64
-
-    member this.CanRepresent (i: bigint) =
-        match this with
-        | Float32 -> abs i <= MAX_FLOAT32_INT
-        | Float64 -> abs i <= MAX_FLOAT64_INT
+    member this.CanRepresent (value: Int) =
+        match this, value with
+        | Float32, IAny (v, _) -> abs v <= MAX_FLOAT32_INT
+        | Float64, IAny (v, _) -> abs v <= MAX_FLOAT64_INT
+        | _, _ -> failwith ("This is only used for IAny values")
 
     /// Checks if a given float types can represent a AnyFloat value
     member this.CanRepresent (value: Float) =
@@ -384,8 +380,14 @@ type FloatType =
         | FAny (v, _) ->
             if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
      
-     member this.AdoptAny (any: Float) : Float =
-         match this, any with
-         | Float32, FAny _ -> any.PromoteTo Float.Zero32
-         | Float64, FAny _ -> any.PromoteTo Float.Zero64
-         | _ -> failwith "Adoption of any not allowed"
+    member this.AdoptAny (any: Float) : Float =
+        match this, any with
+        | Float32, FAny _ -> any.PromoteTo Float.Zero32
+        | Float64, FAny _ -> any.PromoteTo Float.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    member this.AdoptAny (any: Int) : Float =
+        match this, any with
+        | Float32, IAny _ -> any.PromoteTo Float.Zero32
+        | Float64, IAny _ -> any.PromoteTo Float.Zero64
+        | _ -> failwith "Adoption of any not allowed"

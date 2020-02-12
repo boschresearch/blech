@@ -97,28 +97,21 @@ let internal isLeftSupertypeOfRight typL typR =
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
         sizeL >= sizeR
 
-    | Types.ValueTypes (IntType sizeL), Types.AnyInt value ->
-        // AnyBits cannot be used as IntType, because their size is undefined
-        sizeL.CanRepresent value 
-    | Types.ValueTypes (NatType sizeL), Types.AnyBits value ->
-        sizeL.CanRepresent value
-    | Types.ValueTypes (NatType sizeL), Types.AnyInt value ->
-        sizeL.CanRepresent value
-    | Types.ValueTypes (BitsType sizeL), Types.AnyInt value ->
-        sizeL.CanRepresent value
-    | Types.ValueTypes (BitsType sizeL), Types.AnyBits value ->
-        // AnyInt can be used as BitsType, we assume 2s complement representation for literals
-        sizeL.CanRepresent value
-    | Types.ValueTypes (FloatType sizeL), Types.AnyFloat value ->
-        // We may loose precision but decimal float literals are always imprecise
-        sizeL.CanRepresent value
-    
+    | Types.ValueTypes (IntType _), Types.AnyInt _
+    | Types.ValueTypes (NatType _), Types.AnyInt _
+    | Types.ValueTypes (BitsType _), Types.AnyInt _
+    | Types.ValueTypes (FloatType _), Types.AnyInt _ 
+    | Types.ValueTypes (BitsType _), Types.AnyBits _
+    | Types.ValueTypes (NatType _), Types.AnyBits _
+    | Types.ValueTypes (FloatType _), Types.AnyFloat _ -> true
+
     | Types.Any, _ -> true      // wildcard hast type Any which is supertype of any other type
-    
+
     | a, b when (a = b) -> true
     
     | _, _ -> false // this includes the cases that integers shall not 
                     // implicitly be promoted to floats
+
 
 /// Returns default value for given datatype.
 /// Contains superflous 0 entries, use getInitValueWithoutZeros
@@ -280,7 +273,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
             failwith "Array literal with more elements than an int can represent" // this will certainly never happen
 
 
-and internal amendPrimitiveAny inInitMode toTyp (any: TypedRhs)  = 
+and internal amendPrimitiveAny toTyp (any: TypedRhs)  = 
     match any.typ, toTyp with
     | AnyInt value, ValueTypes (IntType intX) ->
         if intX.CanRepresent value then 
@@ -298,8 +291,14 @@ and internal amendPrimitiveAny inInitMode toTyp (any: TypedRhs)  =
         if bitsX.CanRepresent value then
             Ok {any with rhs = BitsConst <| bitsX.AdoptAny value; typ = toTyp}
         else
-            Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
-
+            Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
+            
+    | AnyInt value, ValueTypes (FloatType floatX) ->
+        if floatX.CanRepresent value then
+            Ok {any with rhs = FloatConst <| floatX.AdoptAny value; typ = toTyp}
+        else
+            Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
+    
     | AnyBits value, ValueTypes (BitsType bitsX) ->
         if bitsX.CanRepresent value then
             Ok {any with rhs = BitsConst <| bitsX.AdoptAny value; typ = toTyp}
@@ -317,8 +316,9 @@ and internal amendPrimitiveAny inInitMode toTyp (any: TypedRhs)  =
             Ok {any with rhs = FloatConst <| floatX.AdoptAny value; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20              
+    
     | _, _  ->
-        Ok any // Any amends to Any, _ = 7 is allowed
+        Ok any
 
         
 /// With structured literals we may need to "fill them up" since a user may 
@@ -333,12 +333,12 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
         // if left hand side is _, its type is any and we need to keep the rhs type
         // if right hand side is 8 or 4.2f, we need to take the more concrete type of the lhs
         // if we write _ = 7 amending fails
-        if lTyp.IsWildcard && rExpr.typ.IsSomeAny then 
+        if lTyp.IsWildcard && rExpr.typ.IsSomeAny then     
             Error [VarDeclMissingTypeOrValue (rExpr.range, rExpr.ToString())]
         elif lTyp.IsWildcard then 
             Ok rExpr
         elif rExpr.typ.IsPrimitiveAny then // primitive any
-            amendPrimitiveAny inInitMode lTyp rExpr
+            amendPrimitiveAny lTyp rExpr
         else 
             Ok {rExpr with typ = lTyp}
     // otherwise we are lacking information about the rhs
