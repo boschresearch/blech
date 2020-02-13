@@ -502,37 +502,43 @@ and getInitValueForTml lut tml =
 /// Checks if literals and constant expression are of suitable size.
 let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
     match anyExpr.typ, targetExpr.typ with
-    | AnyInt value, ValueTypes (IntType intX) ->
+    | AnyInt, ValueTypes (IntType intX) ->
+        let value = anyExpr.rhs.GetIntConst
         if intX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (IntType intX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
     
-    | AnyInt value, ValueTypes (NatType natX) ->
+    | AnyInt, ValueTypes (NatType natX) ->
+        let value = anyExpr.rhs.GetIntConst
         if natX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (NatType natX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
-    | AnyInt value, ValueTypes (BitsType bitX) ->
+    | AnyInt, ValueTypes (BitsType bitX) ->
+        let value = anyExpr.rhs.GetIntConst
         if bitX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
-    | AnyBits value, ValueTypes (BitsType bitX) ->
+    | AnyBits, ValueTypes (BitsType bitX) ->
+        let value = anyExpr.rhs.GetBitsConst
         if bitX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
-    | AnyBits value, ValueTypes (NatType natX) ->
+    | AnyBits, ValueTypes (NatType natX) ->
+        let value = anyExpr.rhs.GetBitsConst
         if natX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (NatType natX)}
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
-    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
+    | AnyFloat, Types.ValueTypes (FloatType floatX) ->
+        let value = anyExpr.rhs.GetFloatConst
         if floatX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
         else
@@ -540,14 +546,6 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
    
     | _, _  ->
         Ok anyExpr
-
-
-let private makeAnyTypeFromConstExpr (rhs: RhsStructure) : Types =  
-    match rhs with
-    | IntConst i when i.IsAny -> AnyInt i
-    | FloatConst f when f.IsAny -> AnyFloat f
-    | _ -> failwith "Evaluation of numbers resulted in not a number" // cannot happen
-
 
 
 // --------------------------------------------------------------------
@@ -581,11 +579,11 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         match expr.rhs with
         | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20  
         | _ -> Sub ( {expr with rhs = FloatConst <| Evaluation.Constant.FloatZero size}, expr) //0 - expr
-    | AnyInt _ ->
+    | AnyInt ->
         match expr.rhs with
         | IntConst i -> IntConst <| Evaluation.Unm.UnaryMinusInt i // TODO: Import Evaluation, fjg. 10.02.20
         | _ -> failwith "AnyFloat should be always a FloatConst"
-    | AnyFloat _ ->
+    | AnyFloat ->
         match expr.rhs with
         | FloatConst f -> FloatConst <| Evaluation.Unm.UnaryMinusFloat f // TODO: Import Evaluation, fjg. 10.02.20
         | _ -> failwith "AnyFloat should be always a FloatConst"
@@ -597,15 +595,15 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 let private unaryMinus r (expr: TypedRhs) =
     match expr.typ with
     // no unary minus on natural number since it cannot be used anywhere
-    | AnyInt value ->
+    | AnyInt ->
         let rhs = unsafeUnaryMinus expr
         Ok { rhs = rhs
-             typ = makeAnyTypeFromConstExpr rhs
+             typ = AnyInt
              range = expr.range }
-    | AnyFloat value ->
+    | AnyFloat ->
         let rhs = unsafeUnaryMinus expr
         Ok { rhs = rhs
-             typ = makeAnyTypeFromConstExpr rhs
+             typ = AnyFloat
              range = expr.range }
     | ValueTypes (IntType _)
     | ValueTypes (BitsType _)
@@ -686,13 +684,13 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
     match expr1.typ, expr2.typ with
     // we allow to compare numbers of different sizes, which technically are of different type
     | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.AnyInt _, Types.AnyInt _
+    | Types.AnyInt, Types.AnyInt
     | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-    | Types.ValueTypes (IntType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (IntType _)
+    | Types.ValueTypes (IntType _), Types.AnyInt
+    | Types.AnyInt, Types.ValueTypes (IntType _)
     | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
-    | Types.ValueTypes (NatType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (NatType _)
+    | Types.ValueTypes (NatType _), Types.AnyInt
+    | Types.AnyInt, Types.ValueTypes (NatType _)
     | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
         eq expr1 expr2 |> resultOk |> Ok
     | Types.ValueTypes lType, Types.ValueTypes rType when lType = rType ->
@@ -709,17 +707,17 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
 /// If the two types are not comparable, an error will be returned instead.
 //let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
 //    match expr1.typ, expr2.typ with
-//    | Types.ValueTypes (IntType _), Types.AnyInt _
-//    | Types.AnyInt _, Types.ValueTypes (IntType _)
+//    | Types.ValueTypes (IntType _), Types.AnyInt
+//    | Types.AnyInt, Types.ValueTypes (IntType _)
     
-//    | Types.ValueTypes (NatType _), Types.AnyInt _
-//    | Types.AnyInt _, Types.ValueTypes (NatType _)
+//    | Types.ValueTypes (NatType _), Types.AnyInt
+//    | Types.AnyInt, Types.ValueTypes (NatType _)
     
-//    | Types.ValueTypes (NatType _), Types.AnyInt _
-//    | Types.AnyInt _, Types.ValueTypes (NatType _)
+//    | Types.ValueTypes (NatType _), Types.AnyInt
+//    | Types.AnyInt, Types.ValueTypes (NatType _)
     
-//    | Types.AnyInt _, Types.AnyInt _
-//    | Types.AnyFloat _, Types.AnyFloat _
+//    | Types.AnyInt, Types.AnyInt
+//    | Types.AnyFloat, Types.AnyFloat
 //    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
 //    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
 //    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
@@ -748,9 +746,9 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
 /// If the two types are not comparable, an error will be returned instead.
 let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with    
-    | AnyInt _, AnyInt _
-    | AnyFloat _, AnyFloat _
-    | AnyBits _, AnyBits _
+    | AnyInt, AnyInt
+    | AnyFloat, AnyFloat
+    | AnyBits, AnyBits
     | ValueTypes BoolType, ValueTypes BoolType
     | ValueTypes (IntType _), ValueTypes (IntType _)
     | ValueTypes (NatType _), ValueTypes (NatType _)
@@ -806,12 +804,10 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
             Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
-        | AnyInt i, AnyInt j ->
-            let rhs = operator expr1 expr2  // TODO: eliminate this, fjg. 13.02.20, idea AnyFloat without value
-            Ok <| makeAnyTypeFromConstExpr rhs
-        | AnyFloat _, AnyFloat _ ->
-            let rhs = operator expr1 expr2  // TODO: eliminate this, fjg. 13.02.20, idea AnyFloat without value
-            Ok <| makeAnyTypeFromConstExpr rhs
+        | AnyInt, AnyInt ->
+            Ok <| AnyInt
+        | AnyFloat, AnyFloat ->
+            Ok <| AnyFloat
         | t1, t2 when t1 = t2 -> 
             Error [MustBeNumeric(expr1, expr2)]
         | _ -> 
@@ -850,9 +846,9 @@ let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic di
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
     match expr1.typ, expr2.typ with
     | ValueTypes (FloatType _), ValueTypes (FloatType _)
-    | AnyFloat _, ValueTypes (FloatType _)
-    | ValueTypes (FloatType _), AnyFloat _
-    | AnyFloat _, AnyFloat _ ->
+    | AnyFloat, ValueTypes (FloatType _)
+    | ValueTypes (FloatType _), AnyFloat
+    | AnyFloat, AnyFloat ->
         Error [CannotModFloats (expr1, expr2)]
     | _ -> checkArithmetic modus expr1 expr2
 
@@ -915,17 +911,17 @@ let private checkSimpleLiteral literal =
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
         if Int64.CanRepresent value || Nat64.CanRepresent value then // Int literals allow an unary minus in attributes
-            { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
+            { rhs = IntConst value; typ = AnyInt; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, value.ToString())]
     | AST.Bits (bits, pos) ->
         if Bits64.CanRepresent bits then // Bits literals are always >= 0                     
-            { rhs = BitsConst bits; typ = AnyBits bits; range = pos } |> Ok
+            { rhs = BitsConst bits; typ = AnyBits; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyInt(pos, bits.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
     | AST.Float (number, _, pos) ->
         if Float64.CanRepresent number then // Float literals allow an unary minus in attributes
-            { rhs = FloatConst number; typ = AnyFloat number; range = pos } |> Ok
+            { rhs = FloatConst number; typ = AnyFloat; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, string number)]
     | AST.String _ ->
@@ -1018,7 +1014,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 )
             | AST.Index (idx, r) ->
                 let isIntType = function
-                    | AnyInt _
+                    | AnyInt
                     | ValueTypes (IntType _)
                     | ValueTypes (NatType _) -> true
                     | _ -> false
@@ -1101,9 +1097,9 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                 | ReferenceTypes _
                 | Any
                 | AnyComposite 
-                | AnyInt _
-                | AnyBits _ 
-                | AnyFloat _ -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
+                | AnyInt
+                | AnyBits 
+                | AnyFloat -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
     // -- function call --

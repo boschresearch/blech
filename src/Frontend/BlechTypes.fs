@@ -161,9 +161,9 @@ and Types =
     | ReferenceTypes of ReferenceTypes
     | Any // used for wildcard
     | AnyComposite // compound literals
-    | AnyInt of Int // used for untyped integer literals
-    | AnyBits of Bits // used for untyped bits literals 
-    | AnyFloat of Float // used for untyped float literals
+    | AnyInt // used for untyped integer literals
+    | AnyBits // of Bits // used for untyped bits literals 
+    | AnyFloat // of Float // used for untyped float literals
     
     member this.ToDoc =
         match this with
@@ -171,9 +171,9 @@ and Types =
         | ReferenceTypes r -> r.ToDoc
         | Any -> txt "wildcard"
         | AnyComposite -> txt "any composite"
-        | AnyInt _ -> txt "any integer"
-        | AnyBits _ -> txt "any bits"
-        | AnyFloat _ -> txt "any float"
+        | AnyInt -> txt "any integer"
+        | AnyBits -> txt "any bits"
+        | AnyFloat -> txt "any float"
 
     override this.ToString() = render None <| this.ToDoc
     
@@ -195,19 +195,19 @@ and Types =
 
     member this.IsPrimitiveAny = 
         match this with
-        | AnyInt _ | AnyBits _ | AnyFloat _ -> true
+        | AnyInt | AnyBits | AnyFloat -> true
         | _ -> false
     
     member this.IsSomeAny = 
         match this with
-        | Any | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> true
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
     
     member this.TryRange =
         match this with
         | ValueTypes v -> v.TryRange
         | ReferenceTypes r -> r.TryRange
-        | Any | AnyComposite | AnyInt _ | AnyBits _ | AnyFloat _ -> None
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> None
 
 
 //=============================================================================
@@ -557,6 +557,21 @@ and RhsStructure =
     | Mod of TypedRhs * TypedRhs
 
     member this.ToDoc = this.ppExpr dpPrec.["min"]
+
+    member this.GetIntConst: Int =
+        match this with
+        | IntConst i -> i
+        | _ -> failwith "expected an IntConst"
+    
+    member this.GetBitsConst: Bits =
+        match this with
+        | BitsConst b -> b
+        | _ -> failwith "expected a BitsConst"
+    
+    member this.GetFloatConst: Float =
+        match this with
+        | FloatConst f -> f
+        | _ -> failwith "expected a FloatConst"
     
     member this.ppExpr outerPrec =
         match this with

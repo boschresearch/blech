@@ -97,13 +97,13 @@ let internal isLeftSupertypeOfRight typL typR =
     | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
         sizeL >= sizeR
 
-    | Types.ValueTypes (IntType _), Types.AnyInt _
-    | Types.ValueTypes (NatType _), Types.AnyInt _
-    | Types.ValueTypes (BitsType _), Types.AnyInt _
-    | Types.ValueTypes (FloatType _), Types.AnyInt _ 
-    | Types.ValueTypes (BitsType _), Types.AnyBits _
-    | Types.ValueTypes (NatType _), Types.AnyBits _
-    | Types.ValueTypes (FloatType _), Types.AnyFloat _ -> true
+    | Types.ValueTypes (IntType _), Types.AnyInt
+    | Types.ValueTypes (NatType _), Types.AnyInt
+    | Types.ValueTypes (BitsType _), Types.AnyInt
+    | Types.ValueTypes (FloatType _), Types.AnyInt 
+    | Types.ValueTypes (BitsType _), Types.AnyBits
+    | Types.ValueTypes (NatType _), Types.AnyBits
+    | Types.ValueTypes (FloatType _), Types.AnyFloat -> true
 
     | Types.Any, _ -> true      // wildcard hast type Any which is supertype of any other type
 
@@ -121,9 +121,9 @@ let rec getDefaultValueFor pos name dty =
     match dty with
     | Types.Any
     | Types.AnyComposite 
-    | Types.AnyInt _ 
-    | Types.AnyBits _ 
-    | Types.AnyFloat _ -> 
+    | Types.AnyInt 
+    | Types.AnyBits 
+    | Types.AnyFloat -> 
         Error [NoDefaultValueForAny (pos, name)]
     | Types.ValueTypes fce ->
         match fce with
@@ -275,43 +275,50 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
 
 and internal amendPrimitiveAny toTyp (any: TypedRhs)  = 
     match any.typ, toTyp with
-    | AnyInt value, ValueTypes (IntType intX) ->
+    | AnyInt , ValueTypes (IntType intX) ->
+        let value = any.rhs.GetIntConst
         if intX.CanRepresent value then 
-            Ok {any with rhs = IntConst <| intX.AdoptAny value; typ = toTyp}
+            Ok {any with rhs = IntConst <| intX.AdoptAny value ; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
 
-    | AnyInt value, ValueTypes (NatType natX) ->
+    | AnyInt, ValueTypes (NatType natX) ->
+        let value = any.rhs.GetIntConst
         if natX.CanRepresent value then
             Ok {any with rhs = NatConst <| natX.AdoptAny value; typ = toTyp }
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
             
-    | AnyInt value, ValueTypes (BitsType bitsX) ->
+    | AnyInt, ValueTypes (BitsType bitsX) ->
+        let value = any.rhs.GetIntConst
         if bitsX.CanRepresent value then
             Ok {any with rhs = BitsConst <| bitsX.AdoptAny value; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
             
-    | AnyInt value, ValueTypes (FloatType floatX) ->
+    | AnyInt, ValueTypes (FloatType floatX) ->
+        let value = any.rhs.GetIntConst
         if floatX.CanRepresent value then
             Ok {any with rhs = FloatConst <| floatX.AdoptAny value; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
     
-    | AnyBits value, ValueTypes (BitsType bitsX) ->
+    | AnyBits, ValueTypes (BitsType bitsX) ->
+        let value = any.rhs.GetBitsConst
         if bitsX.CanRepresent value then
             Ok {any with rhs = BitsConst <| bitsX.AdoptAny value; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
 
-    | AnyBits value, ValueTypes (NatType natX) ->
+    | AnyBits, ValueTypes (NatType natX) ->
+        let value = any.rhs.GetBitsConst
         if natX.CanRepresent value then
             Ok {any with rhs = NatConst <| natX.AdoptAny value; typ = toTyp}
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
 
-    | AnyFloat value, Types.ValueTypes (FloatType floatX) ->
+    | AnyFloat, Types.ValueTypes (FloatType floatX) ->
+        let value = any.rhs.GetFloatConst
         if floatX.CanRepresent value then
             Ok {any with rhs = FloatConst <| floatX.AdoptAny value; typ = toTyp}
         else
@@ -385,9 +392,9 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
         match expr.typ with
         | Types.Any // wildcard
         | Types.AnyComposite // struct/array const literals
-        | Types.AnyInt _ 
-        | Types.AnyBits _
-        | Types.AnyFloat _ ->
+        | Types.AnyInt 
+        | Types.AnyBits
+        | Types.AnyFloat ->
             Error [VarDeclRequiresExplicitType (pos, name)]    
         //| ( Types.ValueTypes (IntType _) 
         //  | Types.ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
