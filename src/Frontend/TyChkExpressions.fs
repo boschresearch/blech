@@ -793,7 +793,6 @@ let private equal ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational eq ex
 /// In case of type mismatches an error is returned instead.
 let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
-    let rhs = operator expr1 expr2  
     let rng = Range.unionRanges expr1.Range expr2.Range
     let commonSize size1 size2 = if size1 >= size2 then size1 else size2
     
@@ -808,15 +807,18 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
         | AnyInt i, AnyInt j ->
+            let rhs = operator expr1 expr2  // TODO: eliminate this, fjg. 13.02.20, idea AnyFloat without value
             Ok <| makeAnyTypeFromConstExpr rhs
-         | AnyFloat _, AnyFloat _ ->
+        | AnyFloat _, AnyFloat _ ->
+            let rhs = operator expr1 expr2  // TODO: eliminate this, fjg. 13.02.20, idea AnyFloat without value
             Ok <| makeAnyTypeFromConstExpr rhs
         | t1, t2 when t1 = t2 -> 
             Error [MustBeNumeric(expr1, expr2)]
         | _ -> 
             Error [SameTypeRequired (expr1, expr2)]
 
-    typ |> Result.bind (fun t -> Ok {rhs = rhs; typ = t; range = rng})
+    typ 
+    |> Result.map ( fun t -> {rhs = operator expr1 expr2; typ = t; range = rng} )
 
 
 /// Checks if literals and constant expression are of suitable size.
