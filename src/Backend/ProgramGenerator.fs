@@ -167,8 +167,8 @@ let internal printState ctx printState entryCompilation =
             assert dty.IsPrimitive
             match dty with
             | ValueTypes (BoolType) -> "%d"
-            | ValueTypes (FloatType FloatType.Float64)
-            | ValueTypes (FloatType FloatType.Float32) -> "%e"
+            | ValueTypes (FloatType Float64)
+            | ValueTypes (FloatType Float32) -> "%e"
             | ValueTypes (IntType Int64) -> "%lld"
             | ValueTypes (IntType Int32) -> "%ld"
             | ValueTypes (IntType Int16) -> "%hd"

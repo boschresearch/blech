@@ -20,38 +20,85 @@ module Blech.Frontend.Evaluation
 open Constants
 open CommonTypes
 
-
 type Constant = 
-    | Zero
 
-    //static member SizeZero : Size = 0uL
-    //static member SizeOne : Size = 1uL
-
-    static member IntZero (size: CommonTypes.IntType) : Int =
+    static member Zero (size: IntType) : Int =
         match size with
-        | Int8 -> Int.Zero8
-        | Int16 -> Int.Zero16
-        | Int32 -> Int.Zero32
+        | Int8 -> Int.Zero8 
+        | Int16 -> Int.Zero16 
+        | Int32 -> Int.Zero32 
         | Int64 -> Int.Zero64
-        
-    static member FloatZero (size: CommonTypes.FloatType) = 
+
+    static member Zero (size: NatType) : Nat =
+        match size with
+        | Nat8 -> Nat.Zero8
+        | Nat16 -> Nat.Zero16
+        | Nat32 -> Nat.Zero32
+        | Nat64 -> Nat.Zero64
+
+    static member Zero (size: BitsType) : Bits = 
+        match size with
+        | Bits8 -> Bits.Zero8
+        | Bits16 -> Bits.Zero16
+        | Bits32 -> Bits.Zero32
+        | Bits64 -> Bits.Zero64
+    
+    static member Zero (size: FloatType) : Float = 
         match size with
         | Float32 -> Float.Zero32
         | Float64 -> Float.Zero64
 
-    static member BitsZero (size: CommonTypes.BitsType) = 
+    static member MinValue (size: IntType) : Int =
+        match size with
+        | Int8 -> I8 System.SByte.MinValue 
+        | Int16 -> I16 System.Int16.MinValue
+        | Int32 -> I32 System.Int32.MinValue
+        | Int64 -> I64 System.Int64.MinValue
+
+    static member MinValue (size: NatType) : Nat =
+        match size with
+        | Nat8 -> Nat.Zero8
+        | Nat16 -> Nat.Zero16
+        | Nat32 -> Nat.Zero32
+        | Nat64 -> Nat.Zero64
+
+    static member MinValue (size: BitsType) : Bits = 
         match size with
         | Bits8 -> Bits.Zero8
         | Bits16 -> Bits.Zero16
         | Bits32 -> Bits.Zero32
         | Bits64 -> Bits.Zero64
 
-    static member NatZero (size: CommonTypes.NatType) =
+    static member MinValue (size: FloatType) : Float = 
         match size with
-        | Nat8 -> Nat.Zero8
-        | Nat16 -> Nat.Zero16
-        | Nat32 -> Nat.Zero32
-        | Nat64 -> Nat.Zero64
+        | Float32 -> F32 System.Single.MinValue
+        | Float64 -> F64 System.Double.MinValue
+
+    static member MaxValue (size: IntType) : Int =
+        match size with
+        | Int8 -> I8 System.SByte.MaxValue 
+        | Int16 -> I16 System.Int16.MaxValue
+        | Int32 -> I32 System.Int32.MaxValue
+        | Int64 -> I64 System.Int64.MaxValue
+
+    static member MaxValue (size: NatType) : Nat =
+        match size with
+        | Nat8 -> N8 System.Byte.MaxValue 
+        | Nat16 -> N16 System.UInt16.MaxValue
+        | Nat32 -> N32 System.UInt32.MaxValue
+        | Nat64 -> N64 System.UInt64.MaxValue
+
+    static member MaxValue (size: BitsType) : Bits = 
+        match size with
+        | Bits8 -> B8 System.Byte.MaxValue 
+        | Bits16 -> B16 System.UInt16.MaxValue
+        | Bits32 -> B32 System.UInt32.MaxValue
+        | Bits64 -> B64 System.UInt64.MaxValue
+
+    static member MaxValue (size: FloatType) : Float = 
+        match size with
+        | Float32 -> F32 System.Single.MaxValue
+        | Float64 -> F64 System.Double.MaxValue
 
 
 type Arithmetic =
@@ -62,7 +109,17 @@ type Arithmetic =
     | Div
     | Mod
 
-    member this.UnaryMinusBits (bits: Bits) = 
+    member this.Unary (i: Int): Int = 
+        match this, i with
+        | Unm, I8 v -> I8 -v
+        | Unm, I16 v -> I16 -v        
+        | Unm, I32 v -> I32 -v 
+        | Unm, I64 v -> I64 -v
+        | Unm, IAny (v, Some s) -> IAny (-v, Some <| "-" + s) 
+        | Unm, IAny (v, None) -> IAny (-v, None) 
+        | _ -> failwith "Not the unary minus operator "
+
+    member this.Unary (bits: Bits) : Bits = 
         match this, bits with
         | Unm, B8 v -> B8 <| 0uy - v
         | Unm, B16 v -> B16 <| 0us - v        
@@ -70,11 +127,28 @@ type Arithmetic =
         | Unm, B64 v -> B64 <| 0UL - v
         | Unm, BAny _ -> failwith "Unary Minus for BAny not allowed"
         | _ -> failwith "Not the unary minus operator "
+    
+    member this.Unary (nat: Nat) : Nat = 
+        match this, nat with
+        | Unm, N8 v -> N8 <| 0uy - v
+        | Unm, N16 v -> N16 <| 0us - v        
+        | Unm, N32 v -> N32 <| 0u - v 
+        | Unm, N64 v -> N64 <| 0UL - v
+        | _ -> failwith "Not the unary minus operator "
 
-    member this.BinaryBits (left: Bits) (right: Bits) : Bits =
+    member this.UnaryMinus (f : Float) : Float =
+        match this, f with
+        | Unm, F32 v -> F32 -v 
+        | Unm, F64 v -> F64 -v
+        | Unm, FAny (v, Some s) -> FAny (-v, Some <| "-" + s) 
+        | Unm, FAny (v, None) -> FAny (-v, None) 
+        | _ -> failwith "Not an unary minus operator"
+
+
+    member this.Binary (left: Bits, right: Bits) : Bits =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
-        match this, left, right with
+        match this, l, r with
         | Add, B8 lv, B8 rv -> B8 <| lv + rv 
         | Add, B16 lv, B16 rv -> B16 <| lv + rv 
         | Add, B32 lv, B32 rv -> B32 <| lv + rv 
@@ -98,19 +172,36 @@ type Arithmetic =
         | Unm, _, _ -> failwith "Unm is not a binary bits operator"
         | _, _, _ -> failwith "Not a valid size"
 
-    
-    member this.UnaryMinusInt (i: Int): Int = 
-        match this, i with
-        | Unm, I8 v -> I8 -v
-        | Unm, I16 v -> I16 -v        
-        | Unm, I32 v -> I32 -v 
-        | Unm, I64 v -> I64 -v
-        | Unm, IAny (v, Some s) -> IAny (-v, Some <| "-" + s) 
-        | Unm, IAny (v, None) -> IAny (-v, None) 
-        | _ -> failwith "Not the unary minus operator "
+
+    member this.Binary (left: Nat, right: Nat) : Nat =
+        let l = left.PromoteTo right
+        let r = right.PromoteTo left
+        match this, l, r with
+        | Add, N8 lv, N8 rv -> N8 <| lv + rv 
+        | Add, N16 lv, N16 rv -> N16 <| lv + rv 
+        | Add, N32 lv, N32 rv -> N32 <| lv + rv 
+        | Add, N64 lv, N64 rv -> N64 <| lv + rv 
+        | Sub, N8 lv, N8 rv -> N8 <| lv - rv 
+        | Sub, N16 lv, N16 rv -> N16 <| lv - rv
+        | Sub, N32 lv, N32 rv -> N32 <| lv - rv
+        | Sub, N64 lv, N64 rv -> N64 <| lv - rv
+        | Mul, N8 lv, N8 rv -> N8 <| lv * rv 
+        | Mul, N16 lv, N16 rv -> N16 <| lv * rv
+        | Mul, N32 lv, N32 rv -> N32 <| lv * rv
+        | Mul, N64 lv, N64 rv -> N64 <| lv * rv
+        | Div, N8 lv, N8 rv -> N8 <| lv / rv 
+        | Div, N16 lv, N16 rv -> N16 <| lv / rv
+        | Div, N32 lv, N32 rv -> N32 <| lv / rv
+        | Div, N64 lv, N64 rv -> N64 <| lv / rv
+        | Mod, N8 lv, N8 rv -> N8 <| lv % rv 
+        | Mod, N16 lv, N16 rv -> N16 <| lv % rv
+        | Mod, N32 lv, N32 rv -> N32 <| lv % rv
+        | Mod, N64 lv, N64 rv -> N64 <| lv % rv
+        | Unm, _, _ -> failwith "Unm is not a binary Nat operator"
+        | _, _, _ -> failwith "Not a valid size"
 
 
-    member this.BinaryInt (left: Int) (right: Int): Int =
+    member this.Binary (left: Int, right: Int): Int =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match this, l, r with
@@ -142,15 +233,8 @@ type Arithmetic =
         | Unm, _, _ -> failwith "Unm is not a binary integer operator"
         | _, _, _ -> failwith "Not a valid size combination"
 
-    member this.UnaryMinusFloat (f : Float) : Float =
-        match this, f with
-        | Unm, F32 v -> F32 -v 
-        | Unm, F64 v -> F64 -v
-        | Unm, FAny (v, Some s) -> FAny (-v, Some <| "-" + s) 
-        | Unm, FAny (v, None) -> FAny (-v, None) 
-        | _ -> failwith "Not an unary minus operator"
 
-    member this.BinaryFloat (left: Float) (right: Float): Float =
+    member this.Binary (left: Float, right: Float): Float =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match this, l , r with
@@ -180,7 +264,7 @@ and Relational =
     | Lt
     | Le
 
-    member this.RelationalFloat (left: Float) (right: Float): bool =
+    member this.Relational (left: Float, right: Float): bool =
         let l = left.PromoteTo right
         let r = right.PromoteTo left    
         match this, l, r with
@@ -195,7 +279,7 @@ and Relational =
         | Le, FAny (lv, _), FAny (rv, _) -> lv <= rv
         | _, _, _ -> failwith "Not a valid width combination"  
         
-    member this.RelationalInt (left: Int) (right: Int) : bool = 
+    member this.Relational (left: Int, right: Int) : bool = 
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match this, l , r with
@@ -216,7 +300,7 @@ and Relational =
         | Le, IAny (lv, _), IAny (rv, _) -> lv <= rv
         | _, _, _ -> failwith "Not a valid width combination"
 
-    member this.RelationalBits (left: Bits) (right: Bits) : bool = 
+    member this.Relational (left: Bits, right: Bits) : bool = 
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match this, l , r with
@@ -237,7 +321,7 @@ and Relational =
         | Le, BAny (lv, _), BAny (rv, _) -> lv <= rv
         | _, _, _ -> failwith "Not a valid width combination"
 
-    member this.RelationalNat (left: Nat) (right: Nat) : bool = 
+    member this.RelationalNat (left: Nat, right: Nat) : bool = 
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match this, l , r with

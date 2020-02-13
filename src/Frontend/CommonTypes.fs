@@ -275,11 +275,6 @@ type NatType =
         | N32 _ -> Nat32
         | N64 _ -> Nat64 
 
-        //if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
-        //elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
-        //elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
-        //else Nat64
-
     member this.AdoptAny (any: Int) : Nat =
         match this, any with
         | Nat8, IAny _ -> any.PromoteTo Nat.Zero8
