@@ -176,7 +176,7 @@ let rec private cpAction ctx curComp action =
         // Since function calls statements and expressions are translated in the same way
         // simply call the expression translation here
         let prereqStmts, processedCall =
-            {rhs = FunCall (whoToCall, inputs, outputs); typ = Types.ValueTypes Void; range = r}
+            {rhs = FunCall (whoToCall, inputs, outputs); typ = ValueTypes Void; range = r}
             |> cpExprInActivity ctx
         prereqStmts @ [ processedCall <^> semi ]
         |> dpBlock
@@ -371,7 +371,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 name = lhsName
                 datatype = lhsTyp
                 mutability = Mutability.Variable
-                initValue = {rhs = NatConst <| Constants.Nat.Zero8; typ = Types.ValueTypes (NatType Nat8); range = pos} // that is a dummy/garbage
+                initValue = {rhs = NatConst <| Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // that is a dummy/garbage
                 annotation = Attribute.VarDecl.Empty
                 allReferences = HashSet() 
             }
@@ -723,7 +723,7 @@ let private translateBlock ctx compilations curComp block =
     let pc =
         { name = mkAuxQNameFrom <| render None (pc4block block)
           pos = range0
-          datatype = Types.ValueTypes (NatType Nat32)
+          datatype = ValueTypes (NatType Nat32)
           isMutable = true
           allReferences = HashSet() }
     let newIface = Iface.addPcs (!curComp).iface pc
@@ -955,7 +955,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = Types.ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)

@@ -166,21 +166,21 @@ let internal printState ctx printState entryCompilation =
         let getFormatStrForArithmetic (dty: Types) =
             assert dty.IsPrimitive
             match dty with
-            | Types.ValueTypes (BoolType) -> "%d"
-            | Types.ValueTypes (FloatType FloatType.Float64)
-            | Types.ValueTypes (FloatType FloatType.Float32) -> "%e"
-            | Types.ValueTypes (IntType Int64) -> "%lld"
-            | Types.ValueTypes (IntType Int32) -> "%ld"
-            | Types.ValueTypes (IntType Int16) -> "%hd"
-            | Types.ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
-            | Types.ValueTypes (NatType Nat64) -> "%llu"
-            | Types.ValueTypes (NatType Nat32) -> "%lu"
-            | Types.ValueTypes (NatType Nat16) -> "%hu"
-            | Types.ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
-            | Types.ValueTypes (BitsType Bits64) -> "%llu"
-            | Types.ValueTypes (BitsType Bits32) -> "%lu"
-            | Types.ValueTypes (BitsType Bits16) -> "%hu"
-            | Types.ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
+            | ValueTypes (BoolType) -> "%d"
+            | ValueTypes (FloatType FloatType.Float64)
+            | ValueTypes (FloatType FloatType.Float32) -> "%e"
+            | ValueTypes (IntType Int64) -> "%lld"
+            | ValueTypes (IntType Int32) -> "%ld"
+            | ValueTypes (IntType Int16) -> "%hd"
+            | ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
+            | ValueTypes (NatType Nat64) -> "%llu"
+            | ValueTypes (NatType Nat32) -> "%lu"
+            | ValueTypes (NatType Nat16) -> "%hu"
+            | ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
+            | ValueTypes (BitsType Bits64) -> "%llu"
+            | ValueTypes (BitsType Bits32) -> "%lu"
+            | ValueTypes (BitsType Bits16) -> "%hu"
+            | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
             | _ -> failwithf "No format string for composite data type %A." dty
 
         let printPrimitive isLocal (n: TypedMemLoc) =

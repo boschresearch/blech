@@ -88,24 +88,24 @@ let internal unsafeMergeCompositeLiteral deflt user =
 // TODO: Rename this function to something more appropriate, fjg. 29.01.20
 let internal isLeftSupertypeOfRight typL typR =
     match typL, typR with
-    | Types.ValueTypes (IntType sizeL), Types.ValueTypes (IntType sizeR) ->
+    | ValueTypes (IntType sizeL), ValueTypes (IntType sizeR) ->
         sizeL >= sizeR
-    | Types.ValueTypes (NatType sizeL), Types.ValueTypes (NatType sizeR) ->
+    | ValueTypes (NatType sizeL), ValueTypes (NatType sizeR) ->
         sizeL >= sizeR
-    | Types.ValueTypes (BitsType sizeL), Types.ValueTypes (BitsType sizeR) ->
+    | ValueTypes (BitsType sizeL), ValueTypes (BitsType sizeR) ->
         sizeL >= sizeR
-    | Types.ValueTypes (FloatType sizeL), Types.ValueTypes (FloatType sizeR) -> 
+    | ValueTypes (FloatType sizeL), ValueTypes (FloatType sizeR) -> 
         sizeL >= sizeR
 
-    | Types.ValueTypes (IntType _), Types.AnyInt
-    | Types.ValueTypes (NatType _), Types.AnyInt
-    | Types.ValueTypes (BitsType _), Types.AnyInt
-    | Types.ValueTypes (FloatType _), Types.AnyInt 
-    | Types.ValueTypes (BitsType _), Types.AnyBits
-    | Types.ValueTypes (NatType _), Types.AnyBits
-    | Types.ValueTypes (FloatType _), Types.AnyFloat -> true
+    | ValueTypes (IntType _), AnyInt
+    | ValueTypes (NatType _), AnyInt
+    | ValueTypes (BitsType _), AnyInt
+    | ValueTypes (FloatType _), AnyInt 
+    | ValueTypes (BitsType _), AnyBits
+    | ValueTypes (NatType _), AnyBits
+    | ValueTypes (FloatType _), AnyFloat -> true
 
-    | Types.Any, _ -> true      // wildcard hast type Any which is supertype of any other type
+    | Any, _ -> true      // wildcard hast type Any which is supertype of any other type
 
     | a, b when (a = b) -> true
     
@@ -115,17 +115,17 @@ let internal isLeftSupertypeOfRight typL typR =
 
 /// Returns default value for given datatype.
 /// Contains superflous 0 entries, use getInitValueWithoutZeros
-/// to obtain the "minimal" default value for composite types.
+/// to obtain the "minimal" default value for composite 
 /// pos and name are for error messages only
 let rec getDefaultValueFor pos name dty =
     match dty with
-    | Types.Any
-    | Types.AnyComposite 
-    | Types.AnyInt 
-    | Types.AnyBits 
-    | Types.AnyFloat -> 
+    | Any
+    | AnyComposite 
+    | AnyInt 
+    | AnyBits 
+    | AnyFloat -> 
         Error [NoDefaultValueForAny (pos, name)]
-    | Types.ValueTypes fce ->
+    | ValueTypes fce ->
         match fce with
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
@@ -142,7 +142,7 @@ let rec getDefaultValueFor pos name dty =
             getDefaultValueFor pos name (ValueTypes elemDty)
             |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
             |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
-    | Types.ReferenceTypes s ->
+    | ReferenceTypes s ->
         Error [NoDefaultValueForSecondClassType (pos, name, s)]
 
   
@@ -317,7 +317,7 @@ and internal amendPrimitiveAny toTyp (any: TypedRhs)  =
         else
             Error[NumberLargerThanAnyInt (any.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
 
-    | AnyFloat, Types.ValueTypes (FloatType floatX) ->
+    | AnyFloat, ValueTypes (FloatType floatX) ->
         let value = any.rhs.GetFloatConst
         if floatX.CanRepresent value then
             Ok {any with rhs = FloatConst <| floatX.AdoptAny value; typ = toTyp}
@@ -354,13 +354,13 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
         match lTyp, rExpr.rhs with
         // resetting
-        | Types.ValueTypes (ValueTypes.StructType _), ResetConst
+        | ValueTypes (ValueTypes.StructType _), ResetConst
         | ValueTypes (ArrayType _), ResetConst ->
             // build a struct (or resp. array) const with default values of the fields
             // note that we do overwrite let fields but we do so with the default value which essentially has no effect
             getInitValueWithoutZeros rExpr.Range "" lTyp
         // structs
-        | Types.ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
+        | ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
             amendStruct inInitMode lTyp rExpr.Range name fields assignments 
         // arrays
         | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
@@ -373,8 +373,8 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
         | t, _ when t.IsPrimitive->
             Error [TypeMismatchPrimitiveComposite(lTyp, rExpr)]
         // altering reference typed data is illegal
-        | Types.ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
-        | Types.ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
+        | ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
+        | ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
             Error [CannotResetRefType(rExpr.Range)]
         // at this point we've missed something
         | _ -> Error [AmendBroken(lTyp, rExpr)]
@@ -390,14 +390,14 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)
         match expr.typ with
-        | Types.Any // wildcard
-        | Types.AnyComposite // struct/array const literals
-        | Types.AnyInt 
-        | Types.AnyBits
-        | Types.AnyFloat ->
+        | Any // wildcard
+        | AnyComposite // struct/array const literals
+        | AnyInt 
+        | AnyBits
+        | AnyFloat ->
             Error [VarDeclRequiresExplicitType (pos, name)]    
-        //| ( Types.ValueTypes (IntType _) 
-        //  | Types.ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
+        //| ( ValueTypes (IntType _) 
+        //  | ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
         //    Error [VarDeclRequiresExplicitType (pos, name)]
         | _ ->
             Ok (expr.typ, expr)

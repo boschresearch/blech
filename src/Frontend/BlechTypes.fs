@@ -250,7 +250,7 @@ and VarDecl =
     member this.ToDoc =
         let vdDoc = 
             this.mutability.ToDoc
-            <+> match this.datatype with | Types.ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
+            <+> match this.datatype with | ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
             <^> txt (this.name.ToString())
             <^> txt ":" <+> this.datatype.ToDoc
             <+> txt "=" <+> this.initValue.ToDoc
@@ -276,7 +276,7 @@ and ExternalVarDecl =
         let vdDoc =
             txt "extern"
             <+> this.mutability.ToDoc
-            <+> match this.datatype with | Types.ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
+            <+> match this.datatype with | ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
             <^> txt (this.name.ToString())
             <^> txt ":" <+> this.datatype.ToDoc
         this.annotation.ToDoc @ [vdDoc]

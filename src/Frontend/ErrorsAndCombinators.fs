@@ -222,15 +222,15 @@ type TyCheckError =
             | MustBeNumeric (t1, t2) -> Range.unionRanges t1.Range t2.Range, sprintf "Expressions %s and %s must be numeric." (t1.ToString()) (t2.ToString())
             | SameTypeRequired (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must be of the same type." (r1.ToString()) (r2.ToString())
             | SameArithmeticTypeRequired (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s must be of the same arithmetic type." (e1.ToString()) (e2.ToString())
-            | SameFirstTypeRequired (p, f1, f2) -> p, sprintf "Types %s and %s must be the same." ((Types.ValueTypes f1).ToString()) ((Types.ValueTypes f2).ToString())
+            | SameFirstTypeRequired (p, f1, f2) -> p, sprintf "Types %s and %s must be the same." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())
             | NoComparisonAllowed (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s are structured value typed data and may not be compared at runtime directly using '=='." (e1.ToString()) (e2.ToString())
-            | IncomparableReturnTypes (p, f1, f2) -> p, sprintf "The code block may return values of type %s or %s which are incomparable." ((Types.ValueTypes f1).ToString()) ((Types.ValueTypes f2).ToString())
+            | IncomparableReturnTypes (p, f1, f2) -> p, sprintf "The code block may return values of type %s or %s which are incomparable." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())
             | VoidSubprogCannotReturnValues p -> p, sprintf "The return statement may not have a value payload since the subprogram is declared as void. (It does not have a \"returns\" declaration.)"
             | VoidReturnStmtMustReturn (p, t) -> p, sprintf "The return statement must have a payload of type %s according to the declaration of the subprogram." (t.ToString())
-            | MustReturnSomething (p, f) -> p, sprintf "The subprogram declares the return type %s. However no return statements were found." ((Types.ValueTypes f).ToString())
-            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) ((Types.ValueTypes f1).ToString())
+            | MustReturnSomething (p, f) -> p, sprintf "The subprogram declares the return type %s. However no return statements were found." ((ValueTypes f).ToString())
+            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) ((ValueTypes f1).ToString())
             | ActCallMustExplicitlyIgnoreResult (p, n) -> p, sprintf "The call of %s must explicitly ignore the non-void return value." (string n)
-            | MayOrMayNotReturn (p, f1, f2) -> p, sprintf "The subprogram possibly returns a %s on some execution paths (but not on all). However it must always return a %s." ((Types.ValueTypes f2).ToString()) ((Types.ValueTypes f1).ToString())
+            | MayOrMayNotReturn (p, f1, f2) -> p, sprintf "The subprogram possibly returns a %s on some execution paths (but not on all). However it must always return a %s." ((ValueTypes f2).ToString()) ((ValueTypes f1).ToString())
             | ValueStructContainsRef (name, refField) -> name.range, sprintf "The structure %s is value typed but contains the reference typed element %s." name.idToString refField.name.basicId
             | ValueArrayMustHaveValueType r -> r, "A value typed array must contain value typed elements."
             | TooManyInitialisers (r, i) -> r, sprintf "More than %d initialisers have been given." i

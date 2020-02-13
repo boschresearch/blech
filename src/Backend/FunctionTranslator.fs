@@ -143,7 +143,7 @@ and private translateFunctionStatement ctx curComp stmt =
         // Since function calls statements and expressions are translated in the same way
         // simply call the expression translation here
         let prereqStmts, processedCall =
-            {rhs = FunCall (whoToCall, inputs, outputs); typ = Types.ValueTypes Void; range = pos}
+            {rhs = FunCall (whoToCall, inputs, outputs); typ = ValueTypes Void; range = pos}
             |> cpExprInFunction ctx
         prereqStmts @ [ processedCall <^> semi ]
         |> dpBlock
@@ -196,12 +196,12 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
     
     let retvar, retType =
         if subProgDecl.returns.IsPrimitive then
-            None, cpType (Types.ValueTypes subProgDecl.returns)
+            None, cpType (ValueTypes subProgDecl.returns)
         else
             let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = Types.ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)

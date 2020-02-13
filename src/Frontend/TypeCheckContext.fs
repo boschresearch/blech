@@ -193,8 +193,8 @@ module TypeCheckContext =
             | Declarable.FunctionPrototype _ -> failwith "TML cannot point to a subprogram!"
         | FieldAccess (tml, ident) ->
             match getDatatypeFromTML lut tml with
-            | Types.ValueTypes (ValueTypes.StructType (_, name, fields))
-            | Types.ReferenceTypes (ReferenceTypes.StructType (_, name, fields)) ->
+            | ValueTypes (ValueTypes.StructType (_, name, fields))
+            | ReferenceTypes (ReferenceTypes.StructType (_, name, fields)) ->
                 fields
                 |> List.find (fun f -> f.name.basicId = ident)
                 |> (fun v -> v.datatype)

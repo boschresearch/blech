@@ -344,7 +344,7 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
 
     let programFunctionPrototypes =
         // TODO: The tick function can return a value, not always void, fjg. 18.04.19
-        let voidType = (Types.ValueTypes ValueTypes.Void) 
+        let voidType = (ValueTypes ValueTypes.Void) 
         [ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
           ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType
           ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation.iface voidType ]

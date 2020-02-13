@@ -86,8 +86,8 @@ let internal isLhsMutable lut lhs =
         let ism, typ = isTmlMutable tml
         if ism then
             match typ with
-            | Types.ValueTypes (ValueTypes.StructType (_, typname, typfields))
-            | Types.ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
+            | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+            | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                 typfields
                 |> List.tryFind (fun f -> f.name.basicId = ident)
                 |> function
@@ -537,7 +537,7 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
         else
             Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
     
-    | AnyFloat, Types.ValueTypes (FloatType floatX) ->
+    | AnyFloat, ValueTypes (FloatType floatX) ->
         let value = anyExpr.rhs.GetFloatConst
         if floatX.CanRepresent value then
             Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
@@ -556,10 +556,10 @@ let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : Ty
 /// If the type is not boolean, an error will be returned instead.
 let private negate r (expr: TypedRhs) =
     match expr.typ with
-    | Types.ValueTypes BoolType ->
+    | ValueTypes BoolType ->
         let structure = neg expr
         { rhs = structure;
-          typ = Types.ValueTypes BoolType
+          typ = ValueTypes BoolType
           range = expr.Range } |> Ok
     | _ -> Error [ExpectedBoolCond (r, expr)]
 
@@ -620,10 +620,10 @@ let private unaryMinus r (expr: TypedRhs) =
 /// If some of the types is not boolean, an error will be returned instead.
 let private formLogical operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+    | ValueTypes BoolType, ValueTypes BoolType ->
         let structure = operator expr1 expr2
         { rhs = structure; 
-          typ = Types.ValueTypes BoolType
+          typ = ValueTypes BoolType
           range = Range.unionRanges expr1.Range expr2.Range }
         |> Ok
     | _ -> Error [ExpectedBoolConds (expr1, expr2)]
@@ -632,10 +632,10 @@ let private formLogical operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
 /// If some of the types is not boolean, an error will be returned instead.
 //let private formConjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
 //    match expr1.typ, expr2.typ with
-//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//    | ValueTypes BoolType, ValueTypes BoolType ->
 //        let structure = conj expr1 expr2
 //        { rhs = structure; 
-//          typ = Types.ValueTypes BoolType
+//          typ = ValueTypes BoolType
 //          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
 //    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
 
@@ -645,10 +645,10 @@ let private formConjunction = formLogical conj
 /// If some of the types is not boolean, an error will be returned instead.
 //let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
 //    match expr1.typ, expr2.typ with
-//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//    | ValueTypes BoolType, ValueTypes BoolType ->
 //        let structure = disj expr1 expr2
 //        { rhs = structure; 
-//          typ = Types.ValueTypes BoolType
+//          typ = ValueTypes BoolType
 //          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
 //    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
 
@@ -658,10 +658,10 @@ let private formDisjunction = formLogical disj
 /// If some of the types is not boolean, an error will be returned instead.
 //let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
 //    match expr1.typ, expr2.typ with
-//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
+//    | ValueTypes BoolType, ValueTypes BoolType ->
 //        let structure = bxor expr1 expr2
 //        { rhs = structure; 
-//          typ = Types.ValueTypes BoolType
+//          typ = ValueTypes BoolType
 //          range = Range.unionRanges expr1.Range expr2.Range }
 //        |> Ok
 //    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
@@ -679,21 +679,21 @@ let private formXor = formLogical bxor
 /// makes a difference for complex data types!
 let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<TypedRhs> =
     let resultOk okCase = { rhs = okCase 
-                            typ = Types.ValueTypes BoolType
+                            typ = ValueTypes BoolType
                             range = Range.unionRanges expr1.Range expr2.Range }
     match expr1.typ, expr2.typ with
     // we allow to compare numbers of different sizes, which technically are of different type
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.AnyInt, Types.AnyInt
-    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-    | Types.ValueTypes (IntType _), Types.AnyInt
-    | Types.AnyInt, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
-    | Types.ValueTypes (NatType _), Types.AnyInt
-    | Types.AnyInt, Types.ValueTypes (NatType _)
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
+    | ValueTypes BoolType, ValueTypes BoolType
+    | AnyInt, AnyInt
+    | ValueTypes (IntType _), ValueTypes (IntType _)
+    | ValueTypes (IntType _), AnyInt
+    | AnyInt, ValueTypes (IntType _)
+    | ValueTypes (NatType _), ValueTypes (NatType _)
+    | ValueTypes (NatType _), AnyInt
+    | AnyInt, ValueTypes (NatType _)
+    | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
         eq expr1 expr2 |> resultOk |> Ok
-    | Types.ValueTypes lType, Types.ValueTypes rType when lType = rType ->
+    | ValueTypes lType, ValueTypes rType when lType = rType ->
         if isLiteral expr1 && isLiteral expr2 then
             eq expr1 expr2 |> resultOk |> Ok
         else
@@ -707,23 +707,23 @@ let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<Type
 /// If the two types are not comparable, an error will be returned instead.
 //let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
 //    match expr1.typ, expr2.typ with
-//    | Types.ValueTypes (IntType _), Types.AnyInt
-//    | Types.AnyInt, Types.ValueTypes (IntType _)
+//    | ValueTypes (IntType _), AnyInt
+//    | AnyInt, ValueTypes (IntType _)
     
-//    | Types.ValueTypes (NatType _), Types.AnyInt
-//    | Types.AnyInt, Types.ValueTypes (NatType _)
+//    | ValueTypes (NatType _), AnyInt
+//    | AnyInt, ValueTypes (NatType _)
     
-//    | Types.ValueTypes (NatType _), Types.AnyInt
-//    | Types.AnyInt, Types.ValueTypes (NatType _)
+//    | ValueTypes (NatType _), AnyInt
+//    | AnyInt, ValueTypes (NatType _)
     
-//    | Types.AnyInt, Types.AnyInt
-//    | Types.AnyFloat, Types.AnyFloat
-//    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-//    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-//    | Types.ValueTypes (NatType _), Types.ValueTypes (NatType _)
-//    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
+//    | AnyInt, AnyInt
+//    | AnyFloat, AnyFloat
+//    | ValueTypes BoolType, ValueTypes BoolType
+//    | ValueTypes (IntType _), ValueTypes (IntType _)
+//    | ValueTypes (NatType _), ValueTypes (NatType _)
+//    | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
 //        { rhs = ineqFun expr1 expr2
-//          typ = Types.ValueTypes BoolType
+//          typ = ValueTypes BoolType
 //          range = Range.unionRanges expr1.Range expr2.Range }
 //        |> Ok
 //    | _ -> Error [SameArithmeticTypeRequired (expr1, expr2)]
@@ -907,7 +907,7 @@ let private checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams:
 // AST.Literal does not comprise struct, array,... literals
 let private checkSimpleLiteral literal =
     match literal with
-    | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = Types.ValueTypes BoolType; range = pos } |> Ok
+    | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = ValueTypes BoolType; range = pos } |> Ok
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
         if Int64.CanRepresent value || Nat64.CanRepresent value then // Int literals allow an unary minus in attributes
@@ -1003,8 +1003,8 @@ and private checkUntimedDynamicAccessPath lut dname =
                 tmlAndType
                 |> Result.bind (fun (tml,typ) ->
                     match typ with
-                    | Types.ValueTypes (ValueTypes.StructType (_, typname, typfields))
-                    | Types.ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
+                    | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+                    | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                         typfields
                         |> List.tryFind (fun f -> f.name.basicId = name.id)
                         |> function
@@ -1107,7 +1107,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         let resIn = List.map (checkExpr lut) readArgs
         let resOut = List.map (checkLExpr lut) writeArgs
         checkFunCall false lut r fp resIn resOut
-        |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = Types.ValueTypes t; range = r} |> Ok)
+        |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = ValueTypes t; range = r} |> Ok)
     // -- logical and bitwise not --
     | AST.Not (subexpr, r) ->
         checkExpr lut subexpr
@@ -1296,9 +1296,9 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
             leftExprRes |> Result.bind (
                 fun lexpr -> 
                     match lexpr.typ with 
-                    | Types.Any -> // wildcard
+                    | Any -> // wildcard
                         Ok None
-                    | Types.ValueTypes _ ->
+                    | ValueTypes _ ->
                         Ok (Some lexpr) 
                     | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
                 )
@@ -1308,7 +1308,7 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
             | Some (lexpr: TypedLhs) ->
                 let typ = lexpr.typ
                 if isLhsMutable lut lexpr.lhs then
-                    if isLeftSupertypeOfRight typ (Types.ValueTypes declReturns) then 
+                    if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
                         Ok (Some lexpr) 
                     else 
                         Error [ReturnTypeMismatch(pos, declReturns, typ)]
@@ -1334,7 +1334,7 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
 let internal fCondition lut cond = 
     let ensureBoolean (e: TypedRhs) =
         match e.typ with
-        | Types.ValueTypes BoolType -> Ok e
+        | ValueTypes BoolType -> Ok e
         | _ -> Error [ExpectedBoolCond (e.Range, e)]
     let ensureSideEffectFree (e: TypedRhs) =
         if hasNoSideEffect e then Ok e
