@@ -111,6 +111,7 @@ type TyCheckError =
     | MustBeNumeric of TypedRhs * TypedRhs
     | SameTypeRequired of TypedRhs * TypedRhs
     | SameArithmeticTypeRequired of TypedRhs * TypedRhs
+    | SameBitsTypeRequired of TypedRhs * TypedRhs
     | SameFirstTypeRequired of range * ValueTypes * ValueTypes
     | NoComparisonAllowed of TypedRhs * TypedRhs
     | IncomparableReturnTypes of range * ValueTypes * ValueTypes
@@ -222,6 +223,7 @@ type TyCheckError =
             | MustBeNumeric (t1, t2) -> Range.unionRanges t1.Range t2.Range, sprintf "Expressions %s and %s must be numeric." (t1.ToString()) (t2.ToString())
             | SameTypeRequired (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must be of the same type." (r1.ToString()) (r2.ToString())
             | SameArithmeticTypeRequired (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s must be of the same arithmetic type." (e1.ToString()) (e2.ToString())
+            | SameBitsTypeRequired (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s must be of the same bits type." (e1.ToString()) (e2.ToString())
             | SameFirstTypeRequired (p, f1, f2) -> p, sprintf "Types %s and %s must be the same." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())
             | NoComparisonAllowed (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s are structured value typed data and may not be compared at runtime directly using '=='." (e1.ToString()) (e2.ToString())
             | IncomparableReturnTypes (p, f1, f2) -> p, sprintf "The code block may return values of type %s or %s which are incomparable." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())

@@ -899,7 +899,6 @@ and private cpExpr inFunction ctx expr =
         prereqStmts, cpNeg processedExpr
     | Conj(s1, s2) -> binConj inFunction ctx s1 s2 
     | Disj(s1, s2) -> binDisj inFunction ctx s1 s2
-    | Bxor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
     | Les (s1, s2) -> binExpr inFunction ctx s1 s2 "<"
     | Leq (s1, s2) -> binExpr inFunction ctx s1 s2 "<="
     | Equ (s1, s2) ->
@@ -929,7 +928,9 @@ and private cpExpr inFunction ctx expr =
     | Mul (s1, s2) -> binExpr inFunction ctx s1 s2 "*"
     | Div (s1, s2) -> binExpr inFunction ctx s1 s2 "/"
     | Mod (s1, s2) -> binExpr inFunction ctx s1 s2 "%"
-
+    // bitwise operators
+    | Bor (s1, s2) -> binExpr inFunction ctx s1 s2 "|"
+    
 
 let private ppParameterTml ctx tml =
     cpRenderData SubProgKind.Activity Usage.Rhs TemporalQualification.Current ctx tml ppNameInActivity

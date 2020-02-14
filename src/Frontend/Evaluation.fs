@@ -119,7 +119,7 @@ type Arithmetic =
         | B8 v -> B8 <| 0uy - v
         | B16 v -> B16 <| 0us - v        
         | B32 v -> B32 <| 0u - v 
-        | B64 v -> B64 <| 0UL - v
+        | B64 v -> B64 <| 0uL - v
         | BAny _ -> failwith "Unary Minus for BAny not allowed"
     
     static member Unm (nat: Nat) : Nat = 
@@ -127,7 +127,7 @@ type Arithmetic =
         | N8 v -> N8 <| 0uy - v
         | N16 v -> N16 <| 0us - v        
         | N32 v -> N32 <| 0u - v 
-        | N64 v -> N64 <| 0UL - v
+        | N64 v -> N64 <| 0uL - v
 
     static member Unm (f : Float) : Float =
         match f with
@@ -337,12 +337,17 @@ type Arithmetic =
         | N64 lv, N64 rv -> N64 <| lv % rv 
         | _, _ -> failwith "Mod not allowed for Nats of different size"
 
+// TODO: This is not needed, delete it, fjg. 14.02.20
+//type Logical =
 
-type Logical =
-    | Not
-    | And 
-    | Or
+//    static member Not (b: bool) : bool = 
+//        not b 
 
+//    static member And (left: bool, right: bool) : bool = 
+//        left && right
+
+//    static member Or (left: bool, right: bool) : bool = 
+//        left || right
 
 type Relational = 
         
@@ -473,15 +478,6 @@ type Relational =
 
 
 and Bitwise =  
-    //| Bnot
-    //| Band
-    //| Bor
-    //| Bxor
-    //| Shl
-    //| Shr
-    //| Ashr
-    //| Rotl
-    //| Rotr
 
     static member Bnot (bits: Bits) =
         match bits with

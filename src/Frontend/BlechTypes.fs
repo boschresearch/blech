@@ -104,9 +104,10 @@ type ValueTypes =
     | BitsType of BitsType
     | FloatType of FloatType
     //structured
-    | ArrayType of size: Size * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
-                                                  // like 'size-1' or to pass size to functions that expect int
-                                                  // such as List.replicate
+    | ArrayType of size: Size * datatype: ValueTypes // TODO: Correct this comment, fjg. 14.02.20
+                                                     // we use int for size to save ourselves from casting expressions 
+                                                     // like 'size-1' or to pass size to functions that expect int
+                                                     // such as List.replicate
     | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
     

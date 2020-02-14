@@ -861,7 +861,6 @@ let private collectVarsToPrev2 pg =
         | Neg e -> processExpr e
         | Conj (e1, e2) 
         | Disj (e1, e2) 
-        | Bxor (e1, e2) 
         // relations
         | Les (e1, e2) 
         | Leq (e1, e2) 
@@ -871,7 +870,9 @@ let private collectVarsToPrev2 pg =
         | Sub (e1, e2) 
         | Mul (e1, e2) 
         | Div (e1, e2) 
-        | Mod (e1, e2) -> processExpr e1 @ processExpr e2
+        | Mod (e1, e2) 
+        // bitwise
+        | Bor (e1, e2) -> processExpr e1 @ processExpr e2
     
     let rec processNode (node: Node) =
         match node.Payload.Typ with

@@ -195,8 +195,6 @@ let rec internal isStaticExpr lut expr =
 //    op a.ToFloat b.ToFloat
 //    |> wrapFloat a b
 
-//let private IntToBits (value: bigint) : Bits =  
-//    Bits.FromInteger value (BitsType.RequiredType value).GetSize  //TODO: this seams to be wrong, fjg. 6.2.20
 
 let private add this that =
     match this.rhs, that.rhs with
@@ -259,24 +257,17 @@ let private disj this that =
     | BoolConst true, _ -> BoolConst true // optimisation, note "and then" semantics prohibits to do the same in case of _, true
     | _ -> Disj(this, that)
 
-let private bxor this that =
-    match this.rhs, that.rhs with
-    | BoolConst a, BoolConst b -> BoolConst (a <> b) //covers the case where both are true, NOT redundant as above for conj and disj
-    | BoolConst false, t
-    | t, BoolConst false -> t
-    | _ -> Bxor(this, that)
-
 let private less this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a < b)
-    | IntConst a, IntConst b -> BoolConst (a < b)
+    | IntConst a, IntConst b -> BoolConst <| Relational.Lt (a, b)
     | BitsConst a, BitsConst b -> BoolConst <| Relational.Lt (a, b)
     | FloatConst a, FloatConst b -> BoolConst <| Relational.Lt (a, b)
     | _ -> Les(this, that)
 
 let private leq this that =
     match this.rhs, that.rhs with
-    | BoolConst a, BoolConst b -> BoolConst (a <= b)
+    | BoolConst a, BoolConst b -> BoolConst ( a <= b )
     | IntConst a, IntConst b -> BoolConst <| Relational.Le (a, b)
     | BitsConst a, BitsConst b -> BoolConst <| Relational.Le (a, b)
     | FloatConst a, FloatConst b -> BoolConst <| Relational.Le (a, b)
@@ -285,10 +276,16 @@ let private leq this that =
 let private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
-    | IntConst a, IntConst b -> BoolConst (a = b)
+    | IntConst a, IntConst b -> BoolConst <| Relational.Eq (a, b)
     | BitsConst a, BitsConst b -> BoolConst <| Relational.Eq (a, b)
     | FloatConst a, FloatConst b -> BoolConst <| Relational.Eq (a, b)
     | _ -> Equ(this, that)
+
+
+let private bor this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Bor (a, b)
+    | _ -> Bor(this, that)
 
 
 //let rec private eq this that =
@@ -372,13 +369,13 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Disj (x, y) -> evalBin x y disj
     // bitwise
     | Band (x, y) // todo: go on here
-    | Bor (x, y)
+    | Bor (x, y) -> evalBin x y bor
     | Shl (x, y)
     | Shr (x, y)
     | Sshr (x, y)
     | Rotl (x, y)
     | Rotr (x, y)
-    | Bxor (x, y) -> evalBin x y bxor 
+    | Bxor (x, y) -> evalBin x y bor  // Todo: This is wrong for the moment, fjg. 14.02.20 
     // relational
     | Les (x, y) -> evalBin x y less 
     | Leq (x, y) -> evalBin x y leq
@@ -494,56 +491,6 @@ and getInitValueForTml lut tml =
 //  Functions that construct typed expressions from subexpressions
 //=========================================================================
 
-
-/// Checks if literals and constant expression are of suitable size.
-let private adoptAnyToTargetExpr (anyExpr: TypedRhs) (targetExpr: TypedRhs) : TyChecked<TypedRhs> =
-    match anyExpr.typ, targetExpr.typ with
-    | AnyInt, ValueTypes (IntType intX) ->
-        let value = anyExpr.rhs.GetIntConst
-        if intX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (IntType intX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-    
-    | AnyInt, ValueTypes (NatType natX) ->
-        let value = anyExpr.rhs.GetIntConst
-        if natX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (NatType natX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-    
-    | AnyInt, ValueTypes (BitsType bitX) ->
-        let value = anyExpr.rhs.GetIntConst
-        if bitX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-    
-    | AnyBits, ValueTypes (BitsType bitX) ->
-        let value = anyExpr.rhs.GetBitsConst
-        if bitX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (BitsType bitX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-    
-    | AnyBits, ValueTypes (NatType natX) ->
-        let value = anyExpr.rhs.GetBitsConst
-        if natX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (NatType natX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20
-    
-    | AnyFloat, ValueTypes (FloatType floatX) ->
-        let value = anyExpr.rhs.GetFloatConst
-        if floatX.CanRepresent value then
-            Ok {anyExpr with typ = ValueTypes (FloatType floatX)}
-        else
-            Error[SameTypeRequired (anyExpr, targetExpr)]  // TODO: better error message, fjg. 28.01.20            
-   
-    | _, _  ->
-        Ok anyExpr
-
-
 // --------------------------------------------------------------------
 // ---  Unary logical and - TODO - bitwise not
 // --------------------------------------------------------------------
@@ -651,88 +598,32 @@ let private formConjunction = formLogical conj
 
 let private formDisjunction = formLogical disj
 
-/// Given two typed expressions, construct their exclusive disjunction.
-/// If some of the types is not boolean, an error will be returned instead.
-//let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
-//    match expr1.typ, expr2.typ with
-//    | ValueTypes BoolType, ValueTypes BoolType ->
-//        let structure = bxor expr1 expr2
-//        { rhs = structure; 
-//          typ = ValueTypes BoolType
-//          range = Range.unionRanges expr1.Range expr2.Range }
-//        |> Ok
-//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
-
 
 // --------------------------------------------------------------------
-// ---  TODO: Logical Operators, fjg. 21.01.20
+// ---  Bitwise Operators, fjg. 21.01.20
 // --------------------------------------------------------------------
 
-let private formXor = formLogical bxor
-
-/// Given two typed expressions, construct their equality.
+/// Given two typed expressions, construct their binary bitwise operator
 /// If the two types are not comparable, an error will be returned instead.
-/// Assuming that expressions are reduced to literals before calling this function -
-/// makes a difference for complex data types!
-let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<TypedRhs> =
-    let resultOk okCase = { rhs = okCase 
-                            typ = ValueTypes BoolType
-                            range = Range.unionRanges expr1.Range expr2.Range }
-    match expr1.typ, expr2.typ with
-    // we allow to compare numbers of different sizes, which technically are of different type
-    | ValueTypes BoolType, ValueTypes BoolType
-    | AnyInt, AnyInt
-    | ValueTypes (IntType _), ValueTypes (IntType _)
-    | ValueTypes (IntType _), AnyInt
-    | AnyInt, ValueTypes (IntType _)
-    | ValueTypes (NatType _), ValueTypes (NatType _)
-    | ValueTypes (NatType _), AnyInt
-    | AnyInt, ValueTypes (NatType _)
-    | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
-        eq expr1 expr2 |> resultOk |> Ok
-    | ValueTypes lType, ValueTypes rType when lType = rType ->
-        if isLiteral expr1 && isLiteral expr2 then
-            eq expr1 expr2 |> resultOk |> Ok
-        else
-            // disallow runtime comparison of structured values using ==
-            Error[NoComparisonAllowed(expr1, expr2)]
-    | _ -> Error [SameTypeRequired (expr1, expr2)]
+let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    let rng = Range.unionRanges expr1.Range expr2.Range
+    let commonSize size1 size2 = if size1 >= size2 then size1 else size2 
+    match expr1.typ, expr2.typ with    
+    | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
+        Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType <| commonSize size1 size2); range = rng }
+    | _, _
+        -> Error [SameBitsTypeRequired (expr1, expr2)] 
 
 
-/// Given two typed expressions, construct their inequality.
-/// We assume that ineqFun is either 'less' or 'leq' from above.
-/// If the two types are not comparable, an error will be returned instead.
-//let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
-//    match expr1.typ, expr2.typ with
-//    | ValueTypes (IntType _), AnyInt
-//    | AnyInt, ValueTypes (IntType _)
-    
-//    | ValueTypes (NatType _), AnyInt
-//    | AnyInt, ValueTypes (NatType _)
-    
-//    | ValueTypes (NatType _), AnyInt
-//    | AnyInt, ValueTypes (NatType _)
-    
-//    | AnyInt, AnyInt
-//    | AnyFloat, AnyFloat
-//    | ValueTypes BoolType, ValueTypes BoolType
-//    | ValueTypes (IntType _), ValueTypes (IntType _)
-//    | ValueTypes (NatType _), ValueTypes (NatType _)
-//    | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
-//        { rhs = ineqFun expr1 expr2
-//          typ = ValueTypes BoolType
-//          range = Range.unionRanges expr1.Range expr2.Range }
-//        |> Ok
-//    | _ -> Error [SameArithmeticTypeRequired (expr1, expr2)]
+let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = amendPrimitiveAny expr2.typ expr1
+    let e2 = amendPrimitiveAny expr1.typ expr2
 
-/// Given two typed expressions, construct their strict inequality.
-/// If the two types are not comparable, an error will be returned instead.
-// let private lessThan = inequality less
+    combine e1 e2
+    |> Result.bind (combineBitwiseOp operator)
 
-/// Given two typed expressions, construct their inequality.
-/// If the two types are not comparable, an error will be returned instead.
-// let private lessEqualThan = inequality leq
-
+/// Returns the bitwise or of two typed expressions or an error in case of type mismatch.
+let private bitwiseOr ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bor expr1 expr2
 
 // --------------------------------------------------------------------
 // ---  Relational Operators
@@ -754,7 +645,7 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
         Ok { rhs = op expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
 
     | _, _
-        -> Error [SameArithmeticTypeRequired (expr1, expr2)]  // TODO: Same relational type required, fjg. 29.01.20
+        -> Error [SameArithmeticTypeRequired (expr1, expr2)] 
 
 
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -1146,9 +1037,9 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Bnot (subexpr, r) ->
         checkExpr lut subexpr
         |> Result.bind (negate r)
-    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
-    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
-    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
+    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseOr
+    | AST.Band _
+    | AST.Bxor _
     | AST.Shl _
     | AST.Shr _  
     
