@@ -26,6 +26,7 @@ open Constants
 open CommonTypes
 open BlechTypes
 open TyChecked
+open Evaluation
 
 module Range = Blech.Common.Range
 
@@ -121,10 +122,10 @@ let rec getDefaultValueFor pos name dty =
         match fce with
         | Void -> Error [IllegalVoid (pos, name)]                                
         | BoolType -> Ok {rhs = BoolConst false; typ = dty; range = pos}
-        | IntType size -> Ok {rhs = IntConst <| Evaluation.Constant.Zero size; typ = dty; range = pos}
-        | BitsType size -> Ok {rhs = BitsConst <| Evaluation.Constant.Zero size; typ = dty; range = pos}
-        | NatType size -> Ok {rhs = NatConst <| Evaluation.Constant.Zero size; typ = dty; range = pos}
-        | FloatType size ->Ok {rhs = FloatConst <| Evaluation.Constant.Zero size; typ = dty; range = pos}
+        | IntType size -> Ok {rhs = IntConst <| Constant.Zero size; typ = dty; range = pos}
+        | BitsType size -> Ok {rhs = BitsConst <| Constant.Zero size; typ = dty; range = pos}
+        | NatType size -> Ok {rhs = NatConst <| Constant.Zero size; typ = dty; range = pos}
+        | FloatType size ->Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
         | ValueTypes.StructType (_, _, fields) ->
             let defaultValues =
                 fields
