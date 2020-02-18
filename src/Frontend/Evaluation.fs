@@ -517,32 +517,43 @@ and Bitwise =
         | B64 lv, B64 rv -> B64 <| (lv ^^^ rv) 
         | _ -> failwith "No BXor on BAny allowed"
     
-    //member this.BinaryBits (left: Bits) (right: Bits): bigint =
-    //    let size = if left.size > right.size then left.size else right.size
-    //    let lv = left.value
-    //    let rv = right.value
-    //    match this, size with
-    //    | Bor, 8 -> uint8 lv ||| uint8 rv |> uint32 |> bigint
-    //    | Band, 8-> uint8 lv &&& uint8 rv |> uint32 |> bigint
-    //    | Bxor, 8 -> uint8 lv ^^^ uint8 rv |> uint32 |> bigint
-    //    | _ -> failwith "Not a bitwise binary operator"
+    static member Shl (bits: Bits, amount: int32) : Bits =
+        match bits with
+        | B8 b -> B8 (b <<< amount)
+        | B16 b -> B16 (b <<< amount)
+        | B32 b -> B32 (b <<< amount)
+        | B64 b -> B64 (b <<< amount)
+        | BAny _ -> failwith "No Shl on BAny allowed"
 
-    //member this.ShiftBits (bits: Bits) (amount: int32) =
-    //    let size = bits.size
-    //    match this, size with
-    //    | Shl, 8 -> uint8 bits.value <<< amount |> uint32 |> bigint
-    //    | Shr, 8 -> uint8 bits.value >>> amount |> uint32 |> bigint
-    //    | _ -> failwith "Not a shift operator"
+    static member Shr (bits: Bits, amount: int32) : Bits =
+        match bits with
+        | B8 b -> B8 (b >>> amount)
+        | B16 b -> B16 (b >>> amount)
+        | B32 b -> B32 (b >>> amount)
+        | B64 b -> B64 (b >>> amount)
+        | BAny _ -> failwith "No Shl on BAny allowed"
 
-    //member this.AdvancedShiftBits (bits: Bits) (amount: int32) : bigint = 
-    //    let size = bits.size
-    //    let b = bits.value
-    //    match this, size with
-    //    | Ashr, 8 -> (int8 b) >>> amount |> uint8 |> uint32 |> bigint 
-    //    // TODO: lookup rotate algorithms in Hacker's Delight, fjg. 6.2.20
-    //    | Rotl, _ -> failwith "Not yet implemented"
-    //    | Rotr, _ -> failwith "Not yet implemented"
-    //    | _ -> failwith "Not an advanced shift operator"
-    
+    static member Sshr (bits: Bits, amount: int32) : Bits =
+        match bits with
+        | B8 b -> int8 b >>> amount |> uint8 |> B8
+        | B16 b -> int16 b >>> amount |> uint16 |> B16
+        | B32 b -> int32 b >>> amount |> uint32 |> B32
+        | B64 b -> int64 b >>> amount |> uint64 |> B64
+        | BAny _ -> failwith "No signed shift right '+>>' on BAny allowed"
 
+    static member Rotl (bits: Bits, amount: int32) : Bits =
+        match bits with
+        | B8 b -> b <<< amount ||| b >>> 8 - amount |> B8 
+        | B16 b -> b <<< amount ||| b >>> 16 - amount |> B16 
+        | B32 b -> b <<< amount ||| b >>> 32 - amount |> B32 
+        | B64 b -> b <<< amount ||| b >>> 64 - amount |> B64 
+        | BAny _ -> failwith "No rotate left '<<>' on BAny allowed"
+
+    static member Rotr (bits: Bits, amount: int32) : Bits =
+        match bits with
+        | B8 b -> b >>> amount ||| b <<< 8 - amount |> B8 
+        | B16 b -> b >>> amount ||| b <<< 16 - amount |> B16 
+        | B32 b -> b >>> amount ||| b <<< 32 - amount |> B32 
+        | B64 b -> b >>> amount ||| b <<< 64 - amount |> B64 
+        | BAny _ -> failwith "No rotate right '<>>' on BAny allowed"
 

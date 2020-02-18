@@ -281,12 +281,63 @@ let private eq this that =
     | FloatConst a, FloatConst b -> BoolConst <| Relational.Eq (a, b)
     | _ -> Equ(this, that)
 
+let private bnot this = 
+    match this.rhs with
+    | BitsConst b -> BitsConst <| Bitwise.Bnot b
+    | _ -> Bnot this
 
 let private bor this that =
     match this.rhs, that.rhs with
     | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Bor (a, b)
     | _ -> Bor(this, that)
 
+let private band this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Band (a, b)
+    | _ -> Band (this, that)
+
+let private bxor this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Bxor (a, b)
+    | _ -> Bxor (this, that)
+
+let private shl expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shl (bs, i.GetShiftAmount)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shl (bs, n.GetShiftAmount)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shl (bs, b.GetShiftAmount)
+    | _ -> Shl (expr, amount)
+
+let private shr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shr (bs, i.GetShiftAmount)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shr (bs, n.GetShiftAmount)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shr (bs, b.GetShiftAmount)
+    | _ -> Shr (expr, amount)
+
+
+let private sshr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Sshr (bs, i.GetShiftAmount)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Sshr (bs, n.GetShiftAmount)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Sshr (bs, b.GetShiftAmount)
+    | _ -> Sshr (expr, amount)
+
+
+let private rotl expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotl (bs, i.GetShiftAmount)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotl (bs, n.GetShiftAmount)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotl (bs, b.GetShiftAmount)
+    | _ -> Rotl (expr, amount)
+
+
+let private rotr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotr (bs, i.GetShiftAmount)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotr (bs, n.GetShiftAmount)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotr (bs, b.GetShiftAmount)
+    | _ -> Rotr (expr, amount)
 
 //let rec private eq this that =
 //    let checkField (id1, st1) (id2, st2) =
@@ -338,6 +389,10 @@ let private bor this that =
 /// However, it may return a non-constant expression if it cannot be
 /// reduced. No error is thrown.
 let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
+    let evalUnary x f = 
+        let newRhs = tryEvalConst lut x |> f
+        { rhs = newRhs; typ = checkedExpr.typ; range = checkedExpr.Range }
+    
     let evalBin x y f =
         let newrhs = tryEvalConst lut x |> f <| tryEvalConst lut y
         { rhs = newrhs; typ = checkedExpr.typ; range = checkedExpr.Range }
@@ -360,22 +415,20 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Div (x, y) -> evalBin x y div 
     | Mod (x, y) -> evalBin x y modus
     // unary
-    | Bnot x  // todo: go on here
-    | Neg x -> 
-        let newRhs = tryEvalConst lut x |> neg
-        { rhs = newRhs; typ = checkedExpr.typ; range = checkedExpr.Range }
+    | Bnot x  -> evalUnary x bnot 
+    | Neg x -> evalUnary x neg
     // logical
     | Conj (x, y) -> evalBin x y conj
     | Disj (x, y) -> evalBin x y disj
     // bitwise
     | Band (x, y) // todo: go on here
     | Bor (x, y) -> evalBin x y bor
-    | Shl (x, y)
-    | Shr (x, y)
-    | Sshr (x, y)
-    | Rotl (x, y)
-    | Rotr (x, y)
-    | Bxor (x, y) -> evalBin x y bor  // Todo: This is wrong for the moment, fjg. 14.02.20 
+    | Bxor (x, y) -> evalBin x y bxor 
+    | Shl (x, y) -> evalBin x y shl
+    | Shr (x, y) -> evalBin x y shr
+    | Sshr (x, y) -> evalBin x y sshr
+    | Rotl (x, y) -> evalBin x y rotl
+    | Rotr (x, y) -> evalBin x y rotr
     // relational
     | Les (x, y) -> evalBin x y less 
     | Leq (x, y) -> evalBin x y leq
@@ -424,9 +477,9 @@ and internal evalCompTimeSize lut expr =
     |> Result.bind (ensureNonNegSize expr.Range)
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
-        | IntConst i -> Ok i.GetSize
-        | NatConst n -> Ok n.GetSize
-        | BitsConst b -> Ok b.GetSize
+        | IntConst i -> Ok i.GetArrayIndex
+        | NatConst n -> Ok n.GetArrayIndex
+        | BitsConst b -> Ok b.GetArrayIndex
         | _ -> Error [NotACompileTimeSize expr]
     )
 
@@ -491,20 +544,26 @@ and getInitValueForTml lut tml =
 //  Functions that construct typed expressions from subexpressions
 //=========================================================================
 
-// --------------------------------------------------------------------
-// ---  Unary logical and - TODO - bitwise not
-// --------------------------------------------------------------------
+// ------------------------------------------------------------------------
+// ---  Unary operators, 
+// ---  logical negate 'not', bitwise complement '~' and unary minus '-'
+// ------------------------------------------------------------------------
 
 /// Given a typed expression, construct its negation.
 /// If the type is not boolean, an error will be returned instead.
 let private negate r (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes BoolType ->
-        let structure = neg expr
-        { rhs = structure;
-          typ = ValueTypes BoolType
-          range = expr.Range } |> Ok
+        Ok { expr with rhs = neg expr }
     | _ -> Error [ExpectedBoolCond (r, expr)]
+
+/// Given a typed expression, construct its bitwise complement
+/// If the the type is not BitsType, an error will returned instead
+let private complement rng (expr: TypedRhs) =
+    match expr.typ with
+    | ValueTypes (BitsType size) ->
+        Ok { expr with rhs = bnot expr }
+    | _ -> Error [ExpectedBoolCond (rng, expr)] // TODO: better error message, fjg. 17.02.20
 
 /// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
@@ -539,20 +598,20 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 let private unaryMinus r (expr: TypedRhs) =
     match expr.typ with
     // no unary minus on natural number since it cannot be used anywhere
-    | AnyInt ->
-        let rhs = unsafeUnaryMinus expr
-        Ok { rhs = rhs
-             typ = AnyInt
-             range = expr.range }
-    | AnyFloat ->
-        let rhs = unsafeUnaryMinus expr
-        Ok { rhs = rhs
-             typ = AnyFloat
-             range = expr.range }
     | ValueTypes (IntType _)
     | ValueTypes (BitsType _)
-    | ValueTypes (FloatType _) ->
+    | ValueTypes (FloatType _)
+    | AnyInt
+    | AnyFloat ->
         Ok { expr with rhs = unsafeUnaryMinus expr }
+        //let rhs = unsafeUnaryMinus expr
+        //Ok { rhs = rhs
+        //     typ = AnyInt
+        //     range = expr.range }
+        //let rhs = unsafeUnaryMinus expr
+        //Ok { rhs = rhs
+        //     typ = AnyFloat
+        //     range = expr.range }
     | _ -> // error illegal minus on expr
         Error [CannotInvertSign(r, expr)]
 
@@ -600,7 +659,7 @@ let private formDisjunction = formLogical disj
 
 
 // --------------------------------------------------------------------
-// ---  Bitwise Operators, fjg. 21.01.20
+// ---  Bitwise binary operators
 // --------------------------------------------------------------------
 
 /// Given two typed expressions, construct their binary bitwise operator
@@ -625,6 +684,63 @@ let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
 /// Returns the bitwise or of two typed expressions or an error in case of type mismatch.
 let private bitwiseOr ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bor expr1 expr2
 
+/// Returns the bitwise and of two typed expressions or an error in case of type mismatch.
+let private bitwiseAnd ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise band expr1 expr2
+
+/// Returns the bitwise xor of two typed expressions or an error in case of type mismatch.
+let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxor expr1 expr2
+
+// --------------------------------------------------------------------
+// ---  Bitwise shift operators
+// --------------------------------------------------------------------
+
+/// Given two typed expressions, construct their binary bitwise operator
+/// If the two types are not comparable, an error will be returned instead.
+let private combineShiftOp shift ((expr: TypedRhs), (positions: TypedRhs)) =
+    let rng = Range.unionRanges expr.Range positions.Range
+    let rhs = shift expr positions
+    Ok { expr with rhs = rhs; range = rng }  // Todo: This can go wrong later on if positions are bigger then bits size or negative, fjg. 18.02.20
+    
+
+let private checkShiftOp shift (expr: TypedRhs) (positions: TypedRhs) =
+    let exp = 
+        match expr.typ with
+        | ValueTypes (BitsType _) ->
+            Ok expr
+        | _ ->
+            Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
+            
+    let pos = 
+        match positions.typ with
+        | ValueTypes (IntType _)
+        | ValueTypes (NatType _)
+        | ValueTypes (BitsType _)
+        | AnyInt
+        | AnyBits ->
+            Ok positions
+        | _ ->
+            Error [ TypeMismatch (positions.typ, positions) ] // TODO: positions must be a valid size type, change this error message, fjg. 17.02.20
+    
+    combine exp pos
+    |> Result.bind (combineShiftOp shift)
+
+
+/// Returns the right shift '>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private shiftRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp shr expr amount
+
+/// Returns the left shift '<<' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private shiftLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp shl expr amount
+
+/// Returns the signed right shift '+>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private signedShiftRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+
+/// Returns the left rotation '<<>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private rotateLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+
+/// Returns the signed right rotation '<>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private rotateRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+
+
 // --------------------------------------------------------------------
 // ---  Relational Operators
 // --------------------------------------------------------------------
@@ -643,7 +759,6 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | ValueTypes (BitsType _), ValueTypes (BitsType _)
     | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
         Ok { rhs = op expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
-
     | _, _
         -> Error [SameArithmeticTypeRequired (expr1, expr2)] 
 
@@ -945,6 +1060,15 @@ and private combineTwoExpr lut e1 e2 f =
     |> Result.bind f
     // |> Result.bind debugShowConstExpr
 
+/// Shorthand helper. Given two expressions bits and amount, and a shift 
+/// function shiftFun (<<, >>, +>>, <>>, <<>), type check bits and amount and combine
+/// using shf.
+and private combineShift lut bits amount shiftFun =
+    combine (checkExpr lut bits) (checkExpr lut amount)
+    |> Result.bind shiftFun
+    // |> Result.bind debugShowConstExpr
+
+
 /// Given an untyped AST.Expr, return a typed expression.
 /// We guarantee that compile time expressions are evaluated to a literal
 /// BoolConst, IntConst, FloatConst, ResetConst, StructConst, ArrayConst
@@ -1036,18 +1160,18 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     // -- bitwise operators, TODO: complete this, fjg. 21.01.20
     | AST.Bnot (subexpr, r) ->
         checkExpr lut subexpr
-        |> Result.bind (negate r)
+        |> Result.bind (complement r)
     | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseOr
-    | AST.Band _
-    | AST.Bxor _
-    | AST.Shl _
-    | AST.Shr _  
-    
+    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseAnd
+    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseXor
+    | AST.Shl (e1, e2) -> combineShift lut e1 e2 shiftLeft
+    | AST.Shr (e1, e2) -> combineShift lut e1 e2 shiftRight
+
     // -- Advance bitwise operators
-    | AST.Sshr _
-    | AST.Rotl _
-    | AST.Rotr _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "advanced bitwise operator: '+>>' or '<<>'  or '<>>'")]
+    | AST.Sshr (e1, e2) -> combineShift lut e1 e2 signedShiftRight
+    | AST.Rotl (e1, e2) -> combineShift lut e1 e2 rotateLeft
+    | AST.Rotr (e1, e2) -> combineShift lut e1 e2 rotateRight
+
     // --- identity operators
     | AST.Ideq _ 
     | AST.Idieq _ ->

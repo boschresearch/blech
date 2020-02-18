@@ -79,9 +79,10 @@ let private bigint2uint64 v =
     if v < 0I then uint64 <| pown 2I 64 + v
     else uint64 v
     
-/// This type represents constants for array indexes.
+/// This type represents constants for array indexes and shift amounts
 /// Bits, Nat, Int can be used for an array index.
 type Size = uint64
+
 let SizeZero : Size = 0uL
 let SizeOne : Size = 1uL
 
@@ -160,13 +161,28 @@ type Nat =
 
     member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
 
-    /// This extracts the Size from a Nat constant.
-    member this.GetSize : Size =
+    /// This extracts the Size for an array index from a Nat constant.
+    member this.GetArrayIndex : Size =
         match this with
         | N8 v -> uint64 v
         | N16 v -> uint64 v
         | N32 v -> uint64 v 
         | N64 v -> uint64 v
+
+    /// Extracts the shift amount from an Nat constant.
+    /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
+    /// The typechecker must guarantee this.
+    member this.GetShiftAmount : int32 =
+        try 
+            match this with
+            | N8 v -> int32 v
+            | N16 v -> int32 v
+            | N32 v -> int32 v
+            | N64 v -> int32 v
+        with
+        | :? System.OverflowException ->
+            failwith "Called on unchecked shift amount constant"
+
 
     member this.PromoteTo (other: Nat) : Nat = 
         match this, other with
@@ -211,9 +227,9 @@ type Bits =
         | B64 v -> v = 0uL
         | BAny (v, _) -> v = 0I 
 
-    /// This extracts the Size from an Bits constant.
+    /// This extracts the Size for an array index from an Bits constant.
     /// The typechecker must guarantee, that no overflow occurs
-    member this.GetSize : Size =
+    member this.GetArrayIndex : Size =
         try 
             match this with
             | B8 v -> uint64 v 
@@ -224,6 +240,22 @@ type Bits =
         with
         | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
+
+    /// This extracts the shift amount from an Bits constant.
+    /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
+    /// The typechecker must guarantee this.
+    member this.GetShiftAmount : int32 =
+        try 
+            match this with
+            | B8 v -> int32 v
+            | B16 v -> int32 v
+            | B32 v -> int32 v
+            | B64 v -> int32 v
+            | BAny (v, _) -> int32 v 
+        with
+        | :? System.OverflowException ->
+            failwith "Called on unchecked shift amount constant"
+
 
     member this.PromoteTo (nat: Nat) =
         // typechecker ensures that this can be represented as Bits
@@ -286,9 +318,9 @@ type Int =
         | IAny _ -> true
         | _ -> false
     
-    /// This extracts the Size from an Int constant.
+    /// This extracts the Size for an array index from an Int constant.
     /// The typechecker must guarantee, that no overflow occurs
-    member this.GetSize : Size =
+    member this.GetArrayIndex : Size =
         try 
             match this with
             | I8 v -> uint64 v
@@ -298,7 +330,24 @@ type Int =
             | IAny (v, _) -> uint64 v 
         with
         | :? System.OverflowException ->
-            failwith "Called on unchecked size constant"  //
+            failwith "Called on unchecked size constant"
+
+    /// This extracts the shift amount from an Int constant.
+    /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
+    /// The typechecker must guarantee this.
+    member this.GetShiftAmount : int32 =
+        try 
+            match this with
+            | I8 v -> int32 v
+            | I16 v -> int32 v
+            | I32 v -> int32 v
+            | I64 v -> int32 v
+            | IAny (v, _) -> int32 v 
+        with
+        | :? System.OverflowException ->
+            failwith "Called on unchecked shift amount constant"
+
+
 
     member this.PromoteTo (nat: Nat) =
         // typechecker ensures that this can be represented as Bits
