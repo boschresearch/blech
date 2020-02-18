@@ -1,4 +1,4 @@
-const ONE: int32 = (2*4 + 12) / 10 - 1 
+const ONE: int32 = ((2: int32)*4 + 12) / 10 - 1 
 const THREE: int32 = (ONE + ONE) * 2 - 1
 const TRUE = true
 const WHEELS: int8 = 1

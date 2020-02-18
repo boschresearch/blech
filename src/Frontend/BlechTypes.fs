@@ -508,13 +508,13 @@ and LhsStructure =
         | LhsCur t -> LhsCur (t.AddArrayAccess idx)
         | LhsNext t -> LhsNext (t.AddArrayAccess idx)
     
-    member this.AddArrayAccess (idx: Int) = 
-        let rhs = {rhs = IntConst idx; typ = ValueTypes (IntType (IntType.RequiredType idx)); range = range0}
-        this.AddArrayAccess rhs
+    //member this.AddArrayAccess (idx: Int) = 
+    //    let rhs = {rhs = IntConst idx; typ = ValueTypes (IntType (IntType.RequiredType idx)); range = range0}
+    //    this.AddArrayAccess rhs
 
-    member this.AddArrayAccess (idx: Nat) = 
-        let rhs = {rhs = NatConst idx; typ = ValueTypes (NatType (NatType.RequiredType idx)); range = range0}
-        this.AddArrayAccess rhs
+    //member this.AddArrayAccess (idx: Nat) = 
+    //    let rhs = {rhs = NatConst idx; typ = ValueTypes (NatType (NatType.RequiredType idx)); range = range0}
+    //    this.AddArrayAccess rhs
 
 /// right hand side expression, in assignments, arguments to subprograms or index of array access    
 and RhsStructure =

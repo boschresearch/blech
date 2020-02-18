@@ -32,7 +32,9 @@ let rec internal normaliseAssign ctx (r, lhs, rhs) =
             { rhs = NatConst <| N64 i //IntConst (bigint(i))
               typ = 
                 // IntType.RequiredType (bigint(i))
-                ValueTypes <| NatType (NatType.RequiredType <| N64 i)
+                // ValueTypes <| NatType (NatType.RequiredType <| N64 i)
+                // TODO: Check the following line carefully, fjg. 18.02.20
+                ValueTypes <| NatType (NatType.RequiredType (IAny (bigint i, None)) )
                 // |> IntType
                 // |> ValueTypes 
               range = r

@@ -222,15 +222,14 @@ type IntType =
 
     static member RequiredType (value: Int) =
         match value with
-        | I8 _ -> Int8
-        | I16 _ -> Int16
-        | I32 _ -> Int32
-        | I64 _ -> Int64
         | IAny (value, _) ->
             if MIN_INT8 <= value && value <= MAX_INT8 then Int8
             elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
             elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
-            else Int64
+            elif MIN_INT64 <= value && value <= MAX_INT64 then Int64
+            else failwith "IAny value outside any IntX type"
+        | _ ->
+            failwith "Not an IAny value"
 
     member this.AdoptAny (any: Int) : Int =
         match this, any with
@@ -268,12 +267,28 @@ type NatType =
         | Nat64, IAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
         | _ -> failwith "This is only used for IAny values"
 
-    static member RequiredType (value: Nat) =
-        match value with
-        | N8 _ -> Nat8
-        | N16 _ -> Nat16
-        | N32 _ -> Nat32
-        | N64 _ -> Nat64 
+    
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (value, _) ->
+            if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+            elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+            elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+            elif MIN_NAT64 <= value && value <= MAX_NAT64 then Nat64
+            else failwith "AnyInt value outside any NatX type"
+        | _ -> 
+            failwith "Not an IAny value"
+
+    static member RequiredType (anyBits: Bits) =
+        match anyBits with
+        | BAny (value, _) ->
+            if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+            elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+            elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+            elif MIN_NAT64 <= value && value <= MAX_NAT64 then Nat64
+            else failwith "BAny value outside any NatX type"
+        | _ -> 
+            failwith "Not an BAny value"
 
     member this.AdoptAny (any: Int) : Nat =
         match this, any with
@@ -321,11 +336,28 @@ type BitsType =
         | Bits64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_NAT64
         | _ -> failwith "This is only used for IAny values"
 
-    static member RequiredType value =
-        if MIN_INT8 <= value && value <= MAX_NAT8 then Bits8
-        elif MIN_INT16 <= value && value <= MAX_NAT16 then Bits16
-        elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
-        else Bits64
+    static member RequiredType (anyBits: Bits) =
+        match anyBits with
+        | BAny (value, _) ->
+            if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
+            elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
+            elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
+            elif MIN_BITS64 <= value && value <= MAX_BITS64 then Bits64
+            else failwith "BAny value outside any BitsX type"
+        | _ -> 
+            failwith "Not a BAny value"
+
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (value, _) ->
+            if MIN_INT8 <= value && value <= MAX_NAT8 then Bits8
+            elif MIN_INT16 <= value && value <= MAX_NAT16 then Bits16
+            elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
+            elif MIN_INT64 <= value && value <= MAX_NAT64 then Bits32
+            else failwith "IAny value outside any BitsX type"
+        | _ -> 
+            failwith "Not an IAny value"
+
 
     member this.AdoptAny (any: Int) : Bits =
         match this, any with
@@ -364,16 +396,17 @@ type FloatType =
     member this.CanRepresent (value: Float) =
         match this, value with
         | Float64, FAny (v, _) -> MIN_FLOAT64 <= v && v <= MAX_FLOAT64
-        | Float32, FAny (v, _) -> float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32
+        | Float32, FAny (v, _) -> MIN_FLOAT32 <= v && v <= MAX_FLOAT32
         | _, _-> failwith "This is only used for FAny values"    
         
-    static member RequiredType (f : Float) =
-        match f with
-        | F32 _ -> 
-            Float32
-        | F64 v
+    static member RequiredType (anyFloat: Float) =
+        match anyFloat with
         | FAny (v, _) ->
-            if float MIN_FLOAT32 <= v && v <= float MAX_FLOAT32 then Float32 else Float64
+            if MIN_FLOAT32 <= v && v <= MAX_FLOAT32 then Float32 
+            elif MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then Float32 
+            else failwith "fAny value outside any FloatX type"
+        | _ -> 
+            failwith "Not an FAny value"
      
     member this.AdoptAny (any: Float) : Float =
         match this, any with

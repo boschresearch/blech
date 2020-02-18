@@ -52,8 +52,8 @@ let MAX_BITS32 = pown 2I 32 - 1I
 let MIN_BITS64 = 0I
 let MAX_BITS64 = pown 2I 64 - 1I
 
-let MIN_FLOAT32 = System.Single.MinValue
-let MAX_FLOAT32 = System.Single.MaxValue
+let MIN_FLOAT32 = float System.Single.MinValue
+let MAX_FLOAT32 = float System.Single.MaxValue
 let MIN_FLOAT64 = System.Double.MinValue
 let MAX_FLOAT64 = System.Double.MaxValue
 let MAX_FLOAT32_INT = pown 2I 24 
@@ -376,7 +376,7 @@ type Int =
         | _ -> failwith "Only IAny can be promoted to Float"
     
     member this.PromoteTo (int: Int) : Int =
-        // typechecker ensures that this can be represented as Bits
+        // typechecker ensures that this can be represented as Int
         match this, int with
         | I8 v, I16 _ -> I16 <| int16 v
         | I8 v, I32 _ -> I32 <| int32 v

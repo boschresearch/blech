@@ -633,28 +633,10 @@ let private formLogical operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
     
 /// Given two typed expressions, construct their conjunction.
 /// If some of the types is not boolean, an error will be returned instead.
-//let private formConjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
-//    match expr1.typ, expr2.typ with
-//    | ValueTypes BoolType, ValueTypes BoolType ->
-//        let structure = conj expr1 expr2
-//        { rhs = structure; 
-//          typ = ValueTypes BoolType
-//          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
-
 let private formConjunction = formLogical conj
 
 /// Given two typed expressions, construct their disjunction.
 /// If some of the types is not boolean, an error will be returned instead.
-//let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
-//    match expr1.typ, expr2.typ with
-//    | ValueTypes BoolType, ValueTypes BoolType ->
-//        let structure = disj expr1 expr2
-//        { rhs = structure; 
-//          typ = ValueTypes BoolType
-//          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-//    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
-
 let private formDisjunction = formLogical disj
 
 
@@ -670,8 +652,10 @@ let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     match expr1.typ, expr2.typ with    
     | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
         Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType <| commonSize size1 size2); range = rng }
-    | _, _
-        -> Error [SameBitsTypeRequired (expr1, expr2)] 
+    | AnyBits, AnyBits ->
+        Error [SameBitsTypeRequired (expr1, expr2)]
+    | _, _ ->
+        Error [SameBitsTypeRequired (expr1, expr2)] 
 
 
 let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -707,6 +691,8 @@ let private checkShiftOp shift (expr: TypedRhs) (positions: TypedRhs) =
         match expr.typ with
         | ValueTypes (BitsType _) ->
             Ok expr
+        | AnyBits -> 
+            Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
         | _ ->
             Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
             
@@ -763,7 +749,58 @@ let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
         -> Error [SameArithmeticTypeRequired (expr1, expr2)] 
 
 
+let promotePrimitiveAny ltyp (rexpr: TypedRhs) = 
+    // TODO: AnyInt to Float and AnyBits to Float missing
+    match rexpr.typ, ltyp with
+    | AnyInt, ValueTypes (IntType size) ->
+        let anyInt = rexpr.rhs.GetIntConst
+        if Int64.CanRepresent anyInt then
+            let intX = IntType.RequiredType anyInt
+            Ok { rexpr with rhs = IntConst <| intX.AdoptAny anyInt ; typ = ValueTypes (IntType intX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+    | AnyInt, ValueTypes (NatType size) ->
+        let anyInt = rexpr.rhs.GetIntConst
+        if Nat64.CanRepresent anyInt then
+            let natX = NatType.RequiredType anyInt
+            Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyInt ; typ = ValueTypes (NatType natX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+    | AnyInt, ValueTypes (BitsType size) ->
+        let anyInt = rexpr.rhs.GetIntConst
+        if Bits64.CanRepresent anyInt then
+            let bitsX = BitsType.RequiredType anyInt
+            Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyInt ; typ = ValueTypes (BitsType bitsX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+    | AnyBits, ValueTypes (BitsType size) ->
+        let anyBits = rexpr.rhs.GetBitsConst
+        if Bits64.CanRepresent anyBits then
+            let bitsX = BitsType.RequiredType anyBits
+            Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyBits ; typ = ValueTypes (BitsType bitsX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20            
+    | AnyBits, ValueTypes (NatType size) ->
+        let anyBits = rexpr.rhs.GetBitsConst
+        if Nat64.CanRepresent anyBits then
+            let natX = NatType.RequiredType anyBits
+            Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyBits ; typ = ValueTypes (NatType natX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20  
+    | AnyFloat, ValueTypes (FloatType size) ->
+        let anyFloat = rexpr.rhs.GetFloatConst
+        if Float64.CanRepresent anyFloat then
+            let floatX = FloatType.RequiredType anyFloat
+            Ok { rexpr with rhs = FloatConst <| floatX.AdoptAny anyFloat; typ = ValueTypes (FloatType floatX) }
+        else
+            Error[NumberLargerThanAnyInt (rexpr.Range, anyFloat.ToString())]  // TODO: better error message, fjg. 28.01.20              
+    
+    | _, _ ->
+        Ok rexpr
+ 
+            
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    // TODO: use promote and then amend, fjg. 18.02.20
     let e1 = amendPrimitiveAny expr2.typ expr1
     let e2 = amendPrimitiveAny expr1.typ expr2
     
@@ -808,9 +845,10 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
         | AnyInt, AnyInt ->
-            Ok <| AnyInt
+            Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
         | AnyFloat, AnyFloat ->
-            Ok <| AnyFloat
+            // Ok <| AnyFloat
+            Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
         | t1, t2 when t1 = t2 -> 
             Error [MustBeNumeric(expr1, expr2)]
         | _ -> 

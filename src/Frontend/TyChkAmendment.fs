@@ -302,13 +302,15 @@ and internal amendPrimitiveAny lTyp (rExpr: TypedRhs)  =
             Ok {rExpr with rhs = BitsConst <| bitsX.AdoptAny value; typ = lTyp}
         else
             Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
-
+    
     | AnyBits, ValueTypes (NatType natX) ->
         let value = rExpr.rhs.GetBitsConst
         if natX.CanRepresent value then
             Ok {rExpr with rhs = NatConst <| natX.AdoptAny value; typ = lTyp}
         else
             Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
+
+    // TODO: AnyBits to Float missing, fjg. 18.02.20
 
     | AnyFloat, ValueTypes (FloatType floatX) ->
         let value = rExpr.rhs.GetFloatConst
