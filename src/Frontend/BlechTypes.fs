@@ -124,7 +124,7 @@ type ValueTypes =
         match this with
         | Void | BoolType | IntType _ | UintType _ | FloatType _ -> true
         | ArrayType _ | StructType _ -> false
-    
+
     member this.TryRange =
         match this with
         | Void | BoolType | IntType _ | UintType _ | FloatType _ | ArrayType _ -> None
@@ -181,6 +181,37 @@ and Types =
         match this with
         | AnyComposite | AnyInt _ -> true
         | ValueTypes _ | ReferenceTypes _ -> false
+
+    /// true iff data blob may be assigned (or reset) as a whole
+    /// relevant for value typed structs and arrays
+    /// which contain structs with `let` fields
+    member this.IsAssignable =
+        let isFieldMutable (field: VarDecl) =
+            // if a field has been declared immutable
+            // it is also not assignable as a whole
+            field.mutability.Equals Mutability.Variable
+            && field.datatype.IsAssignable
+
+        match this with
+        // only "any" literal on the lhs is wildcard
+        | AnyComposite -> true
+        | AnyInt _
+        | ReferenceTypes _ -> false
+        // the relevant case
+        | ValueTypes vt ->
+            match vt with
+            // primitives are assignable (if they are mutable)
+            | Void
+            | BoolType
+            | IntType _
+            | UintType _
+            | FloatType _ -> true
+            // check structs and arrays recursively
+            | ValueTypes.StructType (_,_,fields) ->
+                List.forall isFieldMutable fields
+            | ValueTypes.ArrayType (_,dty) ->
+                (ValueTypes dty).IsAssignable
+                
     
     member this.TryRange =
         match this with

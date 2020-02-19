@@ -1,4 +1,4 @@
-module struct1empty
+module structs1
 
 struct MyS
   var f1: int8
@@ -8,7 +8,7 @@ end
 struct MyT
   var g1: float64
   var g2: MyS
-  var g3: int32
+  let g3: int32
 end
 
 function f (i: MyS)(out: MyT) returns MyT
@@ -23,7 +23,7 @@ end
 
 activity main ()()
   var s: MyS = {f2 = true}
-  var t: MyT = {}
+  var t: MyT = {g2 = s, g1 = 0.65, g3 = 17}
   await true
   var x = f(s)(t)
   let b = x.g2.f2

@@ -800,7 +800,11 @@ let private fAssign lut pos lhs rhs =
     lhs
     |> combine <| rhs
     |> Result.bind (fun (l, r) -> 
-        if isLhsMutable lut l.lhs then createAssign l r
+        if isLhsMutable lut l.lhs then
+            if l.typ.IsAssignable then
+                createAssign l r
+            else
+                Error [AssignmentToLetFields (pos, l.ToString())]
         else Error [AssignmentToImmutable (pos, l.ToString())]
         )
 
