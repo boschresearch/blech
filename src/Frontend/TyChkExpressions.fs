@@ -734,75 +734,30 @@ let private rotateRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp ss
 /// Given two typed expressions, construct their relation.
 /// We assume that operator is either 'less', 'leq', or 'eq' from above.
 /// If the two types are not comparable, an error will be returned instead.
-let private combineRelationalOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
+let private combineRelationalOp operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    
     match expr1.typ, expr2.typ with    
-    | AnyInt, AnyInt
-    | AnyFloat, AnyFloat
-    | AnyBits, AnyBits
     | ValueTypes BoolType, ValueTypes BoolType
     | ValueTypes (IntType _), ValueTypes (IntType _)
     | ValueTypes (NatType _), ValueTypes (NatType _)
     | ValueTypes (BitsType _), ValueTypes (BitsType _)
     | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
-        Ok { rhs = op expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
-    | _, _
-        -> Error [SameArithmeticTypeRequired (expr1, expr2)] 
+        Ok { rhs = operator expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
+    | AnyInt, AnyInt
+    | AnyBits, AnyBits
+    | AnyFloat, AnyFloat ->
+        // Ok <| AnyFloat
+        Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
+    | t1, t2 when t1 = t2 -> 
+        Error [MustBeNumeric(expr1, expr2)]
+    | _ ->
+        Error [SameArithmeticTypeRequired (expr1, expr2)] 
+        
 
-
-let promotePrimitiveAny ltyp (rexpr: TypedRhs) = 
-    // TODO: AnyInt to Float and AnyBits to Float missing
-    match rexpr.typ, ltyp with
-    | AnyInt, ValueTypes (IntType size) ->
-        let anyInt = rexpr.rhs.GetIntConst
-        if Int64.CanRepresent anyInt then
-            let intX = IntType.RequiredType anyInt
-            Ok { rexpr with rhs = IntConst <| intX.AdoptAny anyInt ; typ = ValueTypes (IntType intX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    | AnyInt, ValueTypes (NatType size) ->
-        let anyInt = rexpr.rhs.GetIntConst
-        if Nat64.CanRepresent anyInt then
-            let natX = NatType.RequiredType anyInt
-            Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyInt ; typ = ValueTypes (NatType natX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    | AnyInt, ValueTypes (BitsType size) ->
-        let anyInt = rexpr.rhs.GetIntConst
-        if Bits64.CanRepresent anyInt then
-            let bitsX = BitsType.RequiredType anyInt
-            Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyInt ; typ = ValueTypes (BitsType bitsX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    | AnyBits, ValueTypes (BitsType size) ->
-        let anyBits = rexpr.rhs.GetBitsConst
-        if Bits64.CanRepresent anyBits then
-            let bitsX = BitsType.RequiredType anyBits
-            Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyBits ; typ = ValueTypes (BitsType bitsX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    | AnyBits, ValueTypes (NatType size) ->
-        let anyBits = rexpr.rhs.GetBitsConst
-        if Nat64.CanRepresent anyBits then
-            let natX = NatType.RequiredType anyBits
-            Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyBits ; typ = ValueTypes (NatType natX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20  
-    | AnyFloat, ValueTypes (FloatType size) ->
-        let anyFloat = rexpr.rhs.GetFloatConst
-        if Float64.CanRepresent anyFloat then
-            let floatX = FloatType.RequiredType anyFloat
-            Ok { rexpr with rhs = FloatConst <| floatX.AdoptAny anyFloat; typ = ValueTypes (FloatType floatX) }
-        else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyFloat.ToString())]  // TODO: better error message, fjg. 28.01.20              
-    
-    | _, _ ->
-        Ok rexpr
- 
             
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    // TODO: use promote and then amend, fjg. 18.02.20
-    let e1 = amendPrimitiveAny expr2.typ expr1
-    let e2 = amendPrimitiveAny expr1.typ expr2
+    let e1 = promotePrimitiveAny expr2.typ expr1
+    let e2 = promotePrimitiveAny expr1.typ expr2
     
     combine e1 e2
     |> Result.bind (combineRelationalOp operator)
@@ -844,8 +799,8 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
             Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
-        | AnyInt, AnyInt ->
-            Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
+        | AnyInt, AnyInt
+        | AnyBits, AnyBits
         | AnyFloat, AnyFloat ->
             // Ok <| AnyFloat
             Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
@@ -856,6 +811,23 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
     typ 
     |> Result.map ( fun t -> {rhs = operator expr1 expr2; typ = t; range = rng} )
+ 
+
+/// Checks if literals and constant expression are of suitable size.
+//let private andThen res1 res2 =
+//    match res1 , res2 with
+//    | Ok e1, Ok e2 -> Ok (e1, e2)
+//    | Error e1, _ -> Error e1
+//    | _, Error e2 -> Error e2
+
+
+//let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
+//    let e1 = amendPrimitiveAny expr2.typ expr1 
+//    let e2 = e1 |> Result.bind (fun e1 -> amendPrimitiveAny e1.typ expr2)
+    
+//    andThen e1 e2
+//    |> Result.bind (combineArithmeticOp operator)
+
 
 
 /// Checks if literals and constant expression are of suitable size.

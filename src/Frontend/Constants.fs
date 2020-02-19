@@ -25,13 +25,13 @@ module Blech.Frontend.Constants
 // predefined constants TODO: actually, this should be part of blechconf.h
 //=========================================================================
 
-let MIN_INT8 = -pown 2I 7
+let MIN_INT8 = - pown 2I 7
 let MAX_INT8 = pown 2I 7 - 1I
-let MIN_INT16 = -pown 2I 15
+let MIN_INT16 = - pown 2I 15
 let MAX_INT16 = pown 2I 15 - 1I
-let MIN_INT32 = -pown 2I 31
+let MIN_INT32 = - pown 2I 31
 let MAX_INT32 = pown 2I 31 - 1I
-let MIN_INT64 = -pown 2I 63
+let MIN_INT64 = - pown 2I 63
 let MAX_INT64 = pown 2I 63 - 1I
 
 let MIN_NAT8 = 0I
@@ -56,7 +56,10 @@ let MIN_FLOAT32 = float System.Single.MinValue
 let MAX_FLOAT32 = float System.Single.MaxValue
 let MIN_FLOAT64 = System.Double.MinValue
 let MAX_FLOAT64 = System.Double.MaxValue
-let MAX_FLOAT32_INT = pown 2I 24 
+
+let MIN_FLOAT32_INT = - pown 2I 24
+let MAX_FLOAT32_INT = pown 2I 24
+let MIN_FLOAT64_INT = - pown 2I 53
 let MAX_FLOAT64_INT = pown 2I 53
 
 /// Converts a bigint to an uint8 assuming it fits

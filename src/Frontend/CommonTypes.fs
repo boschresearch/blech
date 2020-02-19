@@ -23,43 +23,6 @@ module Blech.Frontend.CommonTypes
 open Blech.Common
 open Constants
 
-////=========================================================================
-//// predefined constants TODO: actually, this should be part of blechconf.h
-////=========================================================================
-//let MIN_INT8 = -pown 2I 7
-//let MAX_INT8 = pown 2I 7 - 1I
-//let MIN_INT16 = -pown 2I 15
-//let MAX_INT16 = pown 2I 15 - 1I
-//let MIN_INT32 = -pown 2I 31
-//let MAX_INT32 = pown 2I 31 - 1I
-//let MIN_INT64 = -pown 2I 63
-//let MAX_INT64 = pown 2I 63 - 1I
-
-//let MIN_NAT8 = 0I
-//let MAX_NAT8 = pown 2I 8 - 1I
-//let MIN_NAT16 = 0I
-//let MAX_NAT16 = pown 2I 16 - 1I
-//let MIN_NAT32 = 0I
-//let MAX_NAT32 = pown 2I 32 - 1I
-//let MIN_NAT64 = 0I
-//let MAX_NAT64 = pown 2I 64 - 1I
-
-//let MIN_BITS8 = 0I
-//let MAX_BITS8 = pown 2I 8 - 1I
-//let MIN_BITS16 = 0I
-//let MAX_BITS16 = pown 2I 16 - 1I
-//let MIN_BITS32 = 0I
-//let MAX_BITS32 = pown 2I 32 - 1I
-//let MIN_BITS64 = 0I
-//let MAX_BITS64 = pown 2I 64 - 1I
-
-//let MIN_FLOAT32 = System.Single.MinValue
-//let MAX_FLOAT32 = System.Single.MaxValue
-//let MIN_FLOAT64 = System.Double.MinValue
-//let MAX_FLOAT64 = System.Double.MaxValue
-//let MAX_FLOAT32_INT = pown 2I 24 
-//let MAX_FLOAT64_INT = pown 2I 53
-
 // Names /////////////////////////////////////////////////////////////////
 
 type Identifier = string
@@ -212,6 +175,10 @@ type IntType =
         | Int32 -> 32
         | Int64 -> 64
 
+    /// Checks if IntType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Int64.CanRepresent anyInt    
+
     member this.CanRepresent (anyInt: Int) =
         match this, anyInt with
         | Int8, IAny (value, _) -> MIN_INT8 <= value && value <= MAX_INT8
@@ -250,6 +217,14 @@ type NatType =
         | Nat16 -> 16
         | Nat32 -> 32
         | Nat64 -> 64
+
+    /// Checks if NatType can represent an AnyBits value
+    static member CanRepresent (anyBits: Bits) =
+        Nat64.CanRepresent anyBits    
+
+    /// Checks if NatType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Nat64.CanRepresent anyInt
     
     member this.CanRepresent (anyBits: Bits) =
         match this, anyBits with
@@ -319,6 +294,14 @@ type BitsType =
         | Bits16 -> 16
         | Bits32 -> 32
         | Bits64 -> 64
+
+    /// Checks if BitsType can represent an AnyBits value
+    static member CanRepresent (anyBits: Bits) =
+        Bits64.CanRepresent anyBits    
+
+    /// Checks if BitsType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Bits64.CanRepresent anyInt
     
     member this.CanRepresent (anyBits: Bits) =
         match this, anyBits with
@@ -386,10 +369,18 @@ type FloatType =
         | Float32 -> 32
         | Float64 -> 64
 
+    /// Checks if Float can represent an AnyFloat value
+    static member CanRepresent (anyFloat: Float) =
+        Float64.CanRepresent anyFloat    
+ 
+    /// Checks if Float can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Float64.CanRepresent anyInt
+ 
     member this.CanRepresent (value: Int) =
         match this, value with
-        | Float32, IAny (v, _) -> abs v <= MAX_FLOAT32_INT
-        | Float64, IAny (v, _) -> abs v <= MAX_FLOAT64_INT
+        | Float32, IAny (v, _) -> MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT
+        | Float64, IAny (v, _) -> MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT
         | _, _ -> failwith ("This is only used for IAny values")
 
     /// Checks if a given float types can represent a AnyFloat value
@@ -403,11 +394,21 @@ type FloatType =
         match anyFloat with
         | FAny (v, _) ->
             if MIN_FLOAT32 <= v && v <= MAX_FLOAT32 then Float32 
-            elif MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then Float32 
+            elif MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then Float64 
             else failwith "fAny value outside any FloatX type"
         | _ -> 
             failwith "Not an FAny value"
-     
+
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (v, _) ->
+            if MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT then Float32 
+            elif MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT then Float64 
+            else failwith "fAny value outside any FloatX type"
+        | _ -> 
+            failwith "Not an FAny value"
+    
+    
     member this.AdoptAny (any: Float) : Float =
         match this, any with
         | Float32, FAny _ -> any.PromoteTo Float.Zero32
@@ -419,3 +420,4 @@ type FloatType =
         | Float32, IAny _ -> any.PromoteTo Float.Zero32
         | Float64, IAny _ -> any.PromoteTo Float.Zero64
         | _ -> failwith "Adoption of any not allowed"
+
