@@ -30,18 +30,9 @@ open TyChkAmendment
 // Some debug helpers
 //=========================================================================
 
-let private debugShowConstExpr typedRhs =
-    match typedRhs.rhs with
-    | IntConst i ->
-        printfn "IntConst: %s" <| string i
-    | BitsConst b ->
-        printfn "BitsConst: %s" <| string b
-    | FloatConst f ->
-        printfn "FloatConst: %s" <| string f
-    | _ ->
-        () 
-    Ok typedRhs
-
+let private debugShow msg v =
+    printfn "%s: %A" msg v
+    v
 
 //=========================================================================
 // Functions for checking type and expression properties
@@ -396,12 +387,14 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     let evalBin x y f =
         let newrhs = tryEvalConst lut x |> f <| tryEvalConst lut y
         { rhs = newrhs; typ = checkedExpr.typ; range = checkedExpr.Range }
-        //|> Result.bind f
+        |> debugShow "after evalBin"
+    
     let recurFields constBuilder fs =
         let kvps = fs |> List.map (fun (i,f) -> i, tryEvalConst lut f)
         { rhs = constBuilder kvps
           typ = checkedExpr.typ
           range = checkedExpr.Range }
+    
     match checkedExpr.rhs with
     // simple literal
     | IntConst _ | BoolConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst -> checkedExpr
@@ -421,7 +414,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Conj (x, y) -> evalBin x y conj
     | Disj (x, y) -> evalBin x y disj
     // bitwise
-    | Band (x, y) // todo: go on here
+    | Band (x, y) -> evalBin x y band
     | Bor (x, y) -> evalBin x y bor
     | Bxor (x, y) -> evalBin x y bxor 
     | Shl (x, y) -> evalBin x y shl
@@ -584,7 +577,7 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
     | AnyInt ->
         match expr.rhs with
         | IntConst i -> IntConst <| Arithmetic.Unm i
-        | _ -> failwith "AnyFloat should be always a FloatConst"
+        | _ -> failwith "AnyInt should be always an IntConst"
     | AnyFloat ->
         match expr.rhs with
         | FloatConst f -> FloatConst <| Arithmetic.Unm f
@@ -596,24 +589,28 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
 /// Given a typed Expression, construct its negative.
 /// If the type is not numeric, an error will be returned instead.
 let private unaryMinus r (expr: TypedRhs) =
-    match expr.typ with
-    // no unary minus on natural number since it cannot be used anywhere
-    | ValueTypes (IntType _)
-    | ValueTypes (BitsType _)
-    | ValueTypes (FloatType _)
-    | AnyInt
-    | AnyFloat ->
-        Ok { expr with rhs = unsafeUnaryMinus expr }
-        //let rhs = unsafeUnaryMinus expr
-        //Ok { rhs = rhs
-        //     typ = AnyInt
-        //     range = expr.range }
-        //let rhs = unsafeUnaryMinus expr
-        //Ok { rhs = rhs
-        //     typ = AnyFloat
-        //     range = expr.range }
-    | _ -> // error illegal minus on expr
-        Error [CannotInvertSign(r, expr)]
+    try
+        match expr.typ with
+        // no unary minus on natural number since it cannot be used anywhere
+        | ValueTypes (IntType _)
+        | ValueTypes (BitsType _)
+        | ValueTypes (FloatType _)
+        | AnyInt
+        | AnyFloat ->
+            Ok { expr with rhs = unsafeUnaryMinus expr }
+            //let rhs = unsafeUnaryMinus expr
+            //Ok { rhs = rhs
+            //     typ = AnyInt
+            //     range = expr.range }
+            //let rhs = unsafeUnaryMinus expr
+            //Ok { rhs = rhs
+            //     typ = AnyFloat
+            //     range = expr.range }
+        | _ -> // error illegal minus on expr
+            Error [CannotInvertSign(r, expr)]
+    with
+     | :? System.OverflowException -> 
+         Error [OverFlow (r, "Overflow in unary minus")] // Todo: improve this message, fjg. 19.02.20
 
 // --------------------------------------------------------------------
 // ---  Logical Operators
@@ -837,33 +834,60 @@ let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
+    |> debugShow "After arithmetic"
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
-let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic add expr1 expr2
-
+let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try 
+        checkArithmetic add expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let pos = Range.unionRanges expr1.Range expr2.Range
+        Error [OverFlow (pos, "Overflow in addition")] // Todo: improve this message, fjg. 19.02.20
 
 /// Returns the subtraction of two typed expressions or an error in case of type mismatch.
-let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic sub expr1 expr2
-
+let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try 
+        checkArithmetic sub expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let pos = Range.unionRanges expr1.Range expr2.Range
+        Error [OverFlow (pos, "Overflow in subtraction")] // Todo: improve this message, fjg. 19.02.20
 
 /// Returns the product of two typed expressions or an error in case of type mismatch.
-let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic mul expr1 expr2
+let private product ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    try 
+        checkArithmetic mul expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let pos = Range.unionRanges expr1.Range expr2.Range
+        Error [OverFlow (pos, "Overflow in multiplication")] // Todo: improve this message, fjg. 19.02.20
 
 
 /// Returns the quotient of two typed expressions or an error in case of type mismatch.
-let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = checkArithmetic div expr1 expr2
-
+let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try
+        checkArithmetic div expr1 expr2
+    with
+    | :? System.DivideByZeroException  -> 
+        let pos = Range.unionRanges expr1.Range expr2.Range
+        Error [DivideByZero (pos, "Division by zero in remainder")] // Todo: improve this message, fjg. 19.02.20
 
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
-    match expr1.typ, expr2.typ with
-    | ValueTypes (FloatType _), ValueTypes (FloatType _)
-    | AnyFloat, ValueTypes (FloatType _)
-    | ValueTypes (FloatType _), AnyFloat
-    | AnyFloat, AnyFloat ->
-        Error [CannotModFloats (expr1, expr2)]
-    | _ -> checkArithmetic modus expr1 expr2
+    try
+        match expr1.typ, expr2.typ with
+        | ValueTypes (FloatType _), ValueTypes (FloatType _)
+        | AnyFloat, ValueTypes (FloatType _)
+        | ValueTypes (FloatType _), AnyFloat
+        | AnyFloat, AnyFloat ->
+            Error [CannotModFloats (expr1, expr2)]
+        | _ -> checkArithmetic modus expr1 expr2
+    with
+    | :? System.DivideByZeroException  -> 
+        let pos = Range.unionRanges expr1.Range expr2.Range
+        Error [DivideByZero (pos, "Division by zero in remainder")] // Todo: improve this message, fjg. 19.02.20
 
         
 //=============================================================================
@@ -1203,6 +1227,8 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Expr.Parens (expr, _) ->
         checkExpr lut expr
         |> Result.map (fun e -> e.SetRange expr.Range) // TODO: This seems wrong, range should be _, check this. fjg, 31.01.20
+
+    |> Result.map (tryEvalConst lut)       
 
 /// Given an untyped datatype, return a type checked datatype .
 and internal checkDataType lut utyDataType =

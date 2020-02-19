@@ -20,6 +20,28 @@ module Blech.Frontend.Evaluation
 open Constants
 open CommonTypes
 
+/// Unchecked operators are needed for Bits
+type Unchecked = 
+    static member (+) (l: uint8, r: uint8) = l + r
+    static member (-) (l: uint8, r: uint8) = l + r
+    static member (*) (l: uint8, r: uint8) = l + r
+    
+    static member (+) (l: uint16, r: uint16) = l + r
+    static member (-) (l: uint16, r: uint16) = l + r
+    static member (*) (l: uint16, r: uint16) = l + r
+
+    static member (+) (l: uint32, r: uint32) = l + r
+    static member (-) (l: uint32, r: uint32) = l + r
+    static member (*) (l: uint32, r: uint32) = l + r
+
+    static member (+) (l: uint64, r: uint64) = l + r
+    static member (-) (l: uint64, r: uint64) = l + r
+    static member (*) (l: uint64, r: uint64) = l + r
+
+// Checked operators are needed for Int and Nat
+// Warning unary minus is not checked, maybe a bug in FSharp?
+open Microsoft.FSharp.Core.Operators.Checked
+
 type Constant = 
 
     static member Zero (size: IntType) : Int =
@@ -107,19 +129,19 @@ type Arithmetic =
     
     static member Unm (i: Int) : Int =
         match i with
-        | I8 v -> I8 -v
-        | I16 v -> I16 -v        
-        | I32 v -> I32 -v 
-        | I64 v -> I64 -v
-        | IAny (v, Some s) -> IAny (-v, Some <| "-" + s) 
-        | IAny (v, None) -> IAny (-v, None) 
+        | I8 v -> I8 (0y - v)
+        | I16 v -> I16 (0s - v)        
+        | I32 v -> I32 (0 - v) 
+        | I64 v -> I64 (0L - v)
+        | IAny (v, Some s) -> IAny (0I - v, Some <| "-" + s) 
+        | IAny (v, None) -> IAny (0I - v, None) 
 
     static member Unm (bits: Bits) : Bits = 
         match bits with
-        | B8 v -> B8 <| 0uy - v
-        | B16 v -> B16 <| 0us - v        
-        | B32 v -> B32 <| 0u - v 
-        | B64 v -> B64 <| 0uL - v
+        | B8 v -> B8 <| Unchecked.(-) (0uy, v)
+        | B16 v -> B16 <| Unchecked.(-) (0us, v)        
+        | B32 v -> B32 <| Unchecked.(-) (0u, v) 
+        | B64 v -> B64 <| Unchecked.(-) (0uL, v)
         | BAny _ -> failwith "Unary Minus for BAny not allowed"
     
     static member Unm (nat: Nat) : Nat = 
@@ -153,10 +175,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| lv + rv 
-        | B16 lv, B16 rv -> B16 <| lv + rv 
-        | B32 lv, B32 rv -> B32 <| lv + rv 
-        | B64 lv, B64 rv -> B64 <| lv + rv 
+        | B8 lv, B8 rv -> B8 <| Unchecked.(+) (lv, rv) 
+        | B16 lv, B16 rv -> B16 <| Unchecked.(+) (lv, rv) 
+        | B32 lv, B32 rv -> B32 <| Unchecked.(+) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| Unchecked.(+) (lv, rv) 
         | _, _ -> failwith "Add not allowed for BAny or Bits of different size"
 
     static member Add (left: Nat, right: Nat) : Nat =
@@ -195,10 +217,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| lv - rv 
-        | B16 lv, B16 rv -> B16 <| lv - rv 
-        | B32 lv, B32 rv -> B32 <| lv - rv 
-        | B64 lv, B64 rv -> B64 <| lv - rv 
+        | B8 lv, B8 rv -> B8 <| Unchecked.(-) (lv, rv)
+        | B16 lv, B16 rv -> B16 <| Unchecked.(-) (lv, rv) 
+        | B32 lv, B32 rv -> B32 <| Unchecked.(-) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| Unchecked.(-) (lv, rv) 
         | _, _ -> failwith "Sub not allowed for BAny or Bits of different size"
 
     static member Sub (left: Nat, right: Nat) : Nat =
@@ -237,10 +259,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| lv * rv 
-        | B16 lv, B16 rv -> B16 <| lv * rv 
-        | B32 lv, B32 rv -> B32 <| lv * rv 
-        | B64 lv, B64 rv -> B64 <| lv * rv 
+        | B8 lv, B8 rv -> B8 <| Unchecked.(*) (lv, rv)
+        | B16 lv, B16 rv -> B16 <| Unchecked.(*) (lv, rv)
+        | B32 lv, B32 rv -> B32 <| Unchecked.(*) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| Unchecked.(*) (lv, rv) 
         | _, _ -> failwith "Mul not allowed for BAny or Bits of different size"
 
     static member Mul (left: Nat, right: Nat) : Nat =

@@ -92,6 +92,9 @@ type TyCheckError =
     | MustBeConst of TypedRhs
     | ConstArrayRequiresConstIndex of range
     | ParameterMustHaveStaticInit of Name * TypedRhs
+    // evaluation
+    | OverFlow of range * string
+    | DivideByZero of range * string
     // calls
     | FunCallToAct of range * FunctionPrototype
     | RunAFun of range * FunctionPrototype
@@ -198,6 +201,9 @@ type TyCheckError =
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
+            // evaluation
+            | OverFlow (p, s) -> p, s
+            | DivideByZero (p, s) -> p, s
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
