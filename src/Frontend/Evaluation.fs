@@ -168,7 +168,6 @@ type Arithmetic =
         | I16 lv, I16 rv -> I16 <| lv + rv 
         | I32 lv, I32 rv -> I32 <| lv + rv 
         | I64 lv, I64 rv -> I64 <| lv + rv 
-        //| IAny (lv, _), IAny (rv, _) -> IAny (lv + rv, None)
         | _, _ -> failwith "Add not allowed for IAny or Ints of different size"
 
     static member Add (left: Bits, right: Bits) : Bits =
@@ -197,7 +196,6 @@ type Arithmetic =
         match l, r with
         | F32 lv, F32 rv -> F32 <| lv + rv
         | F64 lv, F64 rv -> F64 <| lv + rv
-        //| FAny (lv, _), FAny (rv, _) -> FAny (lv + rv, None)
         | _, _ -> failwith "Add not allowed for FAny or Floats of different size"
         
     // Operator Sub, '-'
@@ -210,7 +208,6 @@ type Arithmetic =
         | I16 lv, I16 rv -> I16 <| lv - rv 
         | I32 lv, I32 rv -> I32 <| lv - rv 
         | I64 lv, I64 rv -> I64 <| lv - rv 
-        //| IAny (lv, _), IAny (rv, _) -> IAny (lv - rv, None)
         | _, _ -> failwith "Sub not allowed for IAny or Int of different size"
 
     static member Sub (left: Bits, right: Bits) : Bits =
@@ -239,7 +236,6 @@ type Arithmetic =
         match l, r with
         | F32 lv, F32 rv -> F32 <| lv - rv
         | F64 lv, F64 rv -> F64 <| lv - rv
-        //| FAny (lv, _), FAny (rv, _) -> FAny (lv - rv, None)
         | _, _ -> failwith "Sub not allowed for FAny or Floats of different size"
         
     // Operator Mul, '*'
@@ -252,7 +248,6 @@ type Arithmetic =
         | I16 lv, I16 rv -> I16 <| lv * rv 
         | I32 lv, I32 rv -> I32 <| lv * rv 
         | I64 lv, I64 rv -> I64 <| lv * rv 
-        //| IAny (lv, _), IAny (rv, _) -> IAny (lv * rv, None)
         | _, _ -> failwith "Mul not allowed for IAny or Ints of different size"
 
     static member Mul (left: Bits, right: Bits) : Bits =
@@ -281,7 +276,6 @@ type Arithmetic =
         match l, r with
         | F32 lv, F32 rv -> F32 <| lv * rv
         | F64 lv, F64 rv -> F64 <| lv * rv
-        //| FAny (lv, _), FAny (rv, _) -> FAny (lv * rv, None)
         | _, _ -> failwith "Mul not allowed for FAny or Floats of different size"
         
     // Operator Div, '/'
@@ -323,7 +317,6 @@ type Arithmetic =
         match l, r with
         | F32 lv, F32 rv -> F32 <| lv / rv
         | F64 lv, F64 rv -> F64 <| lv / rv
-        //| FAny (lv, _), FAny (rv, _) -> FAny (lv / rv, None)
         | _, _ -> failwith "Div not allowed for FAny or Floats of different size"
     
     // Operator Mod, '%', not allowed for Floats
@@ -336,7 +329,6 @@ type Arithmetic =
         | I16 lv, I16 rv -> I16 <| lv % rv 
         | I32 lv, I32 rv -> I32 <| lv % rv 
         | I64 lv, I64 rv -> I64 <| lv % rv 
-        //| IAny (lv, _), IAny (rv, _) -> IAny (lv % rv, None)
         | _, _ -> failwith "Mod not allowed for IAny or Ints of different size"
 
     static member Mod (left: Bits, right: Bits) : Bits =
