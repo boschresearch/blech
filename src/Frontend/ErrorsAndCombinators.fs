@@ -83,7 +83,7 @@ type TyCheckError =
     | InitialisationHasSideEffect of TypedRhs
     | NotACompileTimeSize of TypedRhs
     | PositiveSizeExpected of range * Size
-    | NonNegIdxExpected of range * Size
+    | NonNegIdxExpected of range * TypedRhs
     | ReInitArrayIndex of range * Size * Size
     | PrevOnParam of range * QName
     | PrevOnImmutable of range * QName
@@ -193,7 +193,7 @@ type TyCheckError =
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())
             | NotACompileTimeSize expr -> expr.Range, sprintf "The expression %s cannot be evaluated to a size number at compile time. If you used \"let\" to declare it, use \"const\" instead." (expr.ToString())
             | PositiveSizeExpected (r, i) -> r, sprintf "A size must be positive but %d was given." i
-            | NonNegIdxExpected (r, d) -> r, sprintf "An index must be non-negative, but %d was given." d
+            | NonNegIdxExpected (r, expr) -> r, sprintf "An index must be non-negative, but %s was given." (string expr)
             | ReInitArrayIndex (r, given, counter) -> r, sprintf "The array cell in position %d cannot be redefined. The given index must be at least %d at this point." given counter
             | PrevOnParam (r, q) -> r, sprintf "The prev operator can only be applied to local variables, however here it used on parameter %s." (q.ToString())
             | PrevOnImmutable (r, q) -> r, sprintf "The prev operator cannot be applied to immutable variable %s." (q.ToString())

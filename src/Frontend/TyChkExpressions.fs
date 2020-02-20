@@ -455,8 +455,29 @@ and internal evalConst lut expr =
 /// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
 /// and returns a NotACompileTimeInt if the result is not an integer.
+//and internal evalCompTimeSize lut (expr: TypedRhs) =   
+//    let getConstant (index: TypedRhs) = 
+//        match index.rhs with
+//        | IntConst i -> Ok i.GetArrayIndex
+//        | NatConst n -> Ok n.GetArrayIndex
+//        | BitsConst b -> Ok b.GetArrayIndex
+//        | _ -> Error [NotACompileTimeSize expr]
+    
+//    let ensureNonNegative (index: Size) = 
+//        if index >= SizeZero then Ok index
+//        else Error [NonNegIdxExpected (expr.range, index)] 
+    
+//    evalConst lut expr    
+//    |> Result.bind getConstant
+//    |> debugShow "Compile Time Constant"
+//    |> Result.bind ensureNonNegative
+
+
+/// This tries to evaluate expr to a constant Size value
+/// and returns a MustBeConst error if the input is not constant
+/// and returns a NotACompileTimeInt if the result is not an integer.
 and internal evalCompTimeSize lut expr =   
-    let ensureNonNegSize pos num =
+    let ensureNonNegSize num =
         let ok =
             match num.rhs with
             | IntConst i -> Relational.Le (Constant.Zero Int8, i)
@@ -464,10 +485,10 @@ and internal evalCompTimeSize lut expr =
             | BitsConst b -> Relational.Le  (Constant.Zero Bits8, b)
             | _ -> failwith ""
         if ok then Ok num
-        else Error [ NonNegIdxExpected (pos, 42uL) ]
+        else Error [ NonNegIdxExpected (num.range, num) ]
     
     evalConst lut expr
-    |> Result.bind (ensureNonNegSize expr.Range)
+    |> Result.bind ensureNonNegSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
         | IntConst i -> Ok i.GetArrayIndex
@@ -598,14 +619,6 @@ let private unaryMinus r (expr: TypedRhs) =
         | AnyInt
         | AnyFloat ->
             Ok { expr with rhs = unsafeUnaryMinus expr }
-            //let rhs = unsafeUnaryMinus expr
-            //Ok { rhs = rhs
-            //     typ = AnyInt
-            //     range = expr.range }
-            //let rhs = unsafeUnaryMinus expr
-            //Ok { rhs = rhs
-            //     typ = AnyFloat
-            //     range = expr.range }
         | _ -> // error illegal minus on expr
             Error [CannotInvertSign(r, expr)]
     with
@@ -1055,6 +1068,7 @@ and private checkUntimedDynamicAccessPath lut dname =
             | AST.Index (idx, r) ->
                 let isIntType = function
                     | AnyInt
+                    | AnyBits
                     | ValueTypes (IntType _)
                     | ValueTypes (BitsType _)
                     | ValueTypes (NatType _) -> true
@@ -1077,7 +1091,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                                         Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message
                                 | Error es -> // the index is determined at runtime
                                     if isConstVarDecl lut tml then // but then the array must not be constant
-                                        ConstArrayRequiresConstIndex dname.Range :: es |> Error
+                                        Error <| ConstArrayRequiresConstIndex dname.Range::es
                                     else // param/let/var array with dynamic access, Ok
                                         Ok (tml.AddArrayAccess trhs, ValueTypes dty)
                             else
