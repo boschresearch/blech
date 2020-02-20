@@ -171,8 +171,8 @@ type Arithmetic =
 
     static member Unm (f : Float) : Float =
         match f with
-        | F32 v -> F32 -v 
-        | F64 v -> F64 -v
+        | F32 v -> F32 <| FloatChecked.(-) (0.0f, v) 
+        | F64 v -> F64 <| FloatChecked.(-) (0.0, v)
         | FAny (v, Some s) -> FAny (-v, Some <| "-" + s) 
         | FAny (v, None) -> FAny (-v, None) 
 
