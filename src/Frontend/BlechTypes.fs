@@ -216,8 +216,11 @@ and Types =
 
         match this with
         // only "any" literal on the lhs is wildcard
-        | AnyComposite -> true
-        | AnyInt _
+        | Any -> true
+        | AnyInt
+        | AnyBits
+        | AnyFloat
+        | AnyComposite
         | ReferenceTypes _ -> false
         // the relevant case
         | ValueTypes vt ->
@@ -226,7 +229,8 @@ and Types =
             | Void
             | BoolType
             | IntType _
-            | UintType _
+            | NatType _
+            | BitsType _
             | FloatType _ -> true
             // check structs and arrays recursively
             | ValueTypes.StructType (_,_,fields) ->
