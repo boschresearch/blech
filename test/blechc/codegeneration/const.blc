@@ -1,5 +1,5 @@
 struct S
-    let a: int32
+    var a: int32
     var b: float32
     var c: bool
 end

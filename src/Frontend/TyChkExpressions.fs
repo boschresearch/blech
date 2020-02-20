@@ -907,9 +907,12 @@ let private checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> li
                     Error [ExprMustBeALocationL (pos, argExpr)] :: typecheckOutputs ls
                 else
                     if isLhsMutable lut argExpr.lhs then
-                        Ok argExpr :: typecheckOutputs ls
+                        if argExpr.typ.IsAssignable then
+                            Ok argExpr :: typecheckOutputs ls
+                        else
+                            Error [AssignmentToLetFields (pos, argExpr.ToString())] :: typecheckOutputs ls
                     else
-                        Error [ImmutableOutArg(pos, argExpr)] :: typecheckOutputs ls    
+                        Error [ImmutableOutArg(pos, argExpr)] :: typecheckOutputs ls
             else
                 Error [ArgTypeMismatchL (pos, paramDecl, argExpr)] :: typecheckOutputs ls
     if outputArgs.Length = outputParams.Length then
@@ -1358,10 +1361,13 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
             | Some (lexpr: TypedLhs) ->
                 let typ = lexpr.typ
                 if isLhsMutable lut lexpr.lhs then
-                    if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                        Ok (Some lexpr) 
-                    else 
-                        Error [ReturnTypeMismatch(pos, declReturns, typ)]
+                    if lexpr.typ.IsAssignable then
+                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                            Ok (Some lexpr) 
+                        else 
+                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
+                    else
+                        Error [AssignmentToLetFields (pos, lexpr.ToString())]
                 else Error [AssignmentToImmutable (pos, lexpr.ToString())]
                 )
     let createCall name (((_, ins), outs), retvar) =

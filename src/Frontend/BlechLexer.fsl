@@ -178,11 +178,6 @@ rule Token = parse
     | "param"               { PARAM (getRange lexbuf) }
     | "const"               { CONST (getRange lexbuf) }
     
-    (*
-    | "input"               { INPUT (getRange lexbuf) }
-    | "output"              { INPUT (getRange lexbuf) }
-    *)
-
     | "shares"              { SHARES (getRange lexbuf) }
 
     (* ----- FFI ------ *)
