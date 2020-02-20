@@ -34,7 +34,7 @@ type Unchecked =
     static member (-) (l: uint32, r: uint32) = l + r
     static member (*) (l: uint32, r: uint32) = l + r
 
-    static member (+) (l: uint64, r: uint64) = l + r
+    static member ( + ) (l: uint64, r: uint64) = l + r
     static member (-) (l: uint64, r: uint64) = l + r
     static member (*) (l: uint64, r: uint64) = l + r
 

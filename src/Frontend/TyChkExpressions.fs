@@ -436,11 +436,11 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
         | Declarable.VarDecl v ->
             if v.mutability.Equals Mutability.CompileTimeConstant then
                 match getInitValueForTml lut tml with
-                | Ok trhs -> trhs // is constant by definition
+                | Ok trhs -> { trhs with range = checkedExpr.Range }// is constant by definition
                 | Error _ -> checkedExpr // the tml access fails for arr[foo], where foo is not a compile time const
             else
                 checkedExpr
-        //| Declarable.ParamDecl _ -> Error [] // params not compile time const
+        //| Declarable.ParamDecl _ -> Error [] // params are not compile time const
         | _ -> checkedExpr
 
 
@@ -1148,6 +1148,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                 | AnyFloat -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
+        |> debugShow "Variable usage"
     // -- function call --
     | AST.FunctionCall (fp, readArgs, writeArgs, r) ->
         let resIn = List.map (checkExpr lut) readArgs
