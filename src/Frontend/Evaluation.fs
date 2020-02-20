@@ -20,23 +20,41 @@ module Blech.Frontend.Evaluation
 open Constants
 open CommonTypes
 
-/// Unchecked operators are needed for Bits
-type Unchecked = 
+/// Unchecked arithmetic operators for Bits
+type BitsUnchecked = 
     static member (+) (l: uint8, r: uint8) = l + r
-    static member (-) (l: uint8, r: uint8) = l + r
-    static member (*) (l: uint8, r: uint8) = l + r
+    static member (-) (l: uint8, r: uint8) = l - r
+    static member (*) (l: uint8, r: uint8) = l * r
     
     static member (+) (l: uint16, r: uint16) = l + r
-    static member (-) (l: uint16, r: uint16) = l + r
-    static member (*) (l: uint16, r: uint16) = l + r
+    static member (-) (l: uint16, r: uint16) = l - r
+    static member (*) (l: uint16, r: uint16) = l * r
 
     static member (+) (l: uint32, r: uint32) = l + r
-    static member (-) (l: uint32, r: uint32) = l + r
-    static member (*) (l: uint32, r: uint32) = l + r
+    static member (-) (l: uint32, r: uint32) = l - r
+    static member (*) (l: uint32, r: uint32) = l * r
 
-    static member ( + ) (l: uint64, r: uint64) = l + r
-    static member (-) (l: uint64, r: uint64) = l + r
-    static member (*) (l: uint64, r: uint64) = l + r
+    static member (+) (l: uint64, r: uint64) = l + r
+    static member (-) (l: uint64, r: uint64) = l - r
+    static member (*) (l: uint64, r: uint64) = l * r
+
+/// Checked arithmetic operators for Float
+type private FloatChecked = 
+    static member private check32 v32 =
+        if MIN_FLOAT32 <= float v32 && float v32 <= MAX_FLOAT32 then v32
+        else raise (System.OverflowException("Overflow in float32 arithmetic"))
+    
+    static member private check64 v64 =
+        if MIN_FLOAT64 <= v64 && v64 <= MAX_FLOAT64 then v64
+        else raise (System.OverflowException("Overflow in float64 arithmetic"))
+
+    static member (+) (l: float32, r: float32) = l + r |> FloatChecked.check32
+    static member (-) (l: float32, r: float32) = l - r |> FloatChecked.check32
+    static member (*) (l: float32, r: float32) = l * r |> FloatChecked.check32
+
+    static member (+) (l: float, r: float) = l + r |> FloatChecked.check64
+    static member (-) (l: float, r: float) = l - r |> FloatChecked.check64
+    static member (*) (l: float, r: float) = l * r |> FloatChecked.check64
 
 // Checked operators are needed for Int and Nat
 // Warning unary minus is not checked, maybe a bug in FSharp?
@@ -138,10 +156,10 @@ type Arithmetic =
 
     static member Unm (bits: Bits) : Bits = 
         match bits with
-        | B8 v -> B8 <| Unchecked.(-) (0uy, v)
-        | B16 v -> B16 <| Unchecked.(-) (0us, v)        
-        | B32 v -> B32 <| Unchecked.(-) (0u, v) 
-        | B64 v -> B64 <| Unchecked.(-) (0uL, v)
+        | B8 v -> B8 <| BitsUnchecked.(-) (0uy, v)
+        | B16 v -> B16 <| BitsUnchecked.(-) (0us, v)        
+        | B32 v -> B32 <| BitsUnchecked.(-) (0u, v) 
+        | B64 v -> B64 <| BitsUnchecked.(-) (0uL, v)
         | BAny _ -> failwith "Unary Minus for BAny not allowed"
     
     static member Unm (nat: Nat) : Nat = 
@@ -174,10 +192,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| Unchecked.(+) (lv, rv) 
-        | B16 lv, B16 rv -> B16 <| Unchecked.(+) (lv, rv) 
-        | B32 lv, B32 rv -> B32 <| Unchecked.(+) (lv, rv) 
-        | B64 lv, B64 rv -> B64 <| Unchecked.(+) (lv, rv) 
+        | B8 lv, B8 rv -> B8 <| BitsUnchecked.(+) (lv, rv) 
+        | B16 lv, B16 rv -> B16 <| BitsUnchecked.(+) (lv, rv) 
+        | B32 lv, B32 rv -> B32 <| BitsUnchecked.(+) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| BitsUnchecked.(+) (lv, rv) 
         | _, _ -> failwith "Add not allowed for BAny or Bits of different size"
 
     static member Add (left: Nat, right: Nat) : Nat =
@@ -194,8 +212,8 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | F32 lv, F32 rv -> F32 <| lv + rv
-        | F64 lv, F64 rv -> F64 <| lv + rv
+        | F32 lv, F32 rv -> F32 <| FloatChecked.(+) (lv, rv)
+        | F64 lv, F64 rv -> F64 <| FloatChecked.(+) (lv, rv)
         | _, _ -> failwith "Add not allowed for FAny or Floats of different size"
         
     // Operator Sub, '-'
@@ -214,10 +232,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| Unchecked.(-) (lv, rv)
-        | B16 lv, B16 rv -> B16 <| Unchecked.(-) (lv, rv) 
-        | B32 lv, B32 rv -> B32 <| Unchecked.(-) (lv, rv) 
-        | B64 lv, B64 rv -> B64 <| Unchecked.(-) (lv, rv) 
+        | B8 lv, B8 rv -> B8 <| BitsUnchecked.(-) (lv, rv)
+        | B16 lv, B16 rv -> B16 <| BitsUnchecked.(-) (lv, rv) 
+        | B32 lv, B32 rv -> B32 <| BitsUnchecked.(-) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| BitsUnchecked.(-) (lv, rv) 
         | _, _ -> failwith "Sub not allowed for BAny or Bits of different size"
 
     static member Sub (left: Nat, right: Nat) : Nat =
@@ -234,8 +252,8 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | F32 lv, F32 rv -> F32 <| lv - rv
-        | F64 lv, F64 rv -> F64 <| lv - rv
+        | F32 lv, F32 rv -> F32 <| FloatChecked.(-) (lv, rv)
+        | F64 lv, F64 rv -> F64 <| FloatChecked.(-) (lv, rv)
         | _, _ -> failwith "Sub not allowed for FAny or Floats of different size"
         
     // Operator Mul, '*'
@@ -254,10 +272,10 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | B8 lv, B8 rv -> B8 <| Unchecked.(*) (lv, rv)
-        | B16 lv, B16 rv -> B16 <| Unchecked.(*) (lv, rv)
-        | B32 lv, B32 rv -> B32 <| Unchecked.(*) (lv, rv) 
-        | B64 lv, B64 rv -> B64 <| Unchecked.(*) (lv, rv) 
+        | B8 lv, B8 rv -> B8 <| BitsUnchecked.(*) (lv, rv)
+        | B16 lv, B16 rv -> B16 <| BitsUnchecked.(*) (lv, rv)
+        | B32 lv, B32 rv -> B32 <| BitsUnchecked.(*) (lv, rv) 
+        | B64 lv, B64 rv -> B64 <| BitsUnchecked.(*) (lv, rv) 
         | _, _ -> failwith "Mul not allowed for BAny or Bits of different size"
 
     static member Mul (left: Nat, right: Nat) : Nat =
@@ -274,8 +292,8 @@ type Arithmetic =
         let l = left.PromoteTo right
         let r = right.PromoteTo left
         match l, r with
-        | F32 lv, F32 rv -> F32 <| lv * rv
-        | F64 lv, F64 rv -> F64 <| lv * rv
+        | F32 lv, F32 rv -> F32 <| FloatChecked.(*) (lv, rv)
+        | F64 lv, F64 rv -> F64 <| FloatChecked.(*) (lv, rv)
         | _, _ -> failwith "Mul not allowed for FAny or Floats of different size"
         
     // Operator Div, '/'
