@@ -718,10 +718,10 @@ let private shiftLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp shl 
 let private signedShiftRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
 
 /// Returns the left rotation '<<>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private rotateLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+let private rotateLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp rotl expr amount
 
 /// Returns the signed right rotation '<>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private rotateRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+let private rotateRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp rotr expr amount
 
 
 // --------------------------------------------------------------------
@@ -1053,6 +1053,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 let isIntType = function
                     | AnyInt
                     | ValueTypes (IntType _)
+                    | ValueTypes (BitsType _)
                     | ValueTypes (NatType _) -> true
                     | _ -> false
                 // check that tml is actually an array

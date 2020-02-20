@@ -733,6 +733,8 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
 //=============================================================================
 and private cpNeg e = txt "!" <^> parens e
 
+and private cpBnot e = txt "~" <^> parens e
+
 and private binExpr inFunction ctx s1 s2 infx =
     let prereqStmts1, normalisedS1 = cpExpr inFunction ctx s1
     let prereqStmts2, normalisedS2 = cpExpr inFunction ctx s2
@@ -929,7 +931,17 @@ and private cpExpr inFunction ctx expr =
     | Div (s1, s2) -> binExpr inFunction ctx s1 s2 "/"
     | Mod (s1, s2) -> binExpr inFunction ctx s1 s2 "%"
     // bitwise operators
+    | Bnot subExpr -> 
+        let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
+        prereqStmts, cpBnot processedExpr
+    | Band (s1, s2) -> binExpr inFunction ctx s1 s2 "&"
     | Bor (s1, s2) -> binExpr inFunction ctx s1 s2 "|"
+    | Bxor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
+    | Shl (s1, s2) -> binExpr inFunction ctx s1 s2 "<<"
+    | Shr (s1, s2) -> binExpr inFunction ctx s1 s2 ">>"
+    | Sshr _ 
+    | Rotl _
+    | Rotr _ -> failwith "Advance shift operators '+>>', '<>>', '<<>' not implemented"
     
 
 let private ppParameterTml ctx tml =

@@ -859,6 +859,7 @@ let private collectVarsToPrev2 pg =
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
         // boolean
         | Neg e -> processExpr e
+        | Bnot e -> processExpr e
         | Conj (e1, e2) 
         | Disj (e1, e2) 
         // relations
@@ -872,8 +873,15 @@ let private collectVarsToPrev2 pg =
         | Div (e1, e2) 
         | Mod (e1, e2) 
         // bitwise
-        | Bor (e1, e2) -> processExpr e1 @ processExpr e2
-    
+        | Band (e1, e2)
+        | Bor (e1, e2)
+        | Bxor (e1, e2)
+        | Shl (e1, e2)
+        | Shr (e1, e2)
+        | Sshr (e1, e2)
+        | Rotr (e1, e2)
+        | Rotl (e1, e2) -> processExpr e1 @ processExpr e2
+            
     let rec processNode (node: Node) =
         match node.Payload.Typ with
         | ActionLocation action ->

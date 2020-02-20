@@ -189,10 +189,10 @@ let rec private checkAbsenceOfSyncStmts stmts =
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
         | ArrayConst fields ->
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
-        | Neg e -> checkAbsenceOfSyncExpr e
+        | Neg e 
+        | Bnot e -> checkAbsenceOfSyncExpr e
         | Conj (e1, e2)
         | Disj (e1, e2)
-        | Bxor (e1, e2)
         | Les (e1, e2)
         | Leq (e1, e2)
         | Equ (e1, e2)
@@ -200,7 +200,15 @@ let rec private checkAbsenceOfSyncStmts stmts =
         | Sub (e1, e2)
         | Mul (e1, e2)
         | Div (e1, e2)
-        | Mod (e1, e2) ->
+        | Mod (e1, e2)
+        | Band (e1, e2)
+        | Bor (e1, e2)
+        | Bxor (e1, e2)
+        | Shl (e1, e2)
+        | Shr (e1, e2)
+        | Sshr (e1, e2)
+        | Rotl (e1, e2)
+        | Rotr (e1, e2) ->
             [e1; e2] |> applyToList checkAbsenceOfSyncExpr
 
     let rec checkAbsenceOfSyncStmt oneStmt =
