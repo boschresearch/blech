@@ -387,7 +387,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     let evalBin x y f =
         let newrhs = tryEvalConst lut x |> f <| tryEvalConst lut y
         { rhs = newrhs; typ = checkedExpr.typ; range = checkedExpr.Range }
-        |> debugShow "after evalBin"
+        //|> debugShow "after evalBin"
     
     let recurFields constBuilder fs =
         let kvps = fs |> List.map (fun (i,f) -> i, tryEvalConst lut f)
@@ -473,10 +473,51 @@ and internal evalConst lut expr =
 //    |> Result.bind ensureNonNegative
 
 
+and private ensureNonNegIntSize num =
+    match num.rhs with
+    | IntConst i -> 
+        if i.IsNotNegative then
+            Ok num
+        else
+            Error [ NonNegIdxExpected (num.range, num) ]
+    | _ ->
+        Ok num
+
+/// This tries to evaluate expr to a constant Size value
+/// and returns a MustBeConst error if the input is not constant
+/// and returns a NotACompileTimeSize if the result is not a compile time Size
+/// and returns a NonNegIdxExpected if the result is an negative compile time Size value
+and internal evalCompTimeSize lut expr =   
+    evalConst lut expr
+    |> Result.bind ensureNonNegIntSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
+    |> Result.bind (fun constExpr ->
+        match constExpr.rhs with
+        | IntConst i -> Ok i.GetArrayIndex
+        | NatConst n -> Ok n.GetArrayIndex
+        | BitsConst b -> Ok b.GetArrayIndex
+        | _ -> 
+            Error [NotACompileTimeSize expr]    
+    )
+    //|> debugShow "Compile Time Size"
+
+/// This tries to evaluate expr to a constant Size value
+/// It returns the optional compile time size 
+/// and returns a NonNegIdxExpected if the result is a negative compile time Size value
+and internal tryEvalCompTimeSize lut expr =
+    tryEvalConst lut expr 
+    |> ensureNonNegIntSize
+    |> Result.bind (fun expr ->
+        match expr.rhs with
+        | IntConst i -> Ok <| Some i.GetArrayIndex
+        | NatConst n -> Ok <| Some n.GetArrayIndex
+        | BitsConst b -> Ok <| Some b.GetArrayIndex
+        | _ -> Ok None        
+    )
+
 /// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
 /// and returns a NotACompileTimeInt if the result is not an integer.
-and internal evalCompTimeSize lut expr =   
+and internal evalCompTimeSizeOld lut expr =   
     let ensureNonNegSize num =
         let ok =
             match num.rhs with
@@ -847,7 +888,7 @@ let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
-    |> debugShow "After arithmetic"
+    //|> debugShow "After arithmetic"
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
@@ -1081,19 +1122,21 @@ and private checkUntimedDynamicAccessPath lut dname =
                         checkExpr lut idx
                         |> Result.bind (fun trhs -> // evaluate the index expression
                             if isIntType trhs.typ then // make sure it is an integer
-                                match evalCompTimeSize lut trhs with // if it is constant we can even check boundaries
-                                | Ok actualIndex ->
+                                match tryEvalCompTimeSize lut trhs with // if it is constant we can even check boundaries
+                                | Ok (Some actualIndex) ->
                                     if Constants.SizeZero <= actualIndex && actualIndex < asize then
                                         // let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
                                         let constIdx = {rhs = NatConst <| N64 actualIndex; typ = trhs.typ; range = trhs.range}
                                         Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
                                     else
                                         Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message
-                                | Error es -> // the index is determined at runtime
+                                | Ok (None) -> // the index is determined at runtime
                                     if isConstVarDecl lut tml then // but then the array must not be constant
-                                        Error <| ConstArrayRequiresConstIndex dname.Range::es
+                                        Error [ConstArrayRequiresConstIndex dname.Range]
                                     else // param/let/var array with dynamic access, Ok
                                         Ok (tml.AddArrayAccess trhs, ValueTypes dty)
+                                | Error e ->
+                                    Error e
                             else
                                 Error [IndexMustBeInteger(dname.Range, trhs, tml.AddArrayAccess trhs)]
                             )
@@ -1166,7 +1209,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                 | AnyFloat -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
-        |> debugShow "Variable usage"
+        //|> debugShow "Variable usage"
     // -- function call --
     | AST.FunctionCall (fp, readArgs, writeArgs, r) ->
         let resIn = List.map (checkExpr lut) readArgs

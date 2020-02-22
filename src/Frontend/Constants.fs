@@ -162,6 +162,7 @@ type Nat =
         | N32 v -> v = 0u
         | N64 v -> v = 0uL
 
+
     member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
 
     /// This extracts the Size for an array index from a Nat constant.
@@ -315,6 +316,14 @@ type Int =
         | I32 v -> v = 0
         | I64 v -> v = 0L
         | IAny (v, _) -> v = 0I
+        
+    member this.IsNotNegative = 
+        match this with
+        | I8 v -> v >= 0y
+        | I16 v -> v >= 0s
+        | I32 v -> v >= 0
+        | I64 v -> v >= 0L
+        | IAny (v, _) -> v >= 0I
         
     member this.IsAny =
         match this with
