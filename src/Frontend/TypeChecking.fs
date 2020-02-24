@@ -18,6 +18,8 @@ module Blech.Frontend.TypeChecking
 
 open System.Collections.Generic
 
+open Blech.Common
+
 open CommonTypes
 open BlechTypes
 open TyChecked
@@ -1189,8 +1191,8 @@ let public fPackage lut (pack: AST.Package) =
 
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
-let typeCheck (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
-    let lut = TypeCheckContext.Empty(ncEnv)
+let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
+    let lut = TypeCheckContext.Empty cliContext ncEnv
     fPackage lut pack
     |> function
         | Ok p -> 

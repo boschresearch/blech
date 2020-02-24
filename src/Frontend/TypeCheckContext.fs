@@ -20,6 +20,7 @@
 
 namespace Blech.Frontend
 
+open Blech.Common
 open System.Collections.Generic
 open CommonTypes
 open BlechTypes
@@ -81,6 +82,7 @@ type Declarable =
 /// This allows to lookup what type an identifier has or the position it is declared.
 type TypeCheckContext = 
     { 
+        cliContext: Arguments.BlechCOptions
         ncEnv: SymbolTable.LookupTable
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
@@ -89,8 +91,9 @@ type TypeCheckContext =
         memberPragmas: ResizeArray<Attribute.MemberPragma> 
     }
 
-    static member Empty ncLut =
-        { ncEnv = ncLut
+    static member Empty cliContext ncLut =
+        { cliContext = cliContext
+          ncEnv = ncLut
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
           memberPragmas = ResizeArray() }

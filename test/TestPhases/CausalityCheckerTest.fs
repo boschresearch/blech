@@ -32,6 +32,8 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member x.causalityCheckValidFiles (loadWhat, moduleName, filePath) =
+        let cliContext = Arguments.BlechCOptions.Default
+
         let logger = Diagnostics.Logger.create ()
         
         let ast = 
@@ -44,7 +46,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind Blech.Frontend.TypeChecking.typeCheck astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
@@ -74,6 +76,8 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member x.causalityCheckInvalidInputs (loadWhat, moduleName, filePath) =
+        let cliContext = Arguments.BlechCOptions.Default
+        
         let logger = Diagnostics.Logger.create ()
         let ast = 
             Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
@@ -85,7 +89,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind Blech.Frontend.TypeChecking.typeCheck astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
