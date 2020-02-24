@@ -473,15 +473,41 @@ and internal evalConst lut expr =
 //    |> Result.bind ensureNonNegative
 
 
-and private ensureNonNegIntSize num =
+//and private ensureNonNegIntSize wordsize num =
+//    match num.rhs with
+//    | IntConst i -> 
+//        if i.IsNegative then Error [ NonNegIdxExpected (num.range, num) ]
+//        else Ok num
+//    | NatConst n ->
+//        Ok num
+//    | BitsConst b ->
+//        Ok num
+//    | _ ->
+//        Ok num
+
+and private ensureSize wordsize num =
     match num.rhs with
-    | IntConst i -> 
-        if i.IsNotNegative then
-            Ok num
-        else
+    | IntConst i ->
+        if i.IsNegative then
             Error [ NonNegIdxExpected (num.range, num) ]
+        elif i.IsSize wordsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+
+    | NatConst n ->
+        if n.IsSize wordsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+    | BitsConst b ->
+        if b.IsSize wordsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
     | _ ->
         Ok num
+
 
 /// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
@@ -489,7 +515,7 @@ and private ensureNonNegIntSize num =
 /// and returns a NonNegIdxExpected if the result is an negative compile time Size value
 and internal evalCompTimeSize lut expr =   
     evalConst lut expr
-    |> Result.bind ensureNonNegIntSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
+    |> Result.bind (ensureSize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
         | IntConst i -> Ok i.GetArrayIndex
@@ -505,7 +531,7 @@ and internal evalCompTimeSize lut expr =
 /// and returns a NonNegIdxExpected if the result is a negative compile time Size value
 and internal tryEvalCompTimeSize lut expr =
     tryEvalConst lut expr 
-    |> ensureNonNegIntSize
+    |> ensureSize lut.cliContext.wordSize
     |> Result.bind (fun expr ->
         match expr.rhs with
         | IntConst i -> Ok <| Some i.GetArrayIndex
@@ -517,26 +543,26 @@ and internal tryEvalCompTimeSize lut expr =
 /// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
 /// and returns a NotACompileTimeInt if the result is not an integer.
-and internal evalCompTimeSizeOld lut expr =   
-    let ensureNonNegSize num =
-        let ok =
-            match num.rhs with
-            | IntConst i -> Relational.Le (Constant.Zero Int8, i)
-            | NatConst n -> Relational.Le  (Constant.Zero Nat8, n)
-            | BitsConst b -> Relational.Le  (Constant.Zero Bits8, b)
-            | _ -> failwith ""
-        if ok then Ok num
-        else Error [ NonNegIdxExpected (num.range, num) ]
+//and internal evalCompTimeSizeOld lut expr =   
+//    let ensureNonNegSize num =
+//        let ok =
+//            match num.rhs with
+//            | IntConst i -> Relational.Le (Constant.Zero Int8, i)
+//            | NatConst n -> Relational.Le  (Constant.Zero Nat8, n)
+//            | BitsConst b -> Relational.Le  (Constant.Zero Bits8, b)
+//            | _ -> failwith ""
+//        if ok then Ok num
+//        else Error [ NonNegIdxExpected (num.range, num) ]
     
-    evalConst lut expr
-    |> Result.bind ensureNonNegSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
-    |> Result.bind (fun constExpr ->
-        match constExpr.rhs with
-        | IntConst i -> Ok i.GetArrayIndex
-        | NatConst n -> Ok n.GetArrayIndex
-        | BitsConst b -> Ok b.GetArrayIndex
-        | _ -> Error [NotACompileTimeSize expr]
-    )
+//    evalConst lut expr
+//    |> Result.bind ensureNonNegSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
+//    |> Result.bind (fun constExpr ->
+//        match constExpr.rhs with
+//        | IntConst i -> Ok i.GetArrayIndex
+//        | NatConst n -> Ok n.GetArrayIndex
+//        | BitsConst b -> Ok b.GetArrayIndex
+//        | _ -> Error [NotACompileTimeSize expr]
+//    )
 
 /// Retrieves the initial value for a given TML
 /// Returns an error, if the TML is an array access where the index is not constant
@@ -729,6 +755,39 @@ let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxo
 // ---  Bitwise shift operators
 // --------------------------------------------------------------------
 
+let private ensureShiftAmount bitsize num  =
+    match num.rhs with
+    | IntConst i ->
+        if i.IsNegative then
+            Error [ NonNegIdxExpected (num.range, num) ]
+        elif i.IsLessThan bitsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+
+    | NatConst n ->
+        if n.IsLessThan bitsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+    | BitsConst b ->
+        if b.IsLessThan bitsize then 
+            Ok num
+        else 
+            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+    | _ ->
+        Ok num
+
+
+
+/// This tries to evaluate expr to a constant shift amount
+/// It returns the optional compile time size 
+/// and returns a NonNegIdxExpected if the result is a negative compile time Size value
+let internal tryEvalCompShiftAmount lut bitsize expr =
+    tryEvalConst lut expr 
+    |> ensureShiftAmount bitsize
+    
+
 /// Given two typed expressions, construct their binary bitwise operator
 /// If the two types are not comparable, an error will be returned instead.
 let private combineShiftOp shift ((expr: TypedRhs), (positions: TypedRhs)) =
@@ -737,45 +796,41 @@ let private combineShiftOp shift ((expr: TypedRhs), (positions: TypedRhs)) =
     Ok { expr with rhs = rhs; range = rng }  // Todo: This can go wrong later on if positions are bigger then bits size or negative, fjg. 18.02.20
     
 
-let private checkShiftOp shift (expr: TypedRhs) (positions: TypedRhs) =
-    let exp = 
-        match expr.typ with
-        | ValueTypes (BitsType _) ->
-            Ok expr
-        | AnyBits -> 
-            Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
-        | _ ->
-            Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
-            
-    let pos = 
-        match positions.typ with
+let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
+    match expr.typ with
+    | ValueTypes (BitsType bt) ->
+        match amount.typ with
         | ValueTypes (IntType _)
         | ValueTypes (NatType _)
         | ValueTypes (BitsType _)
         | AnyInt
         | AnyBits ->
-            Ok positions
+            tryEvalCompShiftAmount lut bt.GetSize amount
+            |> combine (Ok expr)
+            |> Result.bind (combineShiftOp shift)
         | _ ->
-            Error [ TypeMismatch (positions.typ, positions) ] // TODO: positions must be a valid size type, change this error message, fjg. 17.02.20
+            Error [ TypeMismatch (amount.typ, amount) ] // TODO: positions must be a valid size type, change this error message, fjg. 17.02.20
     
-    combine exp pos
-    |> Result.bind (combineShiftOp shift)
-
+    | AnyBits -> 
+        Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
+    | _ ->
+        Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
+            
 
 /// Returns the right shift '>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private shiftRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp shr expr amount
+let private shiftRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut shr expr amount
 
 /// Returns the left shift '<<' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private shiftLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp shl expr amount
+let private shiftLeft lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut shl expr amount
 
 /// Returns the signed right shift '+>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private signedShiftRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp sshr expr amount
+let private signedShiftRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut sshr expr amount
 
 /// Returns the left rotation '<<>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private rotateLeft ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp rotl expr amount
+let private rotateLeft lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut rotl expr amount
 
 /// Returns the signed right rotation '<>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
-let private rotateRight ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp rotr expr amount
+let private rotateRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut rotr expr amount
 
 
 // --------------------------------------------------------------------
@@ -1047,7 +1102,7 @@ let rec private checkAggregateLiteral lut al r =
             let checkIdx idx =
                 checkExpr lut idx 
                 |> Result.bind (evalCompTimeSize lut)
-            //    |> Result.bind (ensureNonNegSize idx.Range)
+                //    |> Result.bind (ensureNonNegSize idx.Range)
             // Check that indices, if there are any, are non-negative compile time constants
             // and in order and do not repeat.
             // Note that the exact array length is unknown at this point, nor do we know the
@@ -1107,7 +1162,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                     | _ -> Error [FieldAccessOnNonStructType(name, tml)]
                 )
             | AST.Index (idx, r) ->
-                let isIntType = function
+                let isIndexType = function
                     | AnyInt
                     | AnyBits
                     | ValueTypes (IntType _)
@@ -1121,24 +1176,27 @@ and private checkUntimedDynamicAccessPath lut dname =
                     | ValueTypes (ArrayType (asize, dty)) -> // ensure it is an array type
                         checkExpr lut idx
                         |> Result.bind (fun trhs -> // evaluate the index expression
-                            if isIntType trhs.typ then // make sure it is an integer
+                            if isIndexType trhs.typ then // make sure it is an integer
                                 match tryEvalCompTimeSize lut trhs with // if it is constant we can even check boundaries
                                 | Ok (Some actualIndex) ->
                                     if Constants.SizeZero <= actualIndex && actualIndex < asize then
                                         // let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
-                                        let constIdx = {rhs = NatConst <| N64 actualIndex; typ = trhs.typ; range = trhs.range}
-                                        Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
+                                        // let constIdx = {rhs = NatConst <| N64 actualIndex; typ = trhs.typ; range = trhs.range}
+                                        // Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
+                                        Ok (tml.AddArrayAccess trhs, ValueTypes dty)
                                     else
                                         Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message
                                 | Ok (None) -> // the index is determined at runtime
                                     if isConstVarDecl lut tml then // but then the array must not be constant
-                                        Error [ConstArrayRequiresConstIndex dname.Range]
+                                        Error [ConstArrayRequiresConstIndex dname.Range]  
+                                        // TODO: Should structured constants have a representation in memory? fjg. 24.02.20
+                                        // Currently the backend normalises accesses to constants and crashes if this not tested.
                                     else // param/let/var array with dynamic access, Ok
                                         Ok (tml.AddArrayAccess trhs, ValueTypes dty)
                                 | Error e ->
                                     Error e
                             else
-                                Error [IndexMustBeInteger(dname.Range, trhs, tml.AddArrayAccess trhs)]
+                                Error [IndexMustBeInteger(dname.Range, trhs, tml.AddArrayAccess trhs)] // Todo: Better error message, fjg. 24.02.20
                             )
                     | _ -> Error [ArrayAccessOnNonArrayType(r, tml)]
                     )
@@ -1160,7 +1218,7 @@ and private combineTwoExpr lut e1 e2 f =
 /// using shf.
 and private combineShift lut bits amount shiftFun =
     combine (checkExpr lut bits) (checkExpr lut amount)
-    |> Result.bind shiftFun
+    |> Result.bind (shiftFun lut)
     // |> Result.bind debugShowConstExpr
 
 
@@ -1303,32 +1361,34 @@ and internal checkDataType lut utyDataType =
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
-        let ensurePositiveSize num =
-            if num > Constants.SizeZero then Ok num
-            else Error [PositiveSizeExpected(pos, num)]
-        let checkSize =
-            checkExpr lut 
-            >> Result.bind (evalCompTimeSize lut)
-            >> Result.bind ensurePositiveSize
-        checkSize size
+        //let ensurePositiveSize num =
+        //    if num > Constants.SizeZero then Ok num
+        //    else Error [PositiveSizeExpected(pos, num)]
+        //let checkSize =
+        //    checkExpr lut 
+        //    >> Result.bind (evalCompTimeSize lut)
+        //    //>> Result.bind ensurePositiveSize
+        //checkSize size
+        checkExpr lut size
+        |> Result.bind (evalCompTimeSize lut)
         |> Result.bind(fun checkedSize ->
             checkDataType lut elemDty
             |> Result.bind(fun dty -> 
                 match dty with
                 | ValueTypes sth ->
-                    ArrayType (checkedSize, sth)
-                    |> ValueTypes
-                    |> Ok 
-                | _ -> Error [ValueArrayMustHaveValueType pos]
+                    ArrayType (checkedSize, sth) |> ValueTypes |> Ok
+                | _ -> 
+                    Error [ValueArrayMustHaveValueType pos]
                 )
             )
     | AST.TypeName spath ->
         // look up given static name in the dict of known named types (user types)
+        // TODO: Create a lookup function in TypeCheckContext and return the result here, fjg. 24.02.20
         let found, typ =
             lut.ncEnv.spathToQname spath
             |> lut.userTypes.TryGetValue
         if found then Ok typ
-        else failwith <| sprintf "Did not find a type under the name %s." spath.dottedPathToString
+        else Error [ NotInLUTPrevError spath.dottedPathToString ]
     // unsupported now:
     | AST.SliceType _
     | AST.Signal _ -> 
@@ -1339,16 +1399,20 @@ and internal checkDataType lut utyDataType =
 and internal checkLExpr lut (dname: AST.DynamicAccessPath) =
     let makeTimedLhsStructure ( tml, dty ) =
         match dname.timepoint with
-        | AST.TemporalQualification.Current -> Ok {lhs = LhsCur tml; typ = dty; range = dname.Range}
-        | AST.TemporalQualification.Previous r -> Error [PrevOnLhs (r, dname.pathToString)]
-        | AST.TemporalQualification.Next _ ->  Ok {lhs = LhsNext tml; typ = dty; range = dname.Range}
+        | AST.TemporalQualification.Current -> 
+            Ok {lhs = LhsCur tml; typ = dty; range = dname.Range}
+        | AST.TemporalQualification.Previous r -> 
+            Error [PrevOnLhs (r, dname.pathToString)]
+        | AST.TemporalQualification.Next _ ->  
+            Ok {lhs = LhsNext tml; typ = dty; range = dname.Range}
     checkUntimedDynamicAccessPath lut dname
     |> Result.bind makeTimedLhsStructure
 
 
 and internal checkAssignLExpr lut lhs =
     match lhs with
-    | AST.Wildcard _ -> Ok { lhs = Wildcard; typ = Any; range = lhs.Range }
+    | AST.Wildcard _ -> 
+        Ok { lhs = Wildcard; typ = Any; range = lhs.Range }
     | AST.Loc dname
     | AST.EventLoc dname ->
         checkLExpr lut dname

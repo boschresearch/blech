@@ -21,6 +21,8 @@
 
 module Blech.Frontend.Constants
 
+open Blech.Common
+
 //=========================================================================
 // predefined constants TODO: actually, this should be part of blechconf.h
 //=========================================================================
@@ -62,6 +64,7 @@ let MAX_FLOAT32_INT = pown 2I 24
 let MIN_FLOAT64_INT = - pown 2I 53
 let MAX_FLOAT64_INT = pown 2I 53
 
+
 /// Converts a bigint to an uint8 assuming it fits
 let private bigint2uint8 v =
     if v < 0I then uint8 <| pown 2I 8 + v
@@ -88,6 +91,14 @@ type Size = uint64
 
 let SizeZero : Size = 0uL
 let SizeOne : Size = 1uL
+
+let MaxSize (ws: Arguments.WordSize) : Size = 
+    match ws with
+    | Arguments.W8 -> uint64 System.Byte.MaxValue
+    | Arguments.W16 -> uint64 System.UInt16.MaxValue
+    | Arguments.W32 -> uint64 System.UInt32.MaxValue
+    | Arguments.W64 -> uint64 System.UInt64.MaxValue
+
 
 /// This type represents float constants
 /// They appear as float literals of type AnyFloat,
@@ -165,13 +176,32 @@ type Nat =
 
     member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
 
+    /// This allows uint64  conversion for type Bits
+    static member op_Explicit (source: Nat) : Size =
+        try 
+            match source with
+            | N8 v -> uint64 v 
+            | N16 v -> uint64 v
+            | N32 v -> uint64 v
+            | N64 v -> uint64 v
+        with
+        | :? System.OverflowException ->
+            failwith "Overflow in size conversion, this should never happen"
+
+
+    member this.IsSize (ws: Arguments.WordSize) =
+        uint64 this <= MaxSize ws
+
     /// This extracts the Size for an array index from a Nat constant.
     member this.GetArrayIndex : Size =
+        uint64 this
+        
+    member this.IsLessThan (bitSize: int32) = 
         match this with
-        | N8 v -> uint64 v
-        | N16 v -> uint64 v
-        | N32 v -> uint64 v 
-        | N64 v -> uint64 v
+        | N8 v -> v < byte bitSize
+        | N16 v -> v < uint16 bitSize
+        | N32 v -> v < uint32 bitSize
+        | N64 v -> v < uint64 bitSize
 
     /// Extracts the shift amount from an Nat constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
@@ -231,19 +261,41 @@ type Bits =
         | B64 v -> v = 0uL
         | BAny (v, _) -> v = 0I 
 
-    /// This extracts the Size for an array index from an Bits constant.
-    /// The typechecker must guarantee, that no overflow occurs
-    member this.GetArrayIndex : Size =
+    
+    /// This allows uint64  conversion for type Bits
+    static member op_Explicit (source: Bits) : Size =
         try 
-            match this with
+            match source with
             | B8 v -> uint64 v 
             | B16 v -> uint64 v
             | B32 v -> uint64 v
-            | B64 v -> uint64 v 
+            | B64 v -> uint64 v
             | BAny (v, _) -> uint64 v
         with
         | :? System.OverflowException ->
+            failwith "Overflow in size conversion, this should never happen"
+
+
+    member this.IsSize (ws: Arguments.WordSize) =        
+        uint64 this <= MaxSize ws
+
+    /// This extracts the Size for an array index from an Bits constant.
+    /// The typechecker must guarantee, that no overflow occurs
+    member this.GetArrayIndex : Size =
+        try
+            uint64 this
+        with
+        | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
+
+
+    member this.IsLessThan (bitSize: int32) = 
+        match this with
+        | B8 v -> v < byte bitSize
+        | B16 v -> v < uint16 bitSize
+        | B32 v -> v < uint32 bitSize
+        | B64 v -> v < uint64 bitSize
+        | BAny (v, _) -> v < bigint bitSize
 
     /// This extracts the shift amount from an Bits constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
@@ -258,7 +310,7 @@ type Bits =
             | BAny (v, _) -> int32 v 
         with
         | :? System.OverflowException ->
-            failwith "Called on unchecked shift amount constant"
+            failwith "called on unchecked shift amount constant"
 
 
     member this.PromoteTo (nat: Nat) =
@@ -317,13 +369,32 @@ type Int =
         | I64 v -> v = 0L
         | IAny (v, _) -> v = 0I
         
-    member this.IsNotNegative = 
+    member this.IsNegative = 
         match this with
-        | I8 v -> v >= 0y
-        | I16 v -> v >= 0s
-        | I32 v -> v >= 0
-        | I64 v -> v >= 0L
-        | IAny (v, _) -> v >= 0I
+        | I8 v -> v < 0y
+        | I16 v -> v < 0s
+        | I32 v -> v < 0
+        | I64 v -> v < 0L
+        | IAny (v, _) -> v < 0I
+
+    /// This allows uint64  conversion for type Int
+    static member op_Explicit (source: Int) : Size =
+        try 
+            match source with
+            | I8 v -> uint64 v 
+            | I16 v -> uint64 v
+            | I32 v -> uint64 v
+            | I64 v -> uint64 v
+            | IAny (v, _) -> uint64 v
+        with
+        | :? System.OverflowException ->
+            failwith "Overflow in size conversion, this should never happen"
+
+    member this.IsSize (ws: Arguments.WordSize) =
+        if this.IsNegative then
+            failwith "Make sure to call with non-negative value"
+        else
+            uint64 this <= MaxSize ws
         
     member this.IsAny =
         match this with
@@ -334,15 +405,25 @@ type Int =
     /// The typechecker must guarantee, that no overflow occurs
     member this.GetArrayIndex : Size =
         try 
-            match this with
-            | I8 v -> uint64 v
-            | I16 v -> uint64 v
-            | I32 v -> uint64 v
-            | I64 v -> uint64 v
-            | IAny (v, _) -> uint64 v 
+            uint64 this
+        //try 
+        //    match this with
+        //    | I8 v -> uint64 v
+        //    | I16 v -> uint64 v
+        //    | I32 v -> uint64 v
+        //    | I64 v -> uint64 v
+        //    | IAny (v, _) -> uint64 v 
         with
         | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
+
+    member this.IsLessThan (bitSize: int32) = 
+        match this with
+        | I8 v -> v < sbyte bitSize
+        | I16 v -> v < int16 bitSize
+        | I32 v -> v < int32 bitSize
+        | I64 v -> v < int64 bitSize
+        | IAny (v, _) -> v < bigint bitSize
 
     /// This extracts the shift amount from an Int constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
