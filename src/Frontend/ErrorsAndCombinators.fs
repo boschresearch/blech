@@ -142,6 +142,8 @@ type TyCheckError =
     | IllegalEntryPoint of range * AST.Package
     // pragmas
     | UnknownPragma of range
+    // Dummy error used during development
+    | Dummy of range * string
 
     interface Diagnostics.IDiagnosable with
         member err.MainInformation =
@@ -258,7 +260,7 @@ type TyCheckError =
             | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
-            
+            | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
                 { range = srcPos

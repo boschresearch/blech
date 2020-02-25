@@ -589,3 +589,109 @@ and Bitwise =
         | B64 b -> b >>> amount ||| b <<< 64 - amount |> B64 
         | BAny _ -> failwith "No rotate right '<>>' on BAny allowed"
 
+
+type Conversion = 
+
+    static member IntToNat (i: Int, nt: NatType) : Nat =
+        match i, nt with
+        | I8 i, Nat8 -> N8 (uint8 i)
+        | I8 i, Nat16 -> N16 (uint16 i)
+        | I16 i, Nat16 -> N16 (uint16 i)
+        | I8 i, Nat32 -> N32 (uint32 i)
+        | I16 i, Nat32 -> N32 (uint32 i)
+        | I32 i, Nat32 -> N32 (uint32 i)
+        | I8 i, Nat64 -> N64 (uint64 i)
+        | I16 i, Nat64 -> N64 (uint64 i)
+        | I32 i, Nat64 -> N64 (uint64 i)
+        | I64 i, Nat64 -> N64 (uint64 i)
+        | _ -> failwith (sprintf "No conversion from %A to %A" i nt)
+
+    static member IntToBits (i: Int, bt: BitsType) : Bits =
+        match i, bt with
+        | I8 i, Bits8 -> B8 (uint8 i)
+        | I8 i, Bits16 -> B16 (uint16 i)
+        | I16 i, Bits16 -> B16 (uint16 i)
+        | I8 i, Bits32 -> B32 (uint32 i)
+        | I16 i, Bits32 -> B32 (uint32 i)
+        | I32 i, Bits32 -> B32 (uint32 i)
+        | I8 i, Bits64 -> B64 (uint64 i)
+        | I16 i, Bits64 -> B64 (uint64 i)
+        | I32 i, Bits64 -> B64 (uint64 i)
+        | I64 i, Bits64 -> B64 (uint64 i)
+        | _ -> failwith (sprintf "No conversion from %A to %A" i bt)
+
+    static member IntToFloat (i: Int, ft: FloatType) : Float =
+        match i, ft with
+        | I8 i, Float32 -> F32 (float32 i)
+        | I16 i, Float32 -> F32 (float32 i)
+        | I8 i, Float64 -> F64 (float i)
+        | I16 i, Float64 -> F64 (float i)
+        | I32 i, Float64 -> F64 (float i)
+        | _ -> failwith (sprintf "No conversion from %A to %A" i ft)
+
+    static member NatToBits (n: Nat, bt: BitsType) : Bits =
+        match n, bt with
+        | N8 n, Bits8 -> B8 (uint8 n)
+        | N8 n, Bits16 -> B16 (uint16 n)
+        | N16 n, Bits16 -> B16 (uint16 n)
+        | N8 n, Bits32 -> B32 (uint32 n)
+        | N16 n, Bits32 -> B32 (uint32 n)
+        | N32 n, Bits32 -> B32 (uint32 n)
+        | N8 n, Bits64 -> B64 (uint64 n)
+        | N16 n, Bits64 -> B64 (uint64 n)
+        | N32 n, Bits64 -> B64 (uint64 n)
+        | N64 n, Bits64 -> B64 (uint64 n)
+        | _ -> failwith (sprintf "No conversion from %A to %A" n bt)
+
+    static member NatToInt (n: Nat, it: IntType) : Int =
+        match n, it with
+        | N8 n, Int16 -> I16 (int16 n)
+        | N8 n, Int32 -> I32 (int32 n)
+        | N16 n, Int32 -> I32 (int32 n)
+        | N8 n, Int64 -> I64 (int64 n)
+        | N16 n, Int64 -> I64 (int64 n)
+        | N32 n, Int64 -> I64 (int64 n)
+        | _ -> failwith (sprintf "No conversion from %A to %A" n it)
+
+    static member NatToFloat (i: Nat, ft: FloatType) : Float =
+        match i, ft with
+        | N8 n, Float32 -> F32 (float32 n)
+        | N16 n, Float32 -> F32 (float32 n)
+        | N8 n, Float64 -> F64 (float n)
+        | N16 n, Float64 -> F64 (float n)
+        | N32 n, Float64 -> F64 (float n)
+        | _ -> failwith (sprintf "No conversion from %A to %A" i ft)
+
+    static member BitsToNat (b: Bits, nt: NatType) : Nat =
+        match b, nt with
+        | B8 b, Nat8 -> N8 (uint8 b)
+        | B8 b, Nat16 -> N16 (uint16 b)
+        | B16 b, Nat16 -> N16 (uint16 b)
+        | B8 b, Nat32 -> N32 (uint32 b)
+        | B16 b, Nat32 -> N32 (uint32 b)
+        | B32 b, Nat32 -> N32 (uint32 b)
+        | B8 n, Nat64 -> N64 (uint64 b)
+        | B16 b, Nat64 -> N64 (uint64 b)
+        | B32 b, Nat64 -> N64 (uint64 b)
+        | B64 b, Nat64 -> N64 (uint64 b)
+        | _ -> failwith (sprintf "No conversion from %A to %A" b nt)
+
+    static member BitsToInt (b: Bits, it: IntType) : Int =
+        match b, it with
+        | B8 b, Int16 -> I16 (int16 b)
+        | B8 b, Int32 -> I32 (int32 b)
+        | B16 b, Int32 -> I32 (int32 b)
+        | B8 b, Int64 -> I64 (int64 b)
+        | B16 b, Int64 -> I64 (int64 b)
+        | B32 b, Int64 -> I64 (int64 b)
+        | _ -> failwith (sprintf "No conversion from %A to %A" b it)
+
+    static member BitsToFloat (b: Bits, ft: FloatType) : Float =
+        match b, ft with
+        | B8 b, Float32 -> F32 (float32 b)
+        | B16 b, Float32 -> F32 (float32 b)
+        | B8 b, Float64 -> F64 (float b)
+        | B16 b, Float64 -> F64 (float b)
+        | B32 b, Float64 -> F64 (float b)
+        | _ -> failwith (sprintf "No conversion from %A to %A" b ft)
+

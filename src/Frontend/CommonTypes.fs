@@ -166,9 +166,9 @@ type Moment =
 type IntType = 
     | Int8 | Int16 | Int32 | Int64 // order of tags matters for comparison!
 
-    override this.ToString() = "int" + string(this.GetSize())
+    override this.ToString() = "int" + string this.GetSize
     
-    member this.GetSize() =
+    member this.GetSize =
         match this with
         | Int8 -> 8
         | Int16 -> 16
@@ -209,15 +209,23 @@ type IntType =
 type NatType = 
     | Nat8 | Nat16 | Nat32 | Nat64 // order of tags matters for comparison!
 
-    override this.ToString() = "nat" + string(this.GetSize())
+    override this.ToString() = "nat" + string this.GetSize
     
-    member this.GetSize() =
+    member this.GetSize =
         match this with
         | Nat8 -> 8
         | Nat16 -> 16
         | Nat32 -> 32
         | Nat64 -> 64
 
+    /// Checks if a NatType can represent a value of an IntType
+    member this.CanRepresentType (typ: IntType) =
+        match this with
+        | Nat8 -> typ <= Int8
+        | Nat16 -> typ <= Int16
+        | Nat32 -> typ <= Int32
+        | Nat64 -> typ <= Int64
+    
     /// Checks if NatType can represent an AnyBits value
     static member CanRepresent (anyBits: Bits) =
         Nat64.CanRepresent anyBits    

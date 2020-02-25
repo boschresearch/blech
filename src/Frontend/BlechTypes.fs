@@ -567,6 +567,8 @@ and RhsStructure =
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (Constants.Size * TypedRhs) list
+    //
+    | Convert of TypedRhs
     // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
