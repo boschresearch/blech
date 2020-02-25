@@ -107,7 +107,11 @@ type Float =
     | F32 of float32
     | F64 of float
     | FAny of float * string option 
-    
+
+    static member Zero32: Float = F32 0.0f
+
+    static member Zero64: Float = F64 0.0
+
     override this.ToString() =
         match this with
         | F32 v -> string v
@@ -133,14 +137,6 @@ type Float =
         | FAny (v, _), F64 _ -> F64 v             // typecheck ensures fitting values
         | _ -> this  // no promotion necessary
 
-
-    static member Zero32: Float = F32 0.0f
-
-    static member Zero64: Float = F64 0.0
-
-    // Todo: Get rid of this, fjg. 10.02.20
-    static member CanRepresent (i: bigint) =
-        abs i <= MAX_FLOAT64_INT
 
 /// This type represents sizes.
 /// They appear as array size and array index
@@ -196,27 +192,19 @@ type Nat =
     member this.GetArrayIndex : Size =
         uint64 this
         
-    member this.IsLessThan (bitSize: int32) = 
-        match this with
-        | N8 v -> v < byte bitSize
-        | N16 v -> v < uint16 bitSize
-        | N32 v -> v < uint32 bitSize
-        | N64 v -> v < uint64 bitSize
-
-    /// Extracts the shift amount from an Nat constant.
+    /// Extracts the shift amount from a Nat constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
     /// The typechecker must guarantee this.
-    member this.GetShiftAmount : int32 =
+    member this.GetShiftAmount (bitsize: uint8) : int32 =
         try 
             match this with
-            | N8 v -> int32 v
-            | N16 v -> int32 v
-            | N32 v -> int32 v
-            | N64 v -> int32 v
+            | N8 v -> int32 (v % bitsize)
+            | N16 v -> int32 (v % uint16 bitsize)
+            | N32 v -> int32 (v % uint32 bitsize)
+            | N64 v -> int32 (v % uint64 bitsize)
         with
         | :? System.OverflowException ->
             failwith "Called on unchecked shift amount constant"
-
 
     member this.PromoteTo (other: Nat) : Nat = 
         match this, other with
@@ -288,26 +276,30 @@ type Bits =
         | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
 
-
-    member this.IsLessThan (bitSize: int32) = 
+    /// Extracts the bits size from the value of a BitsConst.
+    /// Only used for the evaluation of shift operations.
+    /// Fails if called on BAny constant.
+    /// Returns 8, 16, 32, or 64 of type uint8
+    member this.getBitsize : uint8 =
         match this with
-        | B8 v -> v < byte bitSize
-        | B16 v -> v < uint16 bitSize
-        | B32 v -> v < uint32 bitSize
-        | B64 v -> v < uint64 bitSize
-        | BAny (v, _) -> v < bigint bitSize
+        | B8 _ -> 8uy
+        | B16 _ -> 16uy
+        | B32 _ -> 32uy
+        | B64 _ -> 64uy
+        | BAny _ -> failwith "Called on BitsConst of type AnyBits"
+            
 
-    /// This extracts the shift amount from an Bits constant.
+    /// This extracts the shift amount from a Bits constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
     /// The typechecker must guarantee this.
-    member this.GetShiftAmount : int32 =
+    member this.GetShiftAmount (bitsize: uint8) : int32 =
         try 
             match this with
-            | B8 v -> int32 v
-            | B16 v -> int32 v
-            | B32 v -> int32 v
-            | B64 v -> int32 v
-            | BAny (v, _) -> int32 v 
+            | B8 v -> int32 (v % bitsize)
+            | B16 v -> int32 (v % uint16 bitsize)
+            | B32 v -> int32 (v % uint32 bitsize)
+            | B64 v -> int32 (v % uint64 bitsize)
+            | BAny (v, _) -> int32 (uint64 v % uint64 bitsize) 
         with
         | :? System.OverflowException ->
             failwith "called on unchecked shift amount constant"
@@ -323,19 +315,22 @@ type Bits =
         | _ -> failwith "Only BAny can be promoted to Nat"
 
     member this.PromoteTo (other: Bits) : Bits = 
-        match this, other with
-        | B8 v, B16 _ -> B16 <| uint16 v
-        | B8 v, B32 _ -> B32 <| uint32 v
-        | B8 v, B64 _ -> B64 <| uint64 v
-        | B16 v, B32 _ -> B32 <| uint32 v
-        | B16 v, B64 _ -> B64 <| uint64 v
-        | B32 v, B64 _ -> B64 <| uint64 v
-        | BAny (v, _), B8 _ -> B8 <| uint8 v   // typecheck ensures fitting values 
-        | BAny (v, _), B16 _ -> B16 <| uint16 v  // typecheck ensures fitting values 
-        | BAny (v, _), B32 _ -> B32 <| uint32 v  // typecheck ensures fitting values 
-        | BAny (v, _), B64 _ -> B64 <| uint64 v  // typecheck ensures fitting values
-        | _ -> this  // no promotion necessary
-
+        try
+            match this, other with
+            | B8 v, B16 _ -> B16 <| uint16 v
+            | B8 v, B32 _ -> B32 <| uint32 v
+            | B8 v, B64 _ -> B64 <| uint64 v
+            | B16 v, B32 _ -> B32 <| uint32 v
+            | B16 v, B64 _ -> B64 <| uint64 v
+            | B32 v, B64 _ -> B64 <| uint64 v
+            | BAny (v, _), B8 _ -> B8 <| uint8 v
+            | BAny (v, _), B16 _ -> B16 <| uint16 v
+            | BAny (v, _), B32 _ -> B32 <| uint32 v
+            | BAny (v, _), B64 _ -> B64 <| uint64 v
+            | _ -> this  // no promotion necessary
+        with
+        | :? System.OverflowException ->
+            failwith "Called with unchecked BAny value"
 
 /// This type represents integer constants
 /// They appear as integer literals of type IAny,
@@ -406,41 +401,27 @@ type Int =
     member this.GetArrayIndex : Size =
         try 
             uint64 this
-        //try 
-        //    match this with
-        //    | I8 v -> uint64 v
-        //    | I16 v -> uint64 v
-        //    | I32 v -> uint64 v
-        //    | I64 v -> uint64 v
-        //    | IAny (v, _) -> uint64 v 
         with
         | :? System.OverflowException ->
             failwith "Called on unchecked size constant"
 
-    member this.IsLessThan (bitSize: int32) = 
-        match this with
-        | I8 v -> v < sbyte bitSize
-        | I16 v -> v < int16 bitSize
-        | I32 v -> v < int32 bitSize
-        | I64 v -> v < int64 bitSize
-        | IAny (v, _) -> v < bigint bitSize
-
     /// This extracts the shift amount from an Int constant.
     /// Shift amounts are always >= 0 and <=64 (the max. number of bits in a bits type) 
     /// The typechecker must guarantee this.
-    member this.GetShiftAmount : int32 =
+    member this.GetShiftAmount (bitsize: uint8) : int32 =
         try 
-            match this with
-            | I8 v -> int32 v
-            | I16 v -> int32 v
-            | I32 v -> int32 v
-            | I64 v -> int32 v
-            | IAny (v, _) -> int32 v 
+            if this.IsNegative then 
+                failwith "Called on negative shift amount"
+            else 
+                match this with
+                | I8 v -> int32 (byte v % bitsize)
+                | I16 v -> int32 (uint16 v % uint16 bitsize)
+                | I32 v -> int32 (uint32 v % uint32 bitsize)
+                | I64 v -> int32 (uint64 v % uint64 bitsize)
+                | IAny (v, _) -> int32 (uint64 v % uint64 bitsize) 
         with
         | :? System.OverflowException ->
             failwith "Called on unchecked shift amount constant"
-
-
 
     member this.PromoteTo (nat: Nat) =
         // typechecker ensures that this can be represented as Bits
@@ -470,17 +451,21 @@ type Int =
     
     member this.PromoteTo (int: Int) : Int =
         // typechecker ensures that this can be represented as Int
-        match this, int with
-        | I8 v, I16 _ -> I16 <| int16 v
-        | I8 v, I32 _ -> I32 <| int32 v
-        | I8 v, I64 _ -> I64 <| int64 v
-        | I16 v, I32 _ -> I32 <| int32 v
-        | I16 v, I64 _ -> I64 <| int64 v
-        | I32 v, I64 _ -> I64 <| int64 v
-        // typecheck ensures that any values can be represented
-        | IAny (v, _), I8 _ -> I8 <| int8 v
-        | IAny (v, _), I16 _ -> I16 <| int16 v
-        | IAny (v, _), I32 _ -> I32 <| int32 v
-        | IAny (v, _), I64 _ -> I64 <| int64 v
-        | _ -> this // no promotion necessary 
-    
+        try
+            match this, int with
+            | I8 v, I16 _ -> I16 <| int16 v
+            | I8 v, I32 _ -> I32 <| int32 v
+            | I8 v, I64 _ -> I64 <| int64 v
+            | I16 v, I32 _ -> I32 <| int32 v
+            | I16 v, I64 _ -> I64 <| int64 v
+            | I32 v, I64 _ -> I64 <| int64 v
+            // typecheck ensures that any values can be represented
+            | IAny (v, _), I8 _ -> I8 <| int8 v
+            | IAny (v, _), I16 _ -> I16 <| int16 v
+            | IAny (v, _), I32 _ -> I32 <| int32 v
+            | IAny (v, _), I64 _ -> I64 <| int64 v
+            | _ -> this // no promotion necessary 
+        with
+        | :? System.OverflowException ->
+            failwith "Called with unchecked IAny value"
+

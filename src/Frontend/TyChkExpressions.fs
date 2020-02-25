@@ -294,40 +294,40 @@ let private bxor this that =
 
 let private shl expr amount = 
     match expr.rhs, amount.rhs with
-    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shl (bs, i.GetShiftAmount)
-    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shl (bs, n.GetShiftAmount)
-    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shl (bs, b.GetShiftAmount)
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shl (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shl (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shl (bs, b.GetShiftAmount bs.getBitsize)
     | _ -> Shl (expr, amount)
 
 let private shr expr amount = 
     match expr.rhs, amount.rhs with
-    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shr (bs, i.GetShiftAmount)
-    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shr (bs, n.GetShiftAmount)
-    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shr (bs, b.GetShiftAmount)
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shr (bs, b.GetShiftAmount bs.getBitsize)
     | _ -> Shr (expr, amount)
 
 
 let private sshr expr amount = 
     match expr.rhs, amount.rhs with
-    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Sshr (bs, i.GetShiftAmount)
-    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Sshr (bs, n.GetShiftAmount)
-    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Sshr (bs, b.GetShiftAmount)
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Sshr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Sshr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Sshr (bs, b.GetShiftAmount bs.getBitsize)
     | _ -> Sshr (expr, amount)
 
 
 let private rotl expr amount = 
     match expr.rhs, amount.rhs with
-    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotl (bs, i.GetShiftAmount)
-    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotl (bs, n.GetShiftAmount)
-    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotl (bs, b.GetShiftAmount)
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotl (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotl (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotl (bs, b.GetShiftAmount bs.getBitsize)
     | _ -> Rotl (expr, amount)
 
 
 let private rotr expr amount = 
     match expr.rhs, amount.rhs with
-    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotr (bs, i.GetShiftAmount)
-    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotr (bs, n.GetShiftAmount)
-    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotr (bs, b.GetShiftAmount)
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotr (bs, b.GetShiftAmount bs.getBitsize)
     | _ -> Rotr (expr, amount)
 
 //let rec private eq this that =
@@ -757,28 +757,10 @@ let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxo
 
 let private ensureShiftAmount bitsize num  =
     match num.rhs with
-    | IntConst i ->
-        if i.IsNegative then
-            Error [ NonNegIdxExpected (num.range, num) ]
-        elif i.IsLessThan bitsize then 
-            Ok num
-        else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
-
-    | NatConst n ->
-        if n.IsLessThan bitsize then 
-            Ok num
-        else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
-    | BitsConst b ->
-        if b.IsLessThan bitsize then 
-            Ok num
-        else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+    | IntConst i when i.IsNegative ->
+        Error [ NonNegIdxExpected (num.range, num) ]  // Todo: Shift amount must not be negative, fjg. 25.02.20
     | _ ->
         Ok num
-
-
 
 /// This tries to evaluate expr to a constant shift amount
 /// It returns the optional compile time size 
