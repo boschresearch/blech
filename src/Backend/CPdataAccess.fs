@@ -731,6 +731,8 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
 //=============================================================================
 // Expressions
 //=============================================================================
+and private cpConvert e toType = parens toType <^> e
+
 and private cpNeg e = txt "!" <^> parens e
 
 and private cpBnot e = txt "~" <^> parens e
@@ -896,6 +898,12 @@ and private cpExpr inFunction ctx expr =
             |> List.map (fun (_,expr) -> cpExpr inFunction ctx expr)
             |> List.unzip
         prereqStmtsLst |> List.concat, processedAssignments |> dpCommaSeparatedInBraces
+    
+    | Convert (subExpr, toType) ->
+        let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
+        let cast = cpType toType
+        prereqStmts, cpConvert processedExpr cast
+
     | Neg subExpr -> 
         let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
         prereqStmts, cpNeg processedExpr

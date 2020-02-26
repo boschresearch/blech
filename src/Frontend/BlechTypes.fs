@@ -568,7 +568,7 @@ and RhsStructure =
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (Constants.Size * TypedRhs) list
     //
-    | Convert of TypedRhs
+    | Convert of TypedRhs * Types
     // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
@@ -638,6 +638,10 @@ and RhsStructure =
             |> List.map (fun elem -> (snd elem).rhs.ppExpr outerPrec)
             |> dpCommaSeparatedInBraces
         // subexpressions
+        // type conversion
+        | Convert (e, t)->
+            fun p -> e.rhs.ppExpr p <.> txt "as" <+> t.ToDoc
+            |> dpPrecedence outerPrec dpPrec.["as"]
         // logical
         | Neg expr ->
             fun p -> txt "not" <+> expr.rhs.ppExpr p 
@@ -702,7 +706,8 @@ and RhsStructure =
         | Mod (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "%" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["%"]
-    
+       
+
     override this.ToString () = render None <| this.ToDoc
 
 and TypedRhs =

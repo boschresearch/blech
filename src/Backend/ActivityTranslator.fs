@@ -857,6 +857,8 @@ let private collectVarsToPrev2 pg =
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
         | ArrayConst fields ->
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
+        // type conversion
+        | Convert (e, _) -> processExpr e
         // boolean
         | Neg e -> processExpr e
         | Bnot e -> processExpr e

@@ -116,6 +116,8 @@ let rec private hasNoSideEffect expr =
     | FunCall (_, inputs, outputs) ->
         outputs = []
         && List.forall hasNoSideEffect inputs
+    // type conversion
+    | Convert (e, _) -> hasNoSideEffect e
     // unary 
     | Neg e | Bnot e -> hasNoSideEffect e
     // logical
@@ -152,6 +154,8 @@ let rec internal isStaticExpr lut expr =
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
+    // type conversion 
+    | Convert (e, _) -> isStaticExpr lut e
     // unary 
     | Neg e | Bnot e -> isStaticExpr lut e
     // logical
@@ -331,8 +335,8 @@ let private rotr expr amount =
     | _ -> Rotr (expr, amount)
 
 
-let private convert expr  =
-    match expr.rhs, expr.typ with
+let private convert toType expr  =
+    match expr.rhs, toType with
     | IntConst i, ValueTypes (NatType nt) -> NatConst <| Conversion.IntToNat (i, nt)
     | IntConst i, ValueTypes (BitsType bt) -> BitsConst <| Conversion.IntToBits (i, bt)
     | IntConst i, ValueTypes (FloatType ft) -> FloatConst <| Conversion.IntToFloat (i, ft)
@@ -342,7 +346,7 @@ let private convert expr  =
     | BitsConst b, ValueTypes (IntType it) -> IntConst <| Conversion.BitsToInt (b, it)
     | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Conversion.BitsToNat (b, nt)
     | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Conversion.BitsToFloat (b, ft)
-    | _ -> Convert expr   
+    | _ -> Convert (expr, toType)   
 
 //let rec private eq this that =
 //    let checkField (id1, st1) (id2, st2) =
@@ -441,7 +445,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Leq (x, y) -> evalBin x y leq
     | Equ (x, y) -> evalBin x y eq 
     // type conversion
-    | Convert x -> evalUnary x convert
+    | Convert (x, t) -> evalUnary x (convert t)
     // function calls
     | FunCall (name, ins, outs) ->
         let newIns = ins |> List.map (tryEvalConst lut)
@@ -1000,27 +1004,26 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
 // ---  Cast operator 'as'
 // --------------------------------------------------------------------
 
-let private checkPrimitiveCasts range (expr: TypedRhs) (toType: Types) = 
-    match expr.typ, toType with
+let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: Types) = 
+    match primitiveExpr.typ, simpleToType with    
     | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize <= n.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize <= b.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }       
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
-    
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize ->
-        Ok { rhs = Convert expr; typ = toType; range = range }
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
 
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
         Error [ Dummy (range, "no downcast possible") ]
@@ -1039,24 +1042,19 @@ let private checkPrimitiveCasts range (expr: TypedRhs) (toType: Types) =
     | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
         Error [ Dummy (range, "no cast necessary, use a type annotation")]
 
-    | ValueTypes (IntType _), ValueTypes vt when vt.IsPrimitive ->
-        Error [ Dummy (range, "no cast possible")]
-    | ValueTypes (NatType _), ValueTypes vt when vt.IsPrimitive ->
-        Error [ Dummy (range, "no cast possible")]
-    | ValueTypes (BitsType _), ValueTypes vt when vt.IsPrimitive ->
-        Error [ Dummy (range, "no cast possible")]
-    | ValueTypes (FloatType _), ValueTypes vt when vt.IsPrimitive ->
-        Error [ Dummy (range, "no cast possible")]
-    | ValueTypes vt1, ValueTypes vt2 when vt1.IsPrimitive && vt2.IsPrimitive ->
-        Error [ Dummy (range, "no cast possible")]
-    | ValueTypes vt, nonPrimitive when vt.IsPrimitive ->
-        Error [ Dummy (range, "no cast to non primitive type possible")]
+    | ValueTypes vt1, ValueTypes vt2 ->
+        Error [ Dummy (range, sprintf "no cast from %A to %A possible" vt1 vt2)]
     | _, _ ->
         failwith "Called with expr of non primitive types"
 
-let private conversion range (expr: TypedRhs, toType: Types) =
-    checkPrimitiveCasts range expr toType
-    
+let private conversion range (checkedExpr: TypedRhs, checkedToType: Types) =
+    if checkedExpr.typ.IsPrimitive && checkedToType.IsPrimitive then
+        checkPrimitiveCasts range checkedExpr checkedToType
+    elif checkedExpr.typ.IsPrimitiveAny then
+        Error [ Dummy (range, "cast of number literal, use a type annotation") ]
+    else
+        Error [ Dummy (range, "cast of non-primitive types") ]
+
 //=============================================================================
 // Checking right and left hand side usages (expressions)
 // A function call can be the rhs of an expression and is hence tightly coupled
@@ -1352,7 +1350,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         checkExpr lut e
         |> Result.bind (unaryMinus r)
 
-    // --- relational operators
+    // relational operators
 
     //| AST.Eq (e1, e2) -> 
     //    // can be applied to logical, numerical and structured data, yields logical value
@@ -1369,7 +1367,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Geq (e1, e2) -> checkExpr lut (AST.Leq(e2, e1))
     
     
-    // -- bitwise operators, TODO: complete this, fjg. 21.01.20
+    // bitwise operators
     | AST.Bnot (subexpr, r) ->
         checkExpr lut subexpr
         |> Result.bind (complement r)
@@ -1379,33 +1377,32 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Shl (e1, e2) -> combineShift lut e1 e2 shiftLeft
     | AST.Shr (e1, e2) -> combineShift lut e1 e2 shiftRight
 
-    // -- Advance bitwise operators
+    // Advance bitwise operators
     | AST.Sshr (e1, e2) -> combineShift lut e1 e2 signedShiftRight
     | AST.Rotl (e1, e2) -> combineShift lut e1 e2 rotateLeft
     | AST.Rotr (e1, e2) -> combineShift lut e1 e2 rotateRight
 
-    // --- identity operators
+    // identity operators
     | AST.Ideq _ 
     | AST.Idieq _ ->
         Error [UnsupportedFeature (expr.Range, "identity operator")]
-    // -- type conversions --
+    // type conversion
     | AST.Convert (e, t) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
         let exp = checkExpr lut e
         let toType = checkDataType lut t
         combine exp toType
         |> Result.bind (conversion expr.Range)
-        // Error [UnsupportedFeature (expr.Range, "type conversion")]
-    // -- type annotation --
+    // type annotation --
     | AST.HasType (e, t) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
         let rhs = checkExpr lut e
         let lty = checkDataType lut t
         combine rhs lty
         |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)
-    // -- operators on arrays and slices --
+    // operators on arrays and slices
     | AST.Len _
     | AST.Cap _ -> //TODO
         Error [UnsupportedFeature (expr.Range, "length or capacity")]
-    // -- parentheses --
+    // parentheses
     | AST.Expr.Parens (expr, _) ->
         checkExpr lut expr
         |> Result.map (fun e -> e.SetRange expr.Range) // TODO: This seems wrong, range should be _, check this. fjg, 31.01.20
