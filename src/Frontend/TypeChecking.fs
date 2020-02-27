@@ -513,8 +513,8 @@ let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno
         else 
             // try, if rhs is constant by any chance, if not that's fine too
             Ok (checkedDty, tryEvalConst lut checkedInitExpr)
+        
 
- 
     let createVarDecl ((qualifiedName, (dty, value)), anno) =
         let v = {
             pos = pos

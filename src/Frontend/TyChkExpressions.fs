@@ -26,13 +26,6 @@ open Evaluation
 open TypeCheckContext
 open TyChkAmendment
 
-//=========================================================================
-// Some debug helpers
-//=========================================================================
-
-let private debugShow msg v =
-    printfn "%s: %A" msg v
-    v
 
 //=========================================================================
 // Functions for checking type and expression properties
@@ -228,7 +221,7 @@ let private modus this that =
     | IntConst a, IntConst b -> IntConst <| Arithmetic.Mod (a, b)
     | NatConst a, NatConst b -> NatConst <| Arithmetic.Mod (a, b)
     | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Mod (a, b)
-    | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function, so this line is basically dead code
+    // | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function 
     | _ -> Mod(this, that)
 
 let private neg this =
@@ -505,37 +498,37 @@ and internal evalConst lut expr =
 //    | _ ->
 //        Ok num
 
-and private ensureSize wordsize num =
-    match num.rhs with
+and private ensureArraySize wordsize index =
+    match index.rhs with
     | IntConst i ->
         if i.IsNegative then
-            Error [ NonNegIdxExpected (num.range, num) ]
+            Error [ NonNegIdxExpected (index.range, index) ]
         elif i.IsSize wordsize then 
-            Ok num
+            Ok index
         else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
 
     | NatConst n ->
         if n.IsSize wordsize then 
-            Ok num
+            Ok index
         else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
     | BitsConst b ->
         if b.IsSize wordsize then 
-            Ok num
+            Ok index
         else 
-            Error [ NonNegIdxExpected (num.range, num) ] // Todo: better error message, fjg. 24.02.20
+            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index ) ] // Todo: better error message, fjg. 24.02.20
     | _ ->
-        Ok num
+        Ok index
 
 
 /// This tries to evaluate expr to a constant Size value
 /// and returns a MustBeConst error if the input is not constant
 /// and returns a NotACompileTimeSize if the result is not a compile time Size
-/// and returns a NonNegIdxExpected if the result is an negative compile time Size value
+/// and returns an error if the result can not be represented in a Size value
 and internal evalCompTimeSize lut expr =   
     evalConst lut expr
-    |> Result.bind (ensureSize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
+    |> Result.bind (ensureArraySize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
         | IntConst i -> Ok i.GetArrayIndex
@@ -544,14 +537,13 @@ and internal evalCompTimeSize lut expr =
         | _ -> 
             Error [NotACompileTimeSize expr]    
     )
-    //|> debugShow "Compile Time Size"
 
-/// This tries to evaluate expr to a constant Size value
+/// This tries to evaluate an index expr to a constant Size value
 /// It returns the optional compile time size 
-/// and returns a NonNegIdxExpected if the result is a negative compile time Size value
+/// and returns an Error, if the compile time size, does not fit into an Size representation
 and internal tryEvalCompTimeSize lut expr =
     tryEvalConst lut expr 
-    |> ensureSize lut.cliContext.wordSize
+    |> ensureArraySize lut.cliContext.wordSize
     |> Result.bind (fun expr ->
         match expr.rhs with
         | IntConst i -> Ok <| Some i.GetArrayIndex
@@ -560,29 +552,6 @@ and internal tryEvalCompTimeSize lut expr =
         | _ -> Ok None        
     )
 
-/// This tries to evaluate expr to a constant Size value
-/// and returns a MustBeConst error if the input is not constant
-/// and returns a NotACompileTimeInt if the result is not an integer.
-//and internal evalCompTimeSizeOld lut expr =   
-//    let ensureNonNegSize num =
-//        let ok =
-//            match num.rhs with
-//            | IntConst i -> Relational.Le (Constant.Zero Int8, i)
-//            | NatConst n -> Relational.Le  (Constant.Zero Nat8, n)
-//            | BitsConst b -> Relational.Le  (Constant.Zero Bits8, b)
-//            | _ -> failwith ""
-//        if ok then Ok num
-//        else Error [ NonNegIdxExpected (num.range, num) ]
-    
-//    evalConst lut expr
-//    |> Result.bind ensureNonNegSize // A size must be >= 0 before it can be extracted with .GetArrayIndex
-//    |> Result.bind (fun constExpr ->
-//        match constExpr.rhs with
-//        | IntConst i -> Ok i.GetArrayIndex
-//        | NatConst n -> Ok n.GetArrayIndex
-//        | BitsConst b -> Ok b.GetArrayIndex
-//        | _ -> Error [NotACompileTimeSize expr]
-//    )
 
 /// Retrieves the initial value for a given TML
 /// Returns an error, if the TML is an array access where the index is not constant
@@ -656,7 +625,7 @@ let private negate r (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes BoolType ->
         Ok { expr with rhs = neg expr }
-    | _ -> Error [ExpectedBoolCond (r, expr)]
+    | _ -> Error [ExpectedBoolExpr (r, expr)]
 
 /// Given a typed expression, construct its bitwise complement
 /// If the the type is not BitsType, an error will returned instead
@@ -664,7 +633,7 @@ let private complement rng (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes (BitsType size) ->
         Ok { expr with rhs = bnot expr }
-    | _ -> Error [ExpectedBoolCond (rng, expr)] // TODO: better error message, fjg. 17.02.20
+    | _ -> Error [ExpectedBitsExpr (rng, expr)] // TODO: better error message, fjg. 17.02.20
 
 /// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
@@ -706,8 +675,13 @@ let private unaryMinus r (expr: TypedRhs) =
         | AnyInt
         | AnyFloat ->
             Ok { expr with rhs = unsafeUnaryMinus expr }
-        | _ -> // error illegal minus on expr
-            Error [CannotInvertSign(r, expr)]
+        | AnyBits ->
+            Error [CannotInvertBitsLiteral (r, expr)]
+        | ValueTypes (NatType _) ->
+            Error [CannotInvertNatExpr (r, expr)]
+        | _ ->
+            Error [ExpectedInvertableNumberExpr (r, expr)]
+
     with
      | :? System.OverflowException -> 
          Error [OverFlow (r, "Overflow in unary minus")] // Todo: improve this message, fjg. 19.02.20
@@ -1430,7 +1404,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         checkExpr lut expr
         |> Result.map (fun e -> e.SetRange expr.Range) // TODO: This seems wrong, range should be _, check this. fjg, 31.01.20
 
-    |> Result.map (tryEvalConst lut)       
+    |> Result.map (tryEvalConst lut)
 
 /// Given an untyped datatype, return a type checked datatype .
 and internal checkDataType lut utyDataType =
@@ -1475,7 +1449,6 @@ and internal checkDataType lut utyDataType =
     | AST.SliceType _
     | AST.Signal _ -> 
         Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]
-
 
 /// Type check expressions that appear on the left hand side.
 and internal checkLExpr lut (dname: AST.DynamicAccessPath) =
@@ -1594,7 +1567,7 @@ let internal fCondition lut cond =
     let ensureBoolean (e: TypedRhs) =
         match e.typ with
         | ValueTypes BoolType -> Ok e
-        | _ -> Error [ExpectedBoolCond (e.Range, e)]
+        | _ -> Error [ExpectedBoolExpr (e.Range, e)]
     let ensureSideEffectFree (e: TypedRhs) =
         if hasNoSideEffect e then Ok e
         else Error [ConditionHasSideEffect e]

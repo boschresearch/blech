@@ -100,6 +100,13 @@ module Arguments =
     type WordSize = 
         | W8 | W16 | W32 | W64
 
+        member this.ToInt : int =
+            match this with
+            | W8 -> 8
+            | W16 -> 16
+            | W32 -> 32
+            | W64 -> 64
+            
         static member FromInt wordsize = 
             match wordsize with
             | 8 -> W8

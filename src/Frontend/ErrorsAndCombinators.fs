@@ -65,7 +65,6 @@ type TyCheckError =
     | ExprMustBeALocationR of range * TypedRhs
     | CannotCallNonVoidFunAsStmt of range * QName
     | CannotModFloats of TypedRhs * TypedRhs
-    | CannotInvertSign of range * TypedRhs
     | CannotResetRefType of range
     | FunCallInExprMustBeNonVoid of range * QName
     | MultipleReturnsInCobegin of range
@@ -83,7 +82,6 @@ type TyCheckError =
     | InitialisationHasSideEffect of TypedRhs
     | NotACompileTimeSize of TypedRhs
     | PositiveSizeExpected of range * Size
-    | NonNegIdxExpected of range * TypedRhs
     | ReInitArrayIndex of range * Size * Size
     | PrevOnParam of range * QName
     | PrevOnImmutable of range * QName
@@ -93,12 +91,21 @@ type TyCheckError =
     | MustBeConst of TypedRhs
     | ConstArrayRequiresConstIndex of range
     | ParameterMustHaveStaticInit of Name * TypedRhs
+    // Array sizes and indexes
+    | NonNegIdxExpected of range * TypedRhs
+    | ArrayIdxOverflowsWordsize of range * Arguments.WordSize * TypedRhs
     // evaluation
     | OverFlow of range * string
     | DivideByZero of range * string
     // calls
     | FunCallToAct of range * FunctionPrototype
     | RunAFun of range * FunctionPrototype
+    // simple types
+    | ExpectedBoolExpr of range * TypedRhs
+    | ExpectedBitsExpr of range * TypedRhs
+    | CannotInvertNatExpr of range * TypedRhs
+    | CannotInvertBitsLiteral of range * TypedRhs
+    | ExpectedInvertableNumberExpr of range * TypedRhs
     // types
     | TypeMismatch of Types * TypedRhs
     | TypeMismatchArrStruct of Types * TypedRhs
@@ -110,7 +117,6 @@ type TyCheckError =
     | MustReturnFirstClassType of range * Identifier
     | NonFirstClassReturnStmt of range
     | ValueMustBeOfValueType of TypedLhs
-    | ExpectedBoolCond of range * TypedRhs
     | ExpectedBoolConds of TypedRhs * TypedRhs
     | MustBeNumeric of TypedRhs * TypedRhs
     | SameTypeRequired of TypedRhs * TypedRhs
@@ -177,7 +183,6 @@ type TyCheckError =
             | ExprMustBeALocationR (p, r) -> p, sprintf "Expression %s must be an identifier (or reference)." (r.ToString())
             | CannotCallNonVoidFunAsStmt (p, name) -> p, sprintf "The returned value of %s must be ignored explicitly." (name.ToString())
             | CannotModFloats (expr1, expr2) -> Range.unionRanges expr1.Range expr2.Range, sprintf "Both %s and %s must be integers in order to apply mod." (expr1.ToString()) (expr2.ToString())
-            | CannotInvertSign (p, expr) -> p, sprintf "You cannot invert the sign of %s, which is either unsigned or not a number." (expr.ToString())
             | CannotResetRefType p -> p, "A reference-type variable cannot be re-initialised as a whole."
             | FunCallInExprMustBeNonVoid (p, name) -> p, sprintf "Void subprogram %s cannot be called inside an expression." (name.ToString())
             | MultipleReturnsInCobegin p -> p, "Cobegin may return values from at most one of its blocks."
@@ -195,7 +200,6 @@ type TyCheckError =
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())
             | NotACompileTimeSize expr -> expr.Range, sprintf "The expression %s cannot be evaluated to a size number at compile time. If you used \"let\" to declare it, use \"const\" instead." (expr.ToString())
             | PositiveSizeExpected (r, i) -> r, sprintf "A size must be positive but %d was given." i
-            | NonNegIdxExpected (r, expr) -> r, sprintf "An index must be non-negative, but %s was given." (string expr)
             | ReInitArrayIndex (r, given, counter) -> r, sprintf "The array cell in position %d cannot be redefined. The given index must be at least %d at this point." given counter
             | PrevOnParam (r, q) -> r, sprintf "The prev operator can only be applied to local variables, however here it used on parameter %s." (q.ToString())
             | PrevOnImmutable (r, q) -> r, sprintf "The prev operator cannot be applied to immutable variable %s." (q.ToString())
@@ -205,12 +209,23 @@ type TyCheckError =
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
+            // array indexes and sizes
+            | NonNegIdxExpected (r, expr) -> 
+                r, sprintf "An index must be non-negative, but '%s' was given." (string expr) 
+            | ArrayIdxOverflowsWordsize (r, wordsize, expr) -> 
+                r, sprintf "The machine dependent 'word-size=%s' cannot represent array index/size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
             // evaluation
             | OverFlow (p, s) -> p, s
             | DivideByZero (p, s) -> p, s
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
+            // simple types
+            | ExpectedBoolExpr (p, r) -> p, sprintf "Expression '%s' must be boolean." (r.ToString())
+            | ExpectedBitsExpr (p, r) -> p, sprintf "Expression '%s' must have a bits type." (r.ToString())
+            | CannotInvertNatExpr (p, expr) -> p, sprintf "You cannot invert the sign of nat value '%s'" (expr.ToString())
+            | CannotInvertBitsLiteral (p, expr) -> p, sprintf "You cannot invert the sign of bits literal '%s'" (expr.ToString())
+            | ExpectedInvertableNumberExpr (p, expr) -> p, sprintf "You cannot invert the sign of '%s', which is not a number." (expr.ToString())
             // types
             | TypeMismatch (t, r) -> 
                 match r.typ with
@@ -228,7 +243,6 @@ type TyCheckError =
             | MustReturnFirstClassType (p, n) -> p, sprintf "%s must return a first class type." (string n)
             | NonFirstClassReturnStmt p -> p, "Return statement must return a first class type."
             | ValueMustBeOfValueType l -> l.Range, sprintf "The identifier %s must be of a first class type." (l.ToString())
-            | ExpectedBoolCond (p, r) -> p, sprintf "Expression %s must be boolean." (r.ToString())
             | ExpectedBoolConds (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must both be boolean." (r1.ToString()) (r2.ToString())
             | MustBeNumeric (t1, t2) -> Range.unionRanges t1.Range t2.Range, sprintf "Expressions %s and %s must be numeric." (t1.ToString()) (t2.ToString())
             | SameTypeRequired (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must be of the same type." (r1.ToString()) (r2.ToString())
@@ -269,6 +283,26 @@ type TyCheckError =
 
         member err.ContextInformation = 
             match err with
+            
+            
+            // array indexes
+            | NonNegIdxExpected (rng, _) ->
+                [ { range = rng; message = "positive number expected"; isPrimary = true} ]
+            | ArrayIdxOverflowsWordsize (rng, wordsize, _) ->
+                [ { range = rng; message = sprintf "number of 'word-size=%s'" (string wordsize.ToInt); isPrimary = true} ]
+            // simple types
+            | ExpectedBoolExpr (rng, _) -> 
+                [ { range = rng; message = "condition expected"; isPrimary = true}]
+            | ExpectedBitsExpr (rng, _) -> 
+                [ { range = rng; message = "bits type expected"; isPrimary = true}]
+            | CannotInvertNatExpr (rng, _) -> 
+                [ { range = rng; message = "must not be a nat type"; isPrimary = true}]
+            | CannotInvertBitsLiteral (rng, _) -> 
+                [ { range = rng; message = "unknown bits size"; isPrimary = true}]
+            | ExpectedInvertableNumberExpr (rng, _) -> 
+                [ { range = rng; message = "number expected"; isPrimary = true}]
+                    
+            // annotations
             | UnsupportedAnnotation range -> 
                 [ { range = range; message = "not supported"; isPrimary = true} ]
             | MissingAnnotation (range, key) -> 
@@ -285,6 +319,17 @@ type TyCheckError =
 
         member err.NoteInformation = 
             match err with
+            // simple types
+            | CannotInvertNatExpr (rng, _) -> 
+                [ "A nat type can only represent natural numbers." ]
+            | CannotInvertBitsLiteral (rng, _) -> 
+                [ "Use a type annotation to defined the size of the bits literal." ]
+            | ExpectedInvertableNumberExpr (rng, _) -> 
+                [ "All numbers, with the exception of type nat, can be inverted."]
+            // array indexes
+            | ArrayIdxOverflowsWordsize (_, wordsize, _) ->
+                [ sprintf "The compiler option '--word-size=%s' defines the machine dependent word size." (string wordsize.ToInt) ]
+            // annotations
             | UnsupportedAnnotation _ ->
                 ["This Blech attribute is not supported here, check the spelling."]
             | MultipleEntryPoints _ -> 
@@ -332,3 +377,11 @@ module TyChecked =
     let internal ofOption = function
         | None -> Ok None
         | Some res -> res |> Result.map Some
+
+//=========================================================================
+// Some debug helpers
+//=========================================================================
+
+    let internal debugShow msg v =
+        printfn "%s: %A" msg v
+        v
