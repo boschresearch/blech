@@ -1033,14 +1033,39 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
         Error [ Dummy (range, "no downcast possible") ]
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF ->
         Error [ Dummy (range, "no downcast possible") ]
-    | ValueTypes (IntType _), ValueTypes (IntType _) ->
-        Error [ Dummy (range, "no cast necessary, use a type annotation")]
-    | ValueTypes (NatType _), ValueTypes (NatType _) ->
-        Error [ Dummy (range, "no cast necessary, use a type annotation")]
-    | ValueTypes (BitsType _), ValueTypes (BitsType _) ->
-        Error [ Dummy (range, "no cast necessary, use a type annotation")]
+
+    | ValueTypes (IntType _), ValueTypes (IntType _)
+    | ValueTypes (NatType _), ValueTypes (NatType _)
+    | ValueTypes (BitsType _), ValueTypes (BitsType _)
     | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
-        Error [ Dummy (range, "no cast necessary, use a type annotation")]
+        Error [ Dummy (range, "no cast necessary, a type annotation is allowed") ]
+
+    // Allow to cast an AnyBits literal to intX, if it can be represented
+    | AnyBits, ValueTypes (IntType it) ->
+        let bc = primitiveExpr.rhs.GetBitsConst
+        if it.AllowsConversion(bc) then
+            let ic = it.Convert bc
+            Ok { rhs = IntConst ic; typ = simpleToType; range = range }    
+        else 
+            Error [ Dummy (range, "IntType cannot represent AnyBits value") ]
+    // Allow to cast an AnyBits literal to floatX, if it can be represented precisely
+    | AnyBits, ValueTypes (FloatType ft) ->
+        let bc = primitiveExpr.rhs.GetBitsConst
+        if ft.AllowsConversion(bc) then
+            let fc = ft.Convert bc
+            Ok { rhs = FloatConst fc; typ = simpleToType; range = range }    
+        else 
+            Error [ Dummy (range, "FloatType cannot represent AnyBits value precisely") ]
+
+    | AnyBits, ValueTypes (BitsType _)
+    | AnyBits, ValueTypes (NatType _)
+    | AnyInt, ValueTypes (IntType _)
+    | AnyInt, ValueTypes (NatType _)
+    | AnyInt, ValueTypes (BitsType _)
+    | AnyInt, ValueTypes (FloatType _)
+    | AnyFloat, ValueTypes (FloatType _) ->
+        Error [ Dummy (range, "no cast of number literal necessary, use a type annotation") ]
+
 
     | ValueTypes vt1, ValueTypes vt2 ->
         Error [ Dummy (range, sprintf "no cast from %A to %A possible" vt1 vt2)]
@@ -1048,10 +1073,8 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
         failwith "Called with expr of non primitive types"
 
 let private conversion range (checkedExpr: TypedRhs, checkedToType: Types) =
-    if checkedExpr.typ.IsPrimitive && checkedToType.IsPrimitive then
+    if checkedToType.IsPrimitive && (checkedExpr.typ.IsPrimitive || checkedExpr.typ.IsPrimitiveAny) then
         checkPrimitiveCasts range checkedExpr checkedToType
-    elif checkedExpr.typ.IsPrimitiveAny then
-        Error [ Dummy (range, "cast of number literal, use a type annotation") ]
     else
         Error [ Dummy (range, "cast of non-primitive types") ]
 

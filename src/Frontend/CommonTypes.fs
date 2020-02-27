@@ -187,6 +187,26 @@ type IntType =
         | Int64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_INT64
         | _ -> failwith "This is only used for IAny values"
 
+    member this.AllowsConversion (anyBits: Bits) =
+        match this, anyBits with
+        | Int8, BAny (value, _) -> MIN_BITS8 <= value && value <= MAX_INT8
+        | Int16, BAny (value, _) -> MIN_BITS16  <= value && value <= MAX_INT16
+        | Int32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_INT32
+        | Int64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_INT64
+        | _ -> failwith "This is only used for IAny values"
+
+    member this.Convert (anyBits: Bits) =
+        try 
+            match this, anyBits with
+            | Int8, BAny (value, _) -> I8 <| sbyte value 
+            | Int16, BAny (value, _) -> I16 <| int16 value 
+            | Int32, BAny (value, _) -> I32 <| int32 value
+            | Int64, BAny (value, _) -> I64 <| int64 value
+            | _ -> failwith "This is only used for BAny values"
+        with
+        | :? System.OverflowException -> 
+            failwith "Called with unchecked BAny value"
+
     static member RequiredType (value: Int) =
         match value with
         | IAny (value, _) ->
@@ -390,6 +410,23 @@ type FloatType =
         | Float32, IAny (v, _) -> MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT
         | Float64, IAny (v, _) -> MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT
         | _, _ -> failwith ("This is only used for IAny values")
+
+    // only used to test possible cast of bits literal: 0x1 as floatX
+    member this.AllowsConversion (anyBits: Bits) =
+        match this, anyBits with
+        | Float32, BAny (v, _) -> MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT
+        | Float64, BAny (v, _) -> MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT
+        | _, _ -> failwith ("This is only used for BAny values")
+
+    member this.Convert (anyBits: Bits) =
+        try 
+            match this, anyBits with
+            | Float32, BAny (value, _) -> F32 <| float32 value
+            | Float64, BAny (value, _) -> F64 <| float value
+            | _ -> failwith "This is only used for BAny values"
+        with
+        | :? System.OverflowException -> 
+            failwith "Called with unchecked BAny value"
 
     /// Checks if a given float types can represent a AnyFloat value
     member this.CanRepresent (value: Float) =
