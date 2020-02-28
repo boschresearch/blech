@@ -169,6 +169,12 @@ type Nat =
         | N32 v -> v = 0u
         | N64 v -> v = 0uL
 
+    member this.IsPositive = 
+        match this with
+        | N8 v -> v > 0uy
+        | N16 v -> v > 0us
+        | N32 v -> v > 0u
+        | N64 v -> v > 0uL
 
     member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
 
@@ -248,6 +254,14 @@ type Bits =
         | B32 v -> v = 0u
         | B64 v -> v = 0uL
         | BAny (v, _) -> v = 0I 
+
+    member this.IsPositive = 
+        match this with
+        | B8 v -> v > 0uy
+        | B16 v -> v > 0us
+        | B32 v -> v > 0u
+        | B64 v -> v > 0uL
+        | BAny (v, _) -> v > 0I 
 
     
     /// This allows uint64  conversion for type Bits
@@ -372,6 +386,14 @@ type Int =
         | I64 v -> v < 0L
         | IAny (v, _) -> v < 0I
 
+    member this.IsPositive = 
+        match this with
+        | I8 v -> v > 0y
+        | I16 v -> v > 0s
+        | I32 v -> v > 0
+        | I64 v -> v > 0L
+        | IAny (v, _) -> v > 0I
+    
     /// This allows uint64  conversion for type Int
     static member op_Explicit (source: Int) : Size =
         try 

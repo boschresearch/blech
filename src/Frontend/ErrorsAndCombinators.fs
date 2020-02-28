@@ -81,7 +81,6 @@ type TyCheckError =
     | ConditionHasSideEffect of TypedRhs
     | InitialisationHasSideEffect of TypedRhs
     | NotACompileTimeSize of TypedRhs
-    | PositiveSizeExpected of range * Size
     | ReInitArrayIndex of range * Size * Size
     | PrevOnParam of range * QName
     | PrevOnImmutable of range * QName
@@ -91,12 +90,6 @@ type TyCheckError =
     | MustBeConst of TypedRhs
     | ConstArrayRequiresConstIndex of range
     | ParameterMustHaveStaticInit of Name * TypedRhs
-    // Array sizes and indexes
-    | NonNegIdxExpected of range * TypedRhs
-    | ArrayIdxOverflowsWordsize of range * Arguments.WordSize * TypedRhs
-    // evaluation
-    | OverFlow of range * string
-    | DivideByZero of range * string
     // calls
     | FunCallToAct of range * FunctionPrototype
     | RunAFun of range * FunctionPrototype
@@ -138,6 +131,19 @@ type TyCheckError =
     | ExternalsInFunction of range
     | SynchronousStatementInFunction of range
     | ActivityHasInstantaneousPath of range * Name
+    
+    // evaluation
+    // Array sizes and indexes
+    | NonNegIdxExpected of range * TypedRhs
+    | PositiveSizeExpected of range * TypedRhs
+    | ArraySizeOverflowsWordsize of range * Arguments.WordSize * TypedRhs
+    // arithmetic
+    | UnaryMinusOverFlow of range * TypedRhs
+    
+    | OverFlow of range * string
+    | DivideByZero of range * string
+    
+
     // annotations
     | UnsupportedAnnotation of range
     | MissingAnnotation of range * string
@@ -199,7 +205,6 @@ type TyCheckError =
             | ConditionHasSideEffect cond -> cond.Range, sprintf "The condition %s has a side-effect. This is not allowed." (cond.ToString())
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())
             | NotACompileTimeSize expr -> expr.Range, sprintf "The expression %s cannot be evaluated to a size number at compile time. If you used \"let\" to declare it, use \"const\" instead." (expr.ToString())
-            | PositiveSizeExpected (r, i) -> r, sprintf "A size must be positive but %d was given." i
             | ReInitArrayIndex (r, given, counter) -> r, sprintf "The array cell in position %d cannot be redefined. The given index must be at least %d at this point." given counter
             | PrevOnParam (r, q) -> r, sprintf "The prev operator can only be applied to local variables, however here it used on parameter %s." (q.ToString())
             | PrevOnImmutable (r, q) -> r, sprintf "The prev operator cannot be applied to immutable variable %s." (q.ToString())
@@ -209,14 +214,6 @@ type TyCheckError =
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
-            // array indexes and sizes
-            | NonNegIdxExpected (r, expr) -> 
-                r, sprintf "An index must be non-negative, but '%s' was given." (string expr) 
-            | ArrayIdxOverflowsWordsize (r, wordsize, expr) -> 
-                r, sprintf "The machine dependent 'word-size=%s' cannot represent array index/size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
-            // evaluation
-            | OverFlow (p, s) -> p, s
-            | DivideByZero (p, s) -> p, s
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
@@ -224,7 +221,6 @@ type TyCheckError =
             | ExpectedBoolExpr (p, r) -> p, sprintf "Expression '%s' must be boolean." (r.ToString())
             | ExpectedBitsExpr (p, r) -> p, sprintf "Expression '%s' must have a bits type." (r.ToString())
             | CannotInvertNatExpr (p, expr) -> p, sprintf "You cannot invert the sign of nat value '%s'" (expr.ToString())
-            | CannotInvertBitsLiteral (p, expr) -> p, sprintf "You cannot invert the sign of bits literal '%s'" (expr.ToString())
             | ExpectedInvertableNumberExpr (p, expr) -> p, sprintf "You cannot invert the sign of '%s', which is not a number." (expr.ToString())
             // types
             | TypeMismatch (t, r) -> 
@@ -264,16 +260,34 @@ type TyCheckError =
             | ExternalsInFunction p -> p, "External variables cannot be defined inside functions."
             | SynchronousStatementInFunction p -> p, "Functions must not contain synchronous control flow statements (await, run, abort, cobegin, infinite repeat...end)."
             | ActivityHasInstantaneousPath (p, q) -> p, sprintf "Activity %s has an instantaneous control flow path. Please make sure there at least one await or run statement on every possible path." q.id
+            
+            // --- evaluation ---
+            // array indexes and sizes
+            | NonNegIdxExpected (r, expr) -> 
+                r, sprintf "An array index must be non-negative, but '%s' was given." (string expr) 
+            | PositiveSizeExpected (r, expr) -> r, sprintf "A array size must be positive but '%s' was given." (string expr)
+            | ArraySizeOverflowsWordsize (r, wordsize, expr) -> 
+                r, sprintf "The machine dependent 'word-size=%s' cannot represent array size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
+            
+            // arithmetic
+            | CannotInvertBitsLiteral (p, expr) -> p, sprintf "You cannot invert the sign of bits literal '%s'." (string expr)
+            | UnaryMinusOverFlow (p, expr) -> p, sprintf "Overflow due to unary minus operation '-' on value '%s'." (string expr)
+            
+            | OverFlow (p, s) -> p, s
+            | DivideByZero (p, s) -> p, s
+            
+            // --- attributes ---
             // annotations
             | UnsupportedAnnotation p -> p, "Unsupported annotation."
-            | MissingAnnotation (p, key) -> p, sprintf "Missing annotation @[%s(...)]" key
+            | MissingAnnotation (p, key) -> p, sprintf "Missing annotation @[%s(...)]." key
             | MultipleUniqueAnnotation (second = p) -> p, sprintf "Unique annotation must not be specified multiply."
-            | MissingNamedArgument (p, key) -> p, sprintf "Missing [... %s = \"<file>\" ...] annotation argument" key
-            | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation"
+            | MissingNamedArgument (p, key) -> p, sprintf "Missing [... %s = \"<file>\" ...] annotation argument." key
+            | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation."
             | MultipleEntryPoints (second = p) -> p, "'@[EntryPoint]' activity already defined."
             | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
+            
             | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
@@ -283,13 +297,7 @@ type TyCheckError =
 
         member err.ContextInformation = 
             match err with
-            
-            
-            // array indexes
-            | NonNegIdxExpected (rng, _) ->
-                [ { range = rng; message = "positive number expected"; isPrimary = true} ]
-            | ArrayIdxOverflowsWordsize (rng, wordsize, _) ->
-                [ { range = rng; message = sprintf "number of 'word-size=%s'" (string wordsize.ToInt); isPrimary = true} ]
+           
             // simple types
             | ExpectedBoolExpr (rng, _) -> 
                 [ { range = rng; message = "condition expected"; isPrimary = true}]
@@ -297,12 +305,27 @@ type TyCheckError =
                 [ { range = rng; message = "bits type expected"; isPrimary = true}]
             | CannotInvertNatExpr (rng, _) -> 
                 [ { range = rng; message = "must not be a nat type"; isPrimary = true}]
-            | CannotInvertBitsLiteral (rng, _) -> 
-                [ { range = rng; message = "unknown bits size"; isPrimary = true}]
             | ExpectedInvertableNumberExpr (rng, _) -> 
                 [ { range = rng; message = "number expected"; isPrimary = true}]
+            
+            // --- evaluation ---
+            
+            // array sizes and indexes
+            | NonNegIdxExpected (rng, _) ->
+                [ { range = rng; message = "non-negative index expected"; isPrimary = true} ]
+            | PositiveSizeExpected (rng, _) ->
+                [ { range = rng; message = "positive size expected"; isPrimary = true} ]
+            | ArraySizeOverflowsWordsize (rng, wordsize, _) ->
+                [ { range = rng; message = sprintf "'word-size=%s' overflow" (string wordsize.ToInt); isPrimary = true} ]
+            // arithmetic
+            | CannotInvertBitsLiteral (rng, _) -> 
+                [ { range = rng; message = "unknown bits size"; isPrimary = true}]
+            | UnaryMinusOverFlow (rng, _) ->
+                [ { range = rng; message = sprintf "overflow detected"; isPrimary = true} ]
                     
-            // annotations
+
+            // --- annotations ---
+
             | UnsupportedAnnotation range -> 
                 [ { range = range; message = "not supported"; isPrimary = true} ]
             | MissingAnnotation (range, key) -> 
@@ -320,15 +343,27 @@ type TyCheckError =
         member err.NoteInformation = 
             match err with
             // simple types
-            | CannotInvertNatExpr (rng, _) -> 
+            | CannotInvertNatExpr _ -> 
                 [ "A nat type can only represent natural numbers." ]
-            | CannotInvertBitsLiteral (rng, _) -> 
-                [ "Use a type annotation to defined the size of the bits literal." ]
-            | ExpectedInvertableNumberExpr (rng, _) -> 
+            | ExpectedInvertableNumberExpr _ -> 
                 [ "All numbers, with the exception of type nat, can be inverted."]
+            
+            // --- evaluation ---
+
             // array indexes
-            | ArrayIdxOverflowsWordsize (_, wordsize, _) ->
-                [ sprintf "The compiler option '--word-size=%s' defines the machine dependent word size." (string wordsize.ToInt) ]
+            | PositiveSizeExpected _ ->
+                [ sprintf "The number of array elements must be strictly positive." ]                    
+            | NonNegIdxExpected _ ->
+                [ sprintf "An array index must be greater than '0'." ]                    
+            | ArraySizeOverflowsWordsize (_, wordsize, _) ->
+                [ sprintf "The compiler option '--word-size=%s' defines the machine dependent word size." (string wordsize.ToInt) 
+                  "See 'blechc --help'."]
+            // arithmetic
+            | CannotInvertBitsLiteral _ -> 
+                [ "Use a type annotation to define the size of the bits literal, e.g. '- (0x1: bits8)'." ]
+            | UnaryMinusOverFlow _  ->
+                [ "Unary minus of an int value or a float value can overflow, e.g. - (-128: int8)." ]
+            
             // annotations
             | UnsupportedAnnotation _ ->
                 ["This Blech attribute is not supported here, check the spelling."]

@@ -498,36 +498,41 @@ and internal evalConst lut expr =
 //    | _ ->
 //        Ok num
 
-and private ensureArraySize wordsize index =
+and private ensureNonNegIndex index =
     match index.rhs with
-    | IntConst i ->
-        if i.IsNegative then
-            Error [ NonNegIdxExpected (index.range, index) ]
-        elif i.IsSize wordsize then 
-            Ok index
-        else 
-            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
-
-    | NatConst n ->
-        if n.IsSize wordsize then 
-            Ok index
-        else 
-            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
-    | BitsConst b ->
-        if b.IsSize wordsize then 
-            Ok index
-        else 
-            Error [ ArrayIdxOverflowsWordsize (index.range, wordsize, index ) ] // Todo: better error message, fjg. 24.02.20
+    | IntConst i when i.IsNegative ->
+        Error [ NonNegIdxExpected (index.range, index) ]
+    | _ ->
+        Ok index
+    
+and private ensurePositiveSize index = 
+    match index.rhs with
+    | IntConst i when not i.IsPositive ->
+        Error [ PositiveSizeExpected (index.range, index) ]
+    | NatConst n when not n.IsPositive ->
+        Error [ PositiveSizeExpected (index.range, index) ]
+    | BitsConst b when not b.IsPositive ->
+        Error [ PositiveSizeExpected (index.range, index) ]
     | _ ->
         Ok index
 
 
-/// This tries to evaluate expr to a constant Size value
-/// and returns a MustBeConst error if the input is not constant
-/// and returns a NotACompileTimeSize if the result is not a compile time Size
-/// and returns an error if the result can not be represented in a Size value
+and private ensureArraySize wordsize index =
+    match index.rhs with
+    | IntConst i when not (i.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
+    | NatConst n when not (n.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
+    | BitsConst b when not (b.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index ) ] // Todo: better error message, fjg. 24.02.20
+    | _ ->
+        Ok index
+
+
+/// This evaluate expr to a constant array size
 and internal evalCompTimeSize lut expr =   
     evalConst lut expr
+    |> Result.bind ensurePositiveSize
     |> Result.bind (ensureArraySize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
@@ -538,12 +543,29 @@ and internal evalCompTimeSize lut expr =
             Error [NotACompileTimeSize expr]    
     )
 
-/// This tries to evaluate an index expr to a constant Size value
-/// It returns the optional compile time size 
-/// and returns an Error, if the compile time size, does not fit into an Size representation
-and internal tryEvalCompTimeSize lut expr =
+/// This evaluate expr to a constant array index.
+/// It retruns the compile time index.
+/// It returns an error if the compile time index is negative or overflows the wordsize.
+and internal evalCompTimeIndex lut expr =   
+    evalConst lut expr
+    |> Result.bind ensureNonNegIndex
+    |> Result.bind (ensureArraySize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
+    |> Result.bind (fun constExpr ->
+        match constExpr.rhs with
+        | IntConst i -> Ok i.GetArrayIndex
+        | NatConst n -> Ok n.GetArrayIndex
+        | BitsConst b -> Ok b.GetArrayIndex
+        | _ -> 
+            Error [NotACompileTimeSize expr]    
+    )
+
+
+/// This tries to evaluate an index expr to a constant value.
+/// It returns the optional compile time index,
+/// and an error is the constant value is negative
+and internal tryEvalCompTimeIndex lut expr =
     tryEvalConst lut expr 
-    |> ensureArraySize lut.cliContext.wordSize
+    |> ensureNonNegIndex
     |> Result.bind (fun expr ->
         match expr.rhs with
         | IntConst i -> Ok <| Some i.GetArrayIndex
@@ -633,7 +655,7 @@ let private complement rng (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes (BitsType size) ->
         Ok { expr with rhs = bnot expr }
-    | _ -> Error [ExpectedBitsExpr (rng, expr)] // TODO: better error message, fjg. 17.02.20
+    | _ -> Error [ExpectedBitsExpr (rng, expr)]
 
 /// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
@@ -659,8 +681,10 @@ let private unsafeUnaryMinus (expr: TypedRhs) =
         match expr.rhs with
         | FloatConst f -> FloatConst <| Arithmetic.Unm f
         | _ -> failwith "AnyFloat should be always a FloatConst"
-    | AnyBits -> failwith "No unary minus on AnyBits literals"
-    | _ -> failwith "UnsafeUnaryMinus called with something other than Int, Bits or Float!"
+    | AnyBits -> 
+        failwith "No unary minus on AnyBits literals"
+    | _ -> 
+        failwith "UnsafeUnaryMinus called with something other than Int, Bits or Float!"
     
 
 /// Given a typed Expression, construct its negative.
@@ -675,16 +699,16 @@ let private unaryMinus r (expr: TypedRhs) =
         | AnyInt
         | AnyFloat ->
             Ok { expr with rhs = unsafeUnaryMinus expr }
-        | AnyBits ->
-            Error [CannotInvertBitsLiteral (r, expr)]
         | ValueTypes (NatType _) ->
             Error [CannotInvertNatExpr (r, expr)]
+        | AnyBits ->
+            Error [CannotInvertBitsLiteral (r, expr)]
         | _ ->
             Error [ExpectedInvertableNumberExpr (r, expr)]
 
     with
      | :? System.OverflowException -> 
-         Error [OverFlow (r, "Overflow in unary minus")] // Todo: improve this message, fjg. 19.02.20
+         Error [UnaryMinusOverFlow (r, expr)]
 
 // --------------------------------------------------------------------
 // ---  Logical Operators
@@ -1149,13 +1173,9 @@ let rec private checkAggregateLiteral lut al r =
         //      - that number is at least as large as the running index counter,
         //        and update the index counter
         | AST.ArrayFields fields ->
-            //let ensureNonNegSize pos num =
-            //    if num >= Constants.SizeZero then Ok num
-            //    else Error [NonNegIdxExpected(pos, num)]
             let checkIdx idx =
                 checkExpr lut idx 
-                |> Result.bind (evalCompTimeSize lut)
-                //    |> Result.bind (ensureNonNegSize idx.Range)
+                |> Result.bind (evalCompTimeIndex lut)
             // Check that indices, if there are any, are non-negative compile time constants
             // and in order and do not repeat.
             // Note that the exact array length is unknown at this point, nor do we know the
@@ -1229,13 +1249,10 @@ and private checkUntimedDynamicAccessPath lut dname =
                     | ValueTypes (ArrayType (asize, dty)) -> // ensure it is an array type
                         checkExpr lut idx
                         |> Result.bind (fun trhs -> // evaluate the index expression
-                            if isIndexType trhs.typ then // make sure it is an integer
-                                match tryEvalCompTimeSize lut trhs with // if it is constant we can even check boundaries
+                            if isIndexType trhs.typ then // make sure it is an int, nat or bits
+                                match tryEvalCompTimeIndex lut trhs with // if it is constant we can even check boundaries
                                 | Ok (Some actualIndex) ->
                                     if Constants.SizeZero <= actualIndex && actualIndex < asize then
-                                        // let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
-                                        // let constIdx = {rhs = NatConst <| N64 actualIndex; typ = trhs.typ; range = trhs.range}
-                                        // Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
                                         Ok (tml.AddArrayAccess trhs, ValueTypes dty)
                                     else
                                         Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message

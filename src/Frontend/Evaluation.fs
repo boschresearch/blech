@@ -145,6 +145,8 @@ type Arithmetic =
     
     // Operator Unm, unary '-'
     
+    /// Unary minus operation. 
+    /// May throw a System.OverflowException
     static member Unm (i: Int) : Int =
         match i with
         | I8 v -> I8 (0y - v)
@@ -162,12 +164,13 @@ type Arithmetic =
         | B64 v -> B64 <| BitsUnchecked.(-) (0uL, v)
         | BAny _ -> failwith "Unary Minus for BAny not allowed"
     
-    static member Unm (nat: Nat) : Nat = 
-        match nat with
-        | N8 v -> N8 <| 0uy - v
-        | N16 v -> N16 <| 0us - v        
-        | N32 v -> N32 <| 0u - v 
-        | N64 v -> N64 <| 0uL - v
+    // This will never be called. The type checker guarantees this.
+    //static member Unm (nat: Nat) : Nat = 
+    //    match nat with
+    //    | N8 v -> N8 <| 0uy - v
+    //    | N16 v -> N16 <| 0us - v        
+    //    | N32 v -> N32 <| 0u - v 
+    //    | N64 v -> N64 <| 0uL - v
 
     static member Unm (f : Float) : Float =
         match f with

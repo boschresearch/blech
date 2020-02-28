@@ -1,0 +1,10 @@
+
+@[EntryPoint]
+activity main()
+
+    const i: int8 = -128
+    var j: int8
+    j = -i  // unary minus overflow on int value
+
+    await true
+end
