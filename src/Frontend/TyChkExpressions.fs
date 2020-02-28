@@ -616,7 +616,7 @@ and getInitValueForTml lut tml =
         |> Result.bind (fun v ->
             match v.rhs with
             | ArrayConst lst ->
-                evalCompTimeSize lut idx
+                evalCompTimeIndex lut idx
                 |> Result.bind (fun constIdx ->
                     // either the value for that index is user defined, or return a default value for the element type
                     lst
