@@ -1,0 +1,22 @@
+@[EntryPoint]
+activity main ()
+    var i: int8
+    var j: int32
+
+    if i < 12345 then end
+    if i > 9_223_372_036_854_775_807 then end
+    i = 127
+    i = -128
+    j = 2_147_483_647
+
+    var n: nat8
+    var m: nat32
+    if i < 12345 then end
+    if i > 9_223_372_036_854_775_807 then end
+    n = 255
+    n = -0  // This is ok
+    m = 2_147_483_647
+
+
+    await true
+end

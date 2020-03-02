@@ -172,7 +172,7 @@ and Types =
         | ReferenceTypes r -> r.ToDoc
         | Any -> txt "wildcard"
         | AnyComposite -> txt "any composite"
-        | AnyInt -> txt "any integer"
+        | AnyInt -> txt "any int"
         | AnyBits -> txt "any bits"
         | AnyFloat -> txt "any float"
 

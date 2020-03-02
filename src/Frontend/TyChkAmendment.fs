@@ -190,52 +190,50 @@ let internal amendPrimitiveAny lTyp (rExpr: TypedRhs)  =
         if intX.CanRepresent value then 
             Ok {rExpr with rhs = IntConst <| intX.AdoptAny value ; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
+            Error [LiteralNotInType (rExpr, lTyp)]
 
     | AnyInt, ValueTypes (NatType natX) ->
         let value = rExpr.rhs.GetIntConst
         if natX.CanRepresent value then
             Ok {rExpr with rhs = NatConst <| natX.AdoptAny value; typ = lTyp }
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
+            Error [LiteralNotInType (rExpr, lTyp)]
             
     | AnyInt, ValueTypes (BitsType bitsX) ->
         let value = rExpr.rhs.GetIntConst
         if bitsX.CanRepresent value then
             Ok {rExpr with rhs = BitsConst <| bitsX.AdoptAny value; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
+            Error [LiteralNotInType (rExpr, lTyp)]
             
     | AnyInt, ValueTypes (FloatType floatX) ->
         let value = rExpr.rhs.GetIntConst
         if floatX.CanRepresent value then
             Ok {rExpr with rhs = FloatConst <| floatX.AdoptAny value; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20     
-    
+            Error [LiteralNotInType (rExpr, lTyp)]
+            
     | AnyBits, ValueTypes (BitsType bitsX) ->
         let value = rExpr.rhs.GetBitsConst
         if bitsX.CanRepresent value then
             Ok {rExpr with rhs = BitsConst <| bitsX.AdoptAny value; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    
+            Error [LiteralNotInType (rExpr, lTyp)]
+            
     | AnyBits, ValueTypes (NatType natX) ->
         let value = rExpr.rhs.GetBitsConst
         if natX.CanRepresent value then
             Ok {rExpr with rhs = NatConst <| natX.AdoptAny value; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20            
-
-    // TODO: AnyBits to Float missing, fjg. 18.02.20
-
+            Error [LiteralNotInType (rExpr, lTyp)]
+            
     | AnyFloat, ValueTypes (FloatType floatX) ->
         let value = rExpr.rhs.GetFloatConst
         if floatX.CanRepresent value then
             Ok {rExpr with rhs = FloatConst <| floatX.AdoptAny value; typ = lTyp}
         else
-            Error[NumberLargerThanAnyInt (rExpr.Range, value.ToString())]  // TODO: better error message, fjg. 28.01.20              
-    
+            Error [LiteralNotInType (rExpr, lTyp)]
+            
     | _, _  ->
         Ok rExpr
 
@@ -252,7 +250,7 @@ let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for
             let intX = IntType.RequiredType anyInt
             Ok { rexpr with rhs = IntConst <| intX.AdoptAny anyInt ; typ = ValueTypes (IntType intX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(IntType(Int64)))]
     
     | AnyInt, ValueTypes (NatType size) ->
         let anyInt = rexpr.rhs.GetIntConst
@@ -260,7 +258,7 @@ let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for
             let natX = NatType.RequiredType anyInt
             Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyInt ; typ = ValueTypes (NatType natX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(NatType(Nat64)))]
     
     | AnyInt, ValueTypes (BitsType size) ->
         let anyInt = rexpr.rhs.GetIntConst
@@ -268,7 +266,7 @@ let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for
             let bitsX = BitsType.RequiredType anyInt
             Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyInt ; typ = ValueTypes (BitsType bitsX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(BitsType(Bits64)))]
     
     | AnyInt, ValueTypes (FloatType size) ->
         let anyInt = rexpr.rhs.GetIntConst
@@ -276,32 +274,32 @@ let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for
             let floatX = FloatType.RequiredType anyInt
             Ok { rexpr with rhs = FloatConst <| floatX.AdoptAny anyInt ; typ = ValueTypes (FloatType floatX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyInt.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(FloatType(Float64)))]
+            
     | AnyBits, ValueTypes (BitsType size) ->
         let anyBits = rexpr.rhs.GetBitsConst
         if BitsType.CanRepresent anyBits then
             let bitsX = BitsType.RequiredType anyBits
             Ok { rexpr with rhs = BitsConst <| bitsX.AdoptAny anyBits ; typ = ValueTypes (BitsType bitsX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20            
-    
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(BitsType(Bits64)))]
+            
     | AnyBits, ValueTypes (NatType size) ->
         let anyBits = rexpr.rhs.GetBitsConst
         if NatType.CanRepresent anyBits then
             let natX = NatType.RequiredType anyBits
             Ok { rexpr with rhs = NatConst <| natX.AdoptAny anyBits ; typ = ValueTypes (NatType natX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyBits.ToString())]  // TODO: better error message, fjg. 28.01.20  
-    
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(NatType(Nat64)))]
+            
     | AnyFloat, ValueTypes (FloatType size) ->
         let anyFloat = rexpr.rhs.GetFloatConst
         if FloatType.CanRepresent anyFloat then
             let floatX = FloatType.RequiredType anyFloat
             Ok { rexpr with rhs = FloatConst <| floatX.AdoptAny anyFloat; typ = ValueTypes (FloatType floatX) }
         else
-            Error[NumberLargerThanAnyInt (rexpr.Range, anyFloat.ToString())]  // TODO: better error message, fjg. 28.01.20              
-    
+            Error[LiteralNotInLargestType (rexpr, ValueTypes(FloatType(Float64)))]
+            
     | _, _ ->
         Ok rexpr
  

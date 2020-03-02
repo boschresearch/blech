@@ -54,8 +54,6 @@ type TyCheckError =
     | NoDefaultValueForSecondClassType of range * Identifier * ReferenceTypes
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
     // expressions
-    | NumberLargerThanAnyInt of range * string
-    | NumberLargerThanAnyFloat of range * string
     | InvalidFloat of range * string
     | NextOnRhs of range * string
     | PrevOnLhs of range * string
@@ -133,8 +131,15 @@ type TyCheckError =
     | ActivityHasInstantaneousPath of range * Name
     
     // evaluation
+    // simple literals
+    | LiteralNotInType of TypedRhs * Types
+    | LiteralNotInLargestType of TypedRhs * Types
+    | NumberLargerThanAnyInt of range * Int
+    | NumberLargerThanAnyBits of range * Bits
+    | NumberLargerThanAnyFloat of range * Float
+    
     // Array sizes and indexes
-    | NonNegIdxExpected of range * TypedRhs
+    | NonNegIdxExpected of TypedRhs
     | PositiveSizeExpected of range * TypedRhs
     | ArraySizeOverflowsWordsize of range * Arguments.WordSize * TypedRhs
     // arithmetic
@@ -143,6 +148,7 @@ type TyCheckError =
     | OverFlow of range * string
     | DivideByZero of range * string
     
+    // bitwise binary operators
 
     // annotations
     | UnsupportedAnnotation of range
@@ -178,8 +184,6 @@ type TyCheckError =
             | NoDefaultValueForSecondClassType (p, n, typ) -> p, sprintf "Internal error: tried to determine a default value for %s which has type %s." (string n) (typ.ToString())
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
             // expressions
-            | NumberLargerThanAnyInt (p, s) -> p, sprintf "%s does not fit into any integer type." s
-            | NumberLargerThanAnyFloat (p, s) -> p, sprintf "%s does not fit into given floating point type." s
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s
             | PrevOnLhs (p, s) -> p, sprintf "The access of the prev value of %s is forbidden on the left hand side." s
@@ -262,9 +266,18 @@ type TyCheckError =
             | ActivityHasInstantaneousPath (p, q) -> p, sprintf "Activity %s has an instantaneous control flow path. Please make sure there at least one await or run statement on every possible path." q.id
             
             // --- evaluation ---
+            // literals
+            | NumberLargerThanAnyInt (p, number) -> p, sprintf "Literal '%s' does not fit into any intX, bitsX or natX type." (string number)
+            | NumberLargerThanAnyBits (p, number) -> p, sprintf "Literal '%s' does not fit into any bitsX or natX type." (string number)
+            | NumberLargerThanAnyFloat (p, number) -> p, sprintf "Literal '%s' does not fit into any floatX type." (string number)
+            | LiteralNotInType (expr, typ) ->
+                expr.range, sprintf "Literal '%s' cannot be represented in type '%s'." (string expr)(string typ)
+            | LiteralNotInLargestType (expr, typ) ->
+                expr.range, sprintf "Literal '%s' cannot be represented in largest type '%s'." (string expr)(string typ)
+
             // array indexes and sizes
-            | NonNegIdxExpected (r, expr) -> 
-                r, sprintf "An array index must be non-negative, but '%s' was given." (string expr) 
+            | NonNegIdxExpected expr -> 
+                expr.range, sprintf "An array index must be non-negative, but '%s' was given." (string expr) 
             | PositiveSizeExpected (r, expr) -> r, sprintf "A array size must be positive but '%s' was given." (string expr)
             | ArraySizeOverflowsWordsize (r, wordsize, expr) -> 
                 r, sprintf "The machine dependent 'word-size=%s' cannot represent array size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
@@ -310,9 +323,19 @@ type TyCheckError =
             
             // --- evaluation ---
             
+            // literals
+            | NumberLargerThanAnyInt (rng, _)
+            | NumberLargerThanAnyBits (rng, _) 
+            | NumberLargerThanAnyFloat (rng, _) ->
+                [ { range = rng; message = "oversized literal"; isPrimary = true}]
+            
+            | LiteralNotInLargestType (expr, _)
+            | LiteralNotInType (expr, _) ->
+                [ { range = expr.range; message = "cannot be represented"; isPrimary = true}]
+                
             // array sizes and indexes
-            | NonNegIdxExpected (rng, _) ->
-                [ { range = rng; message = "non-negative index expected"; isPrimary = true} ]
+            | NonNegIdxExpected expr ->
+                [ { range = expr.range; message = "non-negative index expected"; isPrimary = true} ]
             | PositiveSizeExpected (rng, _) ->
                 [ { range = rng; message = "positive size expected"; isPrimary = true} ]
             | ArraySizeOverflowsWordsize (rng, wordsize, _) ->
@@ -349,6 +372,7 @@ type TyCheckError =
                 [ "All numbers, with the exception of type nat, can be inverted."]
             
             // --- evaluation ---
+
 
             // array indexes
             | PositiveSizeExpected _ ->

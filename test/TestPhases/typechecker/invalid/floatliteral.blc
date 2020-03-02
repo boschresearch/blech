@@ -1,0 +1,12 @@
+
+@[EntryPoint]
+activity main ()
+    var i:  int8 = 1.0  // no float literals for intX
+    var n:  nat8 = 1.0  // one half byte to much 
+    var b:  bits8 = 0.0  // one half byte to much for bits8
+    var f: float32 = 3.402824e+38  // 3.402823e+38 is the largest float32 value
+    var f2: float32 = -3.402824e+38
+    var d: float64 = 1.79769313486232e+308  // 1.7976931348623_2E+308 == infinity
+    var d2: float64 = 1.79769313486232e+308
+    await true
+end

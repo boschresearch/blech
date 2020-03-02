@@ -465,43 +465,11 @@ and internal evalConst lut expr =
     else Error[MustBeConst(expr)]
 
 
-/// This tries to evaluate expr to a constant Size value
-/// and returns a MustBeConst error if the input is not constant
-/// and returns a NotACompileTimeInt if the result is not an integer.
-//and internal evalCompTimeSize lut (expr: TypedRhs) =   
-//    let getConstant (index: TypedRhs) = 
-//        match index.rhs with
-//        | IntConst i -> Ok i.GetArrayIndex
-//        | NatConst n -> Ok n.GetArrayIndex
-//        | BitsConst b -> Ok b.GetArrayIndex
-//        | _ -> Error [NotACompileTimeSize expr]
-    
-//    let ensureNonNegative (index: Size) = 
-//        if index >= SizeZero then Ok index
-//        else Error [NonNegIdxExpected (expr.range, index)] 
-    
-//    evalConst lut expr    
-//    |> Result.bind getConstant
-//    |> debugShow "Compile Time Constant"
-//    |> Result.bind ensureNonNegative
-
-
-//and private ensureNonNegIntSize wordsize num =
-//    match num.rhs with
-//    | IntConst i -> 
-//        if i.IsNegative then Error [ NonNegIdxExpected (num.range, num) ]
-//        else Ok num
-//    | NatConst n ->
-//        Ok num
-//    | BitsConst b ->
-//        Ok num
-//    | _ ->
-//        Ok num
 
 and private ensureNonNegIndex index =
     match index.rhs with
     | IntConst i when i.IsNegative ->
-        Error [ NonNegIdxExpected (index.range, index) ]
+        Error [ NonNegIdxExpected index ]
     | _ ->
         Ok index
     
@@ -698,7 +666,7 @@ let private unaryMinus r (expr: TypedRhs) =
         | ValueTypes (FloatType _)
         | AnyInt
         | AnyFloat ->
-            Ok { expr with rhs = unsafeUnaryMinus expr }
+            Ok { expr with range = r; rhs = unsafeUnaryMinus expr }
         | ValueTypes (NatType _) ->
             Error [CannotInvertNatExpr (r, expr)]
         | AnyBits ->
@@ -776,7 +744,7 @@ let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxo
 let private ensureShiftAmount bitsize num  =
     match num.rhs with
     | IntConst i when i.IsNegative ->
-        Error [ NonNegIdxExpected (num.range, num) ]  // Todo: Shift amount must not be negative, fjg. 25.02.20
+        Error [ NonNegIdxExpected num ]  // Todo: Shift amount must not be negative, fjg. 25.02.20
     | _ ->
         Ok num
 
@@ -1139,17 +1107,17 @@ let private checkSimpleLiteral literal =
         if Int64.CanRepresent value || Nat64.CanRepresent value then // Int literals allow an unary minus in attributes
             { rhs = IntConst value; typ = AnyInt; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyInt(pos, value.ToString())]
+            Error [NumberLargerThanAnyInt(pos, value)]
     | AST.Bits (bits, pos) ->
         if Bits64.CanRepresent bits then // Bits literals are always >= 0                     
             { rhs = BitsConst bits; typ = AnyBits; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyInt(pos, bits.ToString())]  // Todo: Change this error message, fjg. 30.01.20                
+            Error [NumberLargerThanAnyBits(pos, bits)]                 
     | AST.Float (number, _, pos) ->
         if Float64.CanRepresent number then // Float literals allow an unary minus in attributes
             { rhs = FloatConst number; typ = AnyFloat; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyFloat(pos, string number)]
+            Error [NumberLargerThanAnyFloat(pos, number)]
     | AST.String _ ->
         Error [UnsupportedFeature (literal.Range, "undefined, string literal")]
 

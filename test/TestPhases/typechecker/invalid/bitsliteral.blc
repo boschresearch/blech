@@ -1,0 +1,11 @@
+
+@[EntryPoint]
+activity main ()
+    var i:  int8 = 0b_1  // no bit literals for intX
+    var n:  nat8 = 0x_1_FF  // one half byte to much 
+    var n2: nat8 = 0o_477  // left octet to large
+    var b:  bits8 = 0x_1_FF  // one half byte to much for bits8
+    var b2: bits8 = 0b_1111_1111_1 // one bit too much for bits8
+    var f: float32 = 0x1   // no bit literals for floatX, floats have their own hex literals
+    await true
+end

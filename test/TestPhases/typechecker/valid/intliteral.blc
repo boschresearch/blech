@@ -1,0 +1,13 @@
+
+@[EntryPoint]
+activity main ()
+    var i:  int8 = 127
+    var i2: int8 = -128
+    var n:  nat8 = 255
+    var n2: nat8 = 0
+    var b:  bits8 = -128  // smallest possible 2s complement representation
+    var b2: bits8 = 255
+    var f: float32 = 16_777_216  // biggest precise integer in float32
+    var f2: float32 = -16_777_216 // smallest precise integer in float32
+    await true
+end
