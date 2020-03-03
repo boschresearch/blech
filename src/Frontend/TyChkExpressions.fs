@@ -469,7 +469,7 @@ and internal evalConst lut expr =
 and private ensureNonNegIndex index =
     match index.rhs with
     | IntConst i when i.IsNegative ->
-        Error [ NonNegIdxExpected index ]
+        Error [ NegativeArrayIndex index ]
     | _ ->
         Ok index
     
@@ -623,7 +623,9 @@ let private complement rng (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes (BitsType size) ->
         Ok { expr with rhs = bnot expr }
-    | _ -> Error [ExpectedBitsExpr (rng, expr)]
+    | AnyBits ->
+        Error [ComplementOnBitsLiteral (rng, expr)]
+    | _ -> Error [ExpectedBitsExpr expr]
 
 /// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
@@ -668,9 +670,9 @@ let private unaryMinus r (expr: TypedRhs) =
         | AnyFloat ->
             Ok { expr with range = r; rhs = unsafeUnaryMinus expr }
         | ValueTypes (NatType _) ->
-            Error [CannotInvertNatExpr (r, expr)]
+            Error [UnaryMinusOnNatExpr (r, expr)]
         | AnyBits ->
-            Error [CannotInvertBitsLiteral (r, expr)]
+            Error [UnaryMinusOnBitsLiteral (r, expr)]
         | _ ->
             Error [ExpectedInvertableNumberExpr (r, expr)]
 
@@ -716,9 +718,9 @@ let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
         Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType <| commonSize size1 size2); range = rng }
     | AnyBits, AnyBits ->
-        Error [SameBitsTypeRequired (expr1, expr2)]
+        Error [BinaryOperationOnAnyBits (rng, expr1, expr2)]
     | _, _ ->
-        Error [SameBitsTypeRequired (expr1, expr2)] 
+        Error [SameBitsTypeRequired rng] 
 
 
 let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -744,7 +746,7 @@ let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxo
 let private ensureShiftAmount bitsize num  =
     match num.rhs with
     | IntConst i when i.IsNegative ->
-        Error [ NonNegIdxExpected num ]  // Todo: Shift amount must not be negative, fjg. 25.02.20
+        Error [ NegativeShiftAmount num ] 
     | _ ->
         Ok num
 
@@ -758,10 +760,10 @@ let internal tryEvalCompShiftAmount lut bitsize expr =
 
 /// Given two typed expressions, construct their binary bitwise operator
 /// If the two types are not comparable, an error will be returned instead.
-let private combineShiftOp shift ((expr: TypedRhs), (positions: TypedRhs)) =
-    let rng = Range.unionRanges expr.Range positions.Range
-    let rhs = shift expr positions
-    Ok { expr with rhs = rhs; range = rng }  // Todo: This can go wrong later on if positions are bigger then bits size or negative, fjg. 18.02.20
+let private combineShiftOp shift ((expr: TypedRhs), (amount: TypedRhs)) =
+    let rng = Range.unionRanges expr.Range amount.Range
+    let rhs = shift expr amount
+    Ok { expr with rhs = rhs; range = rng }
     
 
 let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
@@ -777,12 +779,13 @@ let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
             |> combine (Ok expr)
             |> Result.bind (combineShiftOp shift)
         | _ ->
-            Error [ TypeMismatch (amount.typ, amount) ] // TODO: positions must be a valid size type, change this error message, fjg. 17.02.20
+            Error [ NoShiftAmountType amount ] 
     
     | AnyBits -> 
-        Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
+        let rng = Range.unionRanges expr.range amount.range
+        Error [ ShiftOperationOnAnyBits (rng, expr) ] 
     | _ ->
-        Error [ TypeMismatch (expr.typ, expr) ] // TODO: expr must be of BitsType, change this error message, fjg. 17.02.20
+        Error [ ExpectedBitsExpr expr ] 
             
 
 /// Returns the right shift '>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
