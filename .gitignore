@@ -230,7 +230,6 @@ test/blechc/codegeneration/blech
 **/Temp/
 **/Tmp/
 # generated code
-**/blech.c
+**/blech
 blech.c
-/SyncToy_caf60dad-4a72-4de2-8c1c-f74d0c56c156.dat
 /src/blechc/Properties/launchSettings.json

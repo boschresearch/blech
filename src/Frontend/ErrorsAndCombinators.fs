@@ -101,6 +101,14 @@ type TyCheckError =
     // Shift amounts, arrays sizes and indexes
     | NoShiftAmountType of TypedRhs
     
+    // Cast and Conversion
+    | AnnotationTypeMismatch of range * TypedRhs * Types 
+
+    // bitwise operators
+    | BitwiseOperationTypeMismatch of range * TypedRhs * TypedRhs
+    | ExpectedBitsArguments of range * TypedRhs * TypedRhs
+    
+
     // types
     | TypeMismatch of Types * TypedRhs
     | TypeMismatchArrStruct of Types * TypedRhs
@@ -133,7 +141,7 @@ type TyCheckError =
     | SynchronousStatementInFunction of range
     | ActivityHasInstantaneousPath of range * Name
     
-    // evaluation
+    // --- evaluation ---
     // simple literals
     | LiteralNotInType of TypedRhs * Types
     | LiteralNotInLargestType of TypedRhs * Types
@@ -155,12 +163,11 @@ type TyCheckError =
     | OverFlow of range * string
     | DivideByZero of range * string
     
-    // bitwise binary operators
+    // bitwise operations
     | UnaryMinusOnBitsLiteral of range * TypedRhs
     | ComplementOnBitsLiteral of range * TypedRhs
-    | BinaryOperationOnAnyBits of range * TypedRhs * TypedRhs
+    | BitwiseBinaryOperationOnAnyBits of range * TypedRhs * TypedRhs
     | ShiftOperationOnAnyBits of range * TypedRhs
-    | SameBitsTypeRequired of range
     
     // annotations
     | UnsupportedAnnotation of range
@@ -178,6 +185,7 @@ type TyCheckError =
     interface Diagnostics.IDiagnosable with
         member err.MainInformation =
             match err with
+            
             | ImpossibleCase o -> Range.range0, sprintf "Seems like some of the DUs in the type checker are not up-to-date. Ran into an seemingly impossible case: %A." o
             | UnsupportedFeature (p, s) -> p, sprintf "Sorry, currently the type checker does not support %s." s
             | UnsupportedTuple p -> p, sprintf "Multiple-return types, assignments or tuples are not supported."
@@ -189,12 +197,14 @@ type TyCheckError =
             | IllegalVoid (p, n) -> p, sprintf "Internal error: tried to determine a default value for %s which has type void." (string n)
             | ValueCannotBeVoid n -> Range.range0, sprintf "Internal error: attempted to create a void value for identifier %s." n
             | EmptyGuardList -> Range.range0, sprintf "Making an empty guard expression should be impossible!"
+            
             // declarations
             | NotInLUTPrevError s -> Range.range0, sprintf "Identifier %s is not in the lookup table, probably due to a previous error." s 
             | VarDeclMissingTypeOrValue (p, n) -> p, sprintf "The declaration of variable %s needs either a type annotation or an initialisation." (string n)
             | VarDeclRequiresExplicitType (p, n) -> p, sprintf "Could not infer type of %s. Please provide explicit type information." (string n)
             | NoDefaultValueForSecondClassType (p, n, typ) -> p, sprintf "Internal error: tried to determine a default value for %s which has type %s." (string n) (typ.ToString())
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
+            
             // expressions
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s
@@ -230,6 +240,7 @@ type TyCheckError =
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
+            
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
@@ -244,6 +255,17 @@ type TyCheckError =
             | NoShiftAmountType expr ->
                 expr.Range, sprintf "Type '%s' is not a valid type for a shift amount" (string expr.typ)
             
+            // Cast and converions
+            | AnnotationTypeMismatch (rng, expr, typ)-> 
+                rng,  sprintf "Type annotation ': %s' does not match type '%s' of the given expression." (string typ) (string expr.typ)
+
+            // bitwise operators
+            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+                rng, "Bitwise operation on arguments of different bits size."
+            | ExpectedBitsArguments (rng, lexpr, rexpr) -> 
+                rng, "Binary bitwise operation requires arguments of the same bitsX type." 
+            
+
             // types
             | TypeMismatch (t, r) -> 
                 match r.typ with
@@ -311,12 +333,11 @@ type TyCheckError =
             // bitwise operators
             | UnaryMinusOnBitsLiteral (p, expr) -> p, sprintf "Invalid unary minus '-' on bits literal '%s'." (string expr)
             | ComplementOnBitsLiteral (p, expr) -> p, sprintf "Invalid bitwise negation '~' on bits literal '%s'." (string expr)
+            | BitwiseBinaryOperationOnAnyBits (rng, lexpr, rexpr) ->
+                rng, sprintf "Cannot resolve overloaded operation on unsized bits literals '%s' and '%s'." (string lexpr) (string rexpr)
     
             | ShiftOperationOnAnyBits (rng, expr) ->
                 rng, sprintf "Cannot resolve overloaded shift operation on unsized bits literal '%s'." (string expr)
-            | BinaryOperationOnAnyBits (rng, lexpr, rexpr) ->
-                rng, sprintf "Cannot resolve overloaded operation on unsized bits literals '%s' and '%s'." (string lexpr) (string rexpr)
-            | SameBitsTypeRequired rng -> rng, "Binary bitwise operation requires arguments of type bitsX." 
             
                     
             // --- attributes ---
@@ -351,10 +372,26 @@ type TyCheckError =
             | ExpectedInvertableNumberExpr (rng, _) -> 
                 [ { range = rng; message = "number expected"; isPrimary = true}]
             
+            // Type annotation and cast
+            | AnnotationTypeMismatch (rng, expr, typ)-> 
+                [ { range = rng; message = "wrong type"; isPrimary = true}]
+
+
             // Shift amounts, arrays sizes and indexes
             | NoShiftAmountType expr ->
                 [ { range = expr.range; message = "number expected"; isPrimary = true } ]
             
+            // bitwise operators
+            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+                [ { range = rng; message = "same bitsX arguments expected"; isPrimary = true}
+                  { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
+                  { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
+                
+            | ExpectedBitsArguments (rng, lexpr, rexpr) ->
+                [ { range = rng; message = "bitsX arguments expected"; isPrimary = true}
+                  { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
+                  { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
+                
 
             // --- evaluation ---
             
@@ -389,10 +426,8 @@ type TyCheckError =
             
             // bitwise
             | ShiftOperationOnAnyBits (rng, _)
-            | BinaryOperationOnAnyBits (rng, _, _) ->
+            | BitwiseBinaryOperationOnAnyBits (rng, _, _) ->
                 [ { range = rng; message = sprintf "overloading not resolved"; isPrimary = true} ]
-            | SameBitsTypeRequired rng ->
-                [ { range = rng; message = sprintf "type mismatch"; isPrimary = true} ]
             
             
 
@@ -420,12 +455,25 @@ type TyCheckError =
             | ExpectedInvertableNumberExpr _ -> 
                 [ "All numbers, with the exception of type nat, can be inverted."]
             
+            // Type annotation and cast
+            | AnnotationTypeMismatch (_, _, typ)-> 
+                [ sprintf "For changing the type use a cast 'as %s'" (string typ)]
+
+
             // Shift amounts, arrays sizes and indexes
             | NoShiftAmountType _ ->
                 [ "A shift amount type it either intX, bitsX or natX."
                   "A shift amount must be greater than 0." 
                   "A shift amount is taken modulo the bitsize of the shifted valued." ]                    
-                  
+            
+            // bitwise operators
+            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+                [ "Bitwise operators require arguments of the same bitsX type." 
+                  "You can use a type cast 'as bitsX' to adopt the arguments." ]
+                        
+            | ExpectedBitsArguments _ ->
+                [ "Bitwise operators are only defined for arguments of type bitsX."]
+            
 
             // --- evaluation ---
 
@@ -448,10 +496,8 @@ type TyCheckError =
             // bitwise
             | ShiftOperationOnAnyBits (_, expr) ->
                 [ sprintf "Use a type annotation to define the size of the bits literal, e.g. '(%s: bits32)'." (string expr) ]    
-            | BinaryOperationOnAnyBits (_, expr, _) ->
+            | BitwiseBinaryOperationOnAnyBits (_, expr, _) ->
                 [ sprintf "Use a type annotation to define the size of one bits literal, e.g. '(%s: bits32)'." (string expr) ]
-            | SameBitsTypeRequired _ ->
-                [ "Bitwise operators are only defined for arguments of type bits."]
             
             | NegativeShiftAmount _ ->
                 [ "An shift amount must be greater than '0'."

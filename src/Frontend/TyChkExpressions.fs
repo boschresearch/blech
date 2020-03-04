@@ -713,14 +713,16 @@ let private formDisjunction = formLogical disj
 /// If the two types are not comparable, an error will be returned instead.
 let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     let rng = Range.unionRanges expr1.Range expr2.Range
-    let commonSize size1 size2 = if size1 >= size2 then size1 else size2 
+    // let commonSize size1 size2 = if size1 >= size2 then size1 else size2 
     match expr1.typ, expr2.typ with    
-    | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
-        Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType <| commonSize size1 size2); range = rng }
+    | ValueTypes (BitsType size1), ValueTypes (BitsType size2) when size1 = size2->
+        Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType size1); range = rng }
+    | ValueTypes (BitsType _), ValueTypes (BitsType _) -> // when size1 != size2
+        Error [BitwiseOperationTypeMismatch (rng, expr1, expr2)]
     | AnyBits, AnyBits ->
-        Error [BinaryOperationOnAnyBits (rng, expr1, expr2)]
+        Error [BitwiseBinaryOperationOnAnyBits (rng, expr1, expr2)]
     | _, _ ->
-        Error [SameBitsTypeRequired rng] 
+        Error [ExpectedBitsArguments (rng, expr1, expr2)] 
 
 
 let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -970,6 +972,24 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
         Error [DivideByZero (pos, "Division by zero in remainder")] // Todo: improve this message, fjg. 19.02.20
 
 // --------------------------------------------------------------------
+// ---  Type annotation in expr 'expr : type'
+// --------------------------------------------------------------------
+
+/// Checks if a type annotation has the same type as the expression
+/// Literals are amended to the given type annotation 
+let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
+    amendPrimitiveAny checkedType checkedExpr
+    |> Result.bind (fun expr -> 
+        match expr.typ, checkedType with
+        | ValueTypes et, ValueTypes ct when et = ct ->
+            Ok expr
+        | ValueTypes _, ValueTypes _ -> 
+            Error [ AnnotationTypeMismatch (range, expr, checkedType) ]  // TODO: improve error message
+        | _, _ ->
+            failwith "Type annotation for unchecked or unsupported type")
+
+
+// --------------------------------------------------------------------
 // ---  Cast operator 'as'
 // --------------------------------------------------------------------
 
@@ -981,19 +1001,30 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
     | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
     | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize ->
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
-
+    | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
+    | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
         Error [ Dummy (range, "no downcast possible") ]
     | ValueTypes (NatType n), ValueTypes (NatType toN) when n > toN ->
@@ -1002,12 +1033,6 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
         Error [ Dummy (range, "no downcast possible") ]
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF ->
         Error [ Dummy (range, "no downcast possible") ]
-
-    | ValueTypes (IntType _), ValueTypes (IntType _)
-    | ValueTypes (NatType _), ValueTypes (NatType _)
-    | ValueTypes (BitsType _), ValueTypes (BitsType _)
-    | ValueTypes (FloatType _), ValueTypes (FloatType _) ->
-        Error [ Dummy (range, "no cast necessary, a type annotation is allowed") ]
 
     // Allow to cast an AnyBits literal to intX, if it can be represented
     | AnyBits, ValueTypes (IntType it) ->
@@ -1247,20 +1272,31 @@ and private checkUntimedDynamicAccessPath lut dname =
 
 
 /// Shorthand helper. Given two expressions e1, e2 and a combination 
-/// function f (and, or, +, -, ...), type check e1 and e2 and combine
+/// function f (and, or, +, -, ...), 
+/// typecheck e1 and e2 and combine
 /// using f.
-and private combineTwoExpr lut e1 e2 f =
+and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
     combine (checkExpr lut e1) (checkExpr lut e2)
     |> Result.bind f
     // |> Result.bind debugShowConstExpr
 
 /// Shorthand helper. Given two expressions bits and amount, and a shift 
-/// function shiftFun (<<, >>, +>>, <>>, <<>), type check bits and amount and combine
+/// function shiftFun (<<, >>, +>>, <>>, <<>), 
+/// typecheck bits and amount and combine
 /// using shf.
-and private combineShift lut bits amount shiftFun =
+and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
     combine (checkExpr lut bits) (checkExpr lut amount)
     |> Result.bind (shiftFun lut)
     // |> Result.bind debugShowConstExpr
+
+
+/// Shorthand helper. Given expressions expr and type typ 
+/// and a cast or conversion function reTypeFun
+/// type check expr and typ and combine
+/// using reTypeFun.
+and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFun =
+    combine (checkExpr lut expr) (checkDataType lut typ)
+    |> Result.bind (reTypeFun typ.Range)
 
 
 /// Given an untyped AST.Expr, return a typed expression.
@@ -1371,18 +1407,25 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Ideq _ 
     | AST.Idieq _ ->
         Error [UnsupportedFeature (expr.Range, "identity operator")]
+    
     // type conversion
-    | AST.Convert (e, t) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
-        let exp = checkExpr lut e
-        let toType = checkDataType lut t
-        combine exp toType
-        |> Result.bind (conversion expr.Range)
+    | AST.Convert (e, t) -> combineExprAndType lut e t conversion
+        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
+        //let exp = checkExpr lut e
+        //let toType = checkDataType lut t
+        //combine exp toType
+        //|> Result.bind (conversion expr.Range)
+    
     // type annotation --
-    | AST.HasType (e, t) -> // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
-        let rhs = checkExpr lut e
-        let lty = checkDataType lut t
-        combine rhs lty
-        |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)
+    | AST.HasType (e, t) -> combineExprAndType lut e t typeAnnotation
+        // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
+        //let rhs = checkExpr lut e
+        //let lty = checkDataType lut t
+        //combine rhs lty
+        //// |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)
+        //// |> Result.bind (fun (rhs, lty) -> amendPrimitiveAny lty rhs)
+        //|> Result.bind (typeAnnotation t.Range) 
+    
     // operators on arrays and slices
     | AST.Len _
     | AST.Cap _ -> //TODO

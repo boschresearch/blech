@@ -182,7 +182,7 @@ let internal getInitValueWithoutZeros pos name dty =
 /// Amends a primivite literal to the type and size of ltyp
 /// A primitive literal has type AnyInt, AnyBits or AnyFloat
 /// Throws an error if the literal cannot be represented.
-/// Returns the unchanged literal if the amendment is not possible
+/// Returns the unchanged rExpr if amendment is not possible.
 let internal amendPrimitiveAny lTyp (rExpr: TypedRhs)  = 
     match rExpr.typ, lTyp with
     | AnyInt , ValueTypes (IntType intX) ->

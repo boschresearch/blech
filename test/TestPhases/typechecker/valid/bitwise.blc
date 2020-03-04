@@ -2,7 +2,7 @@
 @[EntryPoint]
 /// https://stackoverflow.com/questions/9290823/bitwise-shift-operation-in-c-on-uint64-t-variable
 activity main()
-    var b64: bits64 = 0xfffffffff0ffffff
+    var b64: bits64 = 0xfffffffff0ffffff // ~(0xF: bits64 << 24)
     // b64 = ~(0xF: bits64 << 24)  // = b64 initialisation
     // const bc64: bits64 = 0xf
     // b64 = ~(bc64 << 24)         // = b64 initialisation
@@ -13,7 +13,7 @@ activity main()
     // b64 = ~(0xF: bits8 << 24)  // left shift (24 % 8)
     // b64 = ~(0xF: bits8 << 0)
     // b64 = ~(0xF: bits8)
-    b64 = ~((0xF: bits8): bits64)  // TODO: Change constant not only the type for correct evaluation
+    b64 = ~(0xF: bits64 << 24)
     
 
     await true
