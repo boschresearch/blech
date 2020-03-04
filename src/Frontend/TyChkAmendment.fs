@@ -243,7 +243,7 @@ let internal tryAmendPrimitiveAny lTyp (rExpr: TypedRhs)  =
 /// A primitive literal has type AnyInt, AnyBits or AnyFloat
 /// Throws an error if the literal cannot be represented.
 /// Return the unchanged literal, if the promotion is not possible
-let tryPromotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for this function, fjg. 19.02.20
+let tryPromotePrimitiveAny ltyp (rexpr: TypedRhs) = 
     match rexpr.typ, ltyp with
     | AnyInt, ValueTypes (IntType size) ->
         let anyInt = rexpr.rhs.GetIntConst
@@ -445,32 +445,6 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
     // these have to be filled up and their type needs to be updated
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
         amendCompoundLiteral inInitMode lTyp rExpr
-        //match lTyp, rExpr.rhs with
-        //// resetting
-        //| ValueTypes (ValueTypes.StructType _), ResetConst
-        //| ValueTypes (ArrayType _), ResetConst ->
-        //    // build a struct (or resp. array) const with default values of the fields
-        //    // note that we do overwrite let fields but we do so with the default value which essentially has no effect
-        //    getInitValueWithoutZeros rExpr.Range "" lTyp
-        //// structs
-        //| ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
-        //    amendStruct inInitMode lTyp rExpr.Range name fields assignments 
-        //// arrays
-        //| ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
-        //    amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
-        //// all sorts of mismatches
-        //| ValueTypes (ArrayType _), StructConst _ ->
-        //    Error [TypeMismatchArrStruct(lTyp, rExpr)]
-        //| ValueTypes (ValueTypes.StructType _), ArrayConst _ ->
-        //    Error [TypeMismatchStructArr(lTyp, rExpr)]
-        //| t, _ when t.IsPrimitive->
-        //    Error [TypeMismatchPrimitiveComposite(lTyp, rExpr)]
-        //// altering reference typed data is illegal
-        //| ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
-        //| ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
-        //    Error [CannotResetRefType(rExpr.Range)]
-        //// at this point we've missed something
-        //| _ -> Error [AmendBroken(lTyp, rExpr)]
     else
         Error [TypeMismatch(lTyp, rExpr)]
 
