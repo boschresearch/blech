@@ -167,8 +167,8 @@ type TyCheckError =
     // arithmetic
     | UnaryMinusOverFlow of range * TypedRhs
     
-    | OverFlow of range * string
-    | DivideByZero of range * string
+    | ArithmeticOverFlow of range * TypedRhs * TypedRhs
+    | DivideByZero of range * TypedRhs
     
     // bitwise operations
     | UnaryMinusOnBitsLiteral of range * TypedRhs
@@ -347,8 +347,11 @@ type TyCheckError =
             // arithmetic
             | UnaryMinusOverFlow (p, expr) -> p, sprintf "Overflow due to unary minus operation '-' on value '%s'." (string expr)
             
-            | OverFlow (p, s) -> p, s
-            | DivideByZero (p, s) -> p, s
+            | ArithmeticOverFlow (rng, lexpr, rexpr) -> 
+                rng, sprintf "Overflow in arithmetic operation"
+            | DivideByZero (rng, expr) ->
+                rng, sprintf "Division by zero"
+
             // bitwise operators
             | UnaryMinusOnBitsLiteral (p, expr) -> p, sprintf "Invalid unary minus '-' on bits literal '%s'." (string expr)
             | ComplementOnBitsLiteral (p, expr) -> p, sprintf "Invalid bitwise negation '~' on bits literal '%s'." (string expr)
@@ -453,12 +456,24 @@ type TyCheckError =
                 [ { range = rng; message = "no conversion necessary"; isPrimary = true } ]
                 
             // arithmetic
+            
             | UnaryMinusOnBitsLiteral (_, expr) 
             | ComplementOnBitsLiteral (_, expr) ->
                 [ { range = expr.range; message = "unknown bits size"; isPrimary = true}]
-            | UnaryMinusOverFlow (rng, _) ->
-                [ { range = rng; message = sprintf "overflow detected"; isPrimary = true} ]
+            | UnaryMinusOverFlow (rng, expr) ->
+                [ { range = rng; message = sprintf "unary minus overflow"; isPrimary = true}
+                  { range = expr.range; message = sprintf "value is '%s'" (string expr); isPrimary = false} ]
             
+            | ArithmeticOverFlow (rng, lexpr, rexpr) -> 
+                [ { range = rng; message = sprintf "arithmetic overflow"; isPrimary = true}
+                  { range = lexpr.range; message = sprintf "value is '%s'" (string lexpr) ; isPrimary = false}
+                  { range = rexpr.range; message = sprintf "value is '%s'" (string rexpr) ; isPrimary = false} ]
+            
+            | DivideByZero (rng, expr) -> 
+                [ { range = rng; message = sprintf "division by zero"; isPrimary = true}
+                  { range = expr.range; message = sprintf "value is '%s'" (string expr) ; isPrimary = false} ]
+                
+
             // bitwise
             | ShiftOperationOnAnyBits (rng, _)
             | BitwiseBinaryOperationOnAnyBits (rng, _, _) ->

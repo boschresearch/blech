@@ -398,7 +398,6 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     let evalBin x y f =
         let newrhs = tryEvalConst lut x |> f <| tryEvalConst lut y
         { rhs = newrhs; typ = checkedExpr.typ; range = checkedExpr.Range }
-        //|> debugShow "after evalBin"
     
     let recurFields constBuilder fs =
         let kvps = fs |> List.map (fun (i,f) -> i, tryEvalConst lut f)
@@ -915,7 +914,6 @@ let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
-    //|> debugShow "After arithmetic"
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
@@ -924,52 +922,66 @@ let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) =
         checkArithmetic add expr1 expr2
     with
     | :? System.OverflowException -> 
-        let pos = Range.unionRanges expr1.Range expr2.Range
-        Error [OverFlow (pos, "Overflow in addition")] // Todo: improve this message, fjg. 19.02.20
-
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
 /// Returns the subtraction of two typed expressions or an error in case of type mismatch.
 let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = 
     try 
         checkArithmetic sub expr1 expr2
     with
     | :? System.OverflowException -> 
-        let pos = Range.unionRanges expr1.Range expr2.Range
-        Error [OverFlow (pos, "Overflow in subtraction")] // Todo: improve this message, fjg. 19.02.20
-
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
 /// Returns the product of two typed expressions or an error in case of type mismatch.
 let private product ((expr1: TypedRhs), (expr2: TypedRhs)) =
     try 
         checkArithmetic mul expr1 expr2
     with
     | :? System.OverflowException -> 
-        let pos = Range.unionRanges expr1.Range expr2.Range
-        Error [OverFlow (pos, "Overflow in multiplication")] // Todo: improve this message, fjg. 19.02.20
-
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
+let private isZeroConstant (expr: TypedRhs) =
+    match expr.rhs with
+    | IntConst i -> i.IsZero
+    | NatConst n -> n.IsZero
+    | BitsConst b -> b.IsZero
+    | FloatConst f -> f.IsZero
+    | _ -> false
 
 /// Returns the quotient of two typed expressions or an error in case of type mismatch.
 let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = 
     try
-        checkArithmetic div expr1 expr2
+        if isZeroConstant expr2 then
+            let rng = Range.unionRanges expr1.Range expr2.Range
+            Error [DivideByZero (rng, expr2)] 
+        else
+            checkArithmetic div expr1 expr2
     with
     | :? System.DivideByZeroException  -> 
-        let pos = Range.unionRanges expr1.Range expr2.Range
-        Error [DivideByZero (pos, "Division by zero in remainder")] // Todo: improve this message, fjg. 19.02.20
+        failwith "Division by zero in evaluation should not occur"
 
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
-    try
+    try 
         match expr1.typ, expr2.typ with
         | ValueTypes (FloatType _), ValueTypes (FloatType _)
         | AnyFloat, ValueTypes (FloatType _)
         | ValueTypes (FloatType _), AnyFloat
         | AnyFloat, AnyFloat ->
             Error [CannotModFloats (expr1, expr2)]
-        | _ -> checkArithmetic modus expr1 expr2
+        | _ -> 
+            if isZeroConstant expr2 then 
+                let rng = Range.unionRanges expr1.Range expr2.Range
+                Error [DivideByZero (rng, expr2)]    
+            else
+                checkArithmetic modus expr1 expr2
     with
     | :? System.DivideByZeroException  -> 
-        let pos = Range.unionRanges expr1.Range expr2.Range
-        Error [DivideByZero (pos, "Division by zero in remainder")] // Todo: improve this message, fjg. 19.02.20
-
+        failwith "Division by zero in evaluation should not occur"
+                
 // --------------------------------------------------------------------
 // ---  Type annotation in expr 'expr : type'
 // --------------------------------------------------------------------
@@ -1287,7 +1299,7 @@ and private checkUntimedDynamicAccessPath lut dname =
 and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
     combine (checkExpr lut e1) (checkExpr lut e2)
     |> Result.bind f
-    // |> Result.bind debugShowConstExpr
+
 
 /// Shorthand helper. Given two expressions bits and amount, and a shift 
 /// function shiftFun (<<, >>, +>>, <>>, <<>), 
@@ -1296,7 +1308,6 @@ and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
 and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
     combine (checkExpr lut bits) (checkExpr lut amount)
     |> Result.bind (shiftFun lut)
-    // |> Result.bind debugShowConstExpr
 
 
 /// Shorthand helper. Given expressions expr and type typ 
@@ -1354,7 +1365,6 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                 | AnyFloat -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
-        //|> debugShow "Variable usage"
     // -- function call --
     | AST.FunctionCall (fp, readArgs, writeArgs, r) ->
         let resIn = List.map (checkExpr lut) readArgs
