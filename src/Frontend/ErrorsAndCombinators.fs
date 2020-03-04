@@ -348,9 +348,9 @@ type TyCheckError =
             | UnaryMinusOverFlow (p, expr) -> p, sprintf "Overflow due to unary minus operation '-' on value '%s'." (string expr)
             
             | ArithmeticOverFlow (rng, lexpr, rexpr) -> 
-                rng, sprintf "Overflow in arithmetic operation"
+                rng, sprintf "Overflow in arithmetic operation."
             | DivideByZero (rng, expr) ->
-                rng, sprintf "Division by zero"
+                rng, sprintf "Division by zero."
 
             // bitwise operators
             | UnaryMinusOnBitsLiteral (p, expr) -> p, sprintf "Invalid unary minus '-' on bits literal '%s'." (string expr)

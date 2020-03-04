@@ -126,9 +126,9 @@ type Float =
 
     member this.IsZero =
         match this with
-        | F32 v -> v = 0.0f || v = -0.0f
-        | F64 v -> v = 0.0 || v = -0.0
-        | FAny (v, _) -> v = 0.0 || v = -0.0
+        | F32 v -> v = 0.0f 
+        | F64 v -> v = 0.0 
+        | FAny (v, _) -> v = 0.0 
     
     member this.PromoteTo (other: Float) : Float = 
         match this, other with
