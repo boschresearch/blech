@@ -488,11 +488,11 @@ and private ensurePositiveSize index =
 and private ensureArraySize wordsize index =
     match index.rhs with
     | IntConst i when not (i.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] 
     | NatConst n when not (n.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] // Todo: better error message, fjg. 24.02.20
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] 
     | BitsConst b when not (b.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index ) ] // Todo: better error message, fjg. 24.02.20
+        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index ) ] 
     | _ ->
         Ok index
 
@@ -726,8 +726,8 @@ let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
 
 
 let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = amendPrimitiveAny expr2.typ expr1
-    let e2 = amendPrimitiveAny expr1.typ expr2
+    let e1 = tryAmendPrimitiveAny expr2.typ expr1
+    let e2 = tryAmendPrimitiveAny expr1.typ expr2
 
     combine e1 e2
     |> Result.bind (combineBitwiseOp operator)
@@ -825,7 +825,6 @@ let private combineRelationalOp operator ((expr1: TypedRhs), (expr2: TypedRhs)) 
     | AnyInt, AnyInt
     | AnyBits, AnyBits
     | AnyFloat, AnyFloat ->
-        // Ok <| AnyFloat
         Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
     | t1, t2 when t1 = t2 -> 
         Error [MustBeNumeric(expr1, expr2)]
@@ -835,8 +834,8 @@ let private combineRelationalOp operator ((expr1: TypedRhs), (expr2: TypedRhs)) 
 
             
 let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = promotePrimitiveAny expr2.typ expr1
-    let e2 = promotePrimitiveAny expr1.typ expr2
+    let e1 = tryPromotePrimitiveAny expr2.typ expr1
+    let e2 = tryPromotePrimitiveAny expr1.typ expr2
     
     combine e1 e2
     |> Result.bind (combineRelationalOp operator)
@@ -911,8 +910,8 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
 
 /// Checks if literals and constant expression are of suitable size.
 let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
-    let e1 = amendPrimitiveAny expr2.typ expr1
-    let e2 = amendPrimitiveAny expr1.typ expr2
+    let e1 = tryAmendPrimitiveAny expr2.typ expr1
+    let e2 = tryAmendPrimitiveAny expr1.typ expr2
 
     combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
@@ -978,16 +977,27 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
 /// Checks if a type annotation has the same type as the expression
 /// Literals are amended to the given type annotation 
 let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
-    amendPrimitiveAny checkedType checkedExpr
+    let expr = 
+        if checkedExpr.typ.IsCompoundLiteral then
+            amendCompoundLiteral false checkedType checkedExpr
+        else 
+            tryAmendPrimitiveAny checkedType checkedExpr        
+    expr
     |> Result.bind (fun expr -> 
         match expr.typ, checkedType with
         | ValueTypes et, ValueTypes ct when et = ct ->
             Ok expr
         | ValueTypes _, ValueTypes _ -> 
-            Error [ AnnotationTypeMismatch (range, expr, checkedType) ]  // TODO: improve error message
+            Error [ WrongTypeAnnotation (range, expr, checkedType) ] 
+        | AnyComposite, _
+        | AnyInt, _
+        | AnyBits, _
+        | AnyFloat, _ ->  
+            Error [ LiteralDoesNotHaveType (range, checkedExpr, checkedType)]
         | _, _ ->
-            failwith "Type annotation for unchecked or unsupported type")
-
+            failwith "Type annotation for unchecked or unsupported type"
+        )
+            
 
 // --------------------------------------------------------------------
 // ---  Cast operator 'as'
@@ -1026,13 +1036,13 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
         Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
         
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
-        Error [ Dummy (range, "no downcast possible") ]
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (NatType n), ValueTypes (NatType toN) when n > toN ->
-        Error [ Dummy (range, "no downcast possible") ]
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b > toB ->
-        Error [ Dummy (range, "no downcast possible") ]
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF ->
-        Error [ Dummy (range, "no downcast possible") ]
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
 
     // Allow to cast an AnyBits literal to intX, if it can be represented
     | AnyBits, ValueTypes (IntType it) ->
@@ -1041,7 +1051,7 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
             let ic = it.Convert bc
             Ok { rhs = IntConst ic; typ = simpleToType; range = range }    
         else 
-            Error [ Dummy (range, "IntType cannot represent AnyBits value") ]
+            Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
     // Allow to cast an AnyBits literal to floatX, if it can be represented precisely
     | AnyBits, ValueTypes (FloatType ft) ->
         let bc = primitiveExpr.rhs.GetBitsConst
@@ -1049,7 +1059,7 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
             let fc = ft.Convert bc
             Ok { rhs = FloatConst fc; typ = simpleToType; range = range }    
         else 
-            Error [ Dummy (range, "FloatType cannot represent AnyBits value precisely") ]
+            Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
 
     | AnyBits, ValueTypes (BitsType _)
     | AnyBits, ValueTypes (NatType _)
@@ -1058,11 +1068,10 @@ let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: T
     | AnyInt, ValueTypes (BitsType _)
     | AnyInt, ValueTypes (FloatType _)
     | AnyFloat, ValueTypes (FloatType _) ->
-        Error [ Dummy (range, "no cast of number literal necessary, use a type annotation") ]
-
-
+        Error [ LiteralCastNotNecessary (range, primitiveExpr, simpleToType) ]
+        
     | ValueTypes vt1, ValueTypes vt2 ->
-        Error [ Dummy (range, sprintf "no cast from %A to %A possible" vt1 vt2)]
+        Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
     | _, _ ->
         failwith "Called with expr of non primitive types"
 
@@ -1070,7 +1079,7 @@ let private conversion range (checkedExpr: TypedRhs, checkedToType: Types) =
     if checkedToType.IsPrimitive && (checkedExpr.typ.IsPrimitive || checkedExpr.typ.IsPrimitiveAny) then
         checkPrimitiveCasts range checkedExpr checkedToType
     else
-        Error [ Dummy (range, "cast of non-primitive types") ]
+        Error [ ImpossibleCast (range, checkedExpr, checkedToType) ]
 
 //=============================================================================
 // Checking right and left hand side usages (expressions)
@@ -1295,8 +1304,9 @@ and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
 /// type check expr and typ and combine
 /// using reTypeFun.
 and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFun =
+    let rng = Range.unionRanges expr.Range typ.Range
     combine (checkExpr lut expr) (checkDataType lut typ)
-    |> Result.bind (reTypeFun typ.Range)
+    |> Result.bind (reTypeFun rng)
 
 
 /// Given an untyped AST.Expr, return a typed expression.
@@ -1408,32 +1418,18 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
     | AST.Idieq _ ->
         Error [UnsupportedFeature (expr.Range, "identity operator")]
     
-    // type conversion
+    // type conversion and annotation
     | AST.Convert (e, t) -> combineExprAndType lut e t conversion
-        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
-        //let exp = checkExpr lut e
-        //let toType = checkDataType lut t
-        //combine exp toType
-        //|> Result.bind (conversion expr.Range)
-    
-    // type annotation --
     | AST.HasType (e, t) -> combineExprAndType lut e t typeAnnotation
-        // determines the type of a literal, e.g. 42: bits8, are is an alternative for e.g. var x = expr: type
-        //let rhs = checkExpr lut e
-        //let lty = checkDataType lut t
-        //combine rhs lty
-        //// |> Result.bind (fun (rhs, lty) -> amendRhsExpr false lty rhs)
-        //// |> Result.bind (fun (rhs, lty) -> amendPrimitiveAny lty rhs)
-        //|> Result.bind (typeAnnotation t.Range) 
     
     // operators on arrays and slices
     | AST.Len _
     | AST.Cap _ -> //TODO
         Error [UnsupportedFeature (expr.Range, "length or capacity")]
     // parentheses
-    | AST.Expr.Parens (expr, _) ->
+    | AST.Expr.Parens (expr, rng) ->
         checkExpr lut expr
-        |> Result.map (fun e -> e.SetRange expr.Range) // TODO: This seems wrong, range should be _, check this. fjg, 31.01.20
+        |> Result.map (fun e -> e.SetRange rng) 
 
     |> Result.map (tryEvalConst lut)
 

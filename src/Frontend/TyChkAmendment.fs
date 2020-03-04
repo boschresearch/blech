@@ -183,7 +183,7 @@ let internal getInitValueWithoutZeros pos name dty =
 /// A primitive literal has type AnyInt, AnyBits or AnyFloat
 /// Throws an error if the literal cannot be represented.
 /// Returns the unchanged rExpr if amendment is not possible.
-let internal amendPrimitiveAny lTyp (rExpr: TypedRhs)  = 
+let internal tryAmendPrimitiveAny lTyp (rExpr: TypedRhs)  = 
     match rExpr.typ, lTyp with
     | AnyInt , ValueTypes (IntType intX) ->
         let value = rExpr.rhs.GetIntConst
@@ -233,16 +233,17 @@ let internal amendPrimitiveAny lTyp (rExpr: TypedRhs)  =
             Ok {rExpr with rhs = FloatConst <| floatX.AdoptAny value; typ = lTyp}
         else
             Error [LiteralNotInType (rExpr, lTyp)]
-            
-    | _, _  ->
+    
+    | _, _ ->
         Ok rExpr
+ 
 
 
 /// Promotes a primivite literal to the a suitable size of the ltyp
 /// A primitive literal has type AnyInt, AnyBits or AnyFloat
 /// Throws an error if the literal cannot be represented.
 /// Return the unchanged literal, if the promotion is not possible
-let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for this function, fjg. 19.02.20
+let tryPromotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for this function, fjg. 19.02.20
     match rexpr.typ, ltyp with
     | AnyInt, ValueTypes (IntType size) ->
         let anyInt = rexpr.rhs.GetIntConst
@@ -299,10 +300,9 @@ let promotePrimitiveAny ltyp (rexpr: TypedRhs) = // TODO: find a better name for
             Ok { rexpr with rhs = FloatConst <| floatX.AdoptAny anyFloat; typ = ValueTypes (FloatType floatX) }
         else
             Error[LiteralNotInLargestType (rexpr, ValueTypes(FloatType(Float64)))]
-            
-    | _, _ ->
+        
+    | _, _  ->
         Ok rexpr
- 
 
 
 //=============================================================================
@@ -391,7 +391,34 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
         | :? System.OverflowException ->  
             failwith "Array literal with more elements than an int can represent" // this will certainly never happen
 
- 
+and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
+    match lTyp, rExpr.rhs with
+    // resetting
+    | ValueTypes (ValueTypes.StructType _), ResetConst
+    | ValueTypes (ArrayType _), ResetConst ->
+        // build a struct (or resp. array) const with default values of the fields
+        // note that we do overwrite let fields but we do so with the default value which essentially has no effect
+        getInitValueWithoutZeros rExpr.Range "" lTyp
+    // structs
+    | ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
+        amendStruct inInitMode lTyp rExpr.Range name fields assignments 
+    // arrays
+    | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
+        amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
+    // all sorts of mismatches
+    | ValueTypes (ArrayType _), StructConst _ ->
+        Error [TypeMismatchArrStruct(lTyp, rExpr)]
+    | ValueTypes (ValueTypes.StructType _), ArrayConst _ ->
+        Error [TypeMismatchStructArr(lTyp, rExpr)]
+    | t, _ when t.IsPrimitive->
+        Error [TypeMismatchPrimitiveComposite(lTyp, rExpr)]
+    // altering reference typed data is illegal
+    | ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
+    | ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
+        Error [CannotResetRefType(rExpr.Range)]
+    // at this point we've missed something
+    | _ -> Error [AmendBroken(lTyp, rExpr)]
+
  
 /// With structured literals we may need to "fill them up" since a user may 
 /// provide only some of the structure or array fields.
@@ -410,39 +437,40 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
         elif lTyp.IsWildcard then 
             Ok rExpr
         elif rExpr.typ.IsPrimitiveAny then // primitive any
-            amendPrimitiveAny lTyp rExpr
+            tryAmendPrimitiveAny lTyp rExpr
         else 
             Ok {rExpr with typ = lTyp}
     // otherwise we are lacking information about the rhs
     // this is the case with struct literals or reset literals, array literals
     // these have to be filled up and their type needs to be updated
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
-        match lTyp, rExpr.rhs with
-        // resetting
-        | ValueTypes (ValueTypes.StructType _), ResetConst
-        | ValueTypes (ArrayType _), ResetConst ->
-            // build a struct (or resp. array) const with default values of the fields
-            // note that we do overwrite let fields but we do so with the default value which essentially has no effect
-            getInitValueWithoutZeros rExpr.Range "" lTyp
-        // structs
-        | ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
-            amendStruct inInitMode lTyp rExpr.Range name fields assignments 
-        // arrays
-        | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
-            amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
-        // all sorts of mismatches
-        | ValueTypes (ArrayType _), StructConst _ ->
-            Error [TypeMismatchArrStruct(lTyp, rExpr)]
-        | ValueTypes (ValueTypes.StructType _), ArrayConst _ ->
-            Error [TypeMismatchStructArr(lTyp, rExpr)]
-        | t, _ when t.IsPrimitive->
-            Error [TypeMismatchPrimitiveComposite(lTyp, rExpr)]
-        // altering reference typed data is illegal
-        | ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
-        | ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
-            Error [CannotResetRefType(rExpr.Range)]
-        // at this point we've missed something
-        | _ -> Error [AmendBroken(lTyp, rExpr)]
+        amendCompoundLiteral inInitMode lTyp rExpr
+        //match lTyp, rExpr.rhs with
+        //// resetting
+        //| ValueTypes (ValueTypes.StructType _), ResetConst
+        //| ValueTypes (ArrayType _), ResetConst ->
+        //    // build a struct (or resp. array) const with default values of the fields
+        //    // note that we do overwrite let fields but we do so with the default value which essentially has no effect
+        //    getInitValueWithoutZeros rExpr.Range "" lTyp
+        //// structs
+        //| ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
+        //    amendStruct inInitMode lTyp rExpr.Range name fields assignments 
+        //// arrays
+        //| ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
+        //    amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
+        //// all sorts of mismatches
+        //| ValueTypes (ArrayType _), StructConst _ ->
+        //    Error [TypeMismatchArrStruct(lTyp, rExpr)]
+        //| ValueTypes (ValueTypes.StructType _), ArrayConst _ ->
+        //    Error [TypeMismatchStructArr(lTyp, rExpr)]
+        //| t, _ when t.IsPrimitive->
+        //    Error [TypeMismatchPrimitiveComposite(lTyp, rExpr)]
+        //// altering reference typed data is illegal
+        //| ReferenceTypes (ReferenceTypes.StructType _), ResetConst _
+        //| ReferenceTypes (ReferenceTypes.StructType _), StructConst _ ->
+        //    Error [CannotResetRefType(rExpr.Range)]
+        //// at this point we've missed something
+        //| _ -> Error [AmendBroken(lTyp, rExpr)]
     else
         Error [TypeMismatch(lTyp, rExpr)]
 

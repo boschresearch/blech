@@ -102,8 +102,10 @@ type TyCheckError =
     | NoShiftAmountType of TypedRhs
     
     // Cast and Conversion
-    | AnnotationTypeMismatch of range * TypedRhs * Types 
-
+    | WrongTypeAnnotation of range * TypedRhs * Types
+    | DownCast of range * TypedRhs * Types
+    | ImpossibleCast of range * TypedRhs * Types
+    
     // bitwise operators
     | BitwiseOperationTypeMismatch of range * TypedRhs * TypedRhs
     | ExpectedBitsArguments of range * TypedRhs * TypedRhs
@@ -157,6 +159,11 @@ type TyCheckError =
     // shift amounts
     | NegativeShiftAmount of TypedRhs
     
+    // cast and conversions
+    | LiteralDoesNotHaveType of range * TypedRhs * Types
+    | LiteralCastNotInType of range * TypedRhs * Types
+    | LiteralCastNotNecessary of range * TypedRhs * Types
+
     // arithmetic
     | UnaryMinusOverFlow of range * TypedRhs
     
@@ -180,7 +187,7 @@ type TyCheckError =
     // pragmas
     | UnknownPragma of range
     // Dummy error used during development
-    | Dummy of range * string
+    // | Dummy of range * string
 
     interface Diagnostics.IDiagnosable with
         member err.MainInformation =
@@ -256,9 +263,13 @@ type TyCheckError =
                 expr.Range, sprintf "Type '%s' is not a valid type for a shift amount" (string expr.typ)
             
             // Cast and converions
-            | AnnotationTypeMismatch (rng, expr, typ)-> 
-                rng,  sprintf "Type annotation ': %s' does not match type '%s' of the given expression." (string typ) (string expr.typ)
-
+            | WrongTypeAnnotation (rng, expr, typ) -> 
+                rng,  sprintf "Type annotation '%s' does not match type '%s' of the given expression." (string typ) (string expr.typ)
+            | DownCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as' does not allow downcast from type '%s' to type '%s'." (string expr.typ) (string typ)
+            | ImpossibleCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
+                
             // bitwise operators
             | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
                 rng, "Bitwise operation on arguments of different bits size."
@@ -325,6 +336,14 @@ type TyCheckError =
             | NegativeShiftAmount expr ->
                 expr.range, sprintf "Shift amount '%s' is less than '0'." (string expr) 
             
+            // cast and conversions
+            | LiteralDoesNotHaveType (rng, literal, typ) ->
+                rng, sprintf "Literal '%s' does not have type '%s'." (string literal) (string typ)
+            | LiteralCastNotInType (rng, literal, typ) ->
+                rng, sprintf "Literal '%s' cannot be represented in type '%s'." (string literal) (string typ)
+            | LiteralCastNotNecessary (rng, literal, typ) ->
+                rng, sprintf "No conversion necessary. Literal '%s' should use a type annotation." (string literal)
+
             // arithmetic
             | UnaryMinusOverFlow (p, expr) -> p, sprintf "Overflow due to unary minus operation '-' on value '%s'." (string expr)
             
@@ -352,7 +371,7 @@ type TyCheckError =
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
             
-            | Dummy (p, msg) -> p, msg
+            // | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
                 { range = srcPos
@@ -373,9 +392,15 @@ type TyCheckError =
                 [ { range = rng; message = "number expected"; isPrimary = true}]
             
             // Type annotation and cast
-            | AnnotationTypeMismatch (rng, expr, typ)-> 
-                [ { range = rng; message = "wrong type"; isPrimary = true}]
-
+            | WrongTypeAnnotation (rng, expr, typ)-> 
+                [ { range = rng; message = "wrong type annotated"; isPrimary = true} 
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | DownCast (rng, expr, typ) ->
+                [ { range = rng; message = "no downcast allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ImpossibleCast (rng, expr, typ) ->
+                [ { range = rng; message = "cast not allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
 
             // Shift amounts, arrays sizes and indexes
             | NoShiftAmountType expr ->
@@ -417,6 +442,16 @@ type TyCheckError =
             | NegativeShiftAmount expr ->
                 [ { range = expr.range; message = "non-negative shift amount expected"; isPrimary = true} ]
             
+            // cast and conversions
+            | LiteralDoesNotHaveType (rng, literal, typ) ->
+                [ { range = rng; message = "type annotatin not possible "; isPrimary = true } 
+                  { range = literal.range; message = sprintf "value does not have type '%s'" (string typ); isPrimary = false } ]
+            | LiteralCastNotInType (rng, literal, typ) ->
+                [ { range = rng; message = "conversion not possible "; isPrimary = true } 
+                  { range = literal.range; message = sprintf "value not in '%s'" (string typ); isPrimary = false } ]
+            | LiteralCastNotNecessary (rng, literal, typ) ->
+                [ { range = rng; message = "no conversion necessary"; isPrimary = true } ]
+                
             // arithmetic
             | UnaryMinusOnBitsLiteral (_, expr) 
             | ComplementOnBitsLiteral (_, expr) ->
@@ -456,15 +491,19 @@ type TyCheckError =
                 [ "All numbers, with the exception of type nat, can be inverted."]
             
             // Type annotation and cast
-            | AnnotationTypeMismatch (_, _, typ)-> 
+            | WrongTypeAnnotation (_, _, typ)-> 
                 [ sprintf "For changing the type use a cast 'as %s'" (string typ)]
-
+            | ImpossibleCast (rng, expr, typ) ->
+                [ "Type conversion is only allowed on simple types with no loss of information."
+                  "NatX and bitsX types can be casted precisely to a bigger intX type."
+                  "NatX, bitsX and intX types can be casted precisely to a bigger floatX type." ]
+                  
 
             // Shift amounts, arrays sizes and indexes
             | NoShiftAmountType _ ->
                 [ "A shift amount type it either intX, bitsX or natX."
                   "A shift amount must be greater than 0." 
-                  "A shift amount is taken modulo the bitsize of the shifted valued." ]                    
+                  "A shift amount is taken modulo the bitsize of the shifted value." ]                    
             
             // bitwise operators
             | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
@@ -477,7 +516,10 @@ type TyCheckError =
 
             // --- evaluation ---
 
-
+            // type annotation and conversion 
+            | LiteralCastNotNecessary (rng, literal, typ) ->
+                [ sprintf "Use a type annotation '%s : %s'." (string literal) (string typ) ]
+            
             // array indexes
             | PositiveSizeExpected _ ->
                 [ sprintf "The number of array elements must be strictly positive." ]                    
