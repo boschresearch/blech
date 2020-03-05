@@ -94,7 +94,7 @@ type TyCheckError =
     
     // simple types
     | ExpectedBoolExpr of range * TypedRhs
-    | ExpectedBitsExpr of TypedRhs
+    | ExpectedBitsExpr of range * TypedRhs
     | UnaryMinusOnNatExpr of range * TypedRhs
     | ExpectedInvertableNumberExpr of range * TypedRhs
     
@@ -107,10 +107,15 @@ type TyCheckError =
     | ImpossibleCast of range * TypedRhs * Types
     
     // bitwise operators
-    | BitwiseOperationTypeMismatch of range * TypedRhs * TypedRhs
-    | ExpectedBitsArguments of range * TypedRhs * TypedRhs
+    | BitsTypesOfDifferentSize of range * TypedRhs * TypedRhs
+    | BitsTypesRequired of range * TypedRhs * TypedRhs
     
-
+    // relational
+    | RelationalTypesRequired of range * TypedRhs * TypedRhs
+    
+    // arithmetic
+    | ArithmeticTypesRequired of range * TypedRhs * TypedRhs
+    
     // types
     | TypeMismatch of Types * TypedRhs
     | TypeMismatchArrStruct of Types * TypedRhs
@@ -125,7 +130,6 @@ type TyCheckError =
     | ExpectedBoolConds of TypedRhs * TypedRhs
     | MustBeNumeric of TypedRhs * TypedRhs
     | SameTypeRequired of TypedRhs * TypedRhs
-    | SameArithmeticTypeRequired of TypedRhs * TypedRhs
     | SameFirstTypeRequired of range * ValueTypes * ValueTypes
     | NoComparisonAllowed of TypedRhs * TypedRhs
     | IncomparableReturnTypes of range * ValueTypes * ValueTypes
@@ -153,8 +157,8 @@ type TyCheckError =
     
     // Array sizes and indexes
     | NegativeArrayIndex of TypedRhs
-    | PositiveSizeExpected of range * TypedRhs
-    | ArraySizeOverflowsWordsize of range * Arguments.WordSize * TypedRhs
+    | PositiveSizeExpected of TypedRhs
+    | ArraySizeOverflowsWordsize of TypedRhs * Arguments.WordSize
     
     // shift amounts
     | NegativeShiftAmount of TypedRhs
@@ -169,12 +173,17 @@ type TyCheckError =
     
     | ArithmeticOverFlow of range * TypedRhs * TypedRhs
     | DivideByZero of range * TypedRhs
+
+    | ArithmeticOperationOnAny of range * TypedRhs * TypedRhs
     
     // bitwise operations
-    | UnaryMinusOnBitsLiteral of range * TypedRhs
-    | ComplementOnBitsLiteral of range * TypedRhs
-    | BitwiseBinaryOperationOnAnyBits of range * TypedRhs * TypedRhs
+    | UnaryMinusOnAnyBits of range * TypedRhs
+    | ComplementOnAnyBits of range * TypedRhs
+    | BitwiseOperationOnAnyBits of range * TypedRhs * TypedRhs
     | ShiftOperationOnAnyBits of range * TypedRhs
+    
+    // relational operations
+    | RelationalOperationOnAny of range * TypedRhs * TypedRhs
     
     // annotations
     | UnsupportedAnnotation of range
@@ -254,7 +263,8 @@ type TyCheckError =
             
             // simple types
             | ExpectedBoolExpr (p, r) -> p, sprintf "Expression '%s' must be boolean." (r.ToString())
-            | ExpectedBitsExpr expr -> expr.range, sprintf "Given type '%s' is not a bitsX type." (string expr.typ)
+            | ExpectedBitsExpr (rng, expr) -> 
+                rng, sprintf "Given type '%s' is not a bitsX type." (string expr.typ)
             | UnaryMinusOnNatExpr (p, expr) -> p, sprintf "You cannot invert the sign of nat value '%s'" (expr.ToString())
             | ExpectedInvertableNumberExpr (p, expr) -> p, sprintf "You cannot invert the sign of '%s', which is not a number." (expr.ToString())
             
@@ -271,11 +281,18 @@ type TyCheckError =
                 rng, sprintf "Type conversion from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
                 
             // bitwise operators
-            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+            | BitsTypesOfDifferentSize (rng, lexpr, rexpr) ->
                 rng, "Bitwise operation on arguments of different bits size."
-            | ExpectedBitsArguments (rng, lexpr, rexpr) -> 
+            | BitsTypesRequired (rng, lexpr, rexpr) -> 
                 rng, "Binary bitwise operation requires arguments of the same bitsX type." 
             
+            // relational 
+            | RelationalTypesRequired (rng, lexpr, rexpr) ->
+                rng, "Relational operation requires arguments of the same relational type."
+            
+            // arithmetic
+            | ArithmeticTypesRequired (rng, lexpr, repxr) -> 
+                rng, "Arithmetic operation requires arguments of the same arithmetic type." 
 
             // types
             | TypeMismatch (t, r) -> 
@@ -297,7 +314,6 @@ type TyCheckError =
             | ExpectedBoolConds (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must both be boolean." (r1.ToString()) (r2.ToString())
             | MustBeNumeric (t1, t2) -> Range.unionRanges t1.Range t2.Range, sprintf "Expressions %s and %s must be numeric." (t1.ToString()) (t2.ToString())
             | SameTypeRequired (r1, r2) -> Range.unionRanges r1.Range r2.Range, sprintf "Expressions %s and %s must be of the same type." (r1.ToString()) (r2.ToString())
-            | SameArithmeticTypeRequired (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s must be of the same arithmetic type." (e1.ToString()) (e2.ToString())
             | SameFirstTypeRequired (p, f1, f2) -> p, sprintf "Types %s and %s must be the same." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())
             | NoComparisonAllowed (e1, e2) -> Range.unionRanges e1.Range e2.Range, sprintf "Expressions %s and %s are structured value typed data and may not be compared at runtime directly using '=='." (e1.ToString()) (e2.ToString())
             | IncomparableReturnTypes (p, f1, f2) -> p, sprintf "The code block may return values of type %s or %s which are incomparable." ((ValueTypes f1).ToString()) ((ValueTypes f2).ToString())
@@ -328,9 +344,10 @@ type TyCheckError =
             // array indexes and sizes
             | NegativeArrayIndex expr -> 
                 expr.range, sprintf "Array index '%s' is less than '0'." (string expr) 
-            | PositiveSizeExpected (r, expr) -> r, sprintf "A array size must be positive but '%s' was given." (string expr)
-            | ArraySizeOverflowsWordsize (r, wordsize, expr) -> 
-                r, sprintf "The machine dependent 'word-size=%s' cannot represent array size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
+            | PositiveSizeExpected (expr) -> 
+                expr.range, sprintf "A array size must be positive but '%s' was given." (string expr)
+            | ArraySizeOverflowsWordsize (expr, wordsize) -> 
+                expr.range, sprintf "The machine dependent 'word-size=%s' cannot represent array size '%s'." (string wordsize.ToInt) (string expr)        // evaluation
             
             // shift amounts    
             | NegativeShiftAmount expr ->
@@ -352,16 +369,23 @@ type TyCheckError =
             | DivideByZero (rng, expr) ->
                 rng, sprintf "Division by zero."
 
+            | ArithmeticOperationOnAny (rng, lexpr, rexpr) ->
+                rng, sprintf "Cannot resolve overloaded arithmetic operation on unsized literals '%s' and '%s'." (string lexpr) (string rexpr)
+            
             // bitwise operators
-            | UnaryMinusOnBitsLiteral (p, expr) -> p, sprintf "Invalid unary minus '-' on bits literal '%s'." (string expr)
-            | ComplementOnBitsLiteral (p, expr) -> p, sprintf "Invalid bitwise negation '~' on bits literal '%s'." (string expr)
-            | BitwiseBinaryOperationOnAnyBits (rng, lexpr, rexpr) ->
-                rng, sprintf "Cannot resolve overloaded operation on unsized bits literals '%s' and '%s'." (string lexpr) (string rexpr)
+            | UnaryMinusOnAnyBits (p, expr) -> p, sprintf "Invalid unary minus '-' on bits literal '%s'." (string expr)
+            | ComplementOnAnyBits (p, expr) -> p, sprintf "Invalid bitwise negation '~' on bits literal '%s'." (string expr)
+            | BitwiseOperationOnAnyBits (rng, lexpr, rexpr) ->
+                rng, sprintf "Cannot resolve overloaded bitwise operation on unsized bits literals '%s' and '%s'." (string lexpr) (string rexpr)
     
             | ShiftOperationOnAnyBits (rng, expr) ->
                 rng, sprintf "Cannot resolve overloaded shift operation on unsized bits literal '%s'." (string expr)
             
-                    
+            | RelationalOperationOnAny (rng, lexpr, rexpr) ->
+                rng, sprintf "Cannot resolve overloaded relational operation on unsized literals '%s' and '%s'." (string lexpr) (string rexpr)
+            
+            
+
             // --- attributes ---
             // annotations
             | UnsupportedAnnotation p -> p, "Unsupported annotation."
@@ -385,14 +409,14 @@ type TyCheckError =
             match err with
            
             // simple types
-            | ExpectedBoolExpr (rng, _) -> 
-                [ { range = rng; message = "condition expected"; isPrimary = true}]
-            | ExpectedBitsExpr expr -> 
+            | ExpectedBoolExpr (_, expr) -> 
+                [ { range = expr.range; message = "bool type expected"; isPrimary = true}]
+            | ExpectedBitsExpr (_, expr) -> 
                 [ { range = expr.range; message = "bits type expected"; isPrimary = true}]
-            | UnaryMinusOnNatExpr (rng, _) -> 
-                [ { range = rng; message = "must not be a nat type"; isPrimary = true}]
-            | ExpectedInvertableNumberExpr (rng, _) -> 
-                [ { range = rng; message = "number expected"; isPrimary = true}]
+            | UnaryMinusOnNatExpr (_, expr) -> 
+                [ { range = expr.range; message = "must not be a nat type"; isPrimary = true}]
+            | ExpectedInvertableNumberExpr (_, expr) -> 
+                [ { range = expr.range; message = "number expected"; isPrimary = true}]
             
             // Type annotation and cast
             | WrongTypeAnnotation (rng, expr, typ)-> 
@@ -410,17 +434,29 @@ type TyCheckError =
                 [ { range = expr.range; message = "number expected"; isPrimary = true } ]
             
             // bitwise operators
-            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+            | BitsTypesOfDifferentSize (rng, lexpr, rexpr) ->
                 [ { range = rng; message = "same bitsX arguments expected"; isPrimary = true}
                   { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
                   { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
                 
-            | ExpectedBitsArguments (rng, lexpr, rexpr) ->
-                [ { range = rng; message = "bitsX arguments expected"; isPrimary = true}
+            | BitsTypesRequired (rng, lexpr, rexpr) ->
+                [ { range = rng; message = "bitsX argument types expected"; isPrimary = true}
                   { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
                   { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
-                
-
+            
+            // relational
+            
+            | RelationalTypesRequired (rng, lexpr, rexpr) ->
+                [ { range = rng; message = "same arguments types expected"; isPrimary = true}
+                  { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
+                  { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
+            
+            // arithmetic 
+            | ArithmeticTypesRequired (rng, lexpr, rexpr) ->
+                [ { range = rng; message = "same argument types expected"; isPrimary = true}
+                  { range = lexpr.range; message = sprintf "has type '%s'" (string lexpr.typ); isPrimary = false } 
+                  { range = rexpr.range; message = sprintf "has type '%s'" (string rexpr.typ); isPrimary = false } ]
+            
             // --- evaluation ---
             
             // literals
@@ -436,10 +472,10 @@ type TyCheckError =
             // array sizes and indexes
             | NegativeArrayIndex expr ->
                 [ { range = expr.range; message = "non-negative index expected"; isPrimary = true} ]
-            | PositiveSizeExpected (rng, _) ->
-                [ { range = rng; message = "positive size expected"; isPrimary = true} ]
-            | ArraySizeOverflowsWordsize (rng, wordsize, _) ->
-                [ { range = rng; message = sprintf "'word-size=%s' overflow" (string wordsize.ToInt); isPrimary = true} ]
+            | PositiveSizeExpected expr ->
+                [ { range = expr.range; message = "positive size expected"; isPrimary = true} ]
+            | ArraySizeOverflowsWordsize (expr, wordsize) ->
+                [ { range = expr.range; message = sprintf "'word-size=%s' overflow" (string wordsize.ToInt); isPrimary = true} ]
             
             // shift amounts
             | NegativeShiftAmount expr ->
@@ -457,8 +493,8 @@ type TyCheckError =
                 
             // arithmetic
             
-            | UnaryMinusOnBitsLiteral (_, expr) 
-            | ComplementOnBitsLiteral (_, expr) ->
+            | UnaryMinusOnAnyBits (_, expr) 
+            | ComplementOnAnyBits (_, expr) ->
                 [ { range = expr.range; message = "unknown bits size"; isPrimary = true}]
             | UnaryMinusOverFlow (rng, expr) ->
                 [ { range = rng; message = sprintf "unary minus overflow"; isPrimary = true}
@@ -472,15 +508,18 @@ type TyCheckError =
             | DivideByZero (rng, expr) -> 
                 [ { range = rng; message = sprintf "division by zero"; isPrimary = true}
                   { range = expr.range; message = sprintf "value is '%s'" (string expr) ; isPrimary = false} ]
-                
-
-            // bitwise
-            | ShiftOperationOnAnyBits (rng, _)
-            | BitwiseBinaryOperationOnAnyBits (rng, _, _) ->
+            
+            | ArithmeticOperationOnAny (rng, _, _) ->
                 [ { range = rng; message = sprintf "overloading not resolved"; isPrimary = true} ]
             
+            // bitwise
+            | ShiftOperationOnAnyBits (rng, _)
+            | BitwiseOperationOnAnyBits (rng, _, _) ->
+                [ { range = rng; message = sprintf "overloading not resolved"; isPrimary = true} ]
             
-
+            | RelationalOperationOnAny (rng, _, _) ->
+                [ { range = rng; message = sprintf "overloading not resolved"; isPrimary = true} ]
+            
             // --- annotations ---
 
             | UnsupportedAnnotation range -> 
@@ -507,7 +546,7 @@ type TyCheckError =
             
             // Type annotation and cast
             | WrongTypeAnnotation (_, _, typ)-> 
-                [ sprintf "For changing the type use a cast 'as %s'" (string typ)]
+                [ sprintf "For changing the type use a cast 'as %s'." (string typ)]
             | ImpossibleCast (rng, expr, typ) ->
                 [ "Type conversion is only allowed on simple types with no loss of information."
                   "NatX and bitsX types can be casted precisely to a bigger intX type."
@@ -521,13 +560,20 @@ type TyCheckError =
                   "A shift amount is taken modulo the bitsize of the shifted value." ]                    
             
             // bitwise operators
-            | BitwiseOperationTypeMismatch (rng, lexpr, rexpr) ->
+            | BitsTypesOfDifferentSize (rng, lexpr, rexpr) ->
                 [ "Bitwise operators require arguments of the same bitsX type." 
                   "You can use a type cast 'as bitsX' to adopt the arguments." ]
                         
-            | ExpectedBitsArguments _ ->
+            | BitsTypesRequired _ ->
                 [ "Bitwise operators are only defined for arguments of type bitsX."]
             
+            // relational
+            | RelationalTypesRequired _ ->
+                [ "Relational operators are defined for bool, bitsX, natX, intX and floatX types."]
+
+            // arithmetic
+            | ArithmeticTypesRequired _ ->
+                [ "Arithmetic operators are defined for intX, natX, bitsX and floatX types."]
 
             // --- evaluation ---
 
@@ -540,21 +586,23 @@ type TyCheckError =
                 [ sprintf "The number of array elements must be strictly positive." ]                    
             | NegativeArrayIndex _ ->
                 [ sprintf "An array index must be greater than '0'." ]                    
-            | ArraySizeOverflowsWordsize (_, wordsize, _) ->
+            | ArraySizeOverflowsWordsize (_, wordsize) ->
                 [ sprintf "The compiler option '--word-size=%s' defines the machine dependent word size." (string wordsize.ToInt) 
                   "See 'blechc --help'."]
             // arithmetic
-            | UnaryMinusOnBitsLiteral _ -> 
+            | UnaryMinusOnAnyBits _ -> 
                 [ "Use a type annotation to define the size of the bits literal, e.g. '-(0x1: bits8)'." ]
-            | ComplementOnBitsLiteral _ -> 
+            | ComplementOnAnyBits _ -> 
                 [ "Use a type annotation to define the size of the bits literal, e.g. '~(0x1: bits8)'." ]
             | UnaryMinusOverFlow _  ->
                 [ "Unary minus of an int value or a float value can overflow, e.g. - (-128: int8)." ]
             // bitwise
             | ShiftOperationOnAnyBits (_, expr) ->
                 [ sprintf "Use a type annotation to define the size of the bits literal, e.g. '(%s: bits32)'." (string expr) ]    
-            | BitwiseBinaryOperationOnAnyBits (_, expr, _) ->
+            | BitwiseOperationOnAnyBits (_, expr, _) ->
                 [ sprintf "Use a type annotation to define the size of one bits literal, e.g. '(%s: bits32)'." (string expr) ]
+            | RelationalOperationOnAny (_, expr, _) ->
+                [ sprintf "Use a type annotation to define the size of one literal, e.g. '(%s: bits32)'." (string expr) ]
             
             | NegativeShiftAmount _ ->
                 [ "An shift amount must be greater than '0'."

@@ -479,11 +479,11 @@ and private ensureNonNegIndex index =
 and private ensurePositiveSize index = 
     match index.rhs with
     | IntConst i when not i.IsPositive ->
-        Error [ PositiveSizeExpected (index.range, index) ]
+        Error [ PositiveSizeExpected index ]
     | NatConst n when not n.IsPositive ->
-        Error [ PositiveSizeExpected (index.range, index) ]
+        Error [ PositiveSizeExpected index ]
     | BitsConst b when not b.IsPositive ->
-        Error [ PositiveSizeExpected (index.range, index) ]
+        Error [ PositiveSizeExpected index ]
     | _ ->
         Ok index
 
@@ -491,11 +491,11 @@ and private ensurePositiveSize index =
 and private ensureArraySize wordsize index =
     match index.rhs with
     | IntConst i when not (i.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] 
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
     | NatConst n when not (n.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index) ] 
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
     | BitsConst b when not (b.IsSize wordsize) ->
-        Error [ ArraySizeOverflowsWordsize (index.range, wordsize, index ) ] 
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
     | _ ->
         Ok index
 
@@ -614,11 +614,11 @@ and getInitValueForTml lut tml =
 
 /// Given a typed expression, construct its negation.
 /// If the type is not boolean, an error will be returned instead.
-let private negate r (expr: TypedRhs) =
+let private negate rng (expr: TypedRhs) =
     match expr.typ with
     | ValueTypes BoolType ->
         Ok { expr with rhs = neg expr }
-    | _ -> Error [ExpectedBoolExpr (r, expr)]
+    | _ -> Error [ExpectedBoolExpr (rng, expr)]
 
 /// Given a typed expression, construct its bitwise complement
 /// If the the type is not BitsType, an error will returned instead
@@ -627,8 +627,8 @@ let private complement rng (expr: TypedRhs) =
     | ValueTypes (BitsType size) ->
         Ok { expr with rhs = bnot expr }
     | AnyBits ->
-        Error [ComplementOnBitsLiteral (rng, expr)]
-    | _ -> Error [ExpectedBitsExpr expr]
+        Error [ComplementOnAnyBits (rng, expr)]
+    | _ -> Error [ExpectedBitsExpr (rng, expr)]
 
 /// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
@@ -675,7 +675,7 @@ let private unaryMinus r (expr: TypedRhs) =
         | ValueTypes (NatType _) ->
             Error [UnaryMinusOnNatExpr (r, expr)]
         | AnyBits ->
-            Error [UnaryMinusOnBitsLiteral (r, expr)]
+            Error [UnaryMinusOnAnyBits (r, expr)]
         | _ ->
             Error [ExpectedInvertableNumberExpr (r, expr)]
 
@@ -721,11 +721,11 @@ let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
     | ValueTypes (BitsType size1), ValueTypes (BitsType size2) when size1 = size2->
         Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType size1); range = rng }
     | ValueTypes (BitsType _), ValueTypes (BitsType _) -> // when size1 != size2
-        Error [BitwiseOperationTypeMismatch (rng, expr1, expr2)]
+        Error [BitsTypesOfDifferentSize (rng, expr1, expr2)]
     | AnyBits, AnyBits ->
-        Error [BitwiseBinaryOperationOnAnyBits (rng, expr1, expr2)]
+        Error [BitwiseOperationOnAnyBits (rng, expr1, expr2)]
     | _, _ ->
-        Error [ExpectedBitsArguments (rng, expr1, expr2)] 
+        Error [BitsTypesRequired (rng, expr1, expr2)] 
 
 
 let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
@@ -772,6 +772,7 @@ let private combineShiftOp shift ((expr: TypedRhs), (amount: TypedRhs)) =
     
 
 let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
+    let rng = Range.unionRanges expr.range amount.range
     match expr.typ with
     | ValueTypes (BitsType bt) ->
         match amount.typ with
@@ -787,10 +788,9 @@ let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
             Error [ NoShiftAmountType amount ] 
     
     | AnyBits -> 
-        let rng = Range.unionRanges expr.range amount.range
         Error [ ShiftOperationOnAnyBits (rng, expr) ] 
     | _ ->
-        Error [ ExpectedBitsExpr expr ] 
+        Error [ ExpectedBitsExpr (rng, expr) ] 
             
 
 /// Returns the right shift '>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
@@ -817,22 +817,20 @@ let private rotateRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftO
 /// We assume that operator is either 'less', 'leq', or 'eq' from above.
 /// If the two types are not comparable, an error will be returned instead.
 let private combineRelationalOp operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    
+    let rng = Range.unionRanges expr1.range expr2.range
     match expr1.typ, expr2.typ with    
     | ValueTypes BoolType, ValueTypes BoolType
     | ValueTypes (IntType _), ValueTypes (IntType _)
     | ValueTypes (NatType _), ValueTypes (NatType _)
     | ValueTypes (BitsType _), ValueTypes (BitsType _)
     | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
-        Ok { rhs = operator expr1 expr2; typ = ValueTypes BoolType; range = Range.unionRanges expr1.Range expr2.Range }
-    | AnyInt, AnyInt
-    | AnyBits, AnyBits
-    | AnyFloat, AnyFloat ->
-        Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
-    | t1, t2 when t1 = t2 -> 
-        Error [MustBeNumeric(expr1, expr2)]
-    | _ ->
-        Error [SameArithmeticTypeRequired (expr1, expr2)] 
+        Ok { rhs = operator expr1 expr2; typ = ValueTypes BoolType; range = rng }
+    | t1, t2 when t1 = t2 && t1.IsPrimitiveAny ->
+        Error [RelationalOperationOnAny (rng, expr1, expr2)] 
+    //| t1, t2 when t1 = t2 -> 
+    //    Error [MustBeRelational (rng, expr1, expr2)]
+    | _, _ ->
+        Error [RelationalTypesRequired (rng, expr1, expr2)] 
         
 
             
@@ -880,15 +878,13 @@ let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
             Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
         | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
             Ok <| ValueTypes (FloatType (commonSize size1 size2))
-        | AnyInt, AnyInt
-        | AnyBits, AnyBits
-        | AnyFloat, AnyFloat ->
-            // Ok <| AnyFloat
-            Error [MustBeNumeric(expr1, expr2)]  // Todo: Better error message, fjg. 18.02.20
-        | t1, t2 when t1 = t2 -> 
-            Error [MustBeNumeric(expr1, expr2)]
-        | _ -> 
-            Error [SameTypeRequired (expr1, expr2)]
+        
+        | t1, t2 when t1 = t2 && t1.IsPrimitiveAny ->
+            Error [ArithmeticOperationOnAny (rng, expr1, expr2)]
+        //| t1, t2 when t1 = t2 -> 
+        //    Error [SameArithmeticTypeRequired(rng, expr1, expr2)]
+        | _, _ -> 
+            Error [ArithmeticTypesRequired (rng, expr1, expr2)]
 
     typ 
     |> Result.map ( fun t -> {rhs = operator expr1 expr2; typ = t; range = rng} )

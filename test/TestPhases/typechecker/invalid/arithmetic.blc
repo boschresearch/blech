@@ -1,0 +1,25 @@
+@[EntryPoint]
+
+activity main()
+    var i: int8
+    var n: nat8
+    var b: bits8
+
+    const ci: int8 = 127
+    const cn: nat8 = 0
+    const cb: bits8 = 0xFF
+
+
+    n = i + n // different types
+    n = n / cn // devision by zero
+    i = ci + 1 // overflow
+    i = (126 : int8) + 2 // overflow
+    b = ci - ci + 1 // = 1 : int8 , different types
+    i = -ci - 2 // overflow 
+    b = (-1 : bits8) / 0b0 // division by zero
+    b = (-129 : bits8) // no bits8 2s complement
+    b = -(256 : bits8) // no bits8 representation
+    b = 0x1 + 0x2 // no bit size defined
+    
+    await true
+end
