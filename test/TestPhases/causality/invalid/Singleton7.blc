@@ -6,12 +6,12 @@ function f()
     g()
 end
 
-function h() returns uint8
+function h() returns nat8
     g()
     return 7
 end
 
-activity B(x: uint8)
+activity B(x: nat8)
     await true
 end
 

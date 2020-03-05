@@ -21,7 +21,7 @@ activity B (myS: S)
     extern let extVarArr: [8]int32
     var res: int32
 
-    if myS.s < 0.0f then _ = run A()
+    if myS.s < 0.0 then _ = run A()
     else 
         res = run A()
         let foo2 = extVarArr
@@ -36,7 +36,7 @@ activity E ()
 
     @[COutput(binding="c_name_S2", header="externalImmutable.ext.h")]
     extern var extVarS2: S // Oops, pointing to the same external data twice!
-    extVarS2 = {s = 1.7f}
+    extVarS2 = {s = 1.7}
     let foo4 = extVarS
     let foo5 = extVarS.s
     

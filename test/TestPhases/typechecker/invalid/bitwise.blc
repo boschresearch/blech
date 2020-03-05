@@ -1,0 +1,29 @@
+
+@[EntryPoint]
+/// https://stackoverflow.com/questions/9290823/bitwise-shift-operation-in-c-on-uint64-t-variable
+activity main()
+    var b: bits32 = 0xff: bits8
+    b = b << -24       // negative shift amount
+    b = ~(0xF << -24)  // unsized literal
+    
+    b = ~( 0x1: bits32 << -24)   // negative shift amount
+
+    b = - 0xF // no bitsize 
+    b = ~ 0xFF // no bitsize 
+    b = 0x1 | 0x2 // no bitsize 
+    b = 0b111 & 0xFF // no bitsize 
+    var n: nat8
+    b = n | b // bitwise operation on nat8
+
+    // binary ops
+    var b8: bits8
+    var b64: bits64 = 0xf 
+    b8 = 0xfff : bits8 // literal too big
+    b64 = b8 | b64 // bitwise or on arguments of different size
+    b64 = (b8: bits64) | b64 // wrong type annotation
+    b = b8 | (b64 as bits8)  // illegal down cast
+
+    b8 = (0b111: bits8) & -255 // 2s complement of -255 too big for bits8
+
+    await true
+end

@@ -1,0 +1,10 @@
+
+@[EntryPoint]
+activity main()
+
+    var b: bits8 = 0x1
+    
+    b = - 0x1 // unary minus on unsized bits literal
+
+    await true
+end

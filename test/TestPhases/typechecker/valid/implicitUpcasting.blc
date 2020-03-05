@@ -13,7 +13,7 @@ activity implicitUpCasting()
     var h: int64 = c
     var i: int64 = e
 
-    var j: float32 = 12.1234f
+    var j: float32 = 12.1234
     var k: float64 = j
 
     await false

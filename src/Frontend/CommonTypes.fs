@@ -21,32 +21,7 @@
 module Blech.Frontend.CommonTypes
 
 open Blech.Common
-
-//=========================================================================
-// predefined constants TODO: actually, this should be part of blechconf.h
-//=========================================================================
-let MIN_INT8 = -pown 2I 7
-let MAX_INT8 = pown 2I 7 - 1I
-let MIN_INT16 = -pown 2I 15
-let MAX_INT16 = pown 2I 15 - 1I
-let MIN_INT32 = -pown 2I 31
-let MAX_INT32 = pown 2I 31 - 1I
-let MIN_INT64 = -pown 2I 63
-let MAX_INT64 = pown 2I 63 - 1I
-
-let MIN_UINT8 = 0I
-let MAX_UINT8 = pown 2I 8 - 1I
-let MIN_UINT16 = 0I
-let MAX_UINT16 = pown 2I 16 - 1I
-let MIN_UINT32 = 0I
-let MAX_UINT32 = pown 2I 32 - 1I
-let MIN_UINT64 = 0I
-let MAX_UINT64 = pown 2I 64 - 1I
-
-let MIN_FLOAT32 = System.Single.MinValue
-let MAX_FLOAT32 = System.Single.MaxValue
-let MIN_FLOAT64 = System.Double.MinValue
-let MAX_FLOAT64 = System.Double.MaxValue
+open Constants
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -191,48 +166,303 @@ type Moment =
 type IntType = 
     | Int8 | Int16 | Int32 | Int64 // order of tags matters for comparison!
 
-    override this.ToString() = "int" + string(this.GetSize())
+    override this.ToString() = "int" + string this.GetSize
     
-    member this.GetSize() =
+    member this.GetSize =
         match this with
         | Int8 -> 8
         | Int16 -> 16
         | Int32 -> 32
         | Int64 -> 64
-    static member RequiredType value =
-        if MIN_INT8 <= value && value <= MAX_INT8 then Int8
-        elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
-        elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
-        else Int64
 
+    /// Checks if IntType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Int64.CanRepresent anyInt    
 
-type UintType = 
-    | Uint8 | Uint16 | Uint32 | Uint64 // order of tags matters for comparison!
+    member this.CanRepresent (anyInt: Int) =
+        match this, anyInt with
+        | Int8, IAny (value, _) -> MIN_INT8 <= value && value <= MAX_INT8
+        | Int16, IAny (value, _) -> MIN_INT16 <= value && value <= MAX_INT16
+        | Int32, IAny (value, _) -> MIN_INT32 <= value && value <= MAX_INT32
+        | Int64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_INT64
+        | _ -> failwith "This is only used for IAny values"
 
-    override this.ToString() = "uint" + string(this.GetSize())
+    member this.AllowsConversion (anyBits: Bits) =
+        match this, anyBits with
+        | Int8, BAny (value, _) -> MIN_BITS8 <= value && value <= MAX_INT8
+        | Int16, BAny (value, _) -> MIN_BITS16  <= value && value <= MAX_INT16
+        | Int32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_INT32
+        | Int64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_INT64
+        | _ -> failwith "This is only used for IAny values"
+
+    member this.Convert (anyBits: Bits) =
+        try 
+            match this, anyBits with
+            | Int8, BAny (value, _) -> I8 <| sbyte value 
+            | Int16, BAny (value, _) -> I16 <| int16 value 
+            | Int32, BAny (value, _) -> I32 <| int32 value
+            | Int64, BAny (value, _) -> I64 <| int64 value
+            | _ -> failwith "This is only used for BAny values"
+        with
+        | :? System.OverflowException -> 
+            failwith "Called with unchecked BAny value"
+
+    static member RequiredType (value: Int) =
+        match value with
+        | IAny (value, _) ->
+            if MIN_INT8 <= value && value <= MAX_INT8 then Int8
+            elif MIN_INT16 <= value && value <= MAX_INT16 then Int16
+            elif MIN_INT32 <= value && value <= MAX_INT32 then Int32
+            elif MIN_INT64 <= value && value <= MAX_INT64 then Int64
+            else failwith "IAny value outside any IntX type"
+        | _ ->
+            failwith "Not an IAny value"
+
+    member this.AdoptAny (any: Int) : Int =
+        match this, any with
+        | Int8, IAny _ -> any.PromoteTo Int.Zero8
+        | Int16, IAny _ -> any.PromoteTo Int.Zero16
+        | Int32, IAny _ -> any.PromoteTo Int.Zero32
+        | Int64, IAny _ -> any.PromoteTo Int.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+type NatType = 
+    | Nat8 | Nat16 | Nat32 | Nat64 // order of tags matters for comparison!
+
+    override this.ToString() = "nat" + string this.GetSize
     
-    member this.GetSize() =
+    member this.GetSize =
         match this with
-        | Uint8 -> 8
-        | Uint16 -> 16
-        | Uint32 -> 32
-        | Uint64 -> 64
+        | Nat8 -> 8
+        | Nat16 -> 16
+        | Nat32 -> 32
+        | Nat64 -> 64
+
+    /// Checks if a NatType can represent a value of an IntType
+    member this.CanRepresentType (typ: IntType) =
+        match this with
+        | Nat8 -> typ <= Int8
+        | Nat16 -> typ <= Int16
+        | Nat32 -> typ <= Int32
+        | Nat64 -> typ <= Int64
     
-    static member RequiredType value =
-        if MIN_UINT8 <= value && value <= MAX_UINT8 then Uint8
-        elif MIN_UINT16 <= value && value <= MAX_UINT16 then Uint16
-        elif MIN_UINT32 <= value && value <= MAX_UINT32 then Uint32
-        else Uint64
+    /// Checks if NatType can represent an AnyBits value
+    static member CanRepresent (anyBits: Bits) =
+        Nat64.CanRepresent anyBits    
+
+    /// Checks if NatType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Nat64.CanRepresent anyInt
+    
+    member this.CanRepresent (anyBits: Bits) =
+        match this, anyBits with
+        | Nat8, BAny (value, _) -> MIN_NAT8 <= value && value <= MAX_NAT8
+        | Nat16, BAny (value, _) -> MIN_NAT16 <= value && value <= MAX_NAT16
+        | Nat32, BAny (value, _) -> MIN_NAT32 <= value && value <= MAX_NAT32
+        | Nat64, BAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for BAny values"
+   
+    member this.CanRepresent (anyInt: Int) =
+        match this, anyInt with
+        | Nat8, IAny (value, _) -> MIN_NAT8 <= value && value <= MAX_NAT8
+        | Nat16, IAny (value, _) -> MIN_NAT16 <= value && value <= MAX_NAT16
+        | Nat32, IAny (value, _) -> MIN_NAT32<= value && value <= MAX_NAT32
+        | Nat64, IAny (value, _) -> MIN_NAT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for IAny values"
+
+    
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (value, _) ->
+            if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+            elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+            elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+            elif MIN_NAT64 <= value && value <= MAX_NAT64 then Nat64
+            else failwith "AnyInt value outside any NatX type"
+        | _ -> 
+            failwith "Not an IAny value"
+
+    static member RequiredType (anyBits: Bits) =
+        match anyBits with
+        | BAny (value, _) ->
+            if MIN_NAT8 <= value && value <= MAX_NAT8 then Nat8
+            elif MIN_NAT16 <= value && value <= MAX_NAT16 then Nat16
+            elif MIN_NAT32 <= value && value <= MAX_NAT32 then Nat32
+            elif MIN_NAT64 <= value && value <= MAX_NAT64 then Nat64
+            else failwith "BAny value outside any NatX type"
+        | _ -> 
+            failwith "Not an BAny value"
+
+    member this.AdoptAny (any: Int) : Nat =
+        match this, any with
+        | Nat8, IAny _ -> any.PromoteTo Nat.Zero8
+        | Nat16, IAny _ -> any.PromoteTo Nat.Zero16
+        | Nat32, IAny _ -> any.PromoteTo Nat.Zero32
+        | Nat64, IAny _ -> any.PromoteTo Nat.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    
+    member this.AdoptAny (any: Bits) : Nat =
+        match this, any with
+        | Nat8, BAny _ -> any.PromoteTo Nat.Zero8
+        | Nat16, BAny _ -> any.PromoteTo Nat.Zero16
+        | Nat32, BAny _ -> any.PromoteTo Nat.Zero32
+        | Nat64, BAny _ -> any.PromoteTo Nat.Zero64
+        | _ -> failwith "Adoption of any not allowed"
 
 
-type FloatPrecision = 
-    | Single | Double // order of tags matters for comparison!
+type BitsType = 
+    | Bits8 | Bits16 | Bits32 | Bits64 // order of tags matters for comparison!
 
-    override this.ToString() = "float" + string(this.GetSize())
-
-    member this.GetSize() =
+    override this.ToString() = "bits" + string this.GetSize
+    
+    member this.GetSize : int =
         match this with
-        | Single -> 32
-        | Double -> 64
+        | Bits8 -> 8
+        | Bits16 -> 16
+        | Bits32 -> 32
+        | Bits64 -> 64
 
+    /// Checks if BitsType can represent an AnyBits value
+    static member CanRepresent (anyBits: Bits) =
+        Bits64.CanRepresent anyBits    
+
+    /// Checks if BitsType can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Bits64.CanRepresent anyInt
+    
+    member this.CanRepresent (anyBits: Bits) =
+        match this, anyBits with
+        | Bits8, BAny (value, _) -> MIN_BITS8 <= value && value <= MAX_BITS8
+        | Bits16, BAny (value, _) -> MIN_BITS16 <= value && value <= MAX_BITS16
+        | Bits32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_BITS32
+        | Bits64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_BITS64
+        | _ -> failwith "This is only used for BAny values"
+    
+    member this.CanRepresent (anyInt: Int) = 
+        match this, anyInt with
+        | Bits8, IAny (value, _) -> MIN_INT8 <= value && value <= MAX_NAT8
+        | Bits16, IAny (value, _) -> MIN_INT16 <= value && value <= MAX_NAT16
+        | Bits32, IAny (value, _) -> MIN_INT32 <= value && value <= MAX_NAT32
+        | Bits64, IAny (value, _) -> MIN_INT64 <= value && value <= MAX_NAT64
+        | _ -> failwith "This is only used for IAny values"
+
+    static member RequiredType (anyBits: Bits) =
+        match anyBits with
+        | BAny (value, _) ->
+            if MIN_BITS8 <= value && value <= MAX_BITS8 then Bits8
+            elif MIN_BITS16 <= value && value <= MAX_BITS16 then Bits16
+            elif MIN_BITS32 <= value && value <= MAX_BITS32 then Bits32
+            elif MIN_BITS64 <= value && value <= MAX_BITS64 then Bits64
+            else failwith "BAny value outside any BitsX type"
+        | _ -> 
+            failwith "Not a BAny value"
+
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (value, _) ->
+            if MIN_INT8 <= value && value <= MAX_NAT8 then Bits8
+            elif MIN_INT16 <= value && value <= MAX_NAT16 then Bits16
+            elif MIN_INT32 <= value && value <= MAX_NAT32 then Bits32
+            elif MIN_INT64 <= value && value <= MAX_NAT64 then Bits32
+            else failwith "IAny value outside any BitsX type"
+        | _ -> 
+            failwith "Not an IAny value"
+
+
+    member this.AdoptAny (any: Int) : Bits =
+        match this, any with
+        | Bits8, IAny _ -> any.PromoteTo Bits.Zero8
+        | Bits16, IAny _ -> any.PromoteTo Bits.Zero16
+        | Bits32, IAny _ -> any.PromoteTo Bits.Zero32
+        | Bits64, IAny _ -> any.PromoteTo Bits.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    member this.AdoptAny (any: Bits) : Bits =
+        match this, any with
+        | Bits8, BAny _ -> any.PromoteTo Bits.Zero8
+        | Bits16, BAny _ -> any.PromoteTo Bits.Zero16
+        | Bits32, BAny _ -> any.PromoteTo Bits.Zero32
+        | Bits64, BAny _ -> any.PromoteTo Bits.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+
+type FloatType = 
+    | Float32 | Float64 // order of tags matters for comparison!
+
+    override this.ToString() = "float" + string this.GetSize
+
+    member this.GetSize =
+        match this with
+        | Float32 -> 32
+        | Float64 -> 64
+
+    /// Checks if Float can represent an AnyFloat value
+    static member CanRepresent (anyFloat: Float) =
+        Float64.CanRepresent anyFloat    
+ 
+    /// Checks if Float can represent an AnyInt value
+    static member CanRepresent (anyInt: Int) =
+        Float64.CanRepresent anyInt
+ 
+    member this.CanRepresent (value: Int) =
+        match this, value with
+        | Float32, IAny (v, _) -> MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT
+        | Float64, IAny (v, _) -> MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT
+        | _, _ -> failwith ("This is only used for IAny values")
+
+    // only used to test possible cast of bits literal: 0x1 as floatX
+    member this.AllowsConversion (anyBits: Bits) =
+        match this, anyBits with
+        | Float32, BAny (v, _) -> MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT
+        | Float64, BAny (v, _) -> MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT
+        | _, _ -> failwith ("This is only used for BAny values")
+
+    member this.Convert (anyBits: Bits) =
+        try 
+            match this, anyBits with
+            | Float32, BAny (value, _) -> F32 <| float32 value
+            | Float64, BAny (value, _) -> F64 <| float value
+            | _ -> failwith "This is only used for BAny values"
+        with
+        | :? System.OverflowException -> 
+            failwith "Called with unchecked BAny value"
+
+    /// Checks if a given float types can represent a AnyFloat value
+    member this.CanRepresent (value: Float) =
+        match this, value with
+        | Float64, FAny (v, _) -> MIN_FLOAT64 <= v && v <= MAX_FLOAT64
+        | Float32, FAny (v, _) -> MIN_FLOAT32 <= v && v <= MAX_FLOAT32
+        | _, _-> failwith "This is only used for FAny values"    
+        
+    static member RequiredType (anyFloat: Float) =
+        match anyFloat with
+        | FAny (v, _) ->
+            if MIN_FLOAT32 <= v && v <= MAX_FLOAT32 then Float32 
+            elif MIN_FLOAT64 <= v && v <= MAX_FLOAT64 then Float64 
+            else failwith "fAny value outside any FloatX type"
+        | _ -> 
+            failwith "Not an FAny value"
+
+    static member RequiredType (anyInt: Int) =
+        match anyInt with
+        | IAny (v, _) ->
+            if MIN_FLOAT32_INT <= v && v <= MAX_FLOAT32_INT then Float32 
+            elif MIN_FLOAT64_INT <= v && v <= MAX_FLOAT64_INT then Float64 
+            else failwith "fAny value outside any FloatX type"
+        | _ -> 
+            failwith "Not an FAny value"
+    
+    
+    member this.AdoptAny (any: Float) : Float =
+        match this, any with
+        | Float32, FAny _ -> any.PromoteTo Float.Zero32
+        | Float64, FAny _ -> any.PromoteTo Float.Zero64
+        | _ -> failwith "Adoption of any not allowed"
+
+    member this.AdoptAny (any: Int) : Float =
+        match this, any with
+        | Float32, IAny _ -> any.PromoteTo Float.Zero32
+        | Float64, IAny _ -> any.PromoteTo Float.Zero64
+        | _ -> failwith "Adoption of any not allowed"
 

@@ -7,7 +7,7 @@ end
 activity A()
     var l: S
     var l2: S
-    l2 = {f = 0.4217f}
+    l2 = {f = 0.4217}
     l = l2 // local lhs struct direct cur
     await true
 end

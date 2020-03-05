@@ -1,6 +1,6 @@
 
 struct S
-    var i: float32 = 7.f
+    var i: float32 = 7.
 end
 
 struct T
@@ -9,7 +9,7 @@ struct T
 end
 
 activity B()(o: S)
-    o.i = 7.654f
+    o.i = 7.654
     await true
 end
 

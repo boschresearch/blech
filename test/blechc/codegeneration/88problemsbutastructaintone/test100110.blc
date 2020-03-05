@@ -13,7 +13,7 @@ activity A()
     var l: T
     var l2: S
     await true
-    l2 = {f = 0.4217f}
+    l2 = {f = 0.4217}
     l.s = l2 // local lhs struct fieldaccess cur
     await false
 end

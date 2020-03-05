@@ -21,6 +21,7 @@ module SignaturePrinter =
     open Blech.Common
     open Blech.Common.PPrint
     
+    open Constants
     open CommonTypes
     open PrettyPrint.DocPrint
     
@@ -69,17 +70,16 @@ module SignaturePrinter =
                     txt "false"
                 | AST.String (value = text) ->
                     txt text |> dquotes
-                | AST.Bitvec (value = i; prefix = c) ->
-                    bpBitVec i c
                 | AST.Int (value = i) ->
                     string i |> txt
-                | AST.Double (value = s)
-                | AST.Single (value = s) ->
-                    match s with
-                    | Ok number
-                    | Error number ->
-                        txt number 
-
+                | AST.Bits (value = lit) ->
+                    match lit with
+                    | BAny (_, repr) -> txt repr
+                    | _ -> failwith "A bits literal should always have a representation"
+                | AST.Float (value = lit) ->
+                    match lit with
+                    | FAny (_, Some repr) -> txt repr
+                    | _ -> failwith "A float literal should always have a represention"
 
     let rec bpAttribute attr =
         let ppKey = function
@@ -155,21 +155,30 @@ module SignaturePrinter =
     
     // --- types
 
-    let private bpUnsignedType = function
-        | Uint8 -> txt "uint8"
-        | Uint16 -> txt "uint16"
-        | Uint32 -> txt "uint32"
-        | Uint64 -> txt "uint64"
+    let private bpNaturalType = function
+        | Nat8 -> txt "nat8"
+        | Nat16 -> txt "nat16"
+        | Nat32 -> txt "nat32"
+        | Nat64 -> txt "nat64"
     
-    let private bpSignedType = function
+
+    let private bpIntegerType = function
         | IntType.Int8 -> txt "int8"
         | IntType.Int16 -> txt "int16"
         | IntType.Int32 -> txt "int32"
         | IntType.Int64 -> txt "int64"
 
+
+    let private bpBitvecType = function
+        | Bits8 -> txt "bits8"
+        | Bits16 -> txt "bits16"
+        | Bits32 -> txt "bits32"
+        | Bits64 -> txt "bits64"
+    
+
     let private bpFloatType = function            
-        | FloatPrecision.Single -> txt "float32"
-        | FloatPrecision.Double -> txt "float64"
+        | FloatType.Float32 -> txt "float32"
+        | FloatType.Float64 -> txt "float64"
       
 
     let private bpTemporalQualifier = function
@@ -195,11 +204,12 @@ module SignaturePrinter =
         match typ with
         //| VoidType -> txt "void"
         | AST.BoolType _ -> txt "bool"
-        | AST.BitvecType (len, _) -> txt "bits" <^> fmt "%d" len
-        | AST.UnsignedType (size, optUnit, _) -> 
-            bpUnsignedType size <^> bpOptUnit optUnit
-        | AST.SignedType (size, optUnit, _) ->
-            bpSignedType size <^> bpOptUnit optUnit
+        | AST.BitvecType (size, _) -> 
+            bpBitvecType size 
+        | AST.NaturalType (size, optUnit, _) -> 
+            bpNaturalType size <^> bpOptUnit optUnit
+        | AST.IntegerType (size, optUnit, _) ->
+            bpIntegerType size <^> bpOptUnit optUnit
         | AST.FloatType (precision, optUnit, _) ->
             bpFloatType precision <^> bpOptUnit optUnit
         | AST.ArrayType (length, arrType, _) -> 
@@ -337,8 +347,8 @@ module SignaturePrinter =
             fun p -> bpPrecExpr p lhs <.> txt "%" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["%"]
         | AST.Expr.Pow (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "^" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["^"]
+            fun p -> bpPrecExpr p lhs <.> txt "**" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["**"]
         | AST.Expr.Unm (expr, _) ->
             fun p -> txt "-" <^> bpPrecExpr p expr
             |> dpPrecedence outerPrec dpPrec.["unary"]
@@ -376,8 +386,8 @@ module SignaturePrinter =
             fun p -> bpPrecExpr p lhs <.> txt "|" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["|"]
         | AST.Expr.Bxor (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "~" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["~"]
+            fun p -> bpPrecExpr p lhs <.> txt "^" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["^"]
         | AST.Expr.Shl (lhs, rhs) ->
             fun p -> bpPrecExpr p lhs <.> txt "<<" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["<<"]
@@ -386,15 +396,25 @@ module SignaturePrinter =
             |> dpPrecedence outerPrec dpPrec.[">>"]
         | AST.Expr.Bnot (expr, _) ->
             fun p -> txt "~" <+> bpPrecExpr p expr
-            |> dpPrecedence outerPrec dpPrec.["unary"]
-        // -- null coalescing operation --
-        | AST.Expr.Elvis (lhs, rhs) ->
-            fun p -> bpPrecExpr p lhs <.> txt "?:" <+> bpPrecExpr p rhs
-            |> dpPrecedence outerPrec dpPrec.["elvis"]   
+            |> dpPrecedence outerPrec dpPrec.["~"]
+        // -- advanced bitwise operators
+        | AST.Expr.Sshr (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "+>>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["+>>"]
+        | AST.Expr.Rotl (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "<<>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["<<>"]
+        | AST.Expr.Rotr (lhs, rhs) ->
+            fun p -> bpPrecExpr p lhs <.> txt "<>>" <+> bpPrecExpr p rhs
+            |> dpPrecedence outerPrec dpPrec.["<>>"]
         // --- type conversion
         | AST.Expr.Convert (expr, dataType) ->
             fun p -> bpPrecExpr p expr <+> txt "as" <.> bpDataType dataType
             |> dpPrecedence outerPrec dpPrec.["as"]
+        // --- type annotation
+        | AST.Expr.HasType (expr, dataType) ->
+            fun p -> bpPrecExpr p expr <+> txt ":" <.> bpDataType dataType
+            |> dpPrecedence outerPrec dpPrec.[":"]
         // -- operators on arrays and slices --
         | AST.Expr.Len (expr, _) ->
             fun p -> txt "#" <+> bpPrecExpr p expr

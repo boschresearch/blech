@@ -7,7 +7,7 @@ function f() returns bool
     return true
 end
 
-function h() returns uint8
+function h() returns nat8
     g()
     return 0
 end

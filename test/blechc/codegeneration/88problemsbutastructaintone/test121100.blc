@@ -1,10 +1,10 @@
 
 struct S
-    var i: float32 = 7.f
+    var i: float32 = 7.
 end
 
 activity A()(r: S)
-    r = {i = 5.7f}
+    r = {i = 5.7}
     let l = r // output rhs struct direct cur
     await true
 end

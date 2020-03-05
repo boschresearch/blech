@@ -6,18 +6,18 @@ function f()
     g()
 end
 
-function h() returns uint8
+function h() returns nat8
     g()
     return 7
 end
 
-activity B(x: uint8)(y: uint8)
+activity B(x: nat8)(y: nat8)
     await true
 end
 
 @[EntryPoint]
 activity A()
-    var foo: [30]uint8
+    var foo: [30]nat8
     cobegin
         run B(7)(foo[h()])
     with

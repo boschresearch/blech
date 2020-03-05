@@ -30,10 +30,10 @@
 #define BLC_INT32 signed long
 #define BLC_INT64 signed long long
 
-#define BLC_UINT8 unsigned char
-#define BLC_UINT16 unsigned short
-#define BLC_UINT32 unsigned long
-#define BLC_UINT64 unsigned long long
+#define BLC_NAT8 unsigned char
+#define BLC_NAT16 unsigned short
+#define BLC_NAT32 unsigned long
+#define BLC_NAT64 unsigned long long
 
 #define BLC_BITS8 unsigned char
 #define BLC_BITS16 unsigned short

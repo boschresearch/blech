@@ -49,10 +49,10 @@ let tokenTagToString token =
     | TOKEN_BITS16 -> "bits16"
     | TOKEN_BITS32 -> "bits32"
     | TOKEN_BITS64 -> "bits64"
-    | TOKEN_UINT8 -> "uint8"
-    | TOKEN_UINT16 -> "uint16"
-    | TOKEN_UINT32 -> "uint32"
-    | TOKEN_UINT64 -> "uint64"
+    | TOKEN_NAT8 -> "nat8"
+    | TOKEN_NAT16 -> "nat16"
+    | TOKEN_NAT32 -> "nat32"
+    | TOKEN_NAT64 -> "nat64"
     | TOKEN_INT8 -> "int8"
     | TOKEN_INT16 -> "int16"
     | TOKEN_INT32 -> "int32"
@@ -138,17 +138,18 @@ let tokenTagToString token =
     | TOKEN_MUL -> "*"
     | TOKEN_DIV -> "/"
     | TOKEN_MOD -> "%"
-    | TOKEN_HAT -> "^"
-    (* overflow operators *)
-    | TOKEN_OADD -> "&+"
-    | TOKEN_OSUB -> "&-"
-    | TOKEN_OMUL -> "&*"
+    | TOKEN_EXP -> "**"
     (* bitwise operators *)
     | TOKEN_BAND -> "&"
     | TOKEN_BOR -> "|"
-    | TOKEN_BXOR -> "~"
+    | TOKEN_BXOR -> "^"
+    | TOKEN_BNOT -> "~"
     | TOKEN_SHL -> "<<"
     | TOKEN_SHR -> ">>"
+    (* advance bitwise operators *)
+    | TOKEN_SSHR -> "+>>"
+    | TOKEN_ROTL -> "<<>"
+    | TOKEN_ROTR -> "<>>"
     (* comparison operators *)
     | TOKEN_EQU -> "=="
     | TOKEN_IEQ -> "!="
@@ -156,13 +157,14 @@ let tokenTagToString token =
     | TOKEN_LEQ -> "<="
     | TOKEN_GRT -> ">"
     | TOKEN_GEQ -> ">="
+    (* safe cast *)
     | TOKEN_AS -> "as"
     (* identity operators *)
     | TOKEN_IDEQU -> "=="
     | TOKEN_IDIEQ -> "!=="
     (* length operators on arrays and slices *)
-    | TOKEN_LEN -> "len"
-    | TOKEN_CAP -> "cap"
+    | TOKEN_LEN -> "#"
+    | TOKEN_CAP -> "##"
     (* -------------- Access operators ------------*)
     | TOKEN_PREV -> "prev"
     | TOKEN_NEXT -> "next"
@@ -179,16 +181,13 @@ let tokenTagToString token =
     | TOKEN_COMMA -> ","
     | TOKEN_SEMICOLON -> ";"
     | TOKEN_QUEST -> "?"
-    (* | TOKEN_ELVIS -> "?:" *)
     (* --------- literals --------- *)
-    | TOKEN_BINCONST -> "<binary number>"
-    | TOKEN_OCTCONST -> "<octal number>"
-    | TOKEN_HEXCONST -> "<hexadecimal number>"
+    | TOKEN_BINCONST -> "<binary bits>"
+    | TOKEN_OCTCONST -> "<octal bits>"
+    | TOKEN_HEXCONST -> "<hexadecimal bits>"
     | TOKEN_NATCONST -> "<natural number>"
-    | TOKEN_FLOATCONST
-    | TOKEN_FLOATCONST32 -> "<floating point number>"
-    | TOKEN_HEXFLOATCONST 
-    | TOKEN_HEXFLOATCONST32 -> "<hexadicamal floating point number>"
+    | TOKEN_FLOATCONST -> "<floating point number>"
+    | TOKEN_HEXFLOATCONST -> "<hexadecimal floating point number>"
     | TOKEN_STRING -> "<string constant>"
     | TOKEN_ID -> "<identifier>"
     | TOKEN_WILDCARD -> "<_>"

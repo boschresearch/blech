@@ -16,6 +16,7 @@
 
 module Blech.Backend.Normalisation
 
+open Blech.Frontend.Constants
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes
 open Blech.Frontend.TypeCheckContext
@@ -27,12 +28,15 @@ let rec internal normaliseAssign ctx (r, lhs, rhs) =
     | ArrayConst assigments ->
         // if arrayconst contains dynamic values (not compile-time-constants) rewrite into sequence of assignments
         // otherwise let it be and let code generation take care of possibly necessary tmp variables for memcpy
-        let makeIdx (i: int) =
-            { rhs = IntConst (bigint(i))
+        let makeIdx (i: Size) =
+            { rhs = NatConst <| N64 i //IntConst (bigint(i))
               typ = 
-                IntType.RequiredType (bigint(i))
-                |> IntType
-                |> ValueTypes 
+                // IntType.RequiredType (bigint(i))
+                // ValueTypes <| NatType (NatType.RequiredType <| N64 i)
+                // TODO: Check the following line carefully, fjg. 18.02.20
+                ValueTypes <| NatType (NatType.RequiredType (IAny (bigint i, None)) )
+                // |> IntType
+                // |> ValueTypes 
               range = r
             }
         let fieldAsAssign i = 

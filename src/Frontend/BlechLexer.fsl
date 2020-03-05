@@ -53,7 +53,6 @@ let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let pointfloat = digitpart? fraction | digitpart '.'
 let exponentfloat = (digitpart | pointfloat) exponent
 let floatliteral = (pointfloat | exponentfloat)
-let floatliteral32 = floatliteral ('f' | 'F')
 
 (* hexadecimal floating point literals with "_" instead of "'" follow
    C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
@@ -65,7 +64,6 @@ let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
 let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
-let hexfloatliteral32 = hexfloatliteral ('f' | 'F')
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -123,10 +121,10 @@ rule Token = parse
     | "bits32"              { BITS32 (getRange lexbuf) }
     | "bits64"              { BITS64 (getRange lexbuf) }
 
-    | "uint8"               { UINT8 (getRange lexbuf) }
-    | "uint16"              { UINT16 (getRange lexbuf) }
-    | "uint32"              { UINT32 (getRange lexbuf) }
-    | "uint64"              { UINT64 (getRange lexbuf) }
+    | "nat8"               { NAT8 (getRange lexbuf) }
+    | "nat16"              { NAT16 (getRange lexbuf) }
+    | "nat32"              { NAT32 (getRange lexbuf) }
+    | "nat64"              { NAT64 (getRange lexbuf) }
 
     | "int8"                { INT8 (getRange lexbuf) }
     | "int16"               { INT16 (getRange lexbuf) }
@@ -229,28 +227,28 @@ rule Token = parse
     | "and"                 { AND (getRange lexbuf) }
     | "or"                  { OR (getRange lexbuf) }
         
-    (* arithmetic saturation operators *)
+    (* arithmetic operators *)
     | "+"                   { ADD (getRange lexbuf) }
     | "-"                   { SUB (getRange lexbuf) } // also unary minus
     | "*"                   { MUL (getRange lexbuf) }
     | "/"                   { DIV (getRange lexbuf) }
     | "%"                   { MOD (getRange lexbuf) }
-    | "^"                   { HAT (getRange lexbuf) }
+    | "**"                  { EXP (getRange lexbuf) }
     
-    (* overflow operators *)
-    | "&+"                  { OADD (getRange lexbuf) }
-    | "&-"                  { OSUB (getRange lexbuf) }
-    | "&*"                  { OMUL (getRange lexbuf) }
-
-
     (* bitwise operators *)
     | "&"                   { BAND (getRange lexbuf) }
     | "|"                   { BOR (getRange lexbuf) }
-    | "~"                   { BXOR (getRange lexbuf) } // also unary bitwise not
+    | "^"                   { BXOR (getRange lexbuf) }
+    | "~"                   { BNOT (getRange lexbuf) }
     | "<<"                  { SHL (getRange lexbuf) }
     | ">>"                  { SHR (getRange lexbuf) }
+
+    (* advanced bitwise operators *)
+    | "+>>"                  { SSHR (getRange lexbuf) } // signed shift right  
+    | "<<>"                  { ROTL (getRange lexbuf) } // rotate left
+    | "<>>"                  { ROTR (getRange lexbuf) } // rotate right   
     
-    (* comparison operators *)
+    (* relational operators *)
     | "=="                  { EQU (getRange lexbuf) }
     | "!="                  { IEQ (getRange lexbuf) }
     | "<"                   { LES (getRange lexbuf) }
@@ -293,7 +291,6 @@ rule Token = parse
     | ","                   { COMMA (getRange lexbuf) }
     | ";"                   { SEMICOLON (getRange lexbuf) }
     | "?"                   { QUEST (getRange lexbuf) }
-  (*  | "?:"                  { ELVIS (getRange lexbuf) }  *)
 
     (* --------- literals --------- *)
 
@@ -307,12 +304,8 @@ rule Token = parse
 
     | floatliteral          { FLOATCONST (getLexemeAndRange lexbuf) }
 
-	| floatliteral32        { FLOATCONST32 (getLexemeAndRange lexbuf) }
-
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-	| hexfloatliteral32     { HEXFLOATCONST32 (getLexemeAndRange lexbuf) }
-	
     | '\"' [^ '\"']* '\"'   { let l, r = getLexemeAndRange lexbuf in      
                               (* The string value strips of "", the range contains "" *)
                               STRING (l.Substring(1, l.Length - 2), r) }   

@@ -1,6 +1,6 @@
 
 struct S
-    var i: float32 = 7.f
+    var i: float32 = 7.
 end
 
 struct T
@@ -11,7 +11,7 @@ end
 activity B(i: S)() returns bool
     let l = i.i
     await true
-    return l < 57.654f
+    return l < 57.654
     
 end
 

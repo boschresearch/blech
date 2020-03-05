@@ -1,0 +1,35 @@
+
+@[EntryPoint]
+activity main()
+    
+    var i8: int8
+    var i32: int32
+    i8 = 128    // too big
+    i32 = -1: int64 // type too big
+
+    var n8 = 255: nat8 
+    var n32 = 0: nat32
+    n8 = 256 // too big
+    n32 = -1 // no negative nats
+    
+    var b8 = 0xFF: bits8
+    b8 = -(0xFF : nat8) as bits8 // no unary minus on nats
+
+    var b32 = -1: bits32 // 2s complement
+
+    var f32 = 16_777_216: float32 // max precise integer in float32
+    f32 = (16_777_217: int32) as float32 // cast to float32 not allowed
+    
+    i8 = 128 // to big
+    i8 = 0xFF : int8 // illegal type annotation
+    var a = {1,2,3,4} : [3]int32 // to many initialisers
+
+    i8 = {} : int32  // cannot cast compound to int32
+
+    i8 = 0xFF as int8 // too big 
+    b32 = (i8 as bits16) | (i32 as bits16)  // bits16 too small
+    i32 = (i8 as bits32) | (i32 as bits32) as int32 // cast to int32 not allowed
+    f32 = (i8 as int32) as float32  // int32 does not fit into float32
+
+    await true
+end

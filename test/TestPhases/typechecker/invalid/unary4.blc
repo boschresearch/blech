@@ -1,0 +1,7 @@
+
+@[EntryPoint]
+activity main()
+    var a: [2] bool
+    a = - a[1] // unary minus on non number
+    await true
+end

@@ -51,7 +51,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 /* ---- predefined types ---- */
 %token <range> BOOL
 %token <range> BITS8 BITS16 BITS32 BITS64
-%token <range> UINT8 UINT16 UINT32 UINT64
+%token <range> NAT8 NAT16 NAT32 NAT64
 %token <range> INT8 INT16 INT32 INT64
 %token <range> FLOAT32 FLOAT64
 
@@ -88,12 +88,10 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> PREV
 %token <range> TRUE FALSE
 %token <range> NOT AND OR
-%token <range> ADD SUB MUL DIV MOD HAT
-%token <range> OADD OSUB OMUL
+%token <range> ADD SUB MUL DIV MOD EXP
 %token <range> EQU IEQ LES LEQ GRT GEQ
 %token <range> IDEQU IDIEQ
-%token <range> BAND BOR BXOR SHL SHR
-/* %token <range> ELVIS */
+%token <range> BNOT BAND BOR BXOR SHL SHR SSHR ROTL ROTR
 %token <range> AS
 %token <range> LEN CAP
 
@@ -106,7 +104,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 /* Literals */
 %token <string * range> WILDCARD
-%token <string * range> STRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST FLOATCONST32 HEXFLOATCONST HEXFLOATCONST32
+%token <string * range> STRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
 
 /* Identifiers */
 %token <string * range> ID 
@@ -118,19 +116,21 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 /* ******************************************************************* */
 %left LOWEST
 
+%left COLON AS
+
 %left OR
 %left AND
 %left LES GRT LEQ GEQ EQU IEQ IDEQU IDIEQ
 %left BOR
 %left BXOR
 %left BAND
-/* %right ELVIS */
-%left SHL SHR
+%left SHL SHR SSHR ROTL ROTR
 %left ADD SUB
 %left MUL DIV MOD
 %left UNARY
-%left HAT
-%left AS
+%left EXP
+
+%left IF TRY
 
 %left HIGHEST
 
@@ -242,7 +242,7 @@ UnitExpr
   | PointedName                                 { UnitExpr.Unit $1 }
   | UnitExpr MUL UnitExpr        %prec MUL      { UnitExpr.UnitMul ($1, $3) }
   | UnitExpr DIV UnitExpr        %prec DIV      { UnitExpr.UnitDiv ($1,$3) }
-  | UnitExpr HAT NATCONST        %prec HAT      { UnitExpr.UnitExp ($1, parseInteger <| fst $3, snd $3) }
+  | UnitExpr EXP NATCONST        %prec EXP      { UnitExpr.UnitExp ($1, parseInteger <| fst $3, snd $3) }
   | LPAREN UnitExpr RPAREN                      { UnitExpr.Parens ($2, unionRanges $1 $3) }
 
 
@@ -284,22 +284,22 @@ Datatype
 
 LogicalDatatype
     : BOOL                                  { BoolType $1}
-    | BITS8                                 { BitvecType (8, $1) }
-    | BITS16                                { BitvecType (16, $1) }
-    | BITS32                                { BitvecType (32, $1) }
-    | BITS64                                { BitvecType (64, $1) }
+    | BITS8                                 { BitvecType (BitsType.Bits8, $1) }
+    | BITS16                                { BitvecType (BitsType.Bits16, $1) }
+    | BITS32                                { BitvecType (BitsType.Bits32, $1) }
+    | BITS64                                { BitvecType (BitsType.Bits64, $1) }
 
 NumberDatatype
-    : FLOAT32 OptUnitDef                    { FloatType(FloatPrecision.Single, $2, numberTypeRange $1 $2) }
-    | FLOAT64 OptUnitDef                    { FloatType(FloatPrecision.Double, $2, numberTypeRange $1 $2) }
-    | UINT8 OptUnitDef                      { UnsignedType(UintType.Uint8, $2, numberTypeRange $1 $2) }
-    | UINT16 OptUnitDef                     { UnsignedType(UintType.Uint16, $2, numberTypeRange $1 $2) }
-    | UINT32 OptUnitDef                     { UnsignedType(UintType.Uint32, $2, numberTypeRange $1 $2) }
-    | UINT64 OptUnitDef                     { UnsignedType(UintType.Uint64, $2, numberTypeRange $1 $2) }
-    | INT8 OptUnitDef                       { SignedType(IntType.Int8, $2, numberTypeRange $1 $2) }
-    | INT16 OptUnitDef                      { SignedType(IntType.Int16, $2, numberTypeRange $1 $2) }
-    | INT32 OptUnitDef                      { SignedType(IntType.Int32, $2, numberTypeRange $1 $2) }
-    | INT64 OptUnitDef                      { SignedType(IntType.Int64, $2, numberTypeRange $1 $2) }
+    : FLOAT32 OptUnitDef                    { FloatType(FloatType.Float32, $2, numberTypeRange $1 $2) }
+    | FLOAT64 OptUnitDef                    { FloatType(FloatType.Float64, $2, numberTypeRange $1 $2) }
+    | NAT8 OptUnitDef                       { NaturalType(NatType.Nat8, $2, numberTypeRange $1 $2) }
+    | NAT16 OptUnitDef                      { NaturalType(NatType.Nat16, $2, numberTypeRange $1 $2) }
+    | NAT32 OptUnitDef                      { NaturalType(NatType.Nat32, $2, numberTypeRange $1 $2) }
+    | NAT64 OptUnitDef                      { NaturalType(NatType.Nat64, $2, numberTypeRange $1 $2) }
+    | INT8 OptUnitDef                       { IntegerType(IntType.Int8, $2, numberTypeRange $1 $2) }
+    | INT16 OptUnitDef                      { IntegerType(IntType.Int16, $2, numberTypeRange $1 $2) }
+    | INT32 OptUnitDef                      { IntegerType(IntType.Int32, $2, numberTypeRange $1 $2) }
+    | INT64 OptUnitDef                      { IntegerType(IntType.Int64, $2, numberTypeRange $1 $2) }
     /* fjg todo: Extend AST for fixed-point types */
 
 ArrayDatatype
@@ -520,19 +520,17 @@ OptAccess
 Literal
   : TRUE                                        { Literal.Bool (true, $1) }
   | FALSE                                       { Literal.Bool (false, $1) }
-  | BINCONST                                    { Literal.Bitvec (parseBin <| fst $1, snd $1, 'b') }
-  | OCTCONST                                    { Literal.Bitvec (parseOct <| fst $1, snd $1, 'o') }
-  | HEXCONST                                    { Literal.Bitvec (parseHex <| fst $1, snd $1, 'x') }
+  | BINCONST                                    { Literal.Bits (parseBin <| fst $1, snd $1) }
+  | OCTCONST                                    { Literal.Bits (parseOct <| fst $1, snd $1) }
+  | HEXCONST                                    { Literal.Bits (parseHex <| fst $1, snd $1) }
   | NumberLiteral                               { $1 }
 
 /* fjg TODO: eliminate OptUnifDef and introduce rule: expr with OptUnitDef */
 NumberLiteral
   : NATCONST OptUnitDef                         { Literal.Int (parseInteger <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | FLOATCONST OptUnitDef                       { Literal.Double (parseFloat64 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | FLOATCONST32 OptUnitDef                     { Literal.Single (parseFloat32 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | HEXFLOATCONST OptUnitDef                    { Literal.Double (parseHexFloat64 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-  | HEXFLOATCONST32 OptUnitDef                  { Literal.Single (parseHexFloat32 <| fst $1, $2, numberTypeRange (snd $1) $2) }
-
+  | FLOATCONST OptUnitDef                       { Literal.Float (parseFloat <| fst $1, $2, numberTypeRange (snd $1) $2) }
+  | HEXFLOATCONST OptUnitDef                    { Literal.Float (parseHexFloat <| fst $1, $2, numberTypeRange (snd $1) $2) }
+  
 
 Initialisation
     : SliceInitialiser                          { $1 }
@@ -593,7 +591,7 @@ Expr
     | Expr MUL Expr       %prec MUL             { Mul ($1, $3) }
     | Expr DIV Expr       %prec DIV             { Div ($1, $3) }
     | Expr MOD Expr       %prec MOD             { Mod ($1, $3) }
-    | Expr HAT Expr        %prec HAT            { Pow ($1, $3) }
+    | Expr EXP Expr        %prec EXP            { Pow ($1, $3) }
   
     /* --- comparison operations --- */
     | Expr EQU Expr       %prec EQU             { Eq ($1, $3) }
@@ -614,22 +612,25 @@ Expr
     | Expr SHR Expr       %prec SHR             { Shr ($1, $3) }
     | Expr SHL Expr       %prec SHL             { Shl ($1, $3) }
 
-    /* --- null coalescing operation --- */
-    /* https://en.wikipedia.org/wiki/Null_coalescing_operator */
-    /* https://en.wikipedia.org/wiki/Elvis_operator */
-    /* | Expr ELVIS Expr     %prec ELVIS           { Elvis ($1, $3) } */
+    /* --- advanced bitwise operations --- */
+    | Expr SSHR Expr      %prec SSHR            { Sshr ($1, $3) }
+    | Expr ROTL Expr      %prec ROTR            { Rotl ($1, $3) }
+    | Expr ROTR Expr      %prec ROTL            { Rotr ($1, $3) }
 
     /* --- primary expressions --- */
     | PrimaryExpr            %prec UNARY        { $1 }                    
+
+    /* --- type annotation, mainly used for literals --- */
+    | Expr COLON Datatype     %prec COLON       { HasType($1, $3) }
 
     /* --- casting conversion --- */
     | Expr AS Datatype        %prec AS          { Convert($1, $3) }
 
     /* --- tenary expression ---*/              
-    | IF Expr THEN Expr ELSE Expr %prec AS      { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
+    | IF Expr THEN Expr ELSE Expr   %prec IF    { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
 
     /* --- try else expression, substitute for elvis --- */
-    | TRY Expr ELSE Expr          %prec AS      { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
+    | TRY Expr ELSE Expr          %prec TRY     { $2 }   /* TODO: Create the correct AST, fjg 29.07.19 */
 
 
 
@@ -639,7 +640,7 @@ PrimaryExpr
     /* --- arithmetic minus --- */
     | SUB Expr                %prec UNARY       { Unm ($2, unionRanges $1 $2.Range) }
     /* --- bitwise not --- */
-    | BXOR Expr               %prec UNARY       { Bnot ($2, unionRanges $1 $2.Range) }
+    | BNOT Expr               %prec UNARY       { Bnot ($2, unionRanges $1 $2.Range) }
     /* --- length and capacity ---*/
     | LEN Expr                %prec UNARY       { Len ($2, unionRanges $1 $2.Range) }
     | CAP Expr                %prec UNARY       { Cap ($2, unionRanges $1 $2.Range) }
@@ -1463,25 +1464,19 @@ AttributeLiteral
     
     | FALSE                                     { Literal.Bool (false, $1) }
     
-    | BINCONST                                  { Literal.Bitvec (parseBin <| fst $1, snd $1, 'b') }
+    | BINCONST                                  { Literal.Bits (parseBin <| fst $1, snd $1) }
     
-    | OCTCONST                                  { Literal.Bitvec (parseOct <| fst $1, snd $1, 'o') }
+    | OCTCONST                                  { Literal.Bits (parseOct <| fst $1, snd $1) }
 
-    | HEXCONST                                  { Literal.Bitvec (parseHex <| fst $1, snd $1, 'x') }
+    | HEXCONST                                  { Literal.Bits (parseHex <| fst $1, snd $1) }
 
-	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1, 
+	| OptSub NATCONST                           { Literal.Int ( parseInteger <| fst $2 |> addOptSubInt $1,
                                                                 None, 
                                                                 optUnionRanges $1 <| snd $2 ) }
-    | OptSub FLOATCONST32                       { Literal.Single ( parseFloat32 <| fst $2 |> addOptSubDouble $1, 
+    | OptSub FLOATCONST                         { Literal.Float ( parseFloat <| fst $2 |> addOptSubFloat $1, 
                                                                    None,  
                                                                    optUnionRanges $1 <| snd $2 ) }
-	| OptSub FLOATCONST                         { Literal.Double ( parseFloat64 <| fst $2 |> addOptSubDouble $1, 
-                                                                   None,  
-                                                                   optUnionRanges $1 <| snd $2 ) }
-    | OptSub HEXFLOATCONST32                    { Literal.Single ( parseHexFloat32 <| fst $2 |> addOptSubDouble $1, 
-                                                                   None,  
-                                                                   optUnionRanges $1 <| snd $2 ) }
-	| OptSub HEXFLOATCONST                      { Literal.Double ( parseHexFloat64 <| fst $2 |> addOptSubDouble $1, 
+    | OptSub HEXFLOATCONST                      { Literal.Float ( parseHexFloat <| fst $2 |> addOptSubFloat $1, 
                                                                    None,  
                                                                    optUnionRanges $1 <| snd $2 ) }
 

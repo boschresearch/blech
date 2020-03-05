@@ -1,0 +1,13 @@
+
+@[EntryPoint]
+activity main ()
+    var i:  int8 = 127
+    var i2: int8 = -128
+    var n:  nat8 = 0xFF    // hexadecimal 255 
+    var n2: nat8 = 0o377   // octal 255
+    var b:  bits8 = 0x_7F   // hexadecimal 127
+    var b2: bits8 = 0b_1111_1111 // binary -128 or 255, which is the same on bits8
+    var f: float32 = 16_777_216  // biggest precise integer in float32
+    var f2: float32 = -16_777_216 // smallest precise integer in float32
+    await true
+end

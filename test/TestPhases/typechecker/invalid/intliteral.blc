@@ -1,0 +1,13 @@
+
+@[EntryPoint]
+activity main ()
+    var i:  int8 = 128
+    var i2: int8 = -129
+    var n:  nat8 = 256
+    var n2: nat8 = -1 // nat is always positive
+    var b:  bits8 = -129 // 2s complement not inside 8 bits representable
+    var b2: bits8 = 256
+    var f: float32 = 16_777_217 // exceeds precise representation by 1
+    var f2: float32 = -16_777_217 // exceeds precise representation by 1
+    await true
+end

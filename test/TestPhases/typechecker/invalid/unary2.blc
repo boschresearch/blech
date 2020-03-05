@@ -1,0 +1,10 @@
+
+@[EntryPoint]
+activity main()
+
+    var n: nat8 = 1
+    
+    n = -n // unary minus on nat
+    
+    await true
+end

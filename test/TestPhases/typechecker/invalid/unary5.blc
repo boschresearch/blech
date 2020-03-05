@@ -1,0 +1,12 @@
+
+@[EntryPoint]
+activity main()
+
+    var b: bits8 = 0x1
+    var i: int8
+
+    b = ~0x1 // complement on unsized bits literal
+    i = ~i // complement on non-bits type
+
+    await true
+end

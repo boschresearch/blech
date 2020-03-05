@@ -1,0 +1,18 @@
+
+@[EntryPoint]
+activity main()
+
+    var n: nat8 = 1
+    var b: bits8 = 0x1
+    var a: [2] bool
+    
+    n = -n
+    
+    b = - 0x1 
+
+    a = - a
+
+    if not (n + 1) then end
+    
+    await true
+end

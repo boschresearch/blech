@@ -18,6 +18,8 @@ module Blech.Frontend.TypeChecking
 
 open System.Collections.Generic
 
+open Blech.Common
+
 open CommonTypes
 open BlechTypes
 open TyChecked
@@ -50,7 +52,7 @@ let rec private stmtType stmt =
         match exprOpt with 
         | Some expr ->
             match expr.typ with
-            | Types.ValueTypes t -> Must t |> Ok
+            | ValueTypes t -> Must t |> Ok
             | _ -> Error [NonFirstClassReturnStmt pos]
         | None ->
             Must Void |> Ok
@@ -77,16 +79,16 @@ let rec private stmtType stmt =
                 | Must _, _ -> prev
                 | May _, NoReturn -> prev
                 | May s, May e ->
-                    if isLeftSupertypeOfRight (Types.ValueTypes s) (Types.ValueTypes e) then
+                    if isLeftSupertypeOfRight (ValueTypes s) (ValueTypes e) then
                         prev
-                    elif isLeftSupertypeOfRight (Types.ValueTypes e) (Types.ValueTypes s) then
+                    elif isLeftSupertypeOfRight (ValueTypes e) (ValueTypes s) then
                         Ok succ
                     else
                         Error [IncomparableReturnTypes(Range.range0, s, e)]
                 | May s, Must e ->
-                    if isLeftSupertypeOfRight (Types.ValueTypes s) (Types.ValueTypes e) then
+                    if isLeftSupertypeOfRight (ValueTypes s) (ValueTypes e) then
                         Must s |> Ok
-                    elif isLeftSupertypeOfRight (Types.ValueTypes e) (Types.ValueTypes s) then
+                    elif isLeftSupertypeOfRight (ValueTypes e) (ValueTypes s) then
                         Ok succ 
                     else
                         Error [IncomparableReturnTypes(Range.range0, s, e)]
@@ -106,18 +108,18 @@ let rec private stmtType stmt =
             | May t, NoReturn
             | Must t, NoReturn -> May t |> Ok
             | Must i, Must e ->
-                if isLeftSupertypeOfRight (Types.ValueTypes i) (Types.ValueTypes e) then
+                if isLeftSupertypeOfRight (ValueTypes i) (ValueTypes e) then
                     Must i |> Ok
-                elif isLeftSupertypeOfRight (Types.ValueTypes e) (Types.ValueTypes i) then
+                elif isLeftSupertypeOfRight (ValueTypes e) (ValueTypes i) then
                     Must e |> Ok
                 else
                     Error [IncomparableReturnTypes(pos, i, e)]
             | May i, Must e
             | Must i, May e
             | May i, May e ->
-                if isLeftSupertypeOfRight (Types.ValueTypes i) (Types.ValueTypes e) then
+                if isLeftSupertypeOfRight (ValueTypes i) (ValueTypes e) then
                     May i |> Ok
-                elif isLeftSupertypeOfRight (Types.ValueTypes e) (Types.ValueTypes i) then
+                elif isLeftSupertypeOfRight (ValueTypes e) (ValueTypes i) then
                     May e |> Ok
                 else
                     Error [IncomparableReturnTypes(pos, i, e)]
@@ -152,8 +154,8 @@ let private checkStmtsMatchReturn pos body retType =
             if retType = Void then retType |> Ok
             else Error [MustReturnSomething (pos, retType)]
         | Must f ->
-            if isLeftSupertypeOfRight (Types.ValueTypes retType) (Types.ValueTypes f) then Ok retType
-            else Error [ReturnTypeMismatch (pos, retType, Types.ValueTypes f)]
+            if isLeftSupertypeOfRight (ValueTypes retType) (ValueTypes f) then Ok retType
+            else Error [ReturnTypeMismatch (pos, retType, ValueTypes f)]
         | May f -> Error [MayOrMayNotReturn (pos, retType, f)]
         )
 
@@ -184,15 +186,16 @@ let rec private checkAbsenceOfSyncStmts stmts =
             tml.FindAllIndexExpr
             |> applyToList checkAbsenceOfSyncExpr
         | FunCall (_, ins, outs) -> checkLhsRhs outs ins
-        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> Ok ()
+        | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst -> Ok ()
         | StructConst fields ->
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
         | ArrayConst fields ->
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
-        | Neg e -> checkAbsenceOfSyncExpr e
+        | Convert (e, _) 
+        | Neg e 
+        | Bnot e -> checkAbsenceOfSyncExpr e
         | Conj (e1, e2)
         | Disj (e1, e2)
-        | Xor (e1, e2)
         | Les (e1, e2)
         | Leq (e1, e2)
         | Equ (e1, e2)
@@ -200,7 +203,15 @@ let rec private checkAbsenceOfSyncStmts stmts =
         | Sub (e1, e2)
         | Mul (e1, e2)
         | Div (e1, e2)
-        | Mod (e1, e2) ->
+        | Mod (e1, e2)
+        | Band (e1, e2)
+        | Bor (e1, e2)
+        | Bxor (e1, e2)
+        | Shl (e1, e2)
+        | Shr (e1, e2)
+        | Sshr (e1, e2)
+        | Rotl (e1, e2)
+        | Rotr (e1, e2) ->
             [e1; e2] |> applyToList checkAbsenceOfSyncExpr
 
     let rec checkAbsenceOfSyncStmt oneStmt =
@@ -355,7 +366,7 @@ let private determineCalledSingletons lut bodyRes =
         | RhsCur tml
         | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
         // constants and literals
-        | BoolConst _ | IntConst _ | FloatConst _ | ResetConst _ -> []
+        | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst _ -> []
         | StructConst fields -> recurFields fields
         | ArrayConst elems -> recurFields elems
         // call, has no side-effect IFF it does not write any outputs
@@ -363,10 +374,17 @@ let private determineCalledSingletons lut bodyRes =
         // and no external C variables are written (TODO!)
         | FunCall (name, inputs, outputs) ->
             processFunCall name inputs outputs
-        // boolean
-        | Neg e -> singletonCalls e
-        | Conj (x, y) | Disj (x, y) | Xor (x, y)
-        // relations
+        // unary
+        | Convert (e, _)
+        | Neg e 
+        | Bnot e -> 
+            singletonCalls e
+        // logical
+        | Conj (x, y) | Disj (x, y) 
+        // bitwise
+        | Band (x, y) | Bor(x, y) | Bxor (x, y)
+        | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y) 
+        // relational
         | Les (x, y) | Leq (x, y) | Equ (x, y)
         // arithmetic
         | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
@@ -438,7 +456,7 @@ let private mkGuard guards =
     | g :: gs ->
         let folder expr partResult =
             { rhs = unsafeConj expr partResult; 
-              typ = Types.ValueTypes BoolType; 
+              typ = ValueTypes BoolType; 
               range = Range.unionRanges expr.Range partResult.Range }
         List.foldBack folder gs g |> Ok 
 
@@ -465,47 +483,9 @@ let private unsupported9 str r _ _ _ _ _ _ _ _ = Error [UnsupportedFeature (r, s
 //=============================================================================
 // Creating variable or subprogram declarations
 //=============================================================================
-let rec private fDataType lut utyDataType =
-    match utyDataType with
-    // simple types
-    | AST.BoolType _ -> Types.ValueTypes BoolType |> Ok
-    | AST.SignedType (size, _, _) -> IntType size |> Types.ValueTypes |> Ok
-    | AST.UnsignedType (size, _, _) -> UintType size |> Types.ValueTypes |> Ok
-    | AST.FloatType (size, _, _) -> FloatType size |> Types.ValueTypes |> Ok
-    // structured types
-    | AST.ArrayType (size, elemDty, pos) ->
-        let ensurePositive num =
-            if num > 0 then Ok num
-            else Error [PositiveSizeExpected(pos, num)]
-        let checkSize =
-            checkExpr lut 
-            >> Result.bind (evalCompTimeInt lut)
-            >> Result.bind ensurePositive
-        checkSize size
-        |> Result.bind(fun checkedSize ->
-            fDataType lut elemDty
-            |> Result.bind(fun dty -> 
-                match dty with
-                | ValueTypes sth ->
-                    ArrayType (checkedSize, sth)
-                    |> Types.ValueTypes
-                    |> Ok 
-                | _ -> Error [ValueArrayMustHaveValueType pos]
-                )
-            )
-    | AST.TypeName spath ->
-        // look up given static name in the dict of known named types (user types)
-        let found, typ =
-            lut.ncEnv.spathToQname spath
-            |> lut.userTypes.TryGetValue
-        if found then Ok typ
-        else failwith <| sprintf "Did not find a type under the name %s." spath.dottedPathToString
-    // unsupported now:
-    | AST.BitvecType _
-    | AST.SliceType _
-    | AST.Signal _ -> 
-        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, uint, float, fixed size array or user defined struct")]
 
+/// Check a type annotation
+let rec private fDataType  = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
@@ -533,8 +513,8 @@ let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno
         else 
             // try, if rhs is constant by any chance, if not that's fine too
             Ok (checkedDty, tryEvalConst lut checkedInitExpr)
+        
 
- 
     let createVarDecl ((qualifiedName, (dty, value)), anno) =
         let v = {
             pos = pos
@@ -657,7 +637,7 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
         | Some ret ->
             ret |> Result.bind (
                 function
-                | Types.ValueTypes f -> f |> Ok 
+                | ValueTypes f -> f |> Ok 
                 | _ -> Error [MustReturnFirstClassType (pos, name.id)]
                 )
 
@@ -697,7 +677,7 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
         | Some ret ->
             ret |> Result.bind (
                 function
-                | Types.ValueTypes f -> f |> Ok 
+                | ValueTypes f -> f |> Ok 
                 | _ -> Error [MustReturnFirstClassType (pos, name.id)]
                 )
         |> Result.bind(fun typedRet ->
@@ -766,14 +746,14 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
             |> combine <| checkAllFields std.fields
             |> Result.map (
                 fun (q, f) -> (std.name.Range, q, f)
-                >> ReferenceTypes.StructType >> Types.ReferenceTypes )
+                >> ReferenceTypes.StructType >> ReferenceTypes )
         else
             // create value type
             Ok qname
             |> combine <| checkValueFields std.fields
             |> Result.map (
                 fun (q, f) -> (std.name.Range, q, f)
-                >> ValueTypes.StructType >> Types.ValueTypes )
+                >> ValueTypes.StructType >> ValueTypes )
     // add type declaration to lookup table
     match newType with
     | Ok typ -> do addTypeToLut lut qname typ
@@ -816,7 +796,7 @@ let private generateVC isAssertion pos conditions msgOpt =
             | [] -> failwith "Making an empty VC should be impossible!"
             | [g] -> g
             | g::gg ->
-                List.foldBack (fun e acc -> {rhs = Conj(e, acc); typ = Types.ValueTypes BoolType; range = pos}) gg g
+                List.foldBack (fun e acc -> {rhs = Conj(e, acc); typ = ValueTypes BoolType; range = pos}) gg g
         let msg = // if no message was specified, simply take the string representation of the condition that needs to be verified here
             match msgOpt with 
             | Some (AST.Expr.Const (AST.Literal.String (txt, _))) -> txt 
@@ -870,7 +850,7 @@ let private fRepeat pos stmts conditions endlessFlag =
         RepeatUntil (pos, body, guard, endlessFlag)
     let guard =
         if endlessFlag then
-            {rhs = BoolConst false; typ = Types.ValueTypes BoolType; range = pos} |> Ok
+            {rhs = BoolConst false; typ = ValueTypes BoolType; range = pos} |> Ok
         else
             contract conditions
             |> Result.bind mkGuard
@@ -924,7 +904,7 @@ let private fReturn retTypOpt pos exprOpt =
     | Some retTyp, Some expr ->
         combine retTyp expr 
         |> Result.bind (fun (r, e) -> amendRhsExpr true r e)
-        |> Result.bind (fun (e: TypedRhs) -> match e.typ with | Types.ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
+        |> Result.bind (fun (e: TypedRhs) -> match e.typ with | ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
         |> Result.map (fun e -> Return (pos, Some e))
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
     | Some tr, None -> tr |> Result.bind (fun t -> Error [VoidReturnStmtMustReturn(pos,t)])
@@ -1214,8 +1194,8 @@ let public fPackage lut (pack: AST.Package) =
 
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
-let typeCheck (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
-    let lut = TypeCheckContext.Empty(ncEnv)
+let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
+    let lut = TypeCheckContext.Empty cliContext ncEnv
     fPackage lut pack
     |> function
         | Ok p -> 

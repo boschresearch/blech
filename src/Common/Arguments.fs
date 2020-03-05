@@ -44,6 +44,7 @@ module Arguments =
     let defaultOutDir = "."
     let defaultAppName = "blech"
     
+    
     type BlechCArg =
         | Version
         | Rebuild 
@@ -56,7 +57,7 @@ module Arguments =
         | [<Unique; AltCommandLine("-bp")>] Blech_Path of path:string
         
         // code generation configuration
-        | [<Unique; EqualsAssignment>] Word_Size of bits:int
+        | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
         | [<Unique>] Pass_Primitive_By_Address
         
@@ -95,6 +96,24 @@ module Arguments =
                 | Input _ -> 
                     "file <name> to be compiled."
 
+
+    type WordSize = 
+        | W8 | W16 | W32 | W64
+
+        member this.ToInt : int =
+            match this with
+            | W8 -> 8
+            | W16 -> 16
+            | W32 -> 32
+            | W64 -> 64
+            
+        static member FromInt wordsize = 
+            match wordsize with
+            | 8 -> W8
+            | 16 -> W16
+            | 32 -> W32
+            | 64 -> W64
+            | _ -> failwith <| "invalid word size " + string wordsize + "."
                
     type BlechCOptions =  // TODO: Move this to separate file in utils
         {
@@ -107,7 +126,7 @@ module Arguments =
             isDryRun: bool
             isRebuild: bool
             trace: bool
-            wordSize: int
+            wordSize: WordSize
             passPrimitiveByAddress: bool
             verbosity: Verbosity
         }
@@ -121,7 +140,7 @@ module Arguments =
                 isDryRun = false
                 isRebuild = false
                 trace = false
-                wordSize = 32
+                wordSize = W32
                 passPrimitiveByAddress = false
                 verbosity = Quiet
             }
@@ -148,7 +167,7 @@ module Arguments =
         | Verbosity v ->
             { opts with verbosity = v }
         | Word_Size ws ->
-            { opts with wordSize = ws }
+            { opts with wordSize = WordSize.FromInt ws }
         | Trace ->
             { opts with trace = true }
         | Pass_Primitive_By_Address ->
@@ -159,6 +178,7 @@ module Arguments =
             ws
         else
             failwith <| "invalid word size " + string ws + ". Allowed values are 8, 16, 32, 64."
+       
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")

@@ -16,7 +16,9 @@
 
 namespace Blech.Intermediate
 
+open Blech.Frontend.Constants
 open Blech.Frontend.BlechTypes
+
 
 module GenericGraph = Blech.Common.GenericGraph
 module Range = Blech.Common.Range
@@ -110,8 +112,8 @@ module IntermediateContext =
         | Some t -> [ t ]
         | None ->
             match TypeCheckContext.getDatatypeFromTML context.lut tml with
-            | Types.ValueTypes (ValueTypes.StructType (_, _, fields))
-            | Types.ReferenceTypes (ReferenceTypes.StructType (_, _, fields)) ->
+            | ValueTypes (ValueTypes.StructType (_, _, fields))
+            | ReferenceTypes (ReferenceTypes.StructType (_, _, fields)) ->
                 [
                     for field in fields do
                         yield! allMemLocs context (tml.AddFieldAccess field.name.basicId)
@@ -182,17 +184,28 @@ module IntermediateContext =
             outs |> List.iter (addNameWritten context node)
             addSingletonCalls context trhs.Range node name
         | BoolConst _ 
-        | IntConst _ 
+        | IntConst _
+        | BitsConst _
+        | NatConst _
         | FloatConst _ 
         | ResetConst _ -> ()
         | StructConst structFieldExprList ->
             structFieldExprList |> processFields
         | ArrayConst elems ->
             elems |> processFields
+        | Convert (expr, _)
+        | Bnot expr
         | Neg expr -> addNameRead context node expr
         | Conj (ex1, ex2)
         | Disj (ex1, ex2)
-        | Xor (ex1, ex2)
+        | Band (ex1, ex2)
+        | Bor (ex1, ex2)
+        | Bxor (ex1, ex2)
+        | Shl (ex1, ex2)
+        | Shr (ex1, ex2)
+        | Sshr (ex1, ex2)
+        | Rotl (ex1, ex2)
+        | Rotr (ex1, ex2)
         | Les (ex1, ex2)
         | Leq (ex1, ex2)
         | Equ (ex1, ex2)
@@ -316,7 +329,7 @@ module ProgramGraph =
         do connect pg pg.Entry pgAwait.Entry
         do replaceExitBy pgAwait callNode
         let termVarExpr = {rhs = RhsCur(Loc termVar); typ = ValueTypes (IntType Int32); range = line}
-        let zeroExpr = {rhs = IntConst 0I; typ = ValueTypes (IntType Int32); range = line}
+        let zeroExpr = {rhs = IntConst Int.Zero32 ; typ = ValueTypes (IntType Int32); range = line}
         let termCond = {rhs = Equ (zeroExpr, termVarExpr); typ = ValueTypes BoolType; range = line}
         do guardedConnect termCond pg callNode pg.Exit
         let pauseCond = { termCond with rhs = unsafeNeg termCond }
@@ -399,6 +412,8 @@ module ProgramGraph =
                 // constants and literals
                 | BoolConst _
                 | IntConst _
+                | BitsConst _
+                | NatConst _
                 | FloatConst _
                 | ResetConst -> expr.rhs
                 | StructConst fieldExprs ->
@@ -409,12 +424,23 @@ module ProgramGraph =
                     cellExpr
                     |> List.map (fun (idx, v) -> (idx, rewriteCond v))
                     |> ArrayConst
-                // boolean
+                // type conversion 
+                | Convert (v, t) -> Convert (rewriteCond v, t)
+                // logical
                 | Neg v -> Neg <| rewriteCond v
                 | Conj (v1, v2) -> Conj (rewriteCond v1, rewriteCond v2)
                 | Disj (v1, v2) -> Disj (rewriteCond v1, rewriteCond v2)
-                | Xor (v1, v2) -> Xor (rewriteCond v1, rewriteCond v2)
-                // relations
+                // bitwise
+                | Bnot v -> Bnot <| rewriteCond v
+                | Band (v1, v2) -> Band (rewriteCond v1, rewriteCond v2)
+                | Bor (v1, v2) -> Bor (rewriteCond v1, rewriteCond v2)
+                | Bxor (v1, v2) -> Bxor (rewriteCond v1, rewriteCond v2)
+                | Shl (v1, v2) -> Shl (rewriteCond v1, rewriteCond v2)
+                | Shr (v1, v2) -> Shr (rewriteCond v1, rewriteCond v2)
+                | Sshr (v1, v2) -> Sshr (rewriteCond v1, rewriteCond v2)
+                | Rotl (v1, v2) -> Rotl (rewriteCond v1, rewriteCond v2)
+                | Rotr (v1, v2) -> Rotr (rewriteCond v1, rewriteCond v2)
+                // relational
                 | Les (v1, v2) -> Les (rewriteCond v1, rewriteCond v2)
                 | Leq (v1, v2) -> Leq (rewriteCond v1, rewriteCond v2)
                 | Equ (v1, v2) -> Equ (rewriteCond v1, rewriteCond v2)

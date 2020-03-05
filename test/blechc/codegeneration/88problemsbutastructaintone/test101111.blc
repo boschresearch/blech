@@ -1,6 +1,6 @@
 
 struct S
-    var i: float32 = 7.f
+    var i: float32 = 7.
 end
 
 struct T
@@ -10,7 +10,7 @@ end
 
 @[EntryPoint]
 activity A()
-    var r: T = {s={i = 5.7f}}
+    var r: T = {s={i = 5.7}}
     var l = prev r.s // local rhs struct fieldaccess prev
     await true
     l = prev r.s // local rhs struct fieldaccess prev

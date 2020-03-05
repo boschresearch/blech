@@ -4,12 +4,12 @@ struct Foo
     var r: float32
 end
 
-const ff: Foo = {b = true, a = 7, r = -4.3f}
+const ff: Foo = {b = true, a = 7, r = -4.3}
 
 @[EntryPoint]
 activity entry()()
     var ff = ff
-    ff.r = -123.456f
+    ff.r = -123.456
     var r = ff.b
     await true
     let loc: float64 = ff.r
