@@ -1,6 +1,6 @@
 
 activity A()(l: float32)
-    l = 5.f // output lhs simple direct cur
+    l = 5. // output lhs simple direct cur
     await true
 end
 

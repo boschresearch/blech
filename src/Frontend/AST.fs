@@ -18,8 +18,10 @@ module Blech.Frontend.AST
 
 open Blech.Common
 open Blech.Common.Range
+
+open Constants
 open CommonTypes
-open System
+
 
 /// This module contains the (untyped) abstract syntax tree of Blech.
 /// The module has three parts:
@@ -170,10 +172,10 @@ and DynamicAccessPath =
 and DataType =
     // simple types
     | BoolType of range:range
-    | BitvecType of size:int * range:range
-    | UnsignedType of size:UintType * unit:UnitExpr option * range:range
-    | SignedType of size:IntType * unit:UnitExpr option * range:range
-    | FloatType of size:FloatPrecision * unit:UnitExpr option * range:range
+    | BitvecType of size:BitsType * range:range
+    | NaturalType of size:NatType * unit:UnitExpr option * range:range
+    | IntegerType of size:IntType * unit:UnitExpr option * range:range
+    | FloatType of size:FloatType * unit:UnitExpr option * range:range
     // built-in generic compound types
     | ArrayType of size:Expr * elem:DataType * range:range // static size, value type
     // second-class types, elements are always value types
@@ -185,8 +187,8 @@ and DataType =
         match datatype with
         | BoolType (range=r)
         | BitvecType (range=r)
-        | UnsignedType (range=r)
-        | SignedType (range=r)
+        | NaturalType (range=r)
+        | IntegerType (range=r)
         | FloatType (range=r)
         | ArrayType (range=r)
         | SliceType (range=r)
@@ -542,7 +544,7 @@ and UnitExpr =
     | Parens of UnitExpr * range:range
     | UnitMul of UnitExpr * UnitExpr
     | UnitDiv of UnitExpr * UnitExpr
-    | UnitExp of UnitExpr * bigint * range:range
+    | UnitExp of UnitExpr * Int * range:range
         
     member uexpr.Range =
         match uexpr with
@@ -560,9 +562,9 @@ and UnitExpr =
 
 and ClockExpr =
     | ClockName of StaticNamedPath
-    | Count of bigint * range:range
-    | UpSample of StaticNamedPath * bigint * range:range
-    | DownSample of StaticNamedPath * bigint * (bigint option) * range:range
+    | Count of Int * range:range
+    | UpSample of StaticNamedPath * Int * range:range
+    | DownSample of StaticNamedPath * Int * (Int option) * range:range
     | Parens of ClockExpr * range:range
     | Join of ClockExpr list  // list is never empty
     | Meet of ClockExpr list
@@ -587,19 +589,16 @@ and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range
     // -- numerical constants --
-    | Bitvec of value:bigint * range:range * prefix:Char
-    | Int of value:bigint * unit:UnitExpr option * range:range
-    // | Single of value:single * range:range  
-    | Single of value:Result<string,string> * unit:UnitExpr option * range:range
-    | Double of value:Result<string,string> * unit:UnitExpr option * range:range
+    | Bits of value: Constants.Bits * range:range
+    | Int of value: Constants.Int * unit:UnitExpr option * range:range
+    | Float of value: Constants.Float * unit:UnitExpr option * range:range
     member l.Range = 
         match l with
         | Bool (range=r)
         | String (range=r)
-        | Bitvec (range=r)
+        | Bits (range=r)
         | Int (range=r)
-        | Double (range=r)
-        | Single (range=r)
+        | Float (range=r)
             -> r
 
 and LhsInAssignment =
@@ -672,12 +671,16 @@ and Expr =
     // -- bitwise operators --
     | Band of Expr * Expr               // '&' bitwise and 
     | Bor of Expr * Expr                // '|' bitwise or
-    | Bxor of Expr * Expr               // '~' bitwise xor
+    | Bxor of Expr * Expr               // '^' bitwise xor
     | Shl of Expr * Expr                // '<<' left shift
     | Shr of Expr * Expr                // '>>' right shift 
     | Bnot of Expr * range:range        // '~' unary bitwise not  
-    // -- null coalescing operation --
-    | Elvis of Expr * Expr              // '?:' extract value from optional or given value if none
+    // -- advanced bitwise operators --
+    | Sshr of Expr * Expr               // '+>>' signed shift right
+    | Rotl of Expr * Expr               // '<<>' rotate left
+    | Rotr of Expr * Expr               // '<>>' rotate right
+    // -- type annotation --
+    | HasType of Expr * DataType        // ':' define the type for an expression, e.g. "0x_1 : bits8"  
     // -- type conversions --
     | Convert of Expr * DataType        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
     // -- operators on arrays and slices --
@@ -714,9 +717,12 @@ and Expr =
         | Bxor (l, r)
         | Shl (l, r)
         | Shr (l, r)
-        | Elvis (l, r)
+        | Sshr (l, r)
+        | Rotl (l, r)
+        | Rotr (l, r)
             -> unionRanges l.Range r.Range
         | Convert (expr, datatype)
+        | HasType (expr, datatype)
             -> unionRanges expr.Range datatype.Range
         | AggregateConst (range=r)
         | SliceConst (range=r)
@@ -911,19 +917,22 @@ let mkFromPointedNameAndOptArrayAccess temporalQualifier (staticPath: StaticName
     nameList @ nameOrExList |> mkDynamicAccessPath temporalQualifier
 
 /// Add unary minus to attribute literal
-let addOptSubInt optSub (number: bigint) =
+let addOptSubInt optSub (number: Int) =
     match optSub with
     | None -> number
-    | Some _ -> - number
-
-let addOptSubDouble optSub numberResult =
-    match optSub with
-    | None -> numberResult
     | Some _ ->
-        match numberResult with
-        | Ok x -> Ok ("-"+x)
-        | Error x -> Error ("-"+x)
+        match number with
+        | IAny (v, Some s) -> IAny (-v, Some <| "-" + s)
+        | _ -> failwith "Illegal use of minus for attribute literals"
 
+/// Add unary minus to attribute literal
+let addOptSubFloat optSub (float: Constants.Float) =
+    match optSub with
+    | None -> float
+    | Some _ -> 
+        match float with
+        | FAny (v, Some s) -> FAny (-v, Some <| "-" + s)
+        | _ -> failwith "Illegal use of minus for attribute literals"
 
 /// unites and optional range and a range
 let optUnionRanges optRange range=

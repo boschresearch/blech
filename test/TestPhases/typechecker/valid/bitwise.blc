@@ -1,0 +1,36 @@
+
+@[EntryPoint]
+/// https://stackoverflow.com/questions/9290823/bitwise-shift-operation-in-c-on-uint64-t-variable
+activity main()
+    // all the same
+    var b64: bits64 = 0x_ffff_ffff_f0ff_ffff // ~(0xF: bits64 << 24)
+    b64 = ~(0x_f: bits64 << 24)  // = b64 initialisation
+    const bc64: bits64 = 0x_f
+    b64 = ~(bc64 << 24)         // = b64 initialisation
+    
+    
+    // all the same
+    var b8 = ~(0xF: bits8)
+    b8 = ~(0xF: bits8 << 24)  // left shift (24 % 8 == 0)
+    b8 = ~(0xF: bits8 << 0b_0)
+    b8 = ~(0xF: bits8)
+    
+
+    // no compile time evaluation
+    var bv64: bits64 = 1
+    b64 = ~(bv64 << 24)
+
+    // binary ops
+    var n8: nat8
+
+    b64 = (b8 as bits64) | b64
+    b8 = b8 ^ (n8 as bits8)
+    b64 = b8 ^ (n8 as bits8)
+    
+    if n8 > (b8 as nat32) then end
+    
+    b8 = (0x1: bits8) | 0x2 
+    b8 = (0b11: bits8) & 15
+
+    await true
+end

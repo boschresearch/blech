@@ -1,0 +1,17 @@
+@[EntryPoint]
+
+activity main ()
+    const i8Max: int8 = 127
+
+    var i8: int8
+    i8 = i8Max + 1
+    i8 = -i8Max - 2
+    i8 = 127 + (1: int8)
+
+    var n8: nat8
+    
+    n8 = 2 * (i8Max as nat8) + 2
+    n8 = 2 - (i8Max as nat8)
+
+    await true
+end

@@ -75,7 +75,7 @@ let cpOptDocComments (docs: Attribute.Attribute list) =
 //=============================================================================
 let internal cpUserType typ =
     match typ with
-    | Types.ValueTypes (ValueTypes.StructType (_, typeName, fields)) -> 
+    | ValueTypes (ValueTypes.StructType (_, typeName, fields)) -> 
         let cpField (field: VarDecl) =
             match field.datatype with
             | ValueTypes (ArrayType _ ) ->
@@ -234,12 +234,12 @@ let internal cpExternFunction docs name iface (returns: ValueTypes) =
     // decide whether a return variable is needed based on returns type
     let completeInterface, retType =
         if returns.IsPrimitive then
-            iface, cpType (Types.ValueTypes returns)
+            iface, cpType (ValueTypes returns)
         else
             let qname = QName.Create name.moduleName (name.prefix @ [name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = range.Zero
-                      datatype = Types.ValueTypes returns
+                      datatype = ValueTypes returns
                       isMutable = true 
                       allReferences = HashSet() }
             // we never refer to this variable in code generation, so there is no need to add it any context

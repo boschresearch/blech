@@ -2,7 +2,7 @@ module staticarrayindex
 
 type MyArray = [4]int32
 
-const fst: uint8 = 0
+const fst: nat8 = 0
     
 activity main()
     var a: MyArray = {[fst] = 1}

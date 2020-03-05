@@ -172,23 +172,30 @@ let rec internal cpType typ =
         | Int16 -> txt "blc_int16"
         | Int32 -> txt "blc_int32"
         | Int64 -> txt "blc_int64"
-    | ValueTypes (UintType size) ->
+    | ValueTypes (NatType size) ->
         match size with
-        | Uint8 -> txt "blc_uint8"
-        | Uint16 -> txt "blc_uint16"
-        | Uint32 -> txt "blc_uint32"
-        | Uint64 -> txt "blc_uint64"
+        | Nat8 -> txt "blc_nat8"
+        | Nat16 -> txt "blc_nat16"
+        | Nat32 -> txt "blc_nat32"
+        | Nat64 -> txt "blc_nat64"
+    | ValueTypes (BitsType size) ->
+           match size with
+           | Bits8 -> txt "blc_bits8"
+           | Bits16 -> txt "blc_bits16"
+           | Bits32 -> txt "blc_bits32"
+           | Bits64 -> txt "blc_bits64"
     | ValueTypes (FloatType size) ->
         match size with
-        | FloatPrecision.Single -> txt "blc_float32"
-        | FloatPrecision.Double -> txt "blc_float64"
+        | FloatType.Float32 -> txt "blc_float32"
+        | FloatType.Float64 -> txt "blc_float64"
     | ValueTypes (ValueTypes.StructType (_, typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
         txt "struct" <+> ppGlobalName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
+    | Any
     | AnyComposite 
-    | AnyInt _ -> failwith "Cannot print <Any> type."
+    | AnyInt | AnyBits | AnyFloat -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
 
 
@@ -299,13 +306,17 @@ let rec private trimToFirstAccess (tml: TypedMemLoc) =
 let private getElementDatatype (ctx: TranslationContext) (tml:TypedMemLoc) =
     let tml = trimToFirstAccess tml
     match getDatatypeFromTML ctx.tcc tml with
+    | Any
     | AnyComposite 
-    | AnyInt _ -> failwith "Impossible. Cannot print a data item of type Any."
+    | AnyInt 
+    | AnyBits
+    | AnyFloat -> failwith "Impossible. Cannot print a data item of type Any."
     | ValueTypes (ValueTypes.Void) -> failwith "Impossible. Cannot print a data item of type void."
     | ValueTypes (ValueTypes.BoolType)
-    | ValueTypes (ValueTypes.FloatType _)
     | ValueTypes (ValueTypes.IntType _)
-    | ValueTypes (ValueTypes.UintType _) -> ValueSimple
+    | ValueTypes (ValueTypes.NatType _)
+    | ValueTypes (ValueTypes.BitsType _)
+    | ValueTypes (ValueTypes.FloatType _) -> ValueSimple
     | ValueTypes (ValueTypes.StructType _) -> ValueStruct
     | ValueTypes (ValueTypes.ArrayType _) -> ValueArray
     | ReferenceTypes _ -> failwith "Reference types not yet implemented."
@@ -704,7 +715,7 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
     // simple literals
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
-    | FloatConst f -> [], f.ToDoc
+    | FloatConst f -> [], txt <| string f
     | RhsCur _
     | Prev _ -> // the prev case cannot be matched inside a function context!
         let timepoint, tml = decomposeRhs rhs.rhs
@@ -720,7 +731,11 @@ and cpInputArgInSubprogram inFunction ctx (rhs: TypedRhs) : Doc list * Doc =
 //=============================================================================
 // Expressions
 //=============================================================================
+and private cpConvert e toType = parens toType <^> e
+
 and private cpNeg e = txt "!" <^> parens e
+
+and private cpBnot e = txt "~" <^> parens e
 
 and private binExpr inFunction ctx s1 s2 infx =
     let prereqStmts1, normalisedS1 = cpExpr inFunction ctx s1
@@ -847,7 +862,7 @@ and private cpExpr inFunction ctx expr =
                     name = lhsName
                     datatype = lhsTyp
                     mutability = Mutability.Variable
-                    initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (UintType Uint8); range = expr.range} // that is garbage
+                    initValue = {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = expr.range} // that is garbage
                     annotation = Attribute.VarDecl.Empty
                     allReferences = HashSet() 
                 }
@@ -867,7 +882,9 @@ and private cpExpr inFunction ctx expr =
         
     | BoolConst b -> [], if b then txt "1" else txt "0"
     | IntConst i -> [], txt <| string i
-    | FloatConst f -> [], f.ToDoc
+    | NatConst n -> [], txt <| string n
+    | BitsConst b -> [], txt <| string b
+    | FloatConst f -> [], txt <| string f
     | ResetConst -> failwith "By now, the type checker should have substituted reset const by the type's default value."
     | StructConst assignments ->
         let prereqStmtsLst, processedAssignments =
@@ -881,19 +898,25 @@ and private cpExpr inFunction ctx expr =
             |> List.map (fun (_,expr) -> cpExpr inFunction ctx expr)
             |> List.unzip
         prereqStmtsLst |> List.concat, processedAssignments |> dpCommaSeparatedInBraces
+    
+    | Convert (subExpr, toType) ->
+        let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
+        let cast = cpType toType
+        prereqStmts, cpConvert processedExpr cast
+
     | Neg subExpr -> 
         let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
         prereqStmts, cpNeg processedExpr
     | Conj(s1, s2) -> binConj inFunction ctx s1 s2 
     | Disj(s1, s2) -> binDisj inFunction ctx s1 s2
-    | Xor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
     | Les (s1, s2) -> binExpr inFunction ctx s1 s2 "<"
     | Leq (s1, s2) -> binExpr inFunction ctx s1 s2 "<="
     | Equ (s1, s2) ->
         match s1.typ with //do not care about s2, since type checker ensures it is the same
         | ValueTypes BoolType
         | ValueTypes (IntType _)
-        | ValueTypes (UintType _)
+        | ValueTypes (NatType _)
+        | ValueTypes (BitsType _)
         | ValueTypes (FloatType _) ->
             binExpr inFunction ctx s1 s2 "=="
         | ValueTypes (ValueTypes.StructType _)
@@ -904,15 +927,30 @@ and private cpExpr inFunction ctx expr =
             let memcmp = txt "0 == memcmp" <^> dpCommaSeparatedInParens [processedExpr1; processedExpr2; length]
             prereqStmts1 @ prereqStmts2, memcmp
         | ValueTypes Void
+        | Any
         | AnyComposite 
-        | AnyInt _ -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
+        | AnyInt 
+        | AnyBits
+        | AnyFloat -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     | Add (s1, s2) -> binExpr inFunction ctx s1 s2 "+"
     | Sub (s1, s2) -> binExpr inFunction ctx s1 s2 "-"
     | Mul (s1, s2) -> binExpr inFunction ctx s1 s2 "*"
     | Div (s1, s2) -> binExpr inFunction ctx s1 s2 "/"
     | Mod (s1, s2) -> binExpr inFunction ctx s1 s2 "%"
-
+    // bitwise operators
+    | Bnot subExpr -> 
+        let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
+        prereqStmts, cpBnot processedExpr
+    | Band (s1, s2) -> binExpr inFunction ctx s1 s2 "&"
+    | Bor (s1, s2) -> binExpr inFunction ctx s1 s2 "|"
+    | Bxor (s1, s2) -> binExpr inFunction ctx s1 s2 "^"
+    | Shl (s1, s2) -> binExpr inFunction ctx s1 s2 "<<"
+    | Shr (s1, s2) -> binExpr inFunction ctx s1 s2 ">>"
+    | Sshr _ 
+    | Rotl _
+    | Rotr _ -> failwith "Advance shift operators '+>>', '<>>', '<<>' not implemented"
+    
 
 let private ppParameterTml ctx tml =
     cpRenderData SubProgKind.Activity Usage.Rhs TemporalQualification.Current ctx tml ppNameInActivity

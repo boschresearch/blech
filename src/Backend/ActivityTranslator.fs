@@ -176,7 +176,7 @@ let rec private cpAction ctx curComp action =
         // Since function calls statements and expressions are translated in the same way
         // simply call the expression translation here
         let prereqStmts, processedCall =
-            {rhs = FunCall (whoToCall, inputs, outputs); typ = Types.ValueTypes Void; range = r}
+            {rhs = FunCall (whoToCall, inputs, outputs); typ = ValueTypes Void; range = r}
             |> cpExprInActivity ctx
         prereqStmts @ [ processedCall <^> semi ]
         |> dpBlock
@@ -371,7 +371,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 name = lhsName
                 datatype = lhsTyp
                 mutability = Mutability.Variable
-                initValue = {rhs = IntConst 0I; typ = Types.ValueTypes (UintType Uint8); range = pos} // that is garbage
+                initValue = {rhs = NatConst <| Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // that is a dummy/garbage
                 annotation = Attribute.VarDecl.Empty
                 allReferences = HashSet() 
             }
@@ -723,7 +723,7 @@ let private translateBlock ctx compilations curComp block =
     let pc =
         { name = mkAuxQNameFrom <| render None (pc4block block)
           pos = range0
-          datatype = Types.ValueTypes (UintType Uint32)
+          datatype = ValueTypes (NatType Nat32)
           isMutable = true
           allReferences = HashSet() }
     let newIface = Iface.addPcs (!curComp).iface pc
@@ -849,17 +849,21 @@ let private collectVarsToPrev2 pg =
         // constants and literals
         | BoolConst _
         | IntConst _
+        | NatConst _
+        | BitsConst _ 
         | FloatConst _
         | ResetConst -> []
         | StructConst fields ->
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
         | ArrayConst fields ->
             fields |> List.map (fun (_,e) -> processExpr e) |> List.concat   
+        // type conversion
+        | Convert (e, _) -> processExpr e
         // boolean
         | Neg e -> processExpr e
+        | Bnot e -> processExpr e
         | Conj (e1, e2) 
         | Disj (e1, e2) 
-        | Xor (e1, e2) 
         // relations
         | Les (e1, e2) 
         | Leq (e1, e2) 
@@ -869,8 +873,17 @@ let private collectVarsToPrev2 pg =
         | Sub (e1, e2) 
         | Mul (e1, e2) 
         | Div (e1, e2) 
-        | Mod (e1, e2) -> processExpr e1 @ processExpr e2
-    
+        | Mod (e1, e2) 
+        // bitwise
+        | Band (e1, e2)
+        | Bor (e1, e2)
+        | Bxor (e1, e2)
+        | Shl (e1, e2)
+        | Shr (e1, e2)
+        | Sshr (e1, e2)
+        | Rotr (e1, e2)
+        | Rotl (e1, e2) -> processExpr e1 @ processExpr e2
+            
     let rec processNode (node: Node) =
         match node.Payload.Typ with
         | ActionLocation action ->
@@ -953,7 +966,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = Types.ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)

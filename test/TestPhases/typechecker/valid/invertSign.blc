@@ -7,6 +7,6 @@ end
 activity start ()()
     var x = -someNumber()
     
-    var y: int16 = -(-127 - 1)
+    var y = -(-127 - (1: int16))
     await true
 end

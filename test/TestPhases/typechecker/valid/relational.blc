@@ -1,0 +1,17 @@
+@[EntryPoint]
+
+activity main ()
+    var i: int8
+    var n: nat8
+    var b: bits8
+    var f: float32
+    var a: [2]bool
+
+    if i < 2 then end
+    if i < 10212301232 then end
+    if n < (i as nat8) then end
+    if 1 < f then end
+    if 1 < (2: int8) then end
+    
+    await true
+end

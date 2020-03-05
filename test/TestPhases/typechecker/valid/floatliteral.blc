@@ -1,0 +1,9 @@
+
+@[EntryPoint]
+activity main ()
+    var f: float32 = 3.402823e+38  // 3.402824e+38 == infinity float32
+    var f2: float32 = -3.402823e+38
+    var d: float64 = 1.79769313486231E+308 // 1.79769313486232E+308 == infinity
+    var d2: float64 = -1.79769313486231E+308
+    await true
+end

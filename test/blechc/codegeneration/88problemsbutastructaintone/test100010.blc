@@ -6,6 +6,6 @@ end
 @[EntryPoint]
 activity A()
     var l: S
-    l.f = 5.f // local lhs simple fieldaccess cur
+    l.f = 5. // local lhs simple fieldaccess cur
     await true
 end

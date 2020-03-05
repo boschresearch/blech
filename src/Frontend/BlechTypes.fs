@@ -29,6 +29,7 @@ open System.Collections.Generic
 open Blech.Common.PPrint
 open Blech.Common.Range
 
+open Constants
 open CommonTypes
 open PrettyPrint.DocPrint
 
@@ -58,38 +59,38 @@ type Mutability =
 /// Float constants are represented as strings to ensure that a value's
 /// representation in the generated code is exactly the same as in
 /// the original Blech source code.
-type FloatConst =
-    | Single of string
-    | Double of string
-    override this.ToString () =
-        let dotZero =
-            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
-            elif this.GetString.Contains "." then ""
-            else ".0"
-        match this with
-        | Single s -> s + dotZero + "f"
-        | Double s -> s + dotZero 
-    member this.ToDoc = this.ToString () |> txt
-    member private this.GetString : string =
-        match this with
-        | Single s 
-        | Double s -> s
-    member private this.ReplaceString s =
-        match this with
-        | Single _ -> Single s
-        | Double _ -> Double s
-    member this.ToFloat = this.GetString |> float
-    member this.IsZero =
-        this.ToFloat = 0.0
-    member this.Negate =
-        let s = this.GetString
-        ( if s.StartsWith "-" then s.[1..]
-          else "-" + s )
-        |> this.ReplaceString
-    static member Zero precision =
-        match precision with
-        | FloatPrecision.Single -> FloatConst.Single "0.0"
-        | FloatPrecision.Double -> FloatConst.Double "0.0"
+//type FloatConst =
+//    | Single of string
+//    | Double of string
+//    override this.ToString () =
+//        let dotZero =
+//            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
+//            elif this.GetString.Contains "." then ""
+//            else ".0"
+//        match this with
+//        | Single s -> s + dotZero + "f"
+//        | Double s -> s + dotZero 
+//    member this.ToDoc = this.ToString () |> txt
+//    member private this.GetString : string =
+//        match this with
+//        | Single s 
+//        | Double s -> s
+//    member private this.ReplaceString s =
+//        match this with
+//        | Single _ -> Single s
+//        | Double _ -> Double s
+//    member this.ToFloat = this.GetString |> float
+//    member this.IsZero =
+//        this.ToFloat = 0.0
+//    member this.Negate =
+//        let s = this.GetString
+//        ( if s.StartsWith "-" then s.[1..]
+//          else "-" + s )
+//        |> this.ReplaceString
+//    static member Zero precision =
+//        match precision with
+//        | FloatType.Float32 -> FloatConst.Single "0.0"
+//        | FloatType.Float64 -> FloatConst.Double "0.0"
 
 
 /// Data types
@@ -99,12 +100,14 @@ type ValueTypes =
     | Void // e.g. function return type
     | BoolType    
     | IntType of IntType
-    | UintType of UintType
-    | FloatType of FloatPrecision
+    | NatType of NatType
+    | BitsType of BitsType
+    | FloatType of FloatType
     //structured
-    | ArrayType of size:int * datatype:ValueTypes // we use int for size to save ourselves from casting expressions 
-                                                  // like 'size-1' or to pass size to functions that expect int
-                                                  // such as List.replicate
+    | ArrayType of size: Size * datatype: ValueTypes // TODO: Correct this comment, fjg. 14.02.20
+                                                     // we use int for size to save ourselves from casting expressions 
+                                                     // like 'size-1' or to pass size to functions that expect int
+                                                     // such as List.replicate
     | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
     
@@ -115,19 +118,20 @@ type ValueTypes =
         | Void -> "void"
         | BoolType -> "bool"
         | IntType i -> i.ToString()
-        | UintType i -> i.ToString()
+        | NatType i -> i.ToString()
+        | BitsType b -> b.ToString()    
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
         | StructType (_, q, _) -> q.ToString()
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | UintType _ | FloatType _ -> true
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ -> true
         | ArrayType _ | StructType _ -> false
 
     member this.TryRange =
         match this with
-        | Void | BoolType | IntType _ | UintType _ | FloatType _ | ArrayType _ -> None
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
         | StructType (r,_,_) -> Some r
 
 
@@ -152,19 +156,26 @@ and ReferenceTypes =
             Some r
 
 
-and Types =
+// TODO: check if simple any types really need to carry their value, fjg. 27.01.20
+and Types = 
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
-    | AnyComposite // used for wildcard or compound literals
-    | AnyInt of bigint // used only for untyped numbers
+    | Any // used for wildcard
+    | AnyComposite // compound literals
+    | AnyInt // used for untyped integer literals
+    | AnyBits // of Bits // used for untyped bits literals 
+    | AnyFloat // of Float // used for untyped float literals
     
     member this.ToDoc =
         match this with
         | ValueTypes f -> f.ToDoc
         | ReferenceTypes r -> r.ToDoc
-        | AnyComposite -> txt "any"
-        | AnyInt i -> txt <| string i
-    
+        | Any -> txt "wildcard"
+        | AnyComposite -> txt "any composite"
+        | AnyInt -> txt "any int"
+        | AnyBits -> txt "any bits"
+        | AnyFloat -> txt "any float"
+
     override this.ToString() = render None <| this.ToDoc
     
     member this.IsValueType() = 
@@ -177,9 +188,20 @@ and Types =
         | ValueTypes v -> v.IsPrimitive
         | _ -> false
 
-    member this.IsAny =
+    member this.IsWildcard = 
+        this = Any
+
+    member this.IsCompoundLiteral =
+        this = AnyComposite
+
+    member this.IsPrimitiveAny = 
         match this with
-        | AnyComposite | AnyInt _ -> true
+        | AnyInt | AnyBits | AnyFloat -> true
+        | _ -> false
+    
+    member this.IsSomeAny = 
+        match this with
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
 
     /// true iff data blob may be assigned (or reset) as a whole
@@ -194,8 +216,11 @@ and Types =
 
         match this with
         // only "any" literal on the lhs is wildcard
-        | AnyComposite -> true
-        | AnyInt _
+        | Any -> true
+        | AnyInt
+        | AnyBits
+        | AnyFloat
+        | AnyComposite
         | ReferenceTypes _ -> false
         // the relevant case
         | ValueTypes vt ->
@@ -204,7 +229,8 @@ and Types =
             | Void
             | BoolType
             | IntType _
-            | UintType _
+            | NatType _
+            | BitsType _
             | FloatType _ -> true
             // check structs and arrays recursively
             | ValueTypes.StructType (_,_,fields) ->
@@ -217,8 +243,7 @@ and Types =
         match this with
         | ValueTypes v -> v.TryRange
         | ReferenceTypes r -> r.TryRange
-        | AnyComposite 
-        | AnyInt _ -> None
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> None
 
 
 //=============================================================================
@@ -261,7 +286,7 @@ and VarDecl =
     member this.ToDoc =
         let vdDoc = 
             this.mutability.ToDoc
-            <+> match this.datatype with | Types.ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
+            <+> match this.datatype with | ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
             <^> txt (this.name.ToString())
             <^> txt ":" <+> this.datatype.ToDoc
             <+> txt "=" <+> this.initValue.ToDoc
@@ -287,7 +312,7 @@ and ExternalVarDecl =
         let vdDoc =
             txt "extern"
             <+> this.mutability.ToDoc
-            <+> match this.datatype with | Types.ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
+            <+> match this.datatype with | ReferenceTypes _ -> txt "ref" <+> empty | _ -> empty
             <^> txt (this.name.ToString())
             <^> txt ":" <+> this.datatype.ToDoc
         this.annotation.ToDoc @ [vdDoc]
@@ -518,10 +543,13 @@ and LhsStructure =
         | LhsCur t -> LhsCur (t.AddArrayAccess idx)
         | LhsNext t -> LhsNext (t.AddArrayAccess idx)
     
-    member this.AddArrayAccess (idx: int) = 
-        let i = bigint idx
-        let idx = {rhs = IntConst i; typ = ValueTypes (IntType (IntType.RequiredType i)); range = range0}
-        this.AddArrayAccess idx
+    //member this.AddArrayAccess (idx: Int) = 
+    //    let rhs = {rhs = IntConst idx; typ = ValueTypes (IntType (IntType.RequiredType idx)); range = range0}
+    //    this.AddArrayAccess rhs
+
+    //member this.AddArrayAccess (idx: Nat) = 
+    //    let rhs = {rhs = NatConst idx; typ = ValueTypes (NatType (NatType.RequiredType idx)); range = range0}
+    //    this.AddArrayAccess rhs
 
 /// right hand side expression, in assignments, arguments to subprograms or index of array access    
 and RhsStructure =
@@ -532,17 +560,30 @@ and RhsStructure =
     | FunCall of QName * TypedRhs list * TypedLhs list
     // constants and literals
     | BoolConst of bool
-    | IntConst of bigint
-    | FloatConst of FloatConst
+    | NatConst of Constants.Nat // Todo: check correct usage everywhere, fjg. 11.02.20
+    | IntConst of Constants.Int
+    | BitsConst of Constants.Bits
+    | FloatConst of Constants.Float
     | ResetConst // empty struct or array, reset to default values
     | StructConst of (Identifier * TypedRhs) list
-    | ArrayConst of (int * TypedRhs) list
-    // boolean
+    | ArrayConst of (Constants.Size * TypedRhs) list
+    //
+    | Convert of TypedRhs * Types
+    // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
     | Disj of TypedRhs * TypedRhs
-    | Xor of TypedRhs * TypedRhs
-    // relations
+    // bitwise
+    | Bnot of TypedRhs
+    | Band of TypedRhs * TypedRhs
+    | Bor of TypedRhs * TypedRhs
+    | Bxor of TypedRhs * TypedRhs
+    | Shl of TypedRhs * TypedRhs
+    | Shr of TypedRhs * TypedRhs
+    | Sshr of TypedRhs * TypedRhs
+    | Rotl of TypedRhs * TypedRhs
+    | Rotr of TypedRhs * TypedRhs
+    // relational
     | Les of TypedRhs * TypedRhs
     | Leq of TypedRhs * TypedRhs
     | Equ of TypedRhs * TypedRhs
@@ -554,6 +595,21 @@ and RhsStructure =
     | Mod of TypedRhs * TypedRhs
 
     member this.ToDoc = this.ppExpr dpPrec.["min"]
+
+    member this.GetIntConst: Int =
+        match this with
+        | IntConst i -> i
+        | _ -> failwith "expected an IntConst"
+    
+    member this.GetBitsConst: Bits =
+        match this with
+        | BitsConst b -> b
+        | _ -> failwith "expected a BitsConst"
+    
+    member this.GetFloatConst: Float =
+        match this with
+        | FloatConst f -> f
+        | _ -> failwith "expected a FloatConst"
     
     member this.ppExpr outerPrec =
         match this with
@@ -569,7 +625,9 @@ and RhsStructure =
         // constants and literals
         | BoolConst c -> if c then txt "true" else txt "false"
         | IntConst i -> txt <| i.ToString()
-        | FloatConst f -> f.ToDoc
+        | BitsConst b -> txt <| b.ToString()
+        | NatConst n -> txt <| n.ToString()
+        | FloatConst f -> txt <| f.ToString()
         | ResetConst -> [empty] |> dpCommaSeparatedInBraces
         | StructConst structFieldExprList ->
             structFieldExprList
@@ -580,7 +638,11 @@ and RhsStructure =
             |> List.map (fun elem -> (snd elem).rhs.ppExpr outerPrec)
             |> dpCommaSeparatedInBraces
         // subexpressions
-        // boolean
+        // type conversion
+        | Convert (e, t)->
+            fun p -> e.rhs.ppExpr p <.> txt "as" <+> t.ToDoc
+            |> dpPrecedence outerPrec dpPrec.["as"]
+        // logical
         | Neg expr ->
             fun p -> txt "not" <+> expr.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["not"]
@@ -590,10 +652,35 @@ and RhsStructure =
         | Disj (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "or" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["or"]
-        | Xor (e1, e2) ->
-            fun p -> e1.rhs.ppExpr p <.> txt "xor" <+> e2.rhs.ppExpr p 
+        // bitwise
+        | Bnot expr ->
+            fun p -> txt "~" <+> expr.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["~"]
-        // relations
+        | Band (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "&" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["&"]
+        | Bor (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "|" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["|"]
+        | Bxor (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "^" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["^"]
+        | Shl (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<<" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<<"]
+        | Shr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt ">>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.[">>"]
+        | Sshr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "+>>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["+>>"]
+        | Rotl (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<<>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<<>"]
+        | Rotr (e1, e2) ->
+            fun p -> e1.rhs.ppExpr p <.> txt "<>>" <+> e2.rhs.ppExpr p 
+            |> dpPrecedence outerPrec dpPrec.["<>>"]
+        // relational
         | Les (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "<" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["<"]
@@ -619,7 +706,8 @@ and RhsStructure =
         | Mod (e1, e2) ->
             fun p -> e1.rhs.ppExpr p <.> txt "%" <+> e2.rhs.ppExpr p 
             |> dpPrecedence outerPrec dpPrec.["%"]
-    
+       
+
     override this.ToString () = render None <| this.ToDoc
 
 and TypedRhs =
@@ -761,6 +849,7 @@ let rec public isLiteral expr =
     match expr.rhs with
     | IntConst _ 
     | BoolConst _
+    | BitsConst _
     | FloatConst _
     | ResetConst -> true
     | StructConst fields -> 

@@ -1,0 +1,12 @@
+// default word-size=32
+const maxNat32: nat64 = 4294967295
+
+@[EntryPoint]
+activity main()
+    //var a:[maxNat32] bool; // generation of init value takes very, very ... much memory and execution time
+    var a: [maxNat32 + 1]int32
+    const b = {} : [maxNat32 + 1]bool
+    var c: [2]bool
+    c[maxNat32 + 1] = true
+    await true
+end

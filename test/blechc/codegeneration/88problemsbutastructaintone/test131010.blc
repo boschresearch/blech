@@ -4,7 +4,7 @@ struct Foo
     var r: float32
 end
 
-const ff: Foo = {b = true, a = 7, r = -4.3f}
+const ff: Foo = {b = true, a = 7, r = -4.3}
 
 @[EntryPoint]
 activity entry()()

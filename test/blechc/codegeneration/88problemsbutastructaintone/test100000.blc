@@ -2,6 +2,6 @@
 @[EntryPoint]
 activity A()
     var l: float32
-    l = 5.f // local lhs simple direct cur
+    l = 5. // local lhs simple direct cur
     await true
 end

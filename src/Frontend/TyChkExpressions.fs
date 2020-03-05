@@ -18,9 +18,11 @@ module Blech.Frontend.TyChkExpressions
 
 open Blech.Common
 
+open Constants
 open CommonTypes
 open BlechTypes
 open TyChecked
+open Evaluation
 open TypeCheckContext
 open TyChkAmendment
 
@@ -69,8 +71,8 @@ let internal isLhsMutable lut lhs =
         let ism, typ = isTmlMutable tml
         if ism then
             match typ with
-            | Types.ValueTypes (ValueTypes.StructType (_, typname, typfields))
-            | Types.ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
+            | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+            | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                 typfields
                 |> List.tryFind (fun f -> f.name.basicId = ident)
                 |> function
@@ -98,7 +100,7 @@ let rec private hasNoSideEffect expr =
     | RhsCur tml 
     | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
     // constants and literals
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _  | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     // call, has no side-effect IFF it does not write any outputs
@@ -107,10 +109,16 @@ let rec private hasNoSideEffect expr =
     | FunCall (_, inputs, outputs) ->
         outputs = []
         && List.forall hasNoSideEffect inputs
-    // boolean
-    | Neg e -> hasNoSideEffect e
-    | Conj (x, y) | Disj (x, y) | Xor (x, y)
-    // relations
+    // type conversion
+    | Convert (e, _) -> hasNoSideEffect e
+    // unary 
+    | Neg e | Bnot e -> hasNoSideEffect e
+    // logical
+    | Conj (x, y) | Disj (x, y) 
+    // bitwise 
+    | Band (x, y) | Bor (x, y) | Bxor (x, y)
+    | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y)
+    // relational
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
@@ -135,14 +143,20 @@ let rec internal isStaticExpr lut expr =
         | Some Mutability.Immutable
         | Some Mutability.Variable -> false
     | Prev _ -> false // prev exists only on var
-    | BoolConst _ | IntConst _ | FloatConst _ | ResetConst -> true
+    | BoolConst _ | IntConst _ | BitsConst _ | FloatConst _ | NatConst _ | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
-    // boolean
-    | Neg e -> isStaticExpr lut e
-    | Conj (x, y) | Disj (x, y) | Xor (x, y)
-    // relations
+    // type conversion 
+    | Convert (e, _) -> isStaticExpr lut e
+    // unary 
+    | Neg e | Bnot e -> isStaticExpr lut e
+    // logical
+    | Conj (x, y) | Disj (x, y) 
+    // bitwise
+    | Band (x, y) | Bor (x, y) | Bxor (x, y) 
+    | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y)
+    // relational
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
@@ -153,57 +167,68 @@ let rec internal isStaticExpr lut expr =
 /// wrap them back into FloatConst objects, taking original
 /// precision into account
 /// This operation may introduce rounding imprecision!
-let private combineFloat (a: FloatConst) (b: FloatConst) op =
-    let wrapFloat a b (res: float) =
-        let combinePrecision a b =
-            match a, b with
-            | FloatConst.Single _, FloatConst.Single _ -> FloatConst.Single
-            // return double if there was at least one double
-            | _,_ -> FloatConst.Double
+//let private combineFloat (a: FloatConst) (b: FloatConst) op =
+//    let wrapFloat a b (res: float) =
+//        let combinePrecision a b =
+//            match a, b with
+//            | FloatConst.Single _, FloatConst.Single _ -> FloatConst.Single
+//            // return double if there was at least one double
+//            | _,_ -> FloatConst.Double
 
-        res
-        |> floatToString
-        |> combinePrecision a b
-        |> FloatConst
+//        res
+//        |> floatToString
+//        |> combinePrecision a b
+//        |> FloatConst
 
-    op a.ToFloat b.ToFloat
-    |> wrapFloat a b
+//    op a.ToFloat b.ToFloat
+//    |> wrapFloat a b
+
 
 let private add this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a + b)
-    | FloatConst a, FloatConst b -> combineFloat a b (+)
+    | IntConst a, IntConst b -> IntConst <| Arithmetic.Add (a, b)
+    | NatConst a, NatConst b -> NatConst <| Arithmetic.Add (a, b)
+    | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Add (a, b)
+    | FloatConst a, FloatConst b -> FloatConst <| Arithmetic.Add (a, b)
     | _ -> Add(this, that)
 
 let private mul this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a * b)
-    | FloatConst a, FloatConst b -> combineFloat a b (*)
+    | IntConst a, IntConst b -> IntConst <| Arithmetic.Mul (a, b)
+    | NatConst a, NatConst b -> NatConst <| Arithmetic.Mul (a, b)
+    | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Mul (a, b)
+    | FloatConst a, FloatConst b -> FloatConst <| Arithmetic.Mul (a, b)
     | _ -> Mul(this, that)
 
-let private div this that =
+let private div this that =    
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a / b)
-    | FloatConst a, FloatConst b -> combineFloat a b (/)
+    | IntConst a, IntConst b -> IntConst <| Arithmetic.Div (a, b)
+    | NatConst a, NatConst b -> NatConst <| Arithmetic.Div (a, b)
+    | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Div (a, b)
+    | FloatConst a, FloatConst b -> FloatConst <| Arithmetic.Div (a, b)
     | _ -> Div(this, that)
 
 let private sub this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a - b)
-    | FloatConst a, FloatConst b -> combineFloat a b (-)
+    | IntConst a, IntConst b -> IntConst <| Arithmetic.Sub (a, b)
+    | NatConst a, NatConst b -> NatConst <| Arithmetic.Sub (a, b)
+    | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Sub (a, b)
+    | FloatConst a, FloatConst b -> FloatConst <| Arithmetic.Sub (a, b)
     | _ -> Sub(this, that)
 
 let private modus this that =
     match this.rhs, that.rhs with
-    | IntConst a, IntConst b -> IntConst (a % b)
-    | FloatConst a, FloatConst b -> combineFloat a b (%) // actually, in Blech we cannot mod floats which is checked before calling this function, so this line is basically dead code
+    | IntConst a, IntConst b -> IntConst <| Arithmetic.Mod (a, b)
+    | NatConst a, NatConst b -> NatConst <| Arithmetic.Mod (a, b)
+    | BitsConst a, BitsConst b -> BitsConst <| Arithmetic.Mod (a, b)
+    // | FloatConst a, FloatConst b -> failwith "modulo operation on float should not occur" // this is checked before calling this function 
     | _ -> Mod(this, that)
 
 let private neg this =
     match this.rhs with
     | BoolConst b -> BoolConst (not b)
     | Neg b -> b.rhs
-    | Xor (a,b) -> Equ (a, b) // this is not idempotent
+    | Bxor (a,b) -> Equ (a, b) // this is not idempotent
     | _ -> Neg this
 
 let private conj this that =
@@ -220,71 +245,149 @@ let private disj this that =
     | BoolConst true, _ -> BoolConst true // optimisation, note "and then" semantics prohibits to do the same in case of _, true
     | _ -> Disj(this, that)
 
-let private xor this that =
-    match this.rhs, that.rhs with
-    | BoolConst a, BoolConst b -> BoolConst (a <> b) //covers the case where both are true, NOT redundant as above for conj and disj
-    | BoolConst false, t
-    | t, BoolConst false -> t
-    | _ -> Xor(this, that)
-
 let private less this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a < b)
-    | IntConst a, IntConst b -> BoolConst (a < b)
-    | FloatConst a, FloatConst b -> BoolConst (a < b)
+    | IntConst a, IntConst b -> BoolConst <| Relational.Lt (a, b)
+    | BitsConst a, BitsConst b -> BoolConst <| Relational.Lt (a, b)
+    | FloatConst a, FloatConst b -> BoolConst <| Relational.Lt (a, b)
     | _ -> Les(this, that)
 
 let private leq this that =
     match this.rhs, that.rhs with
-    | BoolConst a, BoolConst b -> BoolConst (a <= b)
-    | IntConst a, IntConst b -> BoolConst (a <= b)
-    | FloatConst a, FloatConst b -> BoolConst (a <= b)
+    | BoolConst a, BoolConst b -> BoolConst ( a <= b )
+    | IntConst a, IntConst b -> BoolConst <| Relational.Le (a, b)
+    | BitsConst a, BitsConst b -> BoolConst <| Relational.Le (a, b)
+    | FloatConst a, FloatConst b -> BoolConst <| Relational.Le (a, b)
     | _ -> Leq(this, that)
 
-let rec private eq this that =
-    let checkField (id1, st1) (id2, st2) =
-        eq st1 st2
-        |> function
-            | BoolConst r -> r && id1 = id2
-            | _ -> false
-    
-    let compareAssignments x y =
-        let sortedA = x |> List.sortBy fst
-        let sortedB = y |> List.sortBy fst
-        (sortedA, sortedB)
-        ||> List.forall2 (fun (id1,e1) (id2,e2) -> checkField (id1,e1) (id2,e2))
-        |> BoolConst
-
-    let compareComposite a b =
-        if isLiteral this && isLiteral that then
-            if List.length a = List.length b then
-                compareAssignments a b
-            else // we have literals where possibly one carries default value that the other does not
-                if this.typ = that.typ then
-                    let defaultComposite = 
-                        match getDefaultValueFor this.range "" this.typ with
-                        | Ok x -> x.rhs 
-                        | Error _ -> failwith "Failed to get default value for composite type."
-                    let explodedA = unsafeMergeCompositeLiteral defaultComposite this.rhs
-                    let explodedB = unsafeMergeCompositeLiteral defaultComposite that.rhs
-                    match explodedA, explodedB with
-                    | StructConst ea, StructConst eb -> compareAssignments ea eb
-                    | ArrayConst ea, ArrayConst eb -> compareAssignments ea eb
-                    | _ -> failwith "Structs exploded in unpredictable ways."
-                else
-                    failwith "incomparable struct sizes"
-        else
-            Equ(this, that)
-    
+let private eq this that =
     match this.rhs, that.rhs with
     | BoolConst a, BoolConst b -> BoolConst (a = b)
-    | IntConst a, IntConst b -> BoolConst (a = b)
-    | FloatConst a, FloatConst b -> BoolConst (a = b)
-    | ResetConst, ResetConst -> BoolConst true
-    | StructConst a, StructConst b -> compareComposite a b
-    | ArrayConst a, ArrayConst b -> compareComposite a b
+    | IntConst a, IntConst b -> BoolConst <| Relational.Eq (a, b)
+    | BitsConst a, BitsConst b -> BoolConst <| Relational.Eq (a, b)
+    | FloatConst a, FloatConst b -> BoolConst <| Relational.Eq (a, b)
     | _ -> Equ(this, that)
 
+let private bnot this = 
+    match this.rhs with
+    | BitsConst b -> BitsConst <| Bitwise.Bnot b
+    | _ -> Bnot this
+
+let private bor this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Bor (a, b)
+    | _ -> Bor(this, that)
+
+let private band this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Band (a, b)
+    | _ -> Band (this, that)
+
+let private bxor this that =
+    match this.rhs, that.rhs with
+    | BitsConst a, BitsConst b -> BitsConst <| Bitwise.Bxor (a, b)
+    | _ -> Bxor (this, that)
+
+let private shl expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shl (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shl (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shl (bs, b.GetShiftAmount bs.getBitsize)
+    | _ -> Shl (expr, amount)
+
+let private shr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Shr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Shr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Shr (bs, b.GetShiftAmount bs.getBitsize)
+    | _ -> Shr (expr, amount)
+
+
+let private sshr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Sshr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Sshr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Sshr (bs, b.GetShiftAmount bs.getBitsize)
+    | _ -> Sshr (expr, amount)
+
+
+let private rotl expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotl (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotl (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotl (bs, b.GetShiftAmount bs.getBitsize)
+    | _ -> Rotl (expr, amount)
+
+
+let private rotr expr amount = 
+    match expr.rhs, amount.rhs with
+    | BitsConst bs, IntConst i -> BitsConst <| Bitwise.Rotr (bs, i.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, NatConst n -> BitsConst <| Bitwise.Rotr (bs, n.GetShiftAmount bs.getBitsize)
+    | BitsConst bs, BitsConst b -> BitsConst <| Bitwise.Rotr (bs, b.GetShiftAmount bs.getBitsize)
+    | _ -> Rotr (expr, amount)
+
+
+let private convert toType expr  =
+    match expr.rhs, toType with
+    | IntConst i, ValueTypes (IntType it) -> IntConst <| Conversion.IntToInt (i, it)
+    | IntConst i, ValueTypes (NatType nt) -> NatConst <| Conversion.IntToNat (i, nt)
+    | IntConst i, ValueTypes (BitsType bt) -> BitsConst <| Conversion.IntToBits (i, bt)
+    | IntConst i, ValueTypes (FloatType ft) -> FloatConst <| Conversion.IntToFloat (i, ft)
+    | NatConst n, ValueTypes (NatType nt) -> NatConst <| Conversion.NatToNat (n, nt)
+    | NatConst n, ValueTypes (IntType it) -> IntConst <| Conversion.NatToInt (n, it)
+    | NatConst n, ValueTypes (BitsType bt) -> BitsConst <| Conversion.NatToBits (n, bt)
+    | NatConst n, ValueTypes (FloatType ft) -> FloatConst <| Conversion.NatToFloat (n, ft)
+    | BitsConst b, ValueTypes (BitsType bt) -> BitsConst <| Conversion.BitsToBits (b, bt)
+    | BitsConst b, ValueTypes (IntType it) -> IntConst <| Conversion.BitsToInt (b, it)
+    | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Conversion.BitsToNat (b, nt)
+    | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Conversion.BitsToFloat (b, ft)
+    | FloatConst f, ValueTypes (FloatType ft) -> FloatConst <| Conversion.FloatToFloat (f, ft)
+    | _ -> Convert (expr, toType)   
+
+//let rec private eq this that =
+//    let checkField (id1, st1) (id2, st2) =
+//        eq st1 st2
+//        |> function
+//            | BoolConst r -> r && id1 = id2
+//            | _ -> false
+    
+//    let compareAssignments x y =
+//        let sortedA = x |> List.sortBy fst
+//        let sortedB = y |> List.sortBy fst
+//        (sortedA, sortedB)
+//        ||> List.forall2 (fun (id1,e1) (id2,e2) -> checkField (id1,e1) (id2,e2))
+//        |> BoolConst
+
+//    let compareComposite a b =
+//        if isLiteral this && isLiteral that then
+//            if List.length a = List.length b then
+//                compareAssignments a b
+//            else // we have literals where possibly one carries default value that the other does not
+//                if this.typ = that.typ then
+//                    let defaultComposite = 
+//                        match getDefaultValueFor this.range "" this.typ with
+//                        | Ok x -> x.rhs 
+//                        | Error _ -> failwith "Failed to get default value for composite type."
+//                    let explodedA = unsafeMergeCompositeLiteral defaultComposite this.rhs
+//                    let explodedB = unsafeMergeCompositeLiteral defaultComposite that.rhs
+//                    match explodedA, explodedB with
+//                    | StructConst ea, StructConst eb -> compareAssignments ea eb
+//                    | ArrayConst ea, ArrayConst eb -> compareAssignments ea eb
+//                    | _ -> failwith "Structs exploded in unpredictable ways."
+//                else
+//                    failwith "incomparable struct sizes"
+//        else
+//            Equ(this, that)
+    
+//    match this.rhs, that.rhs with
+//    | BoolConst a, BoolConst b -> BoolConst (a = b)
+//    | IntConst a, IntConst b -> BoolConst (a = b)
+//    | FloatConst a, FloatConst b -> BoolConst <| Float.Relational (=) a b
+//    | ResetConst, ResetConst -> BoolConst true
+//    | StructConst a, StructConst b -> compareComposite a b
+//    | ArrayConst a, ArrayConst b -> compareComposite a b
+//    | _ -> Equ(this, that)
 
 /// Given a typed rhs expression, this function tries to evaluate this 
 /// expression to a constant and return a new TypedRhs such that
@@ -292,18 +395,23 @@ let rec private eq this that =
 /// However, it may return a non-constant expression if it cannot be
 /// reduced. No error is thrown.
 let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
+    let evalUnary x f = 
+        let newRhs = tryEvalConst lut x |> f
+        { rhs = newRhs; typ = checkedExpr.typ; range = checkedExpr.Range }
+    
     let evalBin x y f =
         let newrhs = tryEvalConst lut x |> f <| tryEvalConst lut y
         { rhs = newrhs; typ = checkedExpr.typ; range = checkedExpr.Range }
-        //|> Result.bind f
+    
     let recurFields constBuilder fs =
         let kvps = fs |> List.map (fun (i,f) -> i, tryEvalConst lut f)
         { rhs = constBuilder kvps
           typ = checkedExpr.typ
           range = checkedExpr.Range }
+    
     match checkedExpr.rhs with
     // simple literal
-    | IntConst _ | BoolConst _ | FloatConst _ | ResetConst -> checkedExpr
+    | IntConst _ | BoolConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst -> checkedExpr
     // composite literal
     | StructConst fields -> recurFields StructConst fields
     | ArrayConst fields -> recurFields ArrayConst fields
@@ -313,17 +421,27 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Mul (x, y) -> evalBin x y mul 
     | Div (x, y) -> evalBin x y div 
     | Mod (x, y) -> evalBin x y modus
-    // bool
-    | Neg x -> 
-        let newRhs = tryEvalConst lut x |> neg
-        { rhs = newRhs; typ = checkedExpr.typ; range = checkedExpr.Range }
+    // unary
+    | Bnot x  -> evalUnary x bnot 
+    | Neg x -> evalUnary x neg
+    // logical
     | Conj (x, y) -> evalBin x y conj
     | Disj (x, y) -> evalBin x y disj
-    | Xor (x, y) -> evalBin x y xor 
-    // compare
+    // bitwise
+    | Band (x, y) -> evalBin x y band
+    | Bor (x, y) -> evalBin x y bor
+    | Bxor (x, y) -> evalBin x y bxor 
+    | Shl (x, y) -> evalBin x y shl
+    | Shr (x, y) -> evalBin x y shr
+    | Sshr (x, y) -> evalBin x y sshr
+    | Rotl (x, y) -> evalBin x y rotl
+    | Rotr (x, y) -> evalBin x y rotr
+    // relational
     | Les (x, y) -> evalBin x y less 
     | Leq (x, y) -> evalBin x y leq
     | Equ (x, y) -> evalBin x y eq 
+    // type conversion
+    | Convert (x, t) -> evalUnary x (convert t)
     // function calls
     | FunCall (name, ins, outs) ->
         let newIns = ins |> List.map (tryEvalConst lut)
@@ -334,11 +452,11 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
         | Declarable.VarDecl v ->
             if v.mutability.Equals Mutability.CompileTimeConstant then
                 match getInitValueForTml lut tml with
-                | Ok trhs -> trhs // is constant by definition
+                | Ok trhs -> { trhs with range = checkedExpr.Range }// is constant by definition
                 | Error _ -> checkedExpr // the tml access fails for arr[foo], where foo is not a compile time const
             else
                 checkedExpr
-        //| Declarable.ParamDecl _ -> Error [] // params not compile time const
+        //| Declarable.ParamDecl _ -> Error [] // params are not compile time const
         | _ -> checkedExpr
 
 
@@ -350,15 +468,81 @@ and internal evalConst lut expr =
     else Error[MustBeConst(expr)]
 
 
-/// This tries to evaluate expr to a constant integer value
-/// and returns a MustBeConst error if the input is not constant
-/// and returns a NotACompileTimeInt if the result is not an integer.
-and internal evalCompTimeInt lut expr =
+
+and private ensureNonNegIndex index =
+    match index.rhs with
+    | IntConst i when i.IsNegative ->
+        Error [ NegativeArrayIndex index ]
+    | _ ->
+        Ok index
+    
+and private ensurePositiveSize index = 
+    match index.rhs with
+    | IntConst i when not i.IsPositive ->
+        Error [ PositiveSizeExpected index ]
+    | NatConst n when not n.IsPositive ->
+        Error [ PositiveSizeExpected index ]
+    | BitsConst b when not b.IsPositive ->
+        Error [ PositiveSizeExpected index ]
+    | _ ->
+        Ok index
+
+
+and private ensureArraySize wordsize index =
+    match index.rhs with
+    | IntConst i when not (i.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
+    | NatConst n when not (n.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
+    | BitsConst b when not (b.IsSize wordsize) ->
+        Error [ ArraySizeOverflowsWordsize (index, wordsize) ] 
+    | _ ->
+        Ok index
+
+
+/// This evaluate expr to a constant array size
+and internal evalCompTimeSize lut expr =   
     evalConst lut expr
+    |> Result.bind ensurePositiveSize
+    |> Result.bind (ensureArraySize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
     |> Result.bind (fun constExpr ->
         match constExpr.rhs with
-        | IntConst i -> Ok <| (int)i
-        | _ -> Error [NotACompileTimeInt expr]
+        | IntConst i -> Ok i.GetArrayIndex
+        | NatConst n -> Ok n.GetArrayIndex
+        | BitsConst b -> Ok b.GetArrayIndex
+        | _ -> 
+            Error [NotACompileTimeSize expr]    
+    )
+
+/// This evaluate expr to a constant array index.
+/// It retruns the compile time index.
+/// It returns an error if the compile time index is negative or overflows the wordsize.
+and internal evalCompTimeIndex lut expr =   
+    evalConst lut expr
+    |> Result.bind ensureNonNegIndex
+    |> Result.bind (ensureArraySize lut.cliContext.wordSize) // A size must be >= 0 before it can be extracted with .GetArrayIndex
+    |> Result.bind (fun constExpr ->
+        match constExpr.rhs with
+        | IntConst i -> Ok i.GetArrayIndex
+        | NatConst n -> Ok n.GetArrayIndex
+        | BitsConst b -> Ok b.GetArrayIndex
+        | _ -> 
+            Error [NotACompileTimeSize expr]    
+    )
+
+
+/// This tries to evaluate an index expr to a constant value.
+/// It returns the optional compile time index,
+/// and an error is the constant value is negative
+and internal tryEvalCompTimeIndex lut expr =
+    tryEvalConst lut expr 
+    |> ensureNonNegIndex
+    |> Result.bind (fun expr ->
+        match expr.rhs with
+        | IntConst i -> Ok <| Some i.GetArrayIndex
+        | NatConst n -> Ok <| Some n.GetArrayIndex
+        | BitsConst b -> Ok <| Some b.GetArrayIndex
+        | _ -> Ok None        
     )
 
 
@@ -403,7 +587,7 @@ and getInitValueForTml lut tml =
         |> Result.bind (fun v ->
             match v.rhs with
             | ArrayConst lst ->
-                evalCompTimeInt lut idx
+                evalCompTimeIndex lut idx
                 |> Result.bind (fun constIdx ->
                     // either the value for that index is user defined, or return a default value for the element type
                     lst
@@ -423,197 +607,491 @@ and getInitValueForTml lut tml =
 //  Functions that construct typed expressions from subexpressions
 //=========================================================================
 
+// ------------------------------------------------------------------------
+// ---  Unary operators, 
+// ---  logical negate 'not', bitwise complement '~' and unary minus '-'
+// ------------------------------------------------------------------------
+
 /// Given a typed expression, construct its negation.
 /// If the type is not boolean, an error will be returned instead.
-let private negate r (expr: TypedRhs) =
+let private negate rng (expr: TypedRhs) =
     match expr.typ with
-    | Types.ValueTypes BoolType ->
-        let structure = neg expr
-        { rhs = structure;
-          typ = Types.ValueTypes BoolType
-          range = expr.Range } |> Ok
-    | _ -> Error [ExpectedBoolCond (r, expr)]
+    | ValueTypes BoolType ->
+        Ok { expr with rhs = neg expr }
+    | _ -> Error [ExpectedBoolExpr (rng, expr)]
 
-/// Unsafe unaryMinus, we assume structure has numeric type. This must be
+/// Given a typed expression, construct its bitwise complement
+/// If the the type is not BitsType, an error will returned instead
+let private complement rng (expr: TypedRhs) =
+    match expr.typ with
+    | ValueTypes (BitsType size) ->
+        Ok { expr with rhs = bnot expr }
+    | AnyBits ->
+        Error [ComplementOnAnyBits (rng, expr)]
+    | _ -> Error [ExpectedBitsExpr (rng, expr)]
+
+/// Unsafe unaryMinus, we assume structure has arithmetic type. This must be
 /// ensured by the caller.
 let private unsafeUnaryMinus (expr: TypedRhs) = 
     match expr.typ with
-    | ValueTypes (IntType _) ->
+    | ValueTypes (IntType size) ->
         match expr.rhs with
-        | IntConst bi -> IntConst -bi
-        | _ -> BlechTypes.Sub ({expr with rhs = IntConst 0I}, expr) //0 - expr
-    | ValueTypes (FloatType precision) ->
+        | IntConst i -> IntConst <| Arithmetic.Unm i
+        | _ -> Sub ({expr with rhs = IntConst <| Constant.Zero size }, expr) //0 - expr
+    | ValueTypes (BitsType size) ->
         match expr.rhs with
-        | FloatConst f -> f.Negate |> FloatConst
-        | _ -> BlechTypes.Sub ({expr with rhs = FloatConst (FloatConst.Zero precision)}, expr) //0 - expr
-    | _ -> failwith "UnsafeUnaryMinus called with something other than int or float!"
+        | BitsConst b -> BitsConst <| Arithmetic.Unm b
+        | _ -> Sub ({expr with rhs = BitsConst <| Constant.Zero size }, expr) //0 - expr        
+    | ValueTypes (FloatType size) ->
+        match expr.rhs with
+        | FloatConst f -> FloatConst <| Arithmetic.Unm f
+        | _ -> Sub ( {expr with rhs = FloatConst <| Constant.Zero size}, expr) //0 - expr
+    | AnyInt ->
+        match expr.rhs with
+        | IntConst i -> IntConst <| Arithmetic.Unm i
+        | _ -> failwith "AnyInt should be always an IntConst"
+    | AnyFloat ->
+        match expr.rhs with
+        | FloatConst f -> FloatConst <| Arithmetic.Unm f
+        | _ -> failwith "AnyFloat should be always a FloatConst"
+    | AnyBits -> 
+        failwith "No unary minus on AnyBits literals"
+    | _ -> 
+        failwith "UnsafeUnaryMinus called with something other than Int, Bits or Float!"
     
+
 /// Given a typed Expression, construct its negative.
 /// If the type is not numeric, an error will be returned instead.
 let private unaryMinus r (expr: TypedRhs) =
-    match expr.typ with
-    // no unary minus on unsigned integer since it cannot be used anywhere
-    | AnyInt value ->
-        { rhs = IntConst -value
-          typ = AnyInt -value
-          range = expr.range } |> Ok
-    | ValueTypes (IntType _)
-    | ValueTypes (FloatType _) ->
-        let structure = unsafeUnaryMinus expr
-        { rhs = structure
-          typ = expr.typ
-          range = expr.range } |> Ok
-    | _ -> // error illegal minus on expr
-        Error [CannotInvertSign(r, expr)]
+    try
+        match expr.typ with
+        // no unary minus on natural number since it cannot be used anywhere
+        | ValueTypes (IntType _)
+        | ValueTypes (BitsType _)
+        | ValueTypes (FloatType _)
+        | AnyInt
+        | AnyFloat ->
+            Ok { expr with range = r; rhs = unsafeUnaryMinus expr }
+        | ValueTypes (NatType _) ->
+            Error [UnaryMinusOnNatExpr (r, expr)]
+        | AnyBits ->
+            Error [UnaryMinusOnAnyBits (r, expr)]
+        | _ ->
+            Error [ExpectedInvertableNumberExpr (r, expr)]
+
+    with
+     | :? System.OverflowException -> 
+         Error [UnaryMinusOverFlow (r, expr)]
+
+// --------------------------------------------------------------------
+// ---  Logical Operators
+// --------------------------------------------------------------------
+
+/// Given two typed expressions, construct their binary logical operator.
+/// If some of the types is not boolean, an error will be returned instead.
+let private formLogical operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    match expr1.typ, expr2.typ with
+    | ValueTypes BoolType, ValueTypes BoolType ->
+        let structure = operator expr1 expr2
+        { rhs = structure; 
+          typ = ValueTypes BoolType
+          range = Range.unionRanges expr1.Range expr2.Range }
+        |> Ok
+    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
     
 /// Given two typed expressions, construct their conjunction.
 /// If some of the types is not boolean, an error will be returned instead.
-let private formConjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = conj expr1 expr2
-        { rhs = structure; 
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+let private formConjunction = formLogical conj
 
 /// Given two typed expressions, construct their disjunction.
 /// If some of the types is not boolean, an error will be returned instead.
-let private formDisjunction ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = disj expr1 expr2
-        { rhs = structure; 
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range } |> Ok
-    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
+let private formDisjunction = formLogical disj
 
-/// Given two typed expressions, construct their exclusive disjunction.
-/// If some of the types is not boolean, an error will be returned instead.
-let private formXor ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType ->
-        let structure = xor expr1 expr2
-        { rhs = structure; 
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range }
-        |> Ok
-    | _ -> Error [ExpectedBoolConds (expr1, expr2)]
 
-/// Given two typed expressions, construct their equality.
+// --------------------------------------------------------------------
+// ---  Bitwise binary operators
+// --------------------------------------------------------------------
+
+/// Given two typed expressions, construct their binary bitwise operator
 /// If the two types are not comparable, an error will be returned instead.
-/// Assuming that expressions are reduced to literals before calling this function -
-/// makes a difference for complex data types!
-let private formEquality ((expr1: TypedRhs), (expr2: TypedRhs)) : TyChecked<TypedRhs> =
-    let resultOk okCase = { rhs = okCase 
-                            typ = Types.ValueTypes BoolType
-                            range = Range.unionRanges expr1.Range expr2.Range }
-    match expr1.typ, expr2.typ with
-    // we allow to compare numbers of different sizes, which technically are of different type
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.AnyInt _, Types.AnyInt _
-    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-    | Types.ValueTypes (IntType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (UintType _), Types.ValueTypes (UintType _)
-    | Types.ValueTypes (UintType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (UintType _)
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
-        eq expr1 expr2 |> resultOk |> Ok
-    | Types.ValueTypes lType, Types.ValueTypes rType when lType = rType ->
-        if isLiteral expr1 && isLiteral expr2 then
-            eq expr1 expr2 |> resultOk |> Ok
-        else
-            // disallow runtime comparison of structured values using ==
-            Error[NoComparisonAllowed(expr1, expr2)]
-    | _ -> Error [SameTypeRequired (expr1, expr2)]
+let private combineBitwiseOp op ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    let rng = Range.unionRanges expr1.Range expr2.Range
+    // let commonSize size1 size2 = if size1 >= size2 then size1 else size2 
+    match expr1.typ, expr2.typ with    
+    | ValueTypes (BitsType size1), ValueTypes (BitsType size2) when size1 = size2->
+        Ok { rhs = op expr1 expr2; typ = ValueTypes (BitsType size1); range = rng }
+    | ValueTypes (BitsType _), ValueTypes (BitsType _) -> // when size1 != size2
+        Error [BitsTypesOfDifferentSize (rng, expr1, expr2)]
+    | AnyBits, AnyBits ->
+        Error [BitwiseOperationOnAnyBits (rng, expr1, expr2)]
+    | _, _ ->
+        Error [BitsTypesRequired (rng, expr1, expr2)] 
 
-/// Given two typed expressions, construct their inequality.
-/// We assume that ineqFun is either 'less' or 'leq' from above.
+
+let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = tryAmendPrimitiveAny expr2.typ expr1
+    let e2 = tryAmendPrimitiveAny expr1.typ expr2
+
+    combine e1 e2
+    |> Result.bind (combineBitwiseOp operator)
+
+/// Returns the bitwise or of two typed expressions or an error in case of type mismatch.
+let private bitwiseOr ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bor expr1 expr2
+
+/// Returns the bitwise and of two typed expressions or an error in case of type mismatch.
+let private bitwiseAnd ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise band expr1 expr2
+
+/// Returns the bitwise xor of two typed expressions or an error in case of type mismatch.
+let private bitwiseXor ((expr1: TypedRhs), (expr2: TypedRhs)) = checkBitwise bxor expr1 expr2
+
+// --------------------------------------------------------------------
+// ---  Bitwise shift operators
+// --------------------------------------------------------------------
+
+let private ensureShiftAmount bitsize num  =
+    match num.rhs with
+    | IntConst i when i.IsNegative ->
+        Error [ NegativeShiftAmount num ] 
+    | _ ->
+        Ok num
+
+/// This tries to evaluate expr to a constant shift amount
+/// It returns the optional compile time size 
+/// and returns a NonNegIdxExpected if the result is a negative compile time Size value
+let internal tryEvalCompShiftAmount lut bitsize expr =
+    tryEvalConst lut expr 
+    |> ensureShiftAmount bitsize
+    
+
+/// Given two typed expressions, construct their binary bitwise operator
 /// If the two types are not comparable, an error will be returned instead.
-let private inequality ineqFun ((expr1: TypedRhs), (expr2: TypedRhs)) =
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes BoolType, Types.ValueTypes BoolType
-    | Types.AnyInt _, Types.AnyInt _
-    | Types.ValueTypes (IntType _), Types.ValueTypes (IntType _)
-    | Types.ValueTypes (IntType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (IntType _)
-    | Types.ValueTypes (UintType _), Types.ValueTypes (UintType _)
-    | Types.ValueTypes (UintType _), Types.AnyInt _
-    | Types.AnyInt _, Types.ValueTypes (UintType _)
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
-        { rhs = ineqFun expr1 expr2
-          typ = Types.ValueTypes BoolType
-          range = Range.unionRanges expr1.Range expr2.Range }
-        |> Ok
-    | _ -> Error [SameArithmeticTypeRequired (expr1, expr2)]
+let private combineShiftOp shift ((expr: TypedRhs), (amount: TypedRhs)) =
+    let rng = Range.unionRanges expr.Range amount.Range
+    let rhs = shift expr amount
+    Ok { expr with rhs = rhs; range = rng }
+    
+
+let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
+    let rng = Range.unionRanges expr.range amount.range
+    match expr.typ with
+    | ValueTypes (BitsType bt) ->
+        match amount.typ with
+        | ValueTypes (IntType _)
+        | ValueTypes (NatType _)
+        | ValueTypes (BitsType _)
+        | AnyInt
+        | AnyBits ->
+            tryEvalCompShiftAmount lut bt.GetSize amount
+            |> combine (Ok expr)
+            |> Result.bind (combineShiftOp shift)
+        | _ ->
+            Error [ NoShiftAmountType amount ] 
+    
+    | AnyBits -> 
+        Error [ ShiftOperationOnAnyBits (rng, expr) ] 
+    | _ ->
+        Error [ ExpectedBitsExpr (rng, expr) ] 
+            
+
+/// Returns the right shift '>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private shiftRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut shr expr amount
+
+/// Returns the left shift '<<' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private shiftLeft lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut shl expr amount
+
+/// Returns the signed right shift '+>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private signedShiftRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut sshr expr amount
+
+/// Returns the left rotation '<<>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private rotateLeft lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut rotl expr amount
+
+/// Returns the signed right rotation '<>>' of a typed expression and a typed shift amount, or an error in case of type mismatch.
+let private rotateRight lut ((expr: TypedRhs), (amount: TypedRhs)) = checkShiftOp lut rotr expr amount
+
+
+// --------------------------------------------------------------------
+// ---  Relational Operators
+// --------------------------------------------------------------------
+
+/// Given two typed expressions, construct their relation.
+/// We assume that operator is either 'less', 'leq', or 'eq' from above.
+/// If the two types are not comparable, an error will be returned instead.
+let private combineRelationalOp operator ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    let rng = Range.unionRanges expr1.range expr2.range
+    match expr1.typ, expr2.typ with    
+    | ValueTypes BoolType, ValueTypes BoolType
+    | ValueTypes (IntType _), ValueTypes (IntType _)
+    | ValueTypes (NatType _), ValueTypes (NatType _)
+    | ValueTypes (BitsType _), ValueTypes (BitsType _)
+    | ValueTypes (FloatType _), ValueTypes (FloatType _) -> 
+        Ok { rhs = operator expr1 expr2; typ = ValueTypes BoolType; range = rng }
+    | t1, t2 when t1 = t2 && t1.IsPrimitiveAny ->
+        Error [RelationalOperationOnAny (rng, expr1, expr2)] 
+    //| t1, t2 when t1 = t2 -> 
+    //    Error [MustBeRelational (rng, expr1, expr2)]
+    | _, _ ->
+        Error [RelationalTypesRequired (rng, expr1, expr2)] 
+        
+
+            
+let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = tryPromotePrimitiveAny expr2.typ expr1
+    let e2 = tryPromotePrimitiveAny expr1.typ expr2
+    
+    combine e1 e2
+    |> Result.bind (combineRelationalOp operator)
+
 
 /// Given two typed expressions, construct their strict inequality.
 /// If the two types are not comparable, an error will be returned instead.
-let private lessThan = inequality less
+let private lessThan ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational less expr1 expr2
 
 /// Given two typed expressions, construct their inequality.
 /// If the two types are not comparable, an error will be returned instead.
-let private lessEqualThan = inequality leq
+let private lessEqualThan ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational leq expr1 expr2
+
+/// Given two typed expressions, construct their equality.
+/// If the two types are not comparable, an error will be returned instead.
+/// Composite literals are currently not compared for equality.
+let private equal ((expr1: TypedRhs), (expr2: TypedRhs)) = checkRelational eq expr1 expr2
+
+
+// --------------------------------------------------------------------
+// ---  Arithmetic Operators
+// --------------------------------------------------------------------
 
 /// Given two typed expressions and a combination function indicator
 /// return a new typed expression as a combination of the two.
 /// In case of type mismatches an error is returned instead.
-let private combineNumOp (expr1: TypedRhs) (expr2: TypedRhs) combFun =
-    let commonRange = Range.unionRanges expr1.Range expr2.Range
-    let genResExpr dty =
-        { rhs = combFun expr1 expr2
-          typ = dty
-          range = commonRange }
-        |> Ok
-    let commonSize size1 size2 =
-        if size1 >= size2 then size1
-        else size2
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes (IntType size1), Types.ValueTypes (IntType size2) ->
-        genResExpr <| Types.ValueTypes (IntType (commonSize size1 size2))
-    | Types.ValueTypes (UintType size1), Types.ValueTypes (UintType size2) ->
-        genResExpr <| Types.ValueTypes (UintType (commonSize size1 size2))
-    | AnyInt value, Types.ValueTypes (IntType size)
-    | Types.ValueTypes (IntType size), AnyInt value ->
-        let requiredSizeForValue = IntType.RequiredType value
-        genResExpr <| Types.ValueTypes (IntType (commonSize requiredSizeForValue size))
-    | AnyInt value, Types.ValueTypes (UintType size)
-    | Types.ValueTypes (UintType size), AnyInt value ->
-        let requiredSizeForValue = UintType.RequiredType value
-        genResExpr <| Types.ValueTypes (UintType (commonSize requiredSizeForValue size))
-    | AnyInt _, AnyInt _ ->
-        let combinedValues = 
-            combFun expr1 expr2
-            |> function
-                | IntConst res -> res
-                | _ -> failwith "Combination of numbers resulted in not a number" //cannot happen
-        genResExpr <| AnyInt combinedValues
-    | Types.ValueTypes (FloatType size1), Types.ValueTypes (FloatType size2) ->
-        genResExpr <| Types.ValueTypes (FloatType (commonSize size1 size2))
-    | t1, t2 when t1 = t2 -> Error [MustBeNumeric(expr1, expr2)]
-    | _ -> Error [SameTypeRequired (expr1, expr2)]
+let private combineArithmeticOp operator (expr1: TypedRhs, expr2: TypedRhs) =
+
+    let rng = Range.unionRanges expr1.Range expr2.Range
+    let commonSize size1 size2 = if size1 >= size2 then size1 else size2
+    
+    let typ = 
+        match expr1.typ, expr2.typ with
+        | ValueTypes (IntType size1), ValueTypes (IntType size2) ->
+            Ok <| ValueTypes (IntType (commonSize size1 size2))
+        | ValueTypes (NatType size1), ValueTypes (NatType size2) ->
+            Ok <| ValueTypes (NatType (commonSize size1 size2)) 
+        | ValueTypes (BitsType size1), ValueTypes (BitsType size2) ->
+            Ok <| ValueTypes (BitsType (commonSize size1 size2)) 
+        | ValueTypes (FloatType size1), ValueTypes (FloatType size2) ->
+            Ok <| ValueTypes (FloatType (commonSize size1 size2))
+        
+        | t1, t2 when t1 = t2 && t1.IsPrimitiveAny ->
+            Error [ArithmeticOperationOnAny (rng, expr1, expr2)]
+        //| t1, t2 when t1 = t2 -> 
+        //    Error [SameArithmeticTypeRequired(rng, expr1, expr2)]
+        | _, _ -> 
+            Error [ArithmeticTypesRequired (rng, expr1, expr2)]
+
+    typ 
+    |> Result.map ( fun t -> {rhs = operator expr1 expr2; typ = t; range = rng} )
+ 
+
+/// Checks if literals and constant expression are of suitable size.
+//let private andThen res1 res2 =
+//    match res1 , res2 with
+//    | Ok e1, Ok e2 -> Ok (e1, e2)
+//    | Error e1, _ -> Error e1
+//    | _, Error e2 -> Error e2
+
+
+//let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
+//    let e1 = amendPrimitiveAny expr2.typ expr1 
+//    let e2 = e1 |> Result.bind (fun e1 -> amendPrimitiveAny e1.typ expr2)
+    
+//    andThen e1 e2
+//    |> Result.bind (combineArithmeticOp operator)
+
+
+
+/// Checks if literals and constant expression are of suitable size.
+let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
+    let e1 = tryAmendPrimitiveAny expr2.typ expr1
+    let e2 = tryAmendPrimitiveAny expr1.typ expr2
+
+    combine e1 e2
+    |> Result.bind (combineArithmeticOp operator)
 
 
 /// Returns the addition of two typed expressions or an error in case of type mismatch.
-let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 add
-
+let private addition ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try 
+        checkArithmetic add expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
 /// Returns the subtraction of two typed expressions or an error in case of type mismatch.
-let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 sub
-
+let private subtraction ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try 
+        checkArithmetic sub expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
 /// Returns the product of two typed expressions or an error in case of type mismatch.
-let private product ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 mul
+let private product ((expr1: TypedRhs), (expr2: TypedRhs)) =
+    try 
+        checkArithmetic mul expr1 expr2
+    with
+    | :? System.OverflowException -> 
+        let rng = Range.unionRanges expr1.Range expr2.Range
+        Error [ArithmeticOverFlow (rng, expr1, expr2)]
+        
+let private isZeroConstant (expr: TypedRhs) =
+    match expr.rhs with
+    | IntConst i -> i.IsZero
+    | NatConst n -> n.IsZero
+    | BitsConst b -> b.IsZero
+    | FloatConst f -> f.IsZero
+    | _ -> false
 
 /// Returns the quotient of two typed expressions or an error in case of type mismatch.
-let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = combineNumOp expr1 expr2 div
+let private quotient ((expr1: TypedRhs), (expr2: TypedRhs)) = 
+    try
+        if isZeroConstant expr2 then
+            let rng = Range.unionRanges expr1.Range expr2.Range
+            Error [DivideByZero (rng, expr2)] 
+        else
+            checkArithmetic div expr1 expr2
+    with
+    | :? System.DivideByZeroException  -> 
+        failwith "Division by zero in evaluation should not occur"
 
 /// Returns the remainder of integer division of two typed expressions or an error in case of type mismatch.
 let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) = 
-    match expr1.typ, expr2.typ with
-    | Types.ValueTypes (FloatType _), Types.ValueTypes (FloatType _) ->
-        Error [CannotModFloats (expr1, expr2)]
-    | _ -> combineNumOp expr1 expr2 modus
+    try 
+        match expr1.typ, expr2.typ with
+        | ValueTypes (FloatType _), ValueTypes (FloatType _)
+        | AnyFloat, ValueTypes (FloatType _)
+        | ValueTypes (FloatType _), AnyFloat
+        | AnyFloat, AnyFloat ->
+            Error [CannotModFloats (expr1, expr2)]
+        | _ -> 
+            if isZeroConstant expr2 then 
+                let rng = Range.unionRanges expr1.Range expr2.Range
+                Error [DivideByZero (rng, expr2)]    
+            else
+                checkArithmetic modus expr1 expr2
+    with
+    | :? System.DivideByZeroException  -> 
+        failwith "Division by zero in evaluation should not occur"
+                
+// --------------------------------------------------------------------
+// ---  Type annotation in expr 'expr : type'
+// --------------------------------------------------------------------
 
+/// Checks if a type annotation has the same type as the expression
+/// Literals are amended to the given type annotation 
+let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
+    let expr = 
+        if checkedExpr.typ.IsCompoundLiteral then
+            amendCompoundLiteral false checkedType checkedExpr
+        else 
+            tryAmendPrimitiveAny checkedType checkedExpr        
+    expr
+    |> Result.bind (fun expr -> 
+        match expr.typ, checkedType with
+        | ValueTypes et, ValueTypes ct when et = ct ->
+            Ok expr
+        | ValueTypes _, ValueTypes _ -> 
+            Error [ WrongTypeAnnotation (range, expr, checkedType) ] 
+        | AnyComposite, _
+        | AnyInt, _
+        | AnyBits, _
+        | AnyFloat, _ ->  
+            Error [ LiteralDoesNotHaveType (range, checkedExpr, checkedType)]
+        | _, _ ->
+            failwith "Type annotation for unchecked or unsupported type"
+        )
+            
+
+// --------------------------------------------------------------------
+// ---  Cast operator 'as'
+// --------------------------------------------------------------------
+
+let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: Types) = 
+    match primitiveExpr.typ, simpleToType with    
+    | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize <= n.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize <= b.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
+    | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
+    | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+    
+    | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF ->
+        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        
+    | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+    | ValueTypes (NatType n), ValueTypes (NatType toN) when n > toN ->
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+    | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b > toB ->
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+    | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF ->
+        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+
+    // Allow to cast an AnyBits literal to intX, if it can be represented
+    | AnyBits, ValueTypes (IntType it) ->
+        let bc = primitiveExpr.rhs.GetBitsConst
+        if it.AllowsConversion(bc) then
+            let ic = it.Convert bc
+            Ok { rhs = IntConst ic; typ = simpleToType; range = range }    
+        else 
+            Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
+    // Allow to cast an AnyBits literal to floatX, if it can be represented precisely
+    | AnyBits, ValueTypes (FloatType ft) ->
+        let bc = primitiveExpr.rhs.GetBitsConst
+        if ft.AllowsConversion(bc) then
+            let fc = ft.Convert bc
+            Ok { rhs = FloatConst fc; typ = simpleToType; range = range }    
+        else 
+            Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
+
+    | AnyBits, ValueTypes (BitsType _)
+    | AnyBits, ValueTypes (NatType _)
+    | AnyInt, ValueTypes (IntType _)
+    | AnyInt, ValueTypes (NatType _)
+    | AnyInt, ValueTypes (BitsType _)
+    | AnyInt, ValueTypes (FloatType _)
+    | AnyFloat, ValueTypes (FloatType _) ->
+        Error [ LiteralCastNotNecessary (range, primitiveExpr, simpleToType) ]
+        
+    | ValueTypes vt1, ValueTypes vt2 ->
+        Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
+    | _, _ ->
+        failwith "Called with expr of non primitive types"
+
+let private conversion range (checkedExpr: TypedRhs, checkedToType: Types) =
+    if checkedToType.IsPrimitive && (checkedExpr.typ.IsPrimitive || checkedExpr.typ.IsPrimitiveAny) then
+        checkPrimitiveCasts range checkedExpr checkedToType
+    else
+        Error [ ImpossibleCast (range, checkedExpr, checkedToType) ]
 
 //=============================================================================
 // Checking right and left hand side usages (expressions)
@@ -672,38 +1150,25 @@ let private checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams:
 // AST.Literal does not comprise struct, array,... literals
 let private checkSimpleLiteral literal =
     match literal with
-    | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = Types.ValueTypes BoolType; range = pos } |> Ok
+    | AST.Bool (value = bc; range = pos) -> { rhs = BoolConst bc; typ = ValueTypes BoolType; range = pos } |> Ok
     // -- numerical constants --
     | AST.Int (value, _, pos) -> 
-        if MIN_INT64 <= value && value <= MAX_UINT64 then
-            { rhs = IntConst value; typ = AnyInt value; range = pos } |> Ok
+        if Int64.CanRepresent value || Nat64.CanRepresent value then // Int literals allow an unary minus in attributes
+            { rhs = IntConst value; typ = AnyInt; range = pos } |> Ok
         else
-            Error [NumberLargerThanAnyInt(pos, value.ToString())]
-    | AST.Single (value, _, pos) ->
-        match value with
-        | Ok number ->
-            if MIN_FLOAT32 <= single number && single number <= MAX_FLOAT32 then
-                { rhs = FloatConst (FloatConst.Single number)
-                  typ = Types.ValueTypes (FloatType FloatPrecision.Single)
-                  range = pos } |> Ok
-            else
-                Error [NumberLargerThanAnyFloat(pos, number)]
-        | Error x ->
-            Error [InvalidFloat(pos, x)]
-    | AST.Double (value, _, pos) ->
-        match value with
-        | Ok number ->
-            if MIN_FLOAT64 <= float number && float number <= MAX_FLOAT64 then
-                { rhs = FloatConst (FloatConst.Double number)
-                  typ = Types.ValueTypes (FloatType FloatPrecision.Double)
-                  range = pos } |> Ok
-            else
-                Error [NumberLargerThanAnyFloat(pos, number)]
-        | Error x ->
-            Error [InvalidFloat(pos, x)]
-    | AST.String _
-    | AST.Bitvec _ ->
-        Error [UnsupportedFeature (literal.Range, "undefined, string or bitvec literal")]
+            Error [NumberLargerThanAnyInt(pos, value)]
+    | AST.Bits (bits, pos) ->
+        if Bits64.CanRepresent bits then // Bits literals are always >= 0                     
+            { rhs = BitsConst bits; typ = AnyBits; range = pos } |> Ok
+        else
+            Error [NumberLargerThanAnyBits(pos, bits)]                 
+    | AST.Float (number, _, pos) ->
+        if Float64.CanRepresent number then // Float literals allow an unary minus in attributes
+            { rhs = FloatConst number; typ = AnyFloat; range = pos } |> Ok
+        else
+            Error [NumberLargerThanAnyFloat(pos, number)]
+    | AST.String _ ->
+        Error [UnsupportedFeature (literal.Range, "undefined, string literal")]
 
 
 /// Given some {...} literal, evaluate its fields and construct an Any typed literal
@@ -725,13 +1190,9 @@ let rec private checkAggregateLiteral lut al r =
         //      - that number is at least as large as the running index counter,
         //        and update the index counter
         | AST.ArrayFields fields ->
-            let ensureNonNeg pos num =
-                if num >= 0 then Ok num
-                else Error [NonNegIdxExpected(pos, num)]
             let checkIdx idx =
                 checkExpr lut idx 
-                |> Result.bind (evalCompTimeInt lut)
-                |> Result.bind (ensureNonNeg idx.Range)
+                |> Result.bind (evalCompTimeIndex lut)
             // Check that indices, if there are any, are non-negative compile time constants
             // and in order and do not repeat.
             // Note that the exact array length is unknown at this point, nor do we know the
@@ -755,10 +1216,10 @@ let rec private checkAggregateLiteral lut al r =
                         (combine 
                         <| Ok thisFieldNum
                         <| checkExpr lut field.value) // yields a pair of index and typechecked value 
-                        :: checkFields (thisFieldNum + 1) rest // continue with the next array index
+                        :: checkFields (thisFieldNum + Constants.SizeOne) rest // continue with the next array index
                     | Error x -> [Error x] // in case of error, just wrap it in a list and stop recursion
             
-            checkFields 0 fields
+            checkFields Constants.SizeZero fields
             |> contract
             |> Result.map (fun ckdFields -> { rhs = ArrayConst ckdFields; typ = AnyComposite; range = r})
 
@@ -781,8 +1242,8 @@ and private checkUntimedDynamicAccessPath lut dname =
                 tmlAndType
                 |> Result.bind (fun (tml,typ) ->
                     match typ with
-                    | Types.ValueTypes (ValueTypes.StructType (_, typname, typfields))
-                    | Types.ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
+                    | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+                    | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                         typfields
                         |> List.tryFind (fun f -> f.name.basicId = name.id)
                         |> function
@@ -791,10 +1252,12 @@ and private checkUntimedDynamicAccessPath lut dname =
                     | _ -> Error [FieldAccessOnNonStructType(name, tml)]
                 )
             | AST.Index (idx, r) ->
-                let isIntType = function
-                    | AnyInt _
+                let isIndexType = function
+                    | AnyInt
+                    | AnyBits
                     | ValueTypes (IntType _)
-                    | ValueTypes (UintType _) -> true
+                    | ValueTypes (BitsType _)
+                    | ValueTypes (NatType _) -> true
                     | _ -> false
                 // check that tml is actually an array
                 tmlAndType
@@ -803,21 +1266,24 @@ and private checkUntimedDynamicAccessPath lut dname =
                     | ValueTypes (ArrayType (asize, dty)) -> // ensure it is an array type
                         checkExpr lut idx
                         |> Result.bind (fun trhs -> // evaluate the index expression
-                            if isIntType trhs.typ then // make sure it is an integer
-                                match evalCompTimeInt lut trhs with // if it is constant we can even check boundaries
-                                | Ok actualIndex ->
-                                    if 0 <= actualIndex && actualIndex < asize then
-                                        let constIdx = {rhs = IntConst (bigint actualIndex); typ = trhs.typ; range = trhs.range}
-                                        Ok (tml.AddArrayAccess constIdx, ValueTypes dty)
+                            if isIndexType trhs.typ then // make sure it is an int, nat or bits
+                                match tryEvalCompTimeIndex lut trhs with // if it is constant we can even check boundaries
+                                | Ok (Some actualIndex) ->
+                                    if Constants.SizeZero <= actualIndex && actualIndex < asize then
+                                        Ok (tml.AddArrayAccess trhs, ValueTypes dty)
                                     else
-                                        Error [StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - 1)] // -1 since we need the maximal index in the error message
-                                | Error es -> // the index is determined at runtime
+                                        Error [ StaticArrayOutOfBounds(dname.Range, trhs, tml.AddArrayAccess trhs, asize - SizeOne) ] // -1 since we need the maximal index in the error message
+                                | Ok (None) -> // the index is determined at runtime
                                     if isConstVarDecl lut tml then // but then the array must not be constant
-                                        ConstArrayRequiresConstIndex dname.Range :: es |> Error
+                                        Error [ConstArrayRequiresConstIndex dname.Range]  
+                                        // TODO: Should structured constants have a representation in memory? fjg. 24.02.20
+                                        // Currently the backend normalises accesses to constants and crashes if this not tested.
                                     else // param/let/var array with dynamic access, Ok
                                         Ok (tml.AddArrayAccess trhs, ValueTypes dty)
+                                | Error e ->
+                                    Error e
                             else
-                                Error [IndexMustBeInteger(dname.Range, trhs, tml.AddArrayAccess trhs)]
+                                Error [IndexMustBeInteger(dname.Range, trhs, tml.AddArrayAccess trhs)] // Todo: Better error message, fjg. 24.02.20
                             )
                     | _ -> Error [ArrayAccessOnNonArrayType(r, tml)]
                     )
@@ -827,11 +1293,31 @@ and private checkUntimedDynamicAccessPath lut dname =
 
 
 /// Shorthand helper. Given two expressions e1, e2 and a combination 
-/// function f (and, or, +, -, ...), type check e1 and e2 and combine
+/// function f (and, or, +, -, ...), 
+/// typecheck e1 and e2 and combine
 /// using f.
-and private combineTwoExpr lut e1 e2 f =
+and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
     combine (checkExpr lut e1) (checkExpr lut e2)
     |> Result.bind f
+
+
+/// Shorthand helper. Given two expressions bits and amount, and a shift 
+/// function shiftFun (<<, >>, +>>, <>>, <<>), 
+/// typecheck bits and amount and combine
+/// using shf.
+and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
+    combine (checkExpr lut bits) (checkExpr lut amount)
+    |> Result.bind (shiftFun lut)
+
+
+/// Shorthand helper. Given expressions expr and type typ 
+/// and a cast or conversion function reTypeFun
+/// type check expr and typ and combine
+/// using reTypeFun.
+and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFun =
+    let rng = Range.unionRanges expr.Range typ.Range
+    combine (checkExpr lut expr) (checkDataType lut typ)
+    |> Result.bind (reTypeFun rng)
 
 
 /// Given an untyped AST.Expr, return a typed expression.
@@ -872,8 +1358,11 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
                     | Declarable.SubProgramDecl _
                     | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
+                | Any
                 | AnyComposite 
-                | AnyInt _ -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
+                | AnyInt
+                | AnyBits 
+                | AnyFloat -> Error [PrevOnlyOnValueTypes(expr.Range, dty)]
         checkUntimedDynamicAccessPath lut dname
         |> Result.bind makeTimedRhsStructure
     // -- function call --
@@ -881,17 +1370,14 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         let resIn = List.map (checkExpr lut) readArgs
         let resOut = List.map (checkLExpr lut) writeArgs
         checkFunCall false lut r fp resIn resOut
-        |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = Types.ValueTypes t; range = r} |> Ok)
-    // -- logical (and some bitwise) operations --
-    | AST.Not (subexpr, r)
-    | AST.Bnot (subexpr, r) ->
+        |> Result.bind(fun (f, t) -> {rhs = RhsStructure.FunCall f; typ = ValueTypes t; range = r} |> Ok)
+    // -- logical and bitwise not --
+    | AST.Not (subexpr, r) ->
         checkExpr lut subexpr
         |> Result.bind (negate r)
-    | AST.And (e1, e2)
-    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
-    | AST.Or (e1, e2)
-    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction
-    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 formXor
+    // -- logical operators
+    | AST.And (e1, e2) -> combineTwoExpr lut e1 e2 formConjunction
+    | AST.Or (e1, e2) -> combineTwoExpr lut e1 e2 formDisjunction    
     // -- numerical operations --
     | AST.Add (e1, e2) -> combineTwoExpr lut e1 e2 addition
     | AST.Sub (e1, e2) -> combineTwoExpr lut e1 e2 subtraction
@@ -904,54 +1390,121 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         // first check the literal recursively and then apply unaryMinus
         checkExpr lut e
         |> Result.bind (unaryMinus r)
-    // --- comparison operators
-    | AST.Eq (e1, e2) -> // can be applied to logical, numerical and structured data, yields logical value
-        checkExpr lut e1 |> Result.map (tryEvalConst lut)
-        |> combine <| (checkExpr lut e2 |> Result.map (tryEvalConst lut))
-        |> Result.bind formEquality
+
+    // relational operators
+
+    //| AST.Eq (e1, e2) -> 
+    //    // can be applied to logical, numerical and structured data, yields logical value
+    //    let te1 = checkExpr lut e1 |> Result.map (tryEvalConst lut)
+    //    let te2 = checkExpr lut e2 |> Result.map (tryEvalConst lut)
+    //    combine te1 te2
+    //    |> Result.bind formEquality
+
+    | AST.Eq (e1, e2) -> combineTwoExpr lut e1 e2 equal
     | AST.Ieq (e1, e2) -> checkExpr lut (AST.Not(AST.Eq(e1, e2), Range.unionRanges e1.Range e2.Range))
     | AST.Les (e1, e2) -> combineTwoExpr lut e1 e2 lessThan
     | AST.Leq (e1, e2) -> combineTwoExpr lut e1 e2 lessEqualThan
     | AST.Grt (e1, e2) -> checkExpr lut (AST.Les(e2, e1))
     | AST.Geq (e1, e2) -> checkExpr lut (AST.Leq(e2, e1))
-    // --- identity operators
+    
+    
+    // bitwise operators
+    | AST.Bnot (subexpr, r) ->
+        checkExpr lut subexpr
+        |> Result.bind (complement r)
+    | AST.Bor (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseOr
+    | AST.Band (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseAnd
+    | AST.Bxor (e1, e2) -> combineTwoExpr lut e1 e2 bitwiseXor
+    | AST.Shl (e1, e2) -> combineShift lut e1 e2 shiftLeft
+    | AST.Shr (e1, e2) -> combineShift lut e1 e2 shiftRight
+
+    // Advance bitwise operators
+    | AST.Sshr (e1, e2) -> combineShift lut e1 e2 signedShiftRight
+    | AST.Rotl (e1, e2) -> combineShift lut e1 e2 rotateLeft
+    | AST.Rotr (e1, e2) -> combineShift lut e1 e2 rotateRight
+
+    // identity operators
     | AST.Ideq _ 
     | AST.Idieq _ ->
         Error [UnsupportedFeature (expr.Range, "identity operator")]
-    // -- remaining bitwise operators --
-    | AST.Shl _
-    | AST.Shr _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "shifting operation")]
-    // -- null coalescing operation --
-    | AST.Elvis _ -> //TODO
-        Error [UnsupportedFeature (expr.Range, "elvis operator")]
-    // -- type conversions --
-    | AST.Convert (_) -> // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
-        Error [UnsupportedFeature (expr.Range, "type conversion")]
-    // -- operators on arrays and slices --
+    
+    // type conversion and annotation
+    | AST.Convert (e, t) -> combineExprAndType lut e t conversion
+    | AST.HasType (e, t) -> combineExprAndType lut e t typeAnnotation
+    
+    // operators on arrays and slices
     | AST.Len _
     | AST.Cap _ -> //TODO
         Error [UnsupportedFeature (expr.Range, "length or capacity")]
-    // -- parentheses --
-    | AST.Expr.Parens (expr, _) ->
+    // parentheses
+    | AST.Expr.Parens (expr, rng) ->
         checkExpr lut expr
-        |> Result.map (fun e -> e.SetRange expr.Range)
+        |> Result.map (fun e -> e.SetRange rng) 
 
+    |> Result.map (tryEvalConst lut)
+
+/// Given an untyped datatype, return a type checked datatype .
+and internal checkDataType lut utyDataType =
+    match utyDataType with
+    // simple types
+    | AST.BoolType _ -> ValueTypes BoolType |> Ok
+    | AST.IntegerType (size, _, _) -> IntType size |> ValueTypes |> Ok
+    | AST.NaturalType (size, _, _) -> NatType size |> ValueTypes |> Ok
+    | AST.BitvecType (size, _) -> BitsType size |> ValueTypes |> Ok
+    | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
+    // structured types
+    | AST.ArrayType (size, elemDty, pos) ->
+        //let ensurePositiveSize num =
+        //    if num > Constants.SizeZero then Ok num
+        //    else Error [PositiveSizeExpected(pos, num)]
+        //let checkSize =
+        //    checkExpr lut 
+        //    >> Result.bind (evalCompTimeSize lut)
+        //    //>> Result.bind ensurePositiveSize
+        //checkSize size
+        checkExpr lut size
+        |> Result.bind (evalCompTimeSize lut)
+        |> Result.bind(fun checkedSize ->
+            checkDataType lut elemDty
+            |> Result.bind(fun dty -> 
+                match dty with
+                | ValueTypes sth ->
+                    ArrayType (checkedSize, sth) |> ValueTypes |> Ok
+                | _ -> 
+                    Error [ValueArrayMustHaveValueType pos]
+                )
+            )
+    | AST.TypeName spath ->
+        // look up given static name in the dict of known named types (user types)
+        // TODO: Create a lookup function in TypeCheckContext and return the result here, fjg. 24.02.20
+        let found, typ =
+            lut.ncEnv.spathToQname spath
+            |> lut.userTypes.TryGetValue
+        if found then Ok typ
+        else Error [ NotInLUTPrevError spath.dottedPathToString ]
+    // unsupported now:
+    | AST.SliceType _
+    | AST.Signal _ -> 
+        Error [UnsupportedFeature (utyDataType.Range, "types other than bool, int, nat, float, fixed size array or user defined struct")]
 
 /// Type check expressions that appear on the left hand side.
 and internal checkLExpr lut (dname: AST.DynamicAccessPath) =
     let makeTimedLhsStructure ( tml, dty ) =
         match dname.timepoint with
-        | AST.TemporalQualification.Current -> Ok {lhs = LhsCur tml; typ = dty; range = dname.Range}
-        | AST.TemporalQualification.Previous r -> Error [PrevOnLhs (r, dname.pathToString)]
-        | AST.TemporalQualification.Next _ ->  Ok {lhs = LhsNext tml; typ = dty; range = dname.Range}
+        | AST.TemporalQualification.Current -> 
+            Ok {lhs = LhsCur tml; typ = dty; range = dname.Range}
+        | AST.TemporalQualification.Previous r -> 
+            Error [PrevOnLhs (r, dname.pathToString)]
+        | AST.TemporalQualification.Next _ ->  
+            Ok {lhs = LhsNext tml; typ = dty; range = dname.Range}
     checkUntimedDynamicAccessPath lut dname
     |> Result.bind makeTimedLhsStructure
 
 
 and internal checkAssignLExpr lut lhs =
     match lhs with
-    | AST.Wildcard _ -> Ok { lhs = Wildcard; typ = AnyComposite; range = lhs.Range }
+    | AST.Wildcard _ -> 
+        Ok { lhs = Wildcard; typ = Any; range = lhs.Range }
     | AST.Loc dname
     | AST.EventLoc dname ->
         checkLExpr lut dname
@@ -1009,9 +1562,9 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
             leftExprRes |> Result.bind (
                 fun lexpr -> 
                     match lexpr.typ with 
-                    | Types.AnyComposite when lexpr.lhs = Wildcard ->
+                    | Any -> // wildcard
                         Ok None
-                    | Types.ValueTypes _ ->
+                    | ValueTypes _ ->
                         Ok (Some lexpr) 
                     | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
                 )
@@ -1022,7 +1575,7 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
                 let typ = lexpr.typ
                 if isLhsMutable lut lexpr.lhs then
                     if lexpr.typ.IsAssignable then
-                        if isLeftSupertypeOfRight typ (Types.ValueTypes declReturns) then 
+                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
                             Ok (Some lexpr) 
                         else 
                             Error [ReturnTypeMismatch(pos, declReturns, typ)]
@@ -1050,8 +1603,8 @@ let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_>
 let internal fCondition lut cond = 
     let ensureBoolean (e: TypedRhs) =
         match e.typ with
-        | Types.ValueTypes BoolType -> Ok e
-        | _ -> Error [ExpectedBoolCond (e.Range, e)]
+        | ValueTypes BoolType -> Ok e
+        | _ -> Error [ExpectedBoolExpr (e.Range, e)]
     let ensureSideEffectFree (e: TypedRhs) =
         if hasNoSideEffect e then Ok e
         else Error [ConditionHasSideEffect e]

@@ -31,6 +31,7 @@
     <FsYacc Include="Parser.fsy">
       <OtherFlags>--module BlechParser</OtherFlags>
     </FsYacc>
+    <Compile Include="Constants.fs" />
     <Compile Include="CommonTypes.fs" />
     <Compile Include="AST.fs" />
     <Compile Include="PrettyPrint.fs" />
@@ -45,6 +46,7 @@
     <Compile Include="SignaturePrinter.fs" />
     <Compile Include="ErrorsAndCombinators.fs" />
     <Compile Include="TypeCheckContext.fs" />
+    <Compile Include="Evaluation.fs" />
     <Compile Include="TyChkAmendment.fs" />
     <Compile Include="TyChkExpressions.fs" />
     <Compile Include="Annotation.fs" />

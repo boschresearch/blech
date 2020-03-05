@@ -32,6 +32,8 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member x.typeCheckValidFiles (loadWhat, moduleName, filePath) =
+        let cliContext = Arguments.BlechCOptions.Default
+
         let logger = Diagnostics.Logger.create ()
         
         let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
@@ -43,7 +45,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind Blech.Frontend.TypeChecking.typeCheck astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
         
         match lutAndTyPkg with
         | Ok _ ->
@@ -61,6 +63,8 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member x.typeCheckInvalidInputs (loadWhat, moduleName, filePath) =
+        let blechcOptions = Arguments.BlechCOptions.Default
+        
         let logger = Diagnostics.Logger.create ()
         
         let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
@@ -75,7 +79,7 @@ type Test() =
         | Error _ ->
             Assert.True false 
         | Ok (ast, env) ->
-            let lut = TypeCheckContext.Empty env
+            let lut = TypeCheckContext.Empty blechcOptions env
             let typedResult = Blech.Frontend.TypeChecking.fPackage lut ast
             match typedResult with
             | Ok _ ->

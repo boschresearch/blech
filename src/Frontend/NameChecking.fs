@@ -160,8 +160,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkLiteral ctx (lit: AST.Literal) = // checked because of units
         match lit with
-        | Literal.Single (unit = ue)
-        | Literal.Double (unit = ue)
+        | Literal.Float (unit = ue)
         | Literal.Int (unit = ue) ->
             Option.fold checkUnitExpr ctx ue
         | _ ->
@@ -226,6 +225,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             | Expr.Bxor (s1, s2)
             | Expr.Shl (s1, s2)
             | Expr.Shr (s1, s2)
+            | Expr.Sshr (s1, s2)
+            | Expr.Rotl (s1, s2)
+            | Expr.Rotr (s1, s2)
             | Expr.Eq (s1, s2)
             | Expr.Ieq (s1, s2)
             | Expr.Les (s1, s2)
@@ -239,12 +241,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             | Expr.Mul (s1, s2)
             | Expr.Div (s1, s2)
             | Expr.Mod (s1, s2)
-            | Expr.Pow (s1, s2)
-            | Expr.Elvis (s1, s2) ->
+            | Expr.Pow (s1, s2) ->
                 ctx
                 |> checkExpr <| s1 
                 |> checkExpr <| s2
-            | Convert (expr, dty) ->
+            | Convert (expr, dty) 
+            | HasType (expr, dty) ->
                 ctx 
                 |> checkExpr <| expr
                 |> checkDataType <| dty
@@ -260,8 +262,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | BoolType _
         | BitvecType _ ->
             ctx
-        | UnsignedType (unit = uexp)
-        | SignedType (unit = uexp) 
+        | NaturalType (unit = uexp)
+        | IntegerType (unit = uexp) 
         | FloatType (unit = uexp) ->
             Option.fold checkUnitExpr ctx uexp
         | ArrayType (size = expr; elem = dty) ->

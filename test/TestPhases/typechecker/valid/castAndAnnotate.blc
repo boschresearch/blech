@@ -1,0 +1,26 @@
+
+@[EntryPoint]
+activity main()
+    
+    var i8 = 127: int8
+    var i32 = -1: int32
+
+    var n8 = 255: nat8
+    var n32 = 0: nat32
+
+    var b8 = 0xFF: bits8
+    var b32 = -1: bits32 // 2s complement
+
+    var f32 = 16_777_216: float32 // max precise integer in float32
+
+    i8 = 127
+    i8 = 0x7F as int8
+    b32 = (i8 as bits32) | (i32 as bits32)
+    n32 = (i8 as bits32) | (i32 as bits32) as nat32
+    f32 = (i8 as int16) as float32
+    
+    var a: [3]int32
+    a = {} : [3]int32
+    
+    await true
+end

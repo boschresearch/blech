@@ -1,0 +1,16 @@
+@[EntryPoint]
+
+activity main ()
+    const i8One: int8 = 1
+
+    var i8: int8
+    i8 = i8 / (i8One - 1)
+    i8 = i8One / (i8One - 1)
+
+    var n8: nat8
+
+    n8 = n8 / (i8One as nat8 - 1)
+    n8 = (i8One as nat8) / (i8One as nat8 - 1)
+
+    await true
+end

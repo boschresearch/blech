@@ -23,6 +23,7 @@ module Blech.Backend.ProgramGenerator
 open Blech.Common
 open Blech.Common.PPrint
 
+open Blech.Frontend.Constants
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes  
 open Blech.Frontend.PrettyPrint.DocPrint
@@ -76,7 +77,7 @@ let private cpMainIface scalarPassByPointer (iface: Iface) =
 
 let private staticStateToArgument (p: ParamDecl) =
     match p.datatype with
-    | ValueTypes BoolType | ValueTypes (IntType _) | ValueTypes (UintType _) | ValueTypes (FloatType _) 
+    | ValueTypes BoolType | ValueTypes (IntType _) | ValueTypes (NatType _) | ValueTypes (BitsType _) | ValueTypes (FloatType _) 
         when not p.isMutable ->
         ppNameInGlobalCall p.name
     | ValueTypes (ArrayType _) -> ppNameInGlobalCall p.name
@@ -165,17 +166,21 @@ let internal printState ctx printState entryCompilation =
         let getFormatStrForArithmetic (dty: Types) =
             assert dty.IsPrimitive
             match dty with
-            | Types.ValueTypes (BoolType) -> "%d"
-            | Types.ValueTypes (FloatType FloatPrecision.Double)
-            | Types.ValueTypes (FloatType FloatPrecision.Single) -> "%e"
-            | Types.ValueTypes (IntType Int64) -> "%lld"
-            | Types.ValueTypes (IntType Int32) -> "%ld"
-            | Types.ValueTypes (IntType Int16) -> "%hd"
-            | Types.ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
-            | Types.ValueTypes (UintType Uint64) -> "%llu"
-            | Types.ValueTypes (UintType Uint32) -> "%lu"
-            | Types.ValueTypes (UintType Uint16) -> "%hu"
-            | Types.ValueTypes (UintType Uint8) -> "%hu" // should be hhu since C99
+            | ValueTypes (BoolType) -> "%d"
+            | ValueTypes (FloatType Float64)
+            | ValueTypes (FloatType Float32) -> "%e"
+            | ValueTypes (IntType Int64) -> "%lld"
+            | ValueTypes (IntType Int32) -> "%ld"
+            | ValueTypes (IntType Int16) -> "%hd"
+            | ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
+            | ValueTypes (NatType Nat64) -> "%llu"
+            | ValueTypes (NatType Nat32) -> "%lu"
+            | ValueTypes (NatType Nat16) -> "%hu"
+            | ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
+            | ValueTypes (BitsType Bits64) -> "%llu"
+            | ValueTypes (BitsType Bits32) -> "%lu"
+            | ValueTypes (BitsType Bits16) -> "%hu"
+            | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
             | _ -> failwithf "No format string for composite data type %A." dty
 
         let printPrimitive isLocal (n: TypedMemLoc) =
@@ -192,8 +197,9 @@ let internal printState ctx printState entryCompilation =
             let dty = getDatatypeFromTML ctx.tcc n
             match dty with
             | ValueTypes (ArrayType (size, _)) ->
-                ([for i in [0..1..size-1] do 
-                        let idx = { rhs = IntConst (System.Numerics.BigInteger i); typ = ValueTypes (IntType Int64) ; range = Range.range0}
+                ([for i in [SizeZero .. SizeOne .. size - SizeOne] do 
+                        //let idx = { rhs = IntConst (System.Numerics.BigInteger i); typ = ValueTypes (IntType Int64) ; range = Range.range0}
+                        let idx = { rhs = NatConst <| N64 i; typ = ValueTypes (NatType Nat64) ; range = Range.range0}
                         yield sprintf """printf("%s");""" ind + (printAnything isLocal (level + 1) (TypedMemLoc.ArrayAccess (n, idx)))]
                  |> String.concat "\n\tprintf(\",\\n\");\n\t")
             | _ -> failwith "printArray called on non-array."

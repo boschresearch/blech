@@ -4,7 +4,7 @@ end
 
 function f()() returns float32
     var t: [3][4]float32 
-    var asdf: [4]float32 = {8.5f,4.7f,6.2f}
+    var asdf: [4]float32 = {8.5,4.7,6.2}
     g()(asdf) // local output array direct
     return asdf[0]
 end

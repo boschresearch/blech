@@ -20,6 +20,7 @@
 
 namespace Blech.Frontend
 
+open Blech.Common
 open System.Collections.Generic
 open CommonTypes
 open BlechTypes
@@ -81,6 +82,7 @@ type Declarable =
 /// This allows to lookup what type an identifier has or the position it is declared.
 type TypeCheckContext = 
     { 
+        cliContext: Arguments.BlechCOptions
         ncEnv: SymbolTable.LookupTable
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
@@ -89,8 +91,9 @@ type TypeCheckContext =
         memberPragmas: ResizeArray<Attribute.MemberPragma> 
     }
 
-    static member Empty ncLut =
-        { ncEnv = ncLut
+    static member Empty cliContext ncLut =
+        { cliContext = cliContext
+          ncEnv = ncLut
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
           memberPragmas = ResizeArray() }
@@ -128,6 +131,8 @@ module TypeCheckContext =
         match expr.rhs with
         | IntConst _ 
         | BoolConst _
+        | BitsConst _
+        | NatConst _ 
         | FloatConst _
         | ResetConst -> true
         | StructConst fields -> 
@@ -139,12 +144,24 @@ module TypeCheckContext =
         | Prev tml -> isConstVarDecl ctx tml
         // call
         | FunCall _ -> false
-        // boolean
-        | Neg x -> isConstantExpr ctx x
+        // type conversion
+        | Convert (x, _) -> isConstantExpr ctx x
+        // unary
+        | Neg x 
+        | Bnot x-> isConstantExpr ctx x
+        // logical
         | Conj (x, y)
         | Disj (x, y)
-        | Xor (x, y)
-        // relations
+        // bitwise
+        | Band (x, y)
+        | Bor (x, y)
+        | Bxor (x, y)
+        | Shl (x, y)
+        | Shr (x, y)
+        | Sshr (x, y)
+        | Rotl (x, y)
+        | Rotr (x, y)
+        // relational
         | Les (x, y)
         | Leq (x, y)
         | Equ (x, y)
@@ -181,8 +198,8 @@ module TypeCheckContext =
             | Declarable.FunctionPrototype _ -> failwith "TML cannot point to a subprogram!"
         | FieldAccess (tml, ident) ->
             match getDatatypeFromTML lut tml with
-            | Types.ValueTypes (ValueTypes.StructType (_, name, fields))
-            | Types.ReferenceTypes (ReferenceTypes.StructType (_, name, fields)) ->
+            | ValueTypes (ValueTypes.StructType (_, name, fields))
+            | ReferenceTypes (ReferenceTypes.StructType (_, name, fields)) ->
                 fields
                 |> List.find (fun f -> f.name.basicId = ident)
                 |> (fun v -> v.datatype)

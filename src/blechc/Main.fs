@@ -103,7 +103,7 @@ module Main =
         // type check
         Logging.log2 "Main" ("performing type checking on " + inputFile)
         let tyAstAndLutRes = 
-            Result.bind TypeChecking.typeCheck astAndEnvRes
+            Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
         
         //match tyAstAndLutRes with
         //| Ok (lut, package) ->        
@@ -149,7 +149,7 @@ module Main =
         // type check
         Logging.log2 "Main" ("performing type checking on " + inputFile)
         let tyAstAndLutRes = 
-            Result.bind TypeChecking.typeCheck astAndEnvRes
+            Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
 
         // check there is an entry point
         //match package.entryPoint with
