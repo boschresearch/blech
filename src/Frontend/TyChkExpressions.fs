@@ -330,15 +330,19 @@ let private rotr expr amount =
 
 let private convert toType expr  =
     match expr.rhs, toType with
+    | IntConst i, ValueTypes (IntType it) -> IntConst <| Conversion.IntToInt (i, it)
     | IntConst i, ValueTypes (NatType nt) -> NatConst <| Conversion.IntToNat (i, nt)
     | IntConst i, ValueTypes (BitsType bt) -> BitsConst <| Conversion.IntToBits (i, bt)
     | IntConst i, ValueTypes (FloatType ft) -> FloatConst <| Conversion.IntToFloat (i, ft)
+    | NatConst n, ValueTypes (NatType nt) -> NatConst <| Conversion.NatToNat (n, nt)
     | NatConst n, ValueTypes (IntType it) -> IntConst <| Conversion.NatToInt (n, it)
     | NatConst n, ValueTypes (BitsType bt) -> BitsConst <| Conversion.NatToBits (n, bt)
     | NatConst n, ValueTypes (FloatType ft) -> FloatConst <| Conversion.NatToFloat (n, ft)
+    | BitsConst b, ValueTypes (BitsType bt) -> BitsConst <| Conversion.BitsToBits (b, bt)
     | BitsConst b, ValueTypes (IntType it) -> IntConst <| Conversion.BitsToInt (b, it)
     | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Conversion.BitsToNat (b, nt)
     | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Conversion.BitsToFloat (b, ft)
+    | FloatConst f, ValueTypes (FloatType ft) -> FloatConst <| Conversion.FloatToFloat (f, ft)
     | _ -> Convert (expr, toType)   
 
 //let rec private eq this that =

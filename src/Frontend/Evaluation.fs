@@ -595,6 +595,20 @@ and Bitwise =
 
 type Conversion = 
 
+    static member IntToInt (i: Int, it: IntType) : Int =
+        match i, it with
+        | I8 _, Int8 -> i
+        | I8 i, Int16 -> I16 (int16 i)
+        | I16 _, Int16 -> i
+        | I8 i, Int32 -> I32 (int32 i)
+        | I16 i, Int32 -> I32 (int32 i)
+        | I32 _, Int32 -> i
+        | I8 i, Int64 -> I64 (int64 i)
+        | I16 i, Int64 -> I64 (int64 i)
+        | I32 i, Int64 -> I64 (int64 i)
+        | I64 _, Int64 -> i
+        | _ -> failwith (sprintf "No conversion from %A to %A" i it)
+
     static member IntToNat (i: Int, nt: NatType) : Nat =
         match i, nt with
         | I8 i, Nat8 -> N8 (uint8 i)
@@ -632,6 +646,20 @@ type Conversion =
         | I32 i, Float64 -> F64 (float i)
         | _ -> failwith (sprintf "No conversion from %A to %A" i ft)
 
+    static member NatToNat (n: Nat, nt: NatType) : Nat =
+        match n, nt with
+        | N8 _, Nat8 -> n
+        | N8 n, Nat16 -> N16 (uint16 n)
+        | N16 _, Nat16 -> n
+        | N8 n, Nat32 -> N32 (uint32 n)
+        | N16 n, Nat32 -> N32 (uint32 n)
+        | N32 _, Nat32 -> n
+        | N8 n, Nat64 -> N64 (uint64 n)
+        | N16 n, Nat64 -> N64 (uint64 n)
+        | N32 n, Nat64 -> N64 (uint64 n)
+        | N64 _, Nat64 -> n
+        | _ -> failwith (sprintf "No conversion from %A to %A" n nt)
+
     static member NatToBits (n: Nat, bt: BitsType) : Bits =
         match n, bt with
         | N8 n, Bits8 -> B8 (uint8 n)
@@ -664,6 +692,20 @@ type Conversion =
         | N16 n, Float64 -> F64 (float n)
         | N32 n, Float64 -> F64 (float n)
         | _ -> failwith (sprintf "No conversion from %A to %A" i ft)
+
+    static member BitsToBits (b: Bits, bt: BitsType) : Bits =
+        match b, bt with
+        | B8 _, Bits8 -> b
+        | B8 b, Bits16 -> B16 (uint16 b)
+        | B16 _, Bits16 -> b
+        | B8 b, Bits32 -> B32 (uint32 b)
+        | B16 b, Bits32 -> B32 (uint32 b)
+        | B32 _, Bits32 -> b
+        | B8 b, Bits64 -> B64 (uint64 b)
+        | B16 b, Bits64 -> B64 (uint64 b)
+        | B32 b, Bits64 -> B64 (uint64 b)
+        | B64 _, Bits64 -> b
+        | _ -> failwith (sprintf "No conversion from %A to %A" b bt)
 
     static member BitsToNat (b: Bits, nt: NatType) : Nat =
         match b, nt with
@@ -698,3 +740,9 @@ type Conversion =
         | B32 b, Float64 -> F64 (float b)
         | _ -> failwith (sprintf "No conversion from %A to %A" b ft)
 
+    static member FloatToFloat (f: Float, ft: FloatType) : Float =
+        match f, ft with
+        | F32 _, Float32 -> f
+        | F32 f, Float64 -> F64 (float f)
+        | F64 _, Float64 -> f
+        | _ -> failwith (sprintf "No conversion from %A to %A" f ft)
