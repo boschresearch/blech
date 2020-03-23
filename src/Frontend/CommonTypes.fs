@@ -159,6 +159,18 @@ type Moment =
     | After
     | OnNext
 
+/// Behaviour is required for operators
+type Behaviour =
+    | Safe
+    | Unsafe
+    | Throwing
+    override this.ToString() = 
+        match this with
+        | Safe -> ""
+        | Unsafe -> "!"
+        | Throwing -> "?"
+    
+
 
 /// This enum reflects the possible sizes of an IntExpr.
 /// The numbers are chosen such that type A is supertype of B if A >= B.

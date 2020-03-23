@@ -1429,7 +1429,7 @@ and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
         Error [UnsupportedFeature (expr.Range, "identity operator")]
     
     // type conversion and annotation
-    | AST.Convert (e, t) -> combineExprAndType lut e t conversion
+    | AST.Convert (e, t, b) -> combineExprAndType lut e t conversion
     | AST.HasType (e, t) -> combineExprAndType lut e t typeAnnotation
     
     // operators on arrays and slices

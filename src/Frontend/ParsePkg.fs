@@ -159,6 +159,8 @@ let tokenTagToString token =
     | TOKEN_GEQ -> ">="
     (* safe cast *)
     | TOKEN_AS -> "as"
+    (* forced cast *)
+    | TOKEN_ASBANG -> "as!"
     (* identity operators *)
     | TOKEN_IDEQU -> "=="
     | TOKEN_IDIEQ -> "!=="
