@@ -169,7 +169,7 @@ type Behaviour =
         | Safe -> ""
         | Unsafe -> "!"
         | Throwing -> "?"
-    
+
 
 
 /// This enum reflects the possible sizes of an IntExpr.
@@ -205,7 +205,7 @@ type IntType =
         | Int16, BAny (value, _) -> MIN_BITS16  <= value && value <= MAX_INT16
         | Int32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_INT32
         | Int64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_INT64
-        | _ -> failwith "This is only used for IAny values"
+        | _ -> failwith "This is only used for BAny values"
 
     member this.Convert (anyBits: Bits) =
         try 
