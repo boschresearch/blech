@@ -110,7 +110,7 @@ let rec private hasNoSideEffect expr =
         outputs = []
         && List.forall hasNoSideEffect inputs
     // type conversion
-    | Convert (e, _) -> hasNoSideEffect e
+    | Convert (e, _, _) -> hasNoSideEffect e
     // unary 
     | Neg e | Bnot e -> hasNoSideEffect e
     // logical
@@ -148,7 +148,7 @@ let rec internal isStaticExpr lut expr =
     | ArrayConst elems -> recurFields elems
     | FunCall _ -> false // we do not have compile time functions yet
     // type conversion 
-    | Convert (e, _) -> isStaticExpr lut e
+    | Convert (e, _, _) -> isStaticExpr lut e
     // unary 
     | Neg e | Bnot e -> isStaticExpr lut e
     // logical
@@ -328,7 +328,7 @@ let private rotr expr amount =
     | _ -> Rotr (expr, amount)
 
 
-let private convert toType expr  =
+let private convert toType behaviour expr =
     match expr.rhs, toType with
     | IntConst i, ValueTypes (IntType it) -> IntConst <| Conversion.IntToInt (i, it)
     | IntConst i, ValueTypes (NatType nt) -> NatConst <| Conversion.IntToNat (i, nt)
@@ -343,7 +343,7 @@ let private convert toType expr  =
     | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Conversion.BitsToNat (b, nt)
     | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Conversion.BitsToFloat (b, ft)
     | FloatConst f, ValueTypes (FloatType ft) -> FloatConst <| Conversion.FloatToFloat (f, ft)
-    | _ -> Convert (expr, toType)   
+    | _ -> Convert (expr, toType, behaviour)   
 
 //let rec private eq this that =
 //    let checkField (id1, st1) (id2, st2) =
@@ -441,7 +441,7 @@ let rec internal tryEvalConst lut (checkedExpr: TypedRhs) : TypedRhs =
     | Leq (x, y) -> evalBin x y leq
     | Equ (x, y) -> evalBin x y eq 
     // type conversion
-    | Convert (x, t) -> evalUnary x (convert t)
+    | Convert (x, t, b) -> evalUnary x (convert t b)
     // function calls
     | FunCall (name, ins, outs) ->
         let newIns = ins |> List.map (tryEvalConst lut)
@@ -1018,34 +1018,34 @@ let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
 let private checkPrimitiveCasts range (primitiveExpr: TypedRhs) (simpleToType: Types) = 
     match primitiveExpr.typ, simpleToType with    
     | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize <= n.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize <= b.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     
     | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     
     | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
     
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType); typ = simpleToType; range = range }    
+        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
         
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
         Error [ DownCast (range, primitiveExpr, simpleToType) ]

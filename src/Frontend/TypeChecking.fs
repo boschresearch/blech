@@ -191,7 +191,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
         | ArrayConst fields ->
             applyToList (snd >> checkAbsenceOfSyncExpr) fields
-        | Convert (e, _) 
+        | Convert (e, _, _) 
         | Neg e 
         | Bnot e -> checkAbsenceOfSyncExpr e
         | Conj (e1, e2)
@@ -375,7 +375,7 @@ let private determineCalledSingletons lut bodyRes =
         | FunCall (name, inputs, outputs) ->
             processFunCall name inputs outputs
         // unary
-        | Convert (e, _)
+        | Convert (e, _, _)
         | Neg e 
         | Bnot e -> 
             singletonCalls e

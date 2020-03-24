@@ -568,7 +568,7 @@ and RhsStructure =
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (Constants.Size * TypedRhs) list
     //
-    | Convert of TypedRhs * Types
+    | Convert of TypedRhs * Types * Behaviour
     // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
@@ -639,8 +639,8 @@ and RhsStructure =
             |> dpCommaSeparatedInBraces
         // subexpressions
         // type conversion
-        | Convert (e, t)->
-            fun p -> e.rhs.ppExpr p <.> txt "as" <+> t.ToDoc
+        | Convert (e, t, b)->
+            fun p -> e.rhs.ppExpr p <.> txt ("as" + string b) <+> t.ToDoc
             |> dpPrecedence outerPrec dpPrec.["as"]
         // logical
         | Neg expr ->
