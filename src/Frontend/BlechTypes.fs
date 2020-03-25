@@ -600,6 +600,11 @@ and RhsStructure =
         match this with
         | IntConst i -> i
         | _ -> failwith "expected an IntConst"
+
+    member this.GetNatConst: Nat =
+        match this with
+        | NatConst n -> n
+        | _ -> failwith "expected a NatConst"
     
     member this.GetBitsConst: Bits =
         match this with
