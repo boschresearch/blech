@@ -830,9 +830,9 @@ type FloatType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    member this.Narrow (value:  Nat) : Float =
-        // assert this.AllowsNarrowing(bits)
-        match this, value with
+    member this.Narrow (nat:  Nat) : Float =
+        // assert this.AllowsNarrowing(nat)
+        match this, nat with
         | Float32, N32 n -> F32 <| float32 n
         | Float32, N64 n -> F32 <| float32 n
         | Float64, N64 n -> F64 <| float n 
