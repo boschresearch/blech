@@ -1097,19 +1097,19 @@ let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: 
 let private formGuaranteedCast range toType fromExpr =
     let rhs = 
         match fromExpr.rhs, toType with
-        | IntConst i, ValueTypes (IntType it) -> IntConst <| Conversion.IntToInt (i, it)
-        | IntConst i, ValueTypes (NatType nt) -> NatConst <| Conversion.IntToNat (i, nt)
-        | IntConst i, ValueTypes (BitsType bt) -> BitsConst <| Conversion.IntToBits (i, bt)
-        | IntConst i, ValueTypes (FloatType ft) -> FloatConst <| Conversion.IntToFloat (i, ft)
-        | NatConst n, ValueTypes (NatType nt) -> NatConst <| Conversion.NatToNat (n, nt)
-        | NatConst n, ValueTypes (IntType it) -> IntConst <| Conversion.NatToInt (n, it)
-        | NatConst n, ValueTypes (BitsType bt) -> BitsConst <| Conversion.NatToBits (n, bt)
-        | NatConst n, ValueTypes (FloatType ft) -> FloatConst <| Conversion.NatToFloat (n, ft)
-        | BitsConst b, ValueTypes (BitsType bt) -> BitsConst <| Conversion.BitsToBits (b, bt)
-        | BitsConst b, ValueTypes (IntType it) -> IntConst <| Conversion.BitsToInt (b, it)
-        | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Conversion.BitsToNat (b, nt)
-        | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Conversion.BitsToFloat (b, ft)
-        | FloatConst f, ValueTypes (FloatType ft) -> FloatConst <| Conversion.FloatToFloat (f, ft)
+        | IntConst i, ValueTypes (IntType it) -> IntConst <| Widen.IntToInt (i, it)
+        | IntConst i, ValueTypes (NatType nt) -> NatConst <| Widen.IntToNat (i, nt)
+        | IntConst i, ValueTypes (BitsType bt) -> BitsConst <| Widen.IntToBits (i, bt)
+        | IntConst i, ValueTypes (FloatType ft) -> FloatConst <| Widen.IntToFloat (i, ft)
+        | NatConst n, ValueTypes (NatType nt) -> NatConst <| Widen.NatToNat (n, nt)
+        | NatConst n, ValueTypes (IntType it) -> IntConst <| Widen.NatToInt (n, it)
+        | NatConst n, ValueTypes (BitsType bt) -> BitsConst <| Widen.NatToBits (n, bt)
+        | NatConst n, ValueTypes (FloatType ft) -> FloatConst <| Widen.NatToFloat (n, ft)
+        | BitsConst b, ValueTypes (BitsType bt) -> BitsConst <| Widen.BitsToBits (b, bt)
+        | BitsConst b, ValueTypes (IntType it) -> IntConst <| Widen.BitsToInt (b, it)
+        | BitsConst b, ValueTypes (NatType nt) -> NatConst <| Widen.BitsToNat (b, nt)
+        | BitsConst b, ValueTypes (FloatType ft) -> FloatConst <| Widen.BitsToFloat (b, ft)
+        | FloatConst f, ValueTypes (FloatType ft) -> FloatConst <| Widen.FloatToFloat (f, ft)
         | _ -> Convert (fromExpr, toType, Safe)   
     
     Ok {rhs = rhs; typ = toType; range = range}
@@ -1164,31 +1164,47 @@ let private checkForcedCasts range (primitiveExpr: TypedRhs) (simpleToType: Type
 /// Asserts that all forced casts are admissible
 let private formForcedCast behaviour range toType fromExpr =
     match fromExpr.rhs, toType with
-    | IntConst i, ValueTypes (IntType intN) when intN.AllowsNarrowing i -> Ok fromExpr
-    | IntConst i, ValueTypes (NatType natN) when natN.AllowsNarrowing i -> Ok fromExpr
-    | IntConst i, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing i -> Ok fromExpr
-    | IntConst i, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing i -> Ok fromExpr
+    | IntConst i, ValueTypes (IntType intN) when intN.AllowsNarrowing i -> 
+        Ok { rhs = IntConst <| Narrow.IntToInt(i, intN); typ = toType; range = range }
+    | IntConst i, ValueTypes (NatType natN) when natN.AllowsNarrowing i ->
+        Ok { rhs = NatConst <| Narrow.IntToNat(i, natN); typ = toType; range = range }
+    | IntConst i, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing i ->
+        Ok { rhs = BitsConst <| Narrow.IntToBits(i, bitsN); typ = toType; range = range }
+    | IntConst i, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing i ->
+        Ok { rhs = FloatConst <| Narrow.IntToFloat(i, floatN); typ = toType; range = range }
     | IntConst i, _ ->
             Error [ LiteralCastNotInType (range, fromExpr, toType) ]
 
-    | NatConst n, ValueTypes (IntType intN) when intN.AllowsNarrowing n -> Ok fromExpr
-    | NatConst n, ValueTypes (NatType natN) when natN.AllowsNarrowing n -> Ok fromExpr
-    | NatConst n, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing n -> Ok fromExpr
-    | NatConst n, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing n -> Ok fromExpr
+    | NatConst n, ValueTypes (IntType intN) when intN.AllowsNarrowing n ->
+        Ok { rhs = IntConst <| Narrow.NatToInt(n, intN); typ = toType; range = range }
+    | NatConst n, ValueTypes (NatType natN) when natN.AllowsNarrowing n ->
+        Ok { rhs = NatConst <| Narrow.NatToNat(n, natN); typ = toType; range = range }
+    | NatConst n, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing n ->
+        Ok { rhs = BitsConst <| Narrow.NatToBits(n, bitsN); typ = toType; range = range }
+    | NatConst n, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing n ->
+        Ok { rhs = FloatConst <| Narrow.NatToFloat(n, floatN); typ = toType; range = range }
     | NatConst n, _ ->
             Error [ LiteralCastNotInType (range, fromExpr, toType) ]
 
-    | BitsConst b, ValueTypes (IntType intN) when intN.AllowsNarrowing b -> Ok fromExpr
-    | BitsConst b, ValueTypes (NatType natN) when natN.AllowsNarrowing b -> Ok fromExpr
-    | BitsConst b, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing b -> Ok fromExpr
-    | BitsConst b, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing b -> Ok fromExpr
+    | BitsConst b, ValueTypes (IntType intN) when intN.AllowsNarrowing b ->
+        Ok { rhs = IntConst <| Narrow.BitsToInt(b, intN); typ = toType; range = range }
+    | BitsConst b, ValueTypes (NatType natN) when natN.AllowsNarrowing b ->
+        Ok { rhs = NatConst <| Narrow.BitsToNat(b, natN); typ = toType; range = range }
+    | BitsConst b, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing b ->
+        Ok { rhs = BitsConst <| Narrow.BitsToBits(b, bitsN); typ = toType; range = range }
+    | BitsConst b, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing b ->
+        Ok { rhs = FloatConst <| Narrow.BitsToFloat(b, floatN); typ = toType; range = range }
     | BitsConst b, _ ->
             Error [ LiteralCastNotInType (range, fromExpr, toType) ]
 
-    | FloatConst f, ValueTypes (IntType intN) when intN.AllowsNarrowing f -> Ok fromExpr
-    | FloatConst f, ValueTypes (NatType natN) when natN.AllowsNarrowing f -> Ok fromExpr
-    | FloatConst f, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing f -> Ok fromExpr
-    | FloatConst f, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing f -> Ok fromExpr
+    | FloatConst f, ValueTypes (IntType intN) when intN.AllowsNarrowing f ->
+        Ok { rhs = IntConst <| Narrow.FloatToInt(f, intN); typ = toType; range = range }
+    | FloatConst f, ValueTypes (NatType natN) when natN.AllowsNarrowing f ->
+        Ok { rhs = NatConst <| Narrow.FloatToNat(f, natN); typ = toType; range = range }
+    | FloatConst f, ValueTypes (BitsType bitsN) when bitsN.AllowsNarrowing f ->
+        Ok { rhs = BitsConst <| Narrow.FloatToBits(f, bitsN); typ = toType; range = range }
+    | FloatConst f, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing f ->
+        Ok { rhs = FloatConst <| Narrow.FloatToFloat(f, floatN); typ = toType; range = range }
     | FloatConst f, _ ->
             Error [ LiteralCastNotInType (range, fromExpr, toType) ]
 
