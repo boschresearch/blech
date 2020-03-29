@@ -1086,7 +1086,7 @@ let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: 
     | AnyBits, _ 
     | AnyInt, _ 
     | AnyFloat, _->
-        Error [ LiteralCastNotNecessary (range, primitiveExpr, simpleToType) ]
+        Error [ LiteralCastNotAllowed (range, primitiveExpr, simpleToType) ]
         
     | ValueTypes vt1, ValueTypes vt2 ->
         Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
@@ -1139,18 +1139,18 @@ let private checkForcedCasts range (primitiveExpr: TypedRhs) (simpleToType: Type
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF -> Ok primitiveExpr
 
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI ->
-        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+        Error [ ForcedUpCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN ->
-        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+        Error [ ForcedUpCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB ->
-        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+        Error [ ForcedUpCast (range, primitiveExpr, simpleToType) ]
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF ->
-        Error [ DownCast (range, primitiveExpr, simpleToType) ]
+        Error [ ForcedUpCast (range, primitiveExpr, simpleToType) ]
 
     | AnyBits, _ 
     | AnyInt, _ 
     | AnyFloat, _->
-        Error [ LiteralCastNotNecessary (range, primitiveExpr, simpleToType) ]
+        Error [ LiteralCastNotAllowed (range, primitiveExpr, simpleToType) ]
         
     | ValueTypes vt1, ValueTypes vt2 ->
         Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
@@ -1172,7 +1172,7 @@ let private formForcedCast behaviour range toType fromExpr =
         | IntConst i, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing i ->
             Ok ( FloatConst <| Narrow.IntToFloat(i, floatN) )
         | IntConst i, _ ->
-            Error [ LiteralCastNotInType (range, fromExpr, toType) ]
+            Error [ ForcedCastNotInType (range, fromExpr, toType) ]
 
         | NatConst n, ValueTypes (IntType intN) when intN.AllowsNarrowing n ->
             Ok ( IntConst <| Narrow.NatToInt(n, intN) )
@@ -1183,7 +1183,7 @@ let private formForcedCast behaviour range toType fromExpr =
         | NatConst n, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing n ->
             Ok ( FloatConst <| Narrow.NatToFloat(n, floatN) )
         | NatConst n, _ ->
-            Error [ LiteralCastNotInType (range, fromExpr, toType) ]
+            Error [ ForcedCastNotInType (range, fromExpr, toType) ]
 
         | BitsConst b, ValueTypes (IntType intN) when intN.AllowsNarrowing b ->
             Ok ( IntConst <| Narrow.BitsToInt(b, intN) )
@@ -1194,7 +1194,7 @@ let private formForcedCast behaviour range toType fromExpr =
         | BitsConst b, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing b ->
             Ok ( FloatConst <| Narrow.BitsToFloat(b, floatN) )
         | BitsConst b, _ ->
-            Error [ LiteralCastNotInType (range, fromExpr, toType) ]
+            Error [ ForcedCastNotInType (range, fromExpr, toType) ]
 
         | FloatConst f, ValueTypes (IntType intN) when intN.AllowsNarrowing f ->
             Ok ( IntConst <| Narrow.FloatToInt(f, intN) )
@@ -1205,7 +1205,7 @@ let private formForcedCast behaviour range toType fromExpr =
         | FloatConst f, ValueTypes (FloatType floatN) when floatN.AllowsNarrowing f ->
             Ok ( FloatConst <| Narrow.FloatToFloat(f, floatN) )
         | FloatConst f, _ ->
-            Error [ LiteralCastNotInType (range, fromExpr, toType) ]
+            Error [ ForcedCastNotInType (range, fromExpr, toType) ]
 
         | _ -> 
             Ok <| Convert (fromExpr, toType, behaviour)
