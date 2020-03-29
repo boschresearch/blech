@@ -1058,31 +1058,6 @@ let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: 
     | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f > toF ->
         Error [ DownCast (range, primitiveExpr, simpleToType) ]
 
-    // Allow to cast an AnyBits literal to intX, if it can be represented
-    //| AnyBits, ValueTypes (IntType it) ->
-    //    let bc = primitiveExpr.rhs.GetBitsConst
-    //    if it.AllowsConversion(bc) then
-    //        let ic = it.Convert bc
-    //        Ok { rhs = IntConst ic; typ = simpleToType; range = range }    
-    //    else 
-    //        Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
-    //// Allow to cast an AnyBits literal to floatX, if it can be represented precisely
-    //| AnyBits, ValueTypes (FloatType ft) ->
-        //let bc = primitiveExpr.rhs.GetBitsConst
-        //if ft.AllowsConversion(bc) then
-        //    let fc = ft.Convert bc
-        //    Ok { rhs = FloatConst fc; typ = simpleToType; range = range }    
-        //else 
-            //Error [ LiteralCastNotInType (range, primitiveExpr, simpleToType) ]
-
-    //| AnyBits, ValueTypes (BitsType _)
-    //| AnyBits, ValueTypes (NatType _)
-    //| AnyInt, ValueTypes (IntType _)
-    //| AnyInt, ValueTypes (NatType _)
-    //| AnyInt, ValueTypes (BitsType _)
-    //| AnyInt, ValueTypes (FloatType _)
-    //| AnyFloat, ValueTypes (FloatType _) ->
-
     | AnyBits, _ 
     | AnyInt, _ 
     | AnyFloat, _->
@@ -1090,7 +1065,7 @@ let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: 
         
     | ValueTypes vt1, ValueTypes vt2 ->
         Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
-    | _, _ ->
+    | _ ->
         failwith "Called with expr of non primitive types"        
 
 /// Evaluates guaranteed cast on constants or forms the guaranteed cast

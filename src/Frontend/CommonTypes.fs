@@ -233,21 +233,6 @@ type IntType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    // member this.Narrow (value: Int) =
-    //     try 
-    //         match this, value with
-    //         | Int8, I16 i -> I8 <| sbyte i 
-    //         | Int8, I32 i -> I8 <| sbyte i
-    //         | Int8, I64 i -> I8 <| sbyte i
-    //         | Int16, I32 i -> I16 <| int16 i 
-    //         | Int16, I64 i -> I16 <| int16 i 
-    //         | Int32, I64 i -> I32 <| int32 i
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked int value"
-    
-
     member this.AllowsNarrowing (bits: Bits) = 
         match this, bits with
         | Int8, B8 b -> b <= uint8 MAX_INT8
@@ -262,24 +247,6 @@ type IntType =
         | Int64, B64 b -> b <= uint64 MAX_INT64
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (bits: Bits) =
-    //     try 
-    //         match this, bits with
-    //         | Int8, B8 b -> I8 <| sbyte b
-    //         | Int8, B16 b -> I8 <| sbyte b
-    //         | Int8, B32 b -> I8 <| sbyte b
-    //         | Int8, B64 b -> I8 <| sbyte b
-    //         | Int16, B16 b -> I16 <| int16 b 
-    //         | Int16, B32 b -> I16 <| int16 b 
-    //         | Int16, B64 b -> I16 <| int16 b 
-    //         | Int32, B32 b -> I32 <| int32 b 
-    //         | Int32, B64 b -> I32 <| int32 b 
-    //         | Int64, B64 b -> I64 <| int64 b 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked bits value"
 
     member this.AllowsNarrowing (nat: Nat) = 
         match this, nat with
@@ -296,24 +263,6 @@ type IntType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    // member this.Narrow (nat: Nat) =
-    //     try 
-    //         match this, nat with
-    //         | Int8, N8 n -> I8 <| sbyte n
-    //         | Int8, N16 n -> I8 <| sbyte n
-    //         | Int8, N32 n -> I8 <| sbyte n
-    //         | Int8, N64 n -> I8 <| sbyte n
-    //         | Int16, N16 n -> I16 <| int16 n 
-    //         | Int16, N32 n -> I16 <| int16 n 
-    //         | Int16, N64 n -> I16 <| int16 n 
-    //         | Int32, N32 n -> I32 <| int32 n 
-    //         | Int32, N64 n -> I32 <| int32 n 
-    //         | Int64, N64 n -> I64 <| int64 n 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked nat value"
-
     member this.AllowsNarrowing (value: Float) = 
         // A non-zero fractional part is discarded
         match this, value with
@@ -327,23 +276,6 @@ type IntType =
         | Int64, F64 f -> float MIN_INT64 <= f && f <=  float MAX_INT64
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value: Float) =
-    //     try 
-    //         match this, value with
-    //         | Int8, F32 f -> I8 <| sbyte f 
-    //         | Int8, F64 f -> I8 <| sbyte f 
-    //         | Int16, F32 f -> I16 <| int16 f 
-    //         | Int16, F64 f -> I16 <| int16 f 
-    //         | Int32, F32 f -> I32 <| int32 f
-    //         | Int32, F64 f -> I32 <| int32 f
-    //         | Int64, F32 f -> I64 <| int64 f
-    //         | Int64, F64 f -> I64 <| int64 f
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked float value"
-    
 
     static member RequiredType (value: Int) =
         match value with
@@ -459,20 +391,6 @@ type NatType =
         | Nat32, N64 n -> n <= uint64 MAX_NAT32
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value: Nat) : Nat =
-    //     try 
-    //         match this, value with
-    //         | Nat8, N16 n -> N8 <| byte n 
-    //         | Nat8, N32 n -> N8 <| byte n
-    //         | Nat8, N64 n -> N8 <| byte n
-    //         | Nat16, N32 n -> N16 <| uint16 n 
-    //         | Nat16, N64 n -> N16 <| uint16 n 
-    //         | Nat32, N64 n -> N32 <| uint32 n
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked nat value"
            
     member this.AllowsNarrowing (bits: Bits) = 
         match this, bits with
@@ -484,20 +402,6 @@ type NatType =
         | Nat32, B64 b -> b <= uint64 MAX_NAT32
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (bits: Bits) : Nat =
-    //     try 
-    //         match this, bits with
-    //         | Nat8, B16 b -> N8 <| byte b
-    //         | Nat8, B32 b -> N8 <| byte b
-    //         | Nat8, B64 b -> N8 <| byte b
-    //         | Nat16, B32 b -> N16 <| uint16 b 
-    //         | Nat16, B64 b -> N16 <| uint16 b 
-    //         | Nat32, B64 b -> N32 <| uint32 b 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked bits value"
 
     member this.AllowsNarrowing (value: Int) = 
         match this, value with
@@ -514,24 +418,6 @@ type NatType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    // member this.Narrow (value: Int) : Nat =
-    //     try 
-    //         match this, value with
-    //         | Nat8, I8 i -> N8 <| byte i
-    //         | Nat8, I16 i -> N8 <| byte i
-    //         | Nat8, I32 i -> N8 <| byte i
-    //         | Nat8, I64 i -> N8 <| byte i
-    //         | Nat16, I16 i -> N16 <| uint16 i 
-    //         | Nat16, I32 i -> N16 <| uint16 i 
-    //         | Nat16, I64 i -> N16 <| uint16 i 
-    //         | Nat32, I32 i -> N32 <| uint32 i 
-    //         | Nat32, I64 i -> N32 <| uint32 i 
-    //         | Nat64, I64 i -> N64 <| uint64 i 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked int value"
-
     member this.AllowsNarrowing (value: Float) = 
         // A non-zero fractional part is discarded
         match this, value with
@@ -545,22 +431,6 @@ type NatType =
         | Nat64, F64 f -> float MIN_NAT64 <= f && f <=  float MAX_NAT64
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value: Float) : Nat =
-    //     try 
-    //         match this, value with
-    //         | Nat8, F32 f -> N8 <| byte f 
-    //         | Nat8, F64 f -> N8 <| byte f 
-    //         | Nat16, F32 f -> N16 <| uint16 f 
-    //         | Nat16, F64 f -> N16 <| uint16 f 
-    //         | Nat32, F32 f -> N32 <| uint32 f
-    //         | Nat32, F64 f -> N32 <| uint32 f
-    //         | Nat64, F32 f -> N64 <| uint64 f
-    //         | Nat64, F64 f -> N64 <| uint64 f
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked float value"
 
 
 type BitsType = 
@@ -649,20 +519,6 @@ type BitsType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    // member this.Narrow (bits: Bits) : Bits =
-    //     try 
-    //         match this, bits with
-    //         | Bits8, B16 b -> B8 <| byte b
-    //         | Bits8, B32 b -> B8 <| byte b
-    //         | Bits8, B64 b -> B8 <| byte b
-    //         | Bits16, B32 b -> B16 <| uint16 b 
-    //         | Bits16, B64 b -> B16 <| uint16 b 
-    //         | Bits32, B64 b -> B32 <| uint32 b 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked bits value"
-
     member this.AllowsNarrowing (value:  Nat) = 
         match this, value with
         |  Bits8, N16 n -> n <= uint16 MAX_BITS8
@@ -673,20 +529,6 @@ type BitsType =
         |  Bits32, N64 n -> n <= uint64 MAX_BITS32
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value:  Nat) : Bits =
-    //     try 
-    //         match this, value with
-    //         |  Bits8, N16 n -> B8 <| byte n 
-    //         |  Bits8, N32 n -> B8 <| byte n
-    //         |  Bits8, N64 n -> B8 <| byte n
-    //         |  Bits16, N32 n -> B16 <| uint16 n 
-    //         |  Bits16, N64 n -> B16 <| uint16 n 
-    //         |  Bits32, N64 n -> B32 <| uint32 n
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked nat value"
     
     member this.AllowsNarrowing (value: Int) = 
         match this, value with
@@ -703,24 +545,6 @@ type BitsType =
         | _ -> 
             failwith "called for wrong narrowing"
 
-    // member this.Narrow (value: Int) : Bits =
-    //     try 
-    //         match this, value with
-    //         | Bits8, I8 i -> B8 <| byte i
-    //         | Bits8, I16 i -> B8 <| byte i
-    //         | Bits8, I32 i -> B8 <| byte i
-    //         | Bits8, I64 i -> B8 <| byte i
-    //         | Bits16, I16 i -> B16 <| uint16 i 
-    //         | Bits16, I32 i -> B16 <| uint16 i 
-    //         | Bits16, I64 i -> B16 <| uint16 i 
-    //         | Bits32, I32 i -> B32 <| uint32 i 
-    //         | Bits32, I64 i -> B32 <| uint32 i 
-    //         | Bits64, I64 i -> B64 <| uint64 i 
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked int value"
-
     member this.AllowsNarrowing (value: Float) = 
         // A non-zero fractional part is discarded
         match this, value with
@@ -734,23 +558,6 @@ type BitsType =
         | Bits64, F64 f -> float MIN_BITS64 <= f && f <=  float MAX_BITS64
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value: Float) : Bits =
-    //     try 
-    //         match this, value with
-    //         | Bits8, F32 f -> B8 <| byte f 
-    //         | Bits8, F64 f -> B8 <| byte f 
-    //         | Bits16, F32 f -> B16 <| uint16 f 
-    //         | Bits16, F64 f -> B16 <| uint16 f 
-    //         | Bits32, F32 f -> B32 <| uint32 f
-    //         | Bits32, F64 f -> B32 <| uint32 f
-    //         | Bits64, F32 f -> B64 <| uint64 f
-    //         | Bits64, F64 f -> B64 <| uint64 f
-    //         | _ -> failwith "Called for wrong narrowing"
-    //     with
-    //     | :? System.OverflowException -> 
-    //         failwith "Called with unchecked float value"
-
 
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
@@ -800,12 +607,6 @@ type FloatType =
             | _ -> 
                 failwith "called for wrong narrowing"
 
-    // member this.Narrow (value: Float) : Float =
-    //     // asserts this.AllowsNarrowing(value) 
-    //     match this, value with
-    //     | Float32, F64 f -> F32 <| float32 f 
-    //     | _ -> failwith "Called for wrong narrowing"        
-
     member this.AllowsNarrowing (bits: Bits) = 
         match this, bits with
         | Float32, B32 b -> b <= uint32 MAX_FLOAT32_INT
@@ -813,14 +614,6 @@ type FloatType =
         | Float64, B64 b -> b <= uint64 MAX_FLOAT64_INT
         | _ -> 
             failwith "called for wrong narrowing"
-            
-    // member this.Narrow (bits: Bits) : Float =
-    //     // assert this.AllowsNarrowing(bits)
-    //     match this, bits with
-    //     | Float32, B32 b -> F32 <| float32 b
-    //     | Float32, B64 b -> F32 <| float32 b
-    //     | Float64, B64 b -> F64 <| float b 
-    //     | _ -> failwith "Called for wrong narrowing"
         
     member this.AllowsNarrowing (value:  Nat) = 
         match this, value with
@@ -829,14 +622,6 @@ type FloatType =
         |  Float64, N64 n -> n <= uint64 MAX_FLOAT64_INT
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (nat:  Nat) : Float =
-    //     // assert this.AllowsNarrowing(nat)
-    //     match this, nat with
-    //     | Float32, N32 n -> F32 <| float32 n
-    //     | Float32, N64 n -> F32 <| float32 n
-    //     | Float64, N64 n -> F64 <| float n 
-    //     | _ -> failwith "Called for wrong narrowing"
         
     member this.AllowsNarrowing (value: Int) = 
         match this, value with
@@ -845,14 +630,6 @@ type FloatType =
         | Float64, I64 i -> int64 MIN_FLOAT64_INT <= i && i <= int64 MAX_FLOAT64_INT
         | _ -> 
             failwith "called for wrong narrowing"
-
-    // member this.Narrow (value: Int) : Float =
-    //     // assert this.AllowsNarrowing(value)
-    //     match this, value with
-    //     | Float32, I32 i -> F32 <| float32 i
-    //     | Float32, I64 i -> F32 <| float32 i
-    //     | Float64, I64 i -> F64 <| float i 
-    //     | _ -> failwith "Called for wrong narrowing"
         
     /// Checks if a given float types can represent a AnyFloat value
     member this.CanRepresent (value: Float) =
