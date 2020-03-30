@@ -10,7 +10,7 @@ activity main()
     const cb: bits8 = 0xFF
 
 
-    n = (i as nat8) + n 
+    n = (b as nat8) + n 
     i = ci - ci + 1
     i = (125: int8) + 2
     b = cb + 1 + cb // = 255

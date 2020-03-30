@@ -1019,35 +1019,22 @@ let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
 
 let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: Types) = 
     match primitiveExpr.typ, simpleToType with    
-    | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize <= n.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize <= b.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
+    // | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize <= n.GetSize -> Ok primitiveExpr  // this is unsafe
+    | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize <= b.GetSize -> Ok primitiveExpr
+    | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize < f.GetSize -> Ok primitiveExpr
+    | ValueTypes (IntType i), ValueTypes (IntType toI) when i <= toI -> Ok primitiveExpr
     
-    | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
+    | ValueTypes (NatType n), ValueTypes (IntType i) when n.GetSize < i.GetSize -> Ok primitiveExpr
+    | ValueTypes (NatType n), ValueTypes (BitsType b) when n.GetSize <= b.GetSize -> Ok primitiveExpr
+    | ValueTypes (NatType n), ValueTypes (FloatType f) when n.GetSize < f.GetSize -> Ok primitiveExpr
+    | ValueTypes (NatType n), ValueTypes (NatType toN) when n <= toN -> Ok primitiveExpr
     
-    | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
-    | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
+    | ValueTypes (BitsType b), ValueTypes (IntType i) when b.GetSize < i.GetSize -> Ok primitiveExpr
+    | ValueTypes (BitsType b), ValueTypes (NatType n) when b.GetSize <= n.GetSize -> Ok primitiveExpr
+    | ValueTypes (BitsType b), ValueTypes (FloatType f) when b.GetSize < f.GetSize -> Ok primitiveExpr
+    | ValueTypes (BitsType b), ValueTypes (BitsType toB) when b <= toB -> Ok primitiveExpr
     
-    | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF ->
-        Ok { rhs = Convert (primitiveExpr, simpleToType, Behaviour.Safe); typ = simpleToType; range = range }    
+    | ValueTypes (FloatType f), ValueTypes (FloatType toF) when f <= toF -> Ok primitiveExpr
         
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI ->
         Error [ DownCast (range, primitiveExpr, simpleToType) ]
@@ -1064,7 +1051,7 @@ let private checkGuaranteedCasts range (primitiveExpr: TypedRhs) (simpleToType: 
         Error [ LiteralCastNotAllowed (range, primitiveExpr, simpleToType) ]
         
     | ValueTypes vt1, ValueTypes vt2 ->
-        Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
+        Error [ ImpossibleGuaranteedCast (range, primitiveExpr, simpleToType) ]
     | _ ->
         failwith "Called with expr of non primitive types"        
 
@@ -1093,7 +1080,8 @@ let private formGuaranteedCast range toType fromExpr =
 
 let private checkForcedCasts range (primitiveExpr: TypedRhs) (simpleToType: Types) behaviour = 
     match primitiveExpr.typ, simpleToType with    
-    | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize >= n.GetSize -> Ok primitiveExpr
+    // | ValueTypes (IntType i), ValueTypes (NatType n) when i.GetSize >= n.GetSize -> Ok primitiveExpr
+    | ValueTypes (IntType _), ValueTypes (NatType _) -> Ok primitiveExpr  // This is always unsafe
     | ValueTypes (IntType i), ValueTypes (BitsType b) when i.GetSize >= b.GetSize -> Ok primitiveExpr
     | ValueTypes (IntType i), ValueTypes (FloatType f) when i.GetSize >= f.GetSize -> Ok primitiveExpr
     | ValueTypes (IntType i), ValueTypes (IntType toI) when i > toI -> Ok primitiveExpr
@@ -1128,7 +1116,7 @@ let private checkForcedCasts range (primitiveExpr: TypedRhs) (simpleToType: Type
         Error [ LiteralCastNotAllowed (range, primitiveExpr, simpleToType) ]
         
     | ValueTypes vt1, ValueTypes vt2 ->
-        Error [ ImpossibleCast (range, primitiveExpr, simpleToType) ]
+        Error [ ImpossibleForcedCast (range, primitiveExpr, simpleToType) ]
     | _, _ ->
         failwith "Called with expr of non primitive types"
 

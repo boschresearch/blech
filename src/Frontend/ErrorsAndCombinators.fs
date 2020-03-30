@@ -106,6 +106,8 @@ type TyCheckError =
     | DownCast of range * TypedRhs * Types
     | ForcedUpCast of range * TypedRhs * Types
     | ImpossibleCast of range * TypedRhs * Types
+    | ImpossibleGuaranteedCast of range * TypedRhs * Types
+    | ImpossibleForcedCast of range * TypedRhs * Types
     
     // bitwise operators
     | BitsTypesOfDifferentSize of range * TypedRhs * TypedRhs
@@ -282,6 +284,10 @@ type TyCheckError =
                 rng, sprintf "Type conversion 'as!' does not allow widening from type '%s' to type '%s'." (string expr.typ) (string typ)
             | ImpossibleCast (rng, expr, typ) ->
                 rng, sprintf "Type conversion from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as' from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as!' from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
                 
             // bitwise operators
             | BitsTypesOfDifferentSize (rng, lexpr, rexpr) ->
@@ -434,8 +440,14 @@ type TyCheckError =
             | ImpossibleCast (rng, expr, typ) ->
                 [ { range = rng; message = "cast not allowed"; isPrimary = true }
                   { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                [ { range = rng; message = "'as' not allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                [ { range = rng; message = "'as!' not allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
 
-            // Shift amounts, arrays sizes and indexes
+            // Shift amounts, arrays sizes and indexes      
             | NoShiftAmountType expr ->
                 [ { range = expr.range; message = "number expected"; isPrimary = true } ]
             
@@ -557,6 +569,10 @@ type TyCheckError =
                 [ "Type conversion is only allowed on simple types."
                   "Operator 'as' allows widening to a bigger type without loss of information."
                   "Operator 'as!' allows narrowing to a smaller type if the runtime value can be represented." ]
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                [ "Operator 'as' allows widening to a bigger type without loss of information." ]
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                [ "Operator 'as!' allows narrowing to a smaller type if the runtime value can be represented." ]
                   
 
             // Shift amounts, arrays sizes and indexes

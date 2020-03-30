@@ -405,16 +405,26 @@ type NatType =
 
     member this.AllowsNarrowing (value: Int) = 
         match this, value with
-        | Nat8, I8 i -> sbyte MIN_NAT8 <= i
+        | Nat8, I8 i -> int8 MIN_NAT8 <= i
         | Nat8, I16 i -> int16 MIN_NAT8 <= i && i <= int16 MAX_NAT8
         | Nat8, I32 i -> int32 MIN_NAT8 <= i && i <= int32 MAX_NAT8
         | Nat8, I64 i -> int64 MIN_NAT8 <= i && i <= int64 MAX_NAT8
+
+        | Nat16, I8 i -> int8 MIN_NAT16 <= i
         | Nat16, I16 i -> int16 MIN_NAT16 <= i
         | Nat16, I32 i -> int32 MIN_NAT16 <= i && i <= int32 MAX_NAT16
         | Nat16, I64 i -> int64 MIN_NAT16 <= i && i <= int64 MAX_NAT16
+        
+        | Nat32, I8 i -> int8 MIN_NAT32 <= i
+        | Nat32, I16 i -> int16 MIN_NAT32 <= i
         | Nat32, I32 i -> int32 MIN_NAT32 <= i
         | Nat32, I64 i -> int64 MIN_NAT32 <= i && i <= int64 MAX_NAT32
+        
+        | Nat64, I8 i -> int8 MIN_NAT64 <= i
+        | Nat64, I16 i -> int16 MIN_NAT64 <= i
+        | Nat64, I32 i -> int32 MIN_NAT64 <= i
         | Nat64, I64 i -> int64 MIN_NAT64 <= i
+        
         | _ -> 
             failwith "called for wrong narrowing"
 
