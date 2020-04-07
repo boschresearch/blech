@@ -9,7 +9,7 @@ activity main ()
 
     if i < 2 then end
     if i < 10212301232 then end
-    if n < (i as nat8) then end
+    if b < (i as bits8) then end
     if 1 < f then end
     if 1 < (2: int8) then end
     

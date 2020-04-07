@@ -104,7 +104,10 @@ type TyCheckError =
     // Cast and Conversion
     | WrongTypeAnnotation of range * TypedRhs * Types
     | DownCast of range * TypedRhs * Types
+    | ForcedUpCast of range * TypedRhs * Types
     | ImpossibleCast of range * TypedRhs * Types
+    | ImpossibleGuaranteedCast of range * TypedRhs * Types
+    | ImpossibleForcedCast of range * TypedRhs * Types
     
     // bitwise operators
     | BitsTypesOfDifferentSize of range * TypedRhs * TypedRhs
@@ -165,9 +168,9 @@ type TyCheckError =
     
     // cast and conversions
     | LiteralDoesNotHaveType of range * TypedRhs * Types
-    | LiteralCastNotInType of range * TypedRhs * Types
-    | LiteralCastNotNecessary of range * TypedRhs * Types
-
+    | LiteralCastNotAllowed of range * TypedRhs * Types
+    | ForcedCastNotInType of range * TypedRhs * Types
+    
     // arithmetic
     | UnaryMinusOverFlow of range * TypedRhs
     
@@ -276,9 +279,15 @@ type TyCheckError =
             | WrongTypeAnnotation (rng, expr, typ) -> 
                 rng,  sprintf "Type annotation '%s' does not match type '%s' of the given expression." (string typ) (string expr.typ)
             | DownCast (rng, expr, typ) ->
-                rng, sprintf "Type conversion 'as' does not allow downcast from type '%s' to type '%s'." (string expr.typ) (string typ)
+                rng, sprintf "Type conversion 'as' does not allow narrowing from type '%s' to type '%s'." (string expr.typ) (string typ)
+            | ForcedUpCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as!' does not allow widening from type '%s' to type '%s'." (string expr.typ) (string typ)
             | ImpossibleCast (rng, expr, typ) ->
                 rng, sprintf "Type conversion from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as' from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                rng, sprintf "Type conversion 'as!' from type '%s' to type '%s' not allowed." (string expr.typ) (string typ)
                 
             // bitwise operators
             | BitsTypesOfDifferentSize (rng, lexpr, rexpr) ->
@@ -356,11 +365,11 @@ type TyCheckError =
             // cast and conversions
             | LiteralDoesNotHaveType (rng, literal, typ) ->
                 rng, sprintf "Literal '%s' does not have type '%s'." (string literal) (string typ)
-            | LiteralCastNotInType (rng, literal, typ) ->
-                rng, sprintf "Literal '%s' cannot be represented in type '%s'." (string literal) (string typ)
-            | LiteralCastNotNecessary (rng, literal, typ) ->
-                rng, sprintf "No conversion necessary. Literal '%s' should use a type annotation." (string literal)
-
+            | LiteralCastNotAllowed (rng, literal, typ) ->
+                rng, sprintf "No conversion allowed for literal '%s'." (string literal)
+            | ForcedCastNotInType (rng, value, typ) ->
+                rng, sprintf "Value '%s' cannot be represented in type '%s'." (string value) (string typ)
+            
             // arithmetic
             | UnaryMinusOverFlow (p, expr) -> p, sprintf "Overflow due to unary minus operation '-' on value '%s'." (string expr)
             
@@ -423,13 +432,22 @@ type TyCheckError =
                 [ { range = rng; message = "wrong type annotated"; isPrimary = true} 
                   { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
             | DownCast (rng, expr, typ) ->
-                [ { range = rng; message = "no downcast allowed"; isPrimary = true }
+                [ { range = rng; message = "no narrowing allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ForcedUpCast (rng, expr, typ) ->
+                [ { range = rng; message = "no widening allowed"; isPrimary = true }
                   { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
             | ImpossibleCast (rng, expr, typ) ->
                 [ { range = rng; message = "cast not allowed"; isPrimary = true }
                   { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                [ { range = rng; message = "'as' not allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                [ { range = rng; message = "'as!' not allowed"; isPrimary = true }
+                  { range = expr.range; message = sprintf "has type '%s'" (string expr.typ); isPrimary = false } ]
 
-            // Shift amounts, arrays sizes and indexes
+            // Shift amounts, arrays sizes and indexes      
             | NoShiftAmountType expr ->
                 [ { range = expr.range; message = "number expected"; isPrimary = true } ]
             
@@ -485,11 +503,11 @@ type TyCheckError =
             | LiteralDoesNotHaveType (rng, literal, typ) ->
                 [ { range = rng; message = "type annotatin not possible "; isPrimary = true } 
                   { range = literal.range; message = sprintf "value does not have type '%s'" (string typ); isPrimary = false } ]
-            | LiteralCastNotInType (rng, literal, typ) ->
+            | LiteralCastNotAllowed (rng, literal, typ) ->
+                [ { range = rng; message = "no conversion allowed"; isPrimary = true } ]
+            | ForcedCastNotInType (rng, value, typ) ->
                 [ { range = rng; message = "conversion not possible "; isPrimary = true } 
-                  { range = literal.range; message = sprintf "value not in '%s'" (string typ); isPrimary = false } ]
-            | LiteralCastNotNecessary (rng, literal, typ) ->
-                [ { range = rng; message = "no conversion necessary"; isPrimary = true } ]
+                  { range = value.range; message = sprintf "value not in '%s'" (string typ); isPrimary = false } ]
                 
             // arithmetic
             
@@ -548,9 +566,13 @@ type TyCheckError =
             | WrongTypeAnnotation (_, _, typ)-> 
                 [ sprintf "For changing the type use a cast 'as %s'." (string typ)]
             | ImpossibleCast (rng, expr, typ) ->
-                [ "Type conversion is only allowed on simple types with no loss of information."
-                  "NatX and bitsX types can be casted precisely to a bigger intX type."
-                  "NatX, bitsX and intX types can be casted precisely to a bigger floatX type." ]
+                [ "Type conversion is only allowed on simple types."
+                  "Operator 'as' allows widening to a bigger type without loss of information."
+                  "Operator 'as!' allows narrowing to a smaller type if the runtime value can be represented." ]
+            | ImpossibleGuaranteedCast (rng, expr, typ) ->
+                [ "Operator 'as' allows widening to a bigger type without loss of information." ]
+            | ImpossibleForcedCast (rng, expr, typ) ->
+                [ "Operator 'as!' allows narrowing to a smaller type if the runtime value can be represented." ]
                   
 
             // Shift amounts, arrays sizes and indexes
@@ -578,8 +600,9 @@ type TyCheckError =
             // --- evaluation ---
 
             // type annotation and conversion 
-            | LiteralCastNotNecessary (rng, literal, typ) ->
-                [ sprintf "Use a type annotation '%s : %s'." (string literal) (string typ) ]
+            | LiteralCastNotAllowed (rng, literal, typ) ->
+                [ sprintf "Use a type annotation '%s : %s'." (string literal) (string typ) 
+                  "or type correct literal." ]
             
             // array indexes
             | PositiveSizeExpected _ ->

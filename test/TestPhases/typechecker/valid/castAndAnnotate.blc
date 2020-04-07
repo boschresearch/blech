@@ -14,7 +14,7 @@ activity main()
     var f32 = 16_777_216: float32 // max precise integer in float32
 
     i8 = 127
-    i8 = 0x7F as int8
+    // i8 = 0x7F as int8 // this is no longer allowed, us an int literal instead
     b32 = (i8 as bits32) | (i32 as bits32)
     n32 = (i8 as bits32) | (i32 as bits32) as nat32
     f32 = (i8 as int16) as float32
