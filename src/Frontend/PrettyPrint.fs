@@ -117,13 +117,16 @@ module PrettyPrint =
             |> punctuate line
             |> vsep
 
+        let dpRemoveEmptyLines elements =
+            elements
+            |> Seq.filter (function
+                | Empty -> false // remove empty documents from sequence
+                | _ -> true)
+
         /// statement blocks (body of a control-flow structure)
         /// removes empty lines
         let dpBlock : Doc seq -> Doc =
-            Seq.filter (function
-                | Empty -> false // remove empty documents from sequence
-                | _ -> true)
-            >> vsep
+            dpRemoveEmptyLines >> vsep
 
         // Printing of argument lists in particular
         let dpArguments = dpCommaSeparatedInParens
