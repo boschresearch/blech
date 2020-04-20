@@ -1,0 +1,20 @@
+@[EntryPoint]
+activity main()
+
+    const c: int16 = 42
+
+    var i = c as! int8
+    var n = c as! nat8
+    var b = c as! bits8
+
+    const f: float64 = 1.1
+    // a non-zero fractional part is discarded
+    var f2i = f as! int8 
+    var f2n = f as! nat8
+
+    const two = f as! bits16 + 1
+
+    var i8 = two as! int8
+
+    await true
+end
