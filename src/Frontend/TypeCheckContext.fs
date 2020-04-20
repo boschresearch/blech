@@ -145,7 +145,7 @@ module TypeCheckContext =
         // call
         | FunCall _ -> false
         // type conversion
-        | Convert (x, _) -> isConstantExpr ctx x
+        | Convert (x, _, _) -> isConstantExpr ctx x
         // unary
         | Neg x 
         | Bnot x-> isConstantExpr ctx x

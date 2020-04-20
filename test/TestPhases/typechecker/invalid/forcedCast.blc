@@ -1,0 +1,18 @@
+@[EntryPoint]
+activity main()
+
+    const c: int16 = -42 // ok
+
+    var n: nat8 = c as! nat8 // -42 not in nat8
+    var b: bits8 = c as! bits8 // -42 not in bits8
+
+    const f: float64 = -1.1
+    // a non-zero fractional part is discarded
+    var f2n = f as! nat8  // -1 not in nat8
+
+    const minus129 = f as! int16 - 128 // ok: -129: int16
+
+    var i8 = minus129 as! int8  // -129 not in int8
+
+    await true
+end

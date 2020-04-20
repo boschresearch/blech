@@ -178,8 +178,8 @@ type Nat =
 
     member this.IsAny = false // Todo: Do we really need this? fjg. 11.02.20
 
-    /// This allows uint64  conversion for type Bits
-    static member op_Explicit (source: Nat) : Size =
+    /// This allows uint64  conversion for type Nat
+    static member op_Explicit (source: Nat) : uint64 =
         try 
             match source with
             | N8 v -> uint64 v 
@@ -265,7 +265,7 @@ type Bits =
 
     
     /// This allows uint64  conversion for type Bits
-    static member op_Explicit (source: Bits) : Size =
+    static member op_Explicit (source: Bits) : uint64 =
         try 
             match source with
             | B8 v -> uint64 v 
@@ -395,7 +395,7 @@ type Int =
         | IAny (v, _) -> v > 0I
     
     /// This allows uint64  conversion for type Int
-    static member op_Explicit (source: Int) : Size =
+    static member op_Explicit (source: Int) : uint64 =
         try 
             match source with
             | I8 v -> uint64 v 

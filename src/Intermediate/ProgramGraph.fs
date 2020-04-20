@@ -193,7 +193,7 @@ module IntermediateContext =
             structFieldExprList |> processFields
         | ArrayConst elems ->
             elems |> processFields
-        | Convert (expr, _)
+        | Convert (expr, _, _)
         | Bnot expr
         | Neg expr -> addNameRead context node expr
         | Conj (ex1, ex2)
@@ -425,7 +425,7 @@ module ProgramGraph =
                     |> List.map (fun (idx, v) -> (idx, rewriteCond v))
                     |> ArrayConst
                 // type conversion 
-                | Convert (v, t) -> Convert (rewriteCond v, t)
+                | Convert (v, t, b) -> Convert (rewriteCond v, t, b)
                 // logical
                 | Neg v -> Neg <| rewriteCond v
                 | Conj (v1, v2) -> Conj (rewriteCond v1, rewriteCond v2)

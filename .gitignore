@@ -235,3 +235,5 @@ test/blechc/codegeneration/blech
 blech.c
 
 /src/blechc/Properties/launchSettings.json
+
+.fake

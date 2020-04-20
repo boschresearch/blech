@@ -899,7 +899,7 @@ and private cpExpr inFunction ctx expr =
             |> List.unzip
         prereqStmtsLst |> List.concat, processedAssignments |> dpCommaSeparatedInBraces
     
-    | Convert (subExpr, toType) ->
+    | Convert (subExpr, toType, behaviour) ->   // TODO: Currently we generate a C cast for every behaviour, this will change with exceptions, fjg. 24.03.20
         let prereqStmts, processedExpr = cpExpr inFunction ctx subExpr
         let cast = cpType toType
         prereqStmts, cpConvert processedExpr cast

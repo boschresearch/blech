@@ -682,7 +682,7 @@ and Expr =
     // -- type annotation --
     | HasType of Expr * DataType        // ':' define the type for an expression, e.g. "0x_1 : bits8"  
     // -- type conversions --
-    | Convert of Expr * DataType        // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
+    | Convert of Expr * DataType * Behaviour  // convert a given expression into a given type, e.g. "sensors[1].speed as float32[mph]"
     // -- operators on arrays and slices --
     | Len of Expr * range:range         // '#' length
     | Cap of Expr * range:range         // '##' capacity
@@ -721,7 +721,7 @@ and Expr =
         | Rotl (l, r)
         | Rotr (l, r)
             -> unionRanges l.Range r.Range
-        | Convert (expr, datatype)
+        | Convert (expr, datatype, _)
         | HasType (expr, datatype)
             -> unionRanges expr.Range datatype.Range
         | AggregateConst (range=r)

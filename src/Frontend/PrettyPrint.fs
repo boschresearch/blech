@@ -757,8 +757,8 @@ module PrettyPrint =
                     fun p -> ppExpr p lhs <.> txt "<>>" <+> ppExpr p rhs
                     |> dpPrecedence outerPrec dpPrec.["<>>"]
                 // --- type conversion
-                | Convert (expr, dataType) ->
-                    fun p -> ppExpr p expr <+> txt "as" <.> fDataType dataType
+                | Convert (expr, dataType, behaviour) ->
+                    fun p -> ppExpr p expr <+> txt ("as" + string behaviour) <.> fDataType dataType
                     |> dpPrecedence outerPrec dpPrec.["as"]
                 // --- type annotation
                 | HasType (expr, dataType) ->

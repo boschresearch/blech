@@ -568,7 +568,7 @@ and RhsStructure =
     | StructConst of (Identifier * TypedRhs) list
     | ArrayConst of (Constants.Size * TypedRhs) list
     //
-    | Convert of TypedRhs * Types
+    | Convert of TypedRhs * Types * Behaviour
     // logical
     | Neg of TypedRhs
     | Conj of TypedRhs * TypedRhs
@@ -600,6 +600,11 @@ and RhsStructure =
         match this with
         | IntConst i -> i
         | _ -> failwith "expected an IntConst"
+
+    member this.GetNatConst: Nat =
+        match this with
+        | NatConst n -> n
+        | _ -> failwith "expected a NatConst"
     
     member this.GetBitsConst: Bits =
         match this with
@@ -639,8 +644,8 @@ and RhsStructure =
             |> dpCommaSeparatedInBraces
         // subexpressions
         // type conversion
-        | Convert (e, t)->
-            fun p -> e.rhs.ppExpr p <.> txt "as" <+> t.ToDoc
+        | Convert (e, t, b)->
+            fun p -> e.rhs.ppExpr p <.> txt ("as" + string b) <+> t.ToDoc
             |> dpPrecedence outerPrec dpPrec.["as"]
         // logical
         | Neg expr ->

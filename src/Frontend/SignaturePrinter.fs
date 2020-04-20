@@ -408,8 +408,8 @@ module SignaturePrinter =
             fun p -> bpPrecExpr p lhs <.> txt "<>>" <+> bpPrecExpr p rhs
             |> dpPrecedence outerPrec dpPrec.["<>>"]
         // --- type conversion
-        | AST.Expr.Convert (expr, dataType) ->
-            fun p -> bpPrecExpr p expr <+> txt "as" <.> bpDataType dataType
+        | AST.Expr.Convert (expr, dataType, behaviour) ->
+            fun p -> bpPrecExpr p expr <+> txt ("as" + string behaviour) <.> bpDataType dataType
             |> dpPrecedence outerPrec dpPrec.["as"]
         // --- type annotation
         | AST.Expr.HasType (expr, dataType) ->

@@ -159,6 +159,21 @@ type Moment =
     | After
     | OnNext
 
+/// Behaviour is required for operators
+type Behaviour =
+    | Safe
+    | Unsafe
+    | Throwing
+    override this.ToString() = 
+        match this with
+        | Safe -> ""
+        | Unsafe -> "!"
+        | Throwing -> "?"
+
+
+// Checked casts are needed for conversions and narrowing
+open Microsoft.FSharp.Core.Operators.Checked
+
 
 /// This enum reflects the possible sizes of an IntExpr.
 /// The numbers are chosen such that type A is supertype of B if A >= B.
@@ -174,7 +189,7 @@ type IntType =
         | Int16 -> 16
         | Int32 -> 32
         | Int64 -> 64
-
+        
     /// Checks if IntType can represent an AnyInt value
     static member CanRepresent (anyInt: Int) =
         Int64.CanRepresent anyInt    
@@ -193,7 +208,7 @@ type IntType =
         | Int16, BAny (value, _) -> MIN_BITS16  <= value && value <= MAX_INT16
         | Int32, BAny (value, _) -> MIN_BITS32 <= value && value <= MAX_INT32
         | Int64, BAny (value, _) -> MIN_BITS64 <= value && value <= MAX_INT64
-        | _ -> failwith "This is only used for IAny values"
+        | _ -> failwith "This is only used for BAny values"
 
     member this.Convert (anyBits: Bits) =
         try 
@@ -206,6 +221,61 @@ type IntType =
         with
         | :? System.OverflowException -> 
             failwith "Called with unchecked BAny value"
+
+    member this.AllowsNarrowing (value: Int) = 
+        match this, value with
+        | Int8, I16 i -> int16 MIN_INT8 <= i && i <= int16 MAX_INT8
+        | Int8, I32 i -> int32 MIN_INT8 <= i && i <= int32 MAX_INT8
+        | Int8, I64 i -> int64 MIN_INT8 <= i && i <= int64 MAX_INT8
+        | Int16, I32 i -> int32 MIN_INT16 <= i && i <= int32 MAX_INT16
+        | Int16, I64 i -> int64 MIN_INT16 <= i && i <= int64 MAX_INT16
+        | Int32, I64 i -> int64 MIN_INT32 <= i && i <= int64 MAX_INT32
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (bits: Bits) = 
+        match this, bits with
+        | Int8, B8 b -> b <= uint8 MAX_INT8
+        | Int8, B16 b -> b <= uint16 MAX_INT8
+        | Int8, B32 b -> b <= uint32 MAX_INT8
+        | Int8, B64 b -> b <= uint64 MAX_INT8
+        | Int16, B16 b -> b <= uint16 MAX_INT16
+        | Int16, B32 b -> b <= uint32 MAX_INT16
+        | Int16, B64 b -> b <= uint64 MAX_INT16
+        | Int32, B32 b -> b <= uint32 MAX_INT32
+        | Int32, B64 b -> b <= uint64 MAX_INT32
+        | Int64, B64 b -> b <= uint64 MAX_INT64
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (nat: Nat) = 
+        match this, nat with
+        | Int8, N8 n -> n <= uint8 MAX_INT8
+        | Int8, N16 n -> n <= uint16 MAX_INT8
+        | Int8, N32 n -> n <= uint32 MAX_INT8
+        | Int8, N64 n -> n <= uint64 MAX_INT8
+        | Int16, N16 n -> n <= uint16 MAX_INT16
+        | Int16, N32 n -> n <= uint32 MAX_INT16
+        | Int16, N64 n -> n <= uint64 MAX_INT16
+        | Int32, N32 n -> n <= uint32 MAX_INT32
+        | Int32, N64 n -> n <= uint64 MAX_INT32
+        | Int64, N64 n -> n <= uint64 MAX_INT64
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (value: Float) = 
+        // A non-zero fractional part is discarded
+        match this, value with
+        | Int8, F32 f -> float32 MIN_INT8 <= f && f <= float32 MAX_INT8
+        | Int8, F64 f -> float MIN_INT8 <= f && f <= float MAX_INT8
+        | Int16, F32 f -> float32 MIN_INT16 <= f && f <= float32 MAX_INT16
+        | Int16, F64 f -> float MIN_INT16 <= f && f <= float MAX_INT16
+        | Int32, F32 f -> float32 MIN_INT32 <= f && f <=  float32 MAX_INT32
+        | Int32, F64 f -> float MIN_INT32 <= f && f <= float MAX_INT32 
+        | Int64, F32 f -> float32 MIN_INT64 <= f && f <=  float32 MAX_INT32
+        | Int64, F64 f -> float MIN_INT64 <= f && f <=  float MAX_INT64
+        | _ -> 
+            failwith "called for wrong narrowing"
 
     static member RequiredType (value: Int) =
         match value with
@@ -226,6 +296,7 @@ type IntType =
         | Int64, IAny _ -> any.PromoteTo Int.Zero64
         | _ -> failwith "Adoption of any not allowed"
 
+
 type NatType = 
     | Nat8 | Nat16 | Nat32 | Nat64 // order of tags matters for comparison!
 
@@ -239,12 +310,12 @@ type NatType =
         | Nat64 -> 64
 
     /// Checks if a NatType can represent a value of an IntType
-    member this.CanRepresentType (typ: IntType) =
-        match this with
-        | Nat8 -> typ <= Int8
-        | Nat16 -> typ <= Int16
-        | Nat32 -> typ <= Int32
-        | Nat64 -> typ <= Int64
+    //member this.CanRepresentType (typ: IntType) =
+        //match this with
+        //| Nat8 -> typ <= Int8
+        //| Nat16 -> typ <= Int16
+        //| Nat32 -> typ <= Int32
+        //| Nat64 -> typ <= Int64
     
     /// Checks if NatType can represent an AnyBits value
     static member CanRepresent (anyBits: Bits) =
@@ -309,6 +380,67 @@ type NatType =
         | Nat32, BAny _ -> any.PromoteTo Nat.Zero32
         | Nat64, BAny _ -> any.PromoteTo Nat.Zero64
         | _ -> failwith "Adoption of any not allowed"
+
+    member this.AllowsNarrowing (value: Nat) = 
+        match this, value with
+        | Nat8, N16 n -> n <= uint16 MAX_NAT8
+        | Nat8, N32 n -> n <= uint32 MAX_NAT8
+        | Nat8, N64 n -> n <= uint64 MAX_NAT8
+        | Nat16, N32 n -> n <= uint32 MAX_NAT16
+        | Nat16, N64 n -> n <= uint64 MAX_NAT16
+        | Nat32, N64 n -> n <= uint64 MAX_NAT32
+        | _ -> 
+            failwith "called for wrong narrowing"
+           
+    member this.AllowsNarrowing (bits: Bits) = 
+        match this, bits with
+        | Nat8, B16 b -> b <= uint16 MAX_NAT8
+        | Nat8, B32 b -> b <= uint32 MAX_NAT8
+        | Nat8, B64 b -> b <= uint64 MAX_NAT8
+        | Nat16, B32 b -> b <= uint32 MAX_NAT16
+        | Nat16, B64 b -> b <= uint64 MAX_NAT16
+        | Nat32, B64 b -> b <= uint64 MAX_NAT32
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (value: Int) = 
+        match this, value with
+        | Nat8, I8 i -> int8 MIN_NAT8 <= i
+        | Nat8, I16 i -> int16 MIN_NAT8 <= i && i <= int16 MAX_NAT8
+        | Nat8, I32 i -> int32 MIN_NAT8 <= i && i <= int32 MAX_NAT8
+        | Nat8, I64 i -> int64 MIN_NAT8 <= i && i <= int64 MAX_NAT8
+
+        | Nat16, I8 i -> int8 MIN_NAT16 <= i
+        | Nat16, I16 i -> int16 MIN_NAT16 <= i
+        | Nat16, I32 i -> int32 MIN_NAT16 <= i && i <= int32 MAX_NAT16
+        | Nat16, I64 i -> int64 MIN_NAT16 <= i && i <= int64 MAX_NAT16
+        
+        | Nat32, I8 i -> int8 MIN_NAT32 <= i
+        | Nat32, I16 i -> int16 MIN_NAT32 <= i
+        | Nat32, I32 i -> int32 MIN_NAT32 <= i
+        | Nat32, I64 i -> int64 MIN_NAT32 <= i && i <= int64 MAX_NAT32
+        
+        | Nat64, I8 i -> int8 MIN_NAT64 <= i
+        | Nat64, I16 i -> int16 MIN_NAT64 <= i
+        | Nat64, I32 i -> int32 MIN_NAT64 <= i
+        | Nat64, I64 i -> int64 MIN_NAT64 <= i
+        
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (value: Float) = 
+        // A non-zero fractional part is discarded
+        match this, value with
+        | Nat8, F32 f -> float32 MIN_NAT8 <= f && f <= float32 MAX_NAT8
+        | Nat8, F64 f -> float MIN_NAT8 <= f && f <= float MAX_NAT8
+        | Nat16, F32 f -> float32 MIN_NAT16 <= f && f <= float32 MAX_NAT16
+        | Nat16, F64 f -> float MIN_NAT16 <= f && f <= float MAX_NAT16
+        | Nat32, F32 f -> float32 MIN_NAT32 <= f && f <=  float32 MAX_NAT32
+        | Nat32, F64 f -> float MIN_NAT32 <= f && f <= float MAX_NAT32 
+        | Nat64, F32 f -> float32 MIN_NAT64 <= f && f <=  float32 MAX_NAT64
+        | Nat64, F64 f -> float MIN_NAT64 <= f && f <=  float MAX_NAT64
+        | _ -> 
+            failwith "called for wrong narrowing"
 
 
 type BitsType = 
@@ -385,7 +517,57 @@ type BitsType =
         | Bits32, BAny _ -> any.PromoteTo Bits.Zero32
         | Bits64, BAny _ -> any.PromoteTo Bits.Zero64
         | _ -> failwith "Adoption of any not allowed"
+               
+    member this.AllowsNarrowing (bits: Bits) = 
+        match this, bits with
+        | Bits8, B16 b -> b <= uint16 MAX_BITS8
+        | Bits8, B32 b -> b <= uint32 MAX_BITS8
+        | Bits8, B64 b -> b <= uint64 MAX_BITS8
+        | Bits16, B32 b -> b <= uint32 MAX_BITS16
+        | Bits16, B64 b -> b <= uint64 MAX_BITS16
+        | Bits32, B64 b -> b <= uint64 MAX_BITS32
+        | _ -> 
+            failwith "called for wrong narrowing"
 
+    member this.AllowsNarrowing (value:  Nat) = 
+        match this, value with
+        |  Bits8, N16 n -> n <= uint16 MAX_BITS8
+        |  Bits8, N32 n -> n <= uint32 MAX_BITS8
+        |  Bits8, N64 n -> n <= uint64 MAX_BITS8
+        |  Bits16, N32 n -> n <= uint32 MAX_BITS16
+        |  Bits16, N64 n -> n <= uint64 MAX_BITS16
+        |  Bits32, N64 n -> n <= uint64 MAX_BITS32
+        | _ -> 
+            failwith "called for wrong narrowing"
+    
+    member this.AllowsNarrowing (value: Int) = 
+        match this, value with
+        | Bits8, I8 i -> sbyte MIN_BITS8 <= i
+        | Bits8, I16 i -> int16 MIN_BITS8 <= i && i <= int16 MAX_BITS8
+        | Bits8, I32 i -> int32 MIN_BITS8 <= i && i <= int32 MAX_BITS8
+        | Bits8, I64 i -> int64 MIN_BITS8 <= i && i <= int64 MAX_BITS8
+        | Bits16, I16 i -> int16 MIN_BITS16 <= i
+        | Bits16, I32 i -> int32 MIN_BITS16 <= i && i <= int32 MAX_BITS16
+        | Bits16, I64 i -> int64 MIN_BITS16 <= i && i <= int64 MAX_BITS16
+        | Bits32, I32 i -> int32 MIN_BITS32 <= i
+        | Bits32, I64 i -> int64 MIN_BITS32 <= i && i <= int64 MAX_BITS32
+        | Bits64, I64 i -> int64 MIN_BITS64 <= i
+        | _ -> 
+            failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (value: Float) = 
+        // A non-zero fractional part is discarded
+        match this, value with
+        | Bits8, F32 f -> float32 MIN_BITS8 <= f && f <= float32 MAX_BITS8
+        | Bits8, F64 f -> float MIN_BITS8 <= f && f <= float MAX_BITS8
+        | Bits16, F32 f -> float32 MIN_BITS16 <= f && f <= float32 MAX_BITS16
+        | Bits16, F64 f -> float MIN_BITS16 <= f && f <= float MAX_BITS16
+        | Bits32, F32 f -> float32 MIN_BITS32 <= f && f <=  float32 MAX_BITS32 
+        | Bits32, F64 f -> float MIN_BITS32 <= f && f <= float MAX_BITS32 
+        | Bits64, F32 f -> float32 MIN_BITS64 <= f && f <=  float32 MAX_BITS64
+        | Bits64, F64 f -> float MIN_BITS64 <= f && f <=  float MAX_BITS64
+        | _ -> 
+            failwith "called for wrong narrowing"
 
 type FloatType = 
     | Float32 | Float64 // order of tags matters for comparison!
@@ -428,6 +610,37 @@ type FloatType =
         | :? System.OverflowException -> 
             failwith "Called with unchecked BAny value"
 
+    member this.AllowsNarrowing (value: Float) = 
+            // A non-zero fractional part is discarded
+            match this, value with
+            | Float32, F64 f -> MIN_FLOAT32 <= f && f <= MAX_FLOAT32
+            | _ -> 
+                failwith "called for wrong narrowing"
+
+    member this.AllowsNarrowing (bits: Bits) = 
+        match this, bits with
+        | Float32, B32 b -> b <= uint32 MAX_FLOAT32_INT
+        | Float32, B64 b -> b <= uint64 MAX_FLOAT32_INT
+        | Float64, B64 b -> b <= uint64 MAX_FLOAT64_INT
+        | _ -> 
+            failwith "called for wrong narrowing"
+        
+    member this.AllowsNarrowing (value:  Nat) = 
+        match this, value with
+        |  Float32, N32 n -> n <= uint32 MAX_FLOAT32_INT
+        |  Float32, N64 n -> n <= uint64 MAX_FLOAT32_INT
+        |  Float64, N64 n -> n <= uint64 MAX_FLOAT64_INT
+        | _ -> 
+            failwith "called for wrong narrowing"
+        
+    member this.AllowsNarrowing (value: Int) = 
+        match this, value with
+        | Float32, I32 i -> int32 MIN_FLOAT32_INT <= i && i <= int32 MAX_FLOAT32_INT
+        | Float32, I64 i -> int64 MIN_FLOAT32_INT <= i && i <= int64 MAX_FLOAT32_INT
+        | Float64, I64 i -> int64 MIN_FLOAT64_INT <= i && i <= int64 MAX_FLOAT64_INT
+        | _ -> 
+            failwith "called for wrong narrowing"
+        
     /// Checks if a given float types can represent a AnyFloat value
     member this.CanRepresent (value: Float) =
         match this, value with

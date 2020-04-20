@@ -263,6 +263,9 @@ rule Token = parse
     (* static cast *)
     | "as"                  { AS (getRange lexbuf) }
 
+    (* forced cast *)
+    | "as!"                 { ASBANG (getRange lexbuf) } 
+
     (* annotations *)
     | "@"                   { AT (getRange lexbuf) }
     | "@@"                  { ATAT (getRange lexbuf) }
