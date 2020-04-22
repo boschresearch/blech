@@ -262,9 +262,10 @@ let private addWRedges context name writtenVar logger =
             |> Seq.iter(fun (rangeInRN, readingNode) -> // check every reading node
                 if writingNode = readingNode then
                     match writingNode.Payload.Typ with
+                    | ActionLocation (FunctionCall _)
                     | CallNode _ ->
                         Diagnostics.Logger.addDiagnostic logger (mkDiagnosticAliasWRerror writtenVar (rangeInWN, writingNode) (rangeInRN, readingNode)) 
-                    | _ -> ()
+                    | _ -> () // we allow read and writing to the same memory in other nodes, e.g. assignment
                 elif areBothInSurfOrDepth pg.Graph writingNode readingNode then // areBothInSurfOrDepth includes areConcurrent check
                     pg.Graph.AddEdge (DataFlow (writtenVar, rangeInWN, rangeInRN)) writingNode readingNode // and in that case add a WR edge
                 else
