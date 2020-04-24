@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - for information on the respective copyright owner
+// Copyright (c) 2019 - for information on the respective copyright owner
 // see the NOTICE file and/or the repository 
 // https://github.com/boschresearch/blech.
 //
@@ -35,8 +35,8 @@ module Comment =
         cpGeneratedComment <| txt "This is generated code - do not touch!"
 
     // c file comments
-    
-    let cheaders =
+
+    let cHeaders =
         cpGeneratedComment <| txt "used C headers"
     
     let blechHeader = 
@@ -75,7 +75,10 @@ module Comment =
         cpGeneratedComment <| txt "all user defined types"
 
     let cProgramFunctions =
-        cpGeneratedComment <| txt "program functions: tick, init, printState"
+        cpGeneratedComment <| txt "program functions: tick, init"
+
+    let cTraceFunction =
+        cpGeneratedComment <| txt "trace function: printState"
 
     // app file comments
 
@@ -117,8 +120,9 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
                              (compilations: Compilation list) 
                              entryPoint =
     // C header
-    let programHeader = txt """#include <stdio.h>
-#include <string.h>"""
+    let programHeader = txt "#include <string.h>"
+
+    let ioHeader = txt "#include <stdio.h>"
 
     let blechHeader = txt "#include \"blech.h\""
 
@@ -249,7 +253,8 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
     // combine all into one Doc
     [ Comment.generatedCode
       programHeader
-      Comment.cheaders
+      (if ctx.cliContext.trace then ioHeader else empty)
+      Comment.cHeaders
       cHeaders
       Comment.blechHeader
       blechHeader
@@ -270,7 +275,8 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
       Comment.progam
       mainCallback
       mainInit
-      printState ]
+      (if ctx.cliContext.trace then printState else empty) ]
+    |> dpRemoveEmptyLines
     |> dpToplevel
 
 // end of cpModuleCode
@@ -311,7 +317,7 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         
         Seq.map includeHfile hfiles
         |> dpBlock
-       
+
 
     // Type Declarations
     let userTypes = 
@@ -346,10 +352,14 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         // TODO: The tick function can return a value, not always void, fjg. 18.04.19
         let voidType = (ValueTypes ValueTypes.Void) 
         [ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
-          ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType
-          ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation.iface voidType ]
+          ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType ]
         |> dpToplevel
-        
+
+    let traceFunctionPrototype =
+        let voidType = (ValueTypes ValueTypes.Void)
+        [ ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation.iface voidType ]
+        |> dpToplevel
+
     // combine all into one Doc
     [ includeGuardBegin
       Comment.generatedCode
@@ -367,7 +377,14 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
       Comment.cProgramFunctions
       programFunctionPrototypes
 
+      (if ctx.cliContext.trace then
+        [ Comment.cTraceFunction
+          traceFunctionPrototype ]
+        |> dpToplevel
+       else empty)
+
       includeGuardEnd ]
+    |> dpRemoveEmptyLines
     |> dpToplevel
 
 // end of cpModuleHeader
@@ -393,15 +410,15 @@ let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleN
     let staticVars = cpMainParametersAsStatics entryCompilation.iface
 
     let mainLoop = 
-        ProgramGenerator.appMainLoop (AppName.init moduleName) 
+        ProgramGenerator.appMainLoop ctx (AppName.init moduleName)
                                       (AppName.tick moduleName) 
                                       (AppName.printState moduleName)
                                       entryCompilation
 
     // combine all into one Doc
     [ Comment.generatedCode
-      Comment.cheaders
-      cHeaders
+      Comment.cHeaders
+      (if ctx.trace then cHeaders else empty)
       Comment.blechHeader
       blechHeader
       Comment.blechCInclude
@@ -410,6 +427,7 @@ let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleN
       staticVars
       Comment.testFunction
       mainLoop ]
+    |> dpRemoveEmptyLines
     |> dpToplevel
 // end of cpApp
 

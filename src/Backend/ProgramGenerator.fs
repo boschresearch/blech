@@ -273,7 +273,7 @@ let internal printState ctx printState entryCompilation =
     <.> txt "}"
 
 
-let appMainLoop init tick printState entryCompilation =
+let appMainLoop (ctx: Arguments.BlechCOptions) init tick printState entryCompilation =
     let initCall = 
         cpProgramName init
         <^> txt "()"
@@ -291,28 +291,46 @@ let appMainLoop init tick printState entryCompilation =
         <^> semi
         |> cpIndent
 
-    txt """ int main(void) {
+    if ctx.trace then
+        txt """int main(void) {
     int running = 0; /* number of iterations */
     int bound = 60;
     printf("{\n\t\"trace\":[\n");
 """   
-    <.> cpIndent initCall
-    <.> txt """
+        <.> cpIndent initCall
+        <.> txt """
     while( running < bound )
     {
         /* call tick function */
 """
-    <.> cpIndent tickCall
-    <.> txt """    
+        <.> cpIndent tickCall
+        <.> txt """
         /* display program state */
         printf ("\t\t{\n\t\t\t\"tick\": %i,\n", running);
 """
-    <.> cpIndent printStateCall
-    <.> txt """
+        <.> cpIndent printStateCall
+        <.> txt """
         ++running;       
         running < bound?printf("\t\t},\n"):printf("\t\t}\n");
     }
     printf("\t]\n}");
+    return 0; /* OK */
+}"""
+    else
+        txt """int main(void) {
+    int running = 0; /* number of iterations */
+    int bound = 60;
+"""
+        <.> cpIndent initCall
+        <.> txt """
+    while( running < bound )
+    {
+        /* call tick function */
+"""
+        <.> cpIndent tickCall
+        <.> txt """
+        ++running;
+    }
     return 0; /* OK */
 }"""
 

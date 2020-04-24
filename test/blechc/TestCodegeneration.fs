@@ -274,6 +274,7 @@ module CompilationProcedures =
                     + " --source-path " + sourcePath 
                     + " --out-dir " + outDir 
                     + " --app " + appName
+                    + " --trace"
                     + " " + inputFile
         let out, _ = execInCLI dotnet args CUR_DIR
         out |> String.concat "\n" |> printf "%s" 
