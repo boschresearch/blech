@@ -336,7 +336,7 @@ let private addWRedges context name writtenVar logger =
                         let wrp1 = findNameRead ([],[]) r
                         let wrp2 = findNameWritten ([],[]) l
                         if List.contains writtenVar (fst wrp1) && List.contains writtenVar (snd wrp1)
-                           or List.contains writtenVar (fst wrp2) && List.contains writtenVar (snd wrp2) then
+                           || List.contains writtenVar (fst wrp2) && List.contains writtenVar (snd wrp2) then
                             Diagnostics.Logger.addDiagnostic
                                 logger 
                                 (mkDiagnosticAliasWRerror 
