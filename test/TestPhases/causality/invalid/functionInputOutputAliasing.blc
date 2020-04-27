@@ -1,0 +1,24 @@
+struct S
+    var i: int32
+end
+
+function g(s: S)(t: S)
+    t.i = 2
+    t.i = s.i + t.i
+end
+
+function f(x: int32)(y: int32)
+    y = 2
+    y = x + y
+end
+
+@[EntryPoint]
+activity A()()
+    var a: S = {i = 17}
+    g(a)(a) // before fix: a.i == 4
+
+    var b: int32 = 17
+    f(b)(b) // before fix: b == 19
+
+    await true
+end

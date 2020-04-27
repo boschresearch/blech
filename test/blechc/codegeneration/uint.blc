@@ -15,7 +15,8 @@ activity R (input: nat64)(out: nat8) returns nat32
     repeat
         out = out + 1
         await true
-        f(g(input, out))(out)
+        let prevout = out
+        f(g(input, prevout))(out)
     end
     return 17
 end

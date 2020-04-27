@@ -250,6 +250,73 @@ let private determineCycles pg =
     let pairs = GenericGraph.johnson75 cycleAnalysisGraph // decompose the resulting graph into cycles
     [for pair in pairs do yield (GenericGraph.mergeMappings mapping (fst pair), snd pair)]
 
+open Blech.Frontend.BlechTypes
+// C&P from ProgramGraph.fs with modifications
+let rec internal findNameWritten wrPair (tlhs: TypedLhs) =
+    let newWrPair (tml: TypedMemLoc) =
+        tml.FindAllIndexExpr 
+        |> List.fold findNameRead wrPair
+    match tlhs.lhs with
+    | Wildcard -> wrPair
+    | LhsCur tml ->
+        let wrp1 = newWrPair tml 
+        ((Cur tml) :: fst wrp1, snd wrp1)
+    | LhsNext tml ->
+        let wrp1 = newWrPair tml 
+        ((Next tml) :: fst wrp1, snd wrp1)
+
+and internal findNameRead wrPair trhs =
+    let processFields fields =
+        fields
+        |> List.unzip
+        |> snd // here we get a list of all rhs expr used in this literal
+        |> List.fold findNameRead wrPair
+
+    match trhs.rhs with
+    | RhsCur tml -> 
+        // check for array index expressions and recursively call addNameRead on them
+        let newWrPair =
+            tml.FindAllIndexExpr 
+            |> List.fold findNameRead wrPair
+        (fst newWrPair, (Cur tml) :: snd newWrPair)
+    | Prev _ -> wrPair // this is irrelevant for causality
+    | FunCall (name, ins, outs) ->
+        // add local names for this call
+        let wrp1 = ins |> List.fold findNameRead wrPair
+        outs |> List.fold findNameWritten wrp1 
+    | BoolConst _ 
+    | IntConst _
+    | BitsConst _
+    | NatConst _
+    | FloatConst _ 
+    | ResetConst _ -> wrPair
+    | StructConst structFieldExprList ->
+        structFieldExprList |> processFields
+    | ArrayConst elems ->
+        elems |> processFields
+    | Convert (expr, _, _)
+    | Bnot expr
+    | Neg expr -> findNameRead wrPair expr
+    | Conj (ex1, ex2)
+    | Disj (ex1, ex2)
+    | Band (ex1, ex2)
+    | Bor (ex1, ex2)
+    | Bxor (ex1, ex2)
+    | Shl (ex1, ex2)
+    | Shr (ex1, ex2)
+    | Sshr (ex1, ex2)
+    | Rotl (ex1, ex2)
+    | Rotr (ex1, ex2)
+    | Les (ex1, ex2)
+    | Leq (ex1, ex2)
+    | Equ (ex1, ex2)
+    | Add (ex1, ex2)
+    | Sub (ex1, ex2)
+    | Mul (ex1, ex2)
+    | Div (ex1, ex2)
+    | Mod (ex1, ex2) ->
+        findNameRead wrPair ex1
+        |> findNameRead <| ex2
 
 let private addWRedges context name writtenVar logger =
     try
@@ -262,10 +329,32 @@ let private addWRedges context name writtenVar logger =
             |> Seq.iter(fun (rangeInRN, readingNode) -> // check every reading node
                 if writingNode = readingNode then
                     match writingNode.Payload.Typ with
-                    | CallNode _ ->
-                        Diagnostics.Logger.addDiagnostic logger (mkDiagnosticAliasWRerror writtenVar (rangeInWN, writingNode) (rangeInRN, readingNode)) 
-                    | _ -> ()
-                elif areBothInSurfOrDepth pg.Graph writingNode readingNode then // areBothInSurfOrDepth includes areConcurrent check
+                    // it is OK if the node is an assignment where the
+                    // lhs only writes "name", and
+                    // rhs only reads "name"
+                    | ActionLocation (Action.Assign (_, l, r)) ->
+                        let wrp1 = findNameRead ([],[]) r
+                        let wrp2 = findNameWritten ([],[]) l
+                        if List.contains writtenVar (fst wrp1) && List.contains writtenVar (snd wrp1)
+                           || List.contains writtenVar (fst wrp2) && List.contains writtenVar (snd wrp2) then
+                            Diagnostics.Logger.addDiagnostic
+                                logger 
+                                (mkDiagnosticAliasWRerror 
+                                    writtenVar 
+                                    (rangeInWN, writingNode) 
+                                    (rangeInRN, readingNode)
+                                )
+                        else ()
+                    // otherwise this is an aliasing error
+                    | _ ->
+                        Diagnostics.Logger.addDiagnostic
+                            logger 
+                            (mkDiagnosticAliasWRerror 
+                                writtenVar 
+                                (rangeInWN, writingNode) 
+                                (rangeInRN, readingNode)
+                            ) 
+                elif areBothInSurfOrDepth pg.Graph writingNode readingNode then
                     pg.Graph.AddEdge (DataFlow (writtenVar, rangeInWN, rangeInRN)) writingNode readingNode // and in that case add a WR edge
                 else
                     ()

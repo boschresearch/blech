@@ -1,0 +1,14 @@
+function f(x: int32)(y: int32) returns int32
+    y = 2
+    y = x + y
+    return y
+end
+
+@[EntryPoint]
+activity A()() returns int32
+    var b: int32 = 17
+    var x = f(b)(b) // VarDecl
+    
+    await true
+    return 0
+end 
