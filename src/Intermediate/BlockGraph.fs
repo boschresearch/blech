@@ -63,6 +63,7 @@ type Block =
         let prio = this.Priority.ToString()
             
         "[label=\"" + nodes + prio + "\"]"
+
     static member Empty () = { innerNodes = ResizeArray(); Priority = 0 }
 
 

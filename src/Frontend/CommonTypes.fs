@@ -82,8 +82,9 @@ type QName =
 
     // TODO: This is currently only used for acitivity states, which does not take imports into account,
     // therefore it does not take qn.moduleName into account. Change this with code generation for imports, fjg 26.01.19
-    member qn.toPrefix = 
-        qn.prefix @ [qn.basicId]
+    // unused
+    //member qn.toPrefix = 
+    //    qn.prefix @ [qn.basicId]
    
     override qn.ToString() =
         List.foldBack (fun n s -> n + "." + s) qn.prefix qn.basicId

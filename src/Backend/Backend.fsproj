@@ -9,9 +9,9 @@
 
   <ItemGroup>
     <Compile Include="Normalisation.fs" />
-    <Compile Include="Iface.fs" />
     <Compile Include="CodeGenContext.fs" />
     <Compile Include="CPdataAccess.fs" />
+    <Compile Include="CPdataAccess2.fs" />
     <Compile Include="CPrinter.fs" />
     <Compile Include="ActivityTranslator.fs" />
     <Compile Include="FunctionTranslator.fs" />

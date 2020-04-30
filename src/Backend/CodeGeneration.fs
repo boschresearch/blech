@@ -67,6 +67,9 @@ module Comment =
         cpGeneratedComment <| txt "blech program"
     
     // h file comments
+
+    let activityContexts =
+        cpGeneratedComment <| txt "activity contexts"
   
     let cPrototypes = 
         cpGeneratedComment <| txt "extern functions to be implemented in C"
@@ -192,7 +195,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
 
     // Global variables
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPoint)
-    let globVars = cpMainStateAsStatics entryCompilation.iface
+    let globVars = cpMainStateAsStatics entryCompilation
     
     // Translate function prototypes to direct C calls
     let functionPrototypes = 
@@ -234,21 +237,27 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
 
     // tick function
     let mainCallback = 
-        let entryIface = 
-            if true then entryCompilation.iface
-            else entryCompilation.iface
         ProgramGenerator.mainCallback ctx.cliContext.passPrimitiveByAddress 
                                       (AppName.tick moduleName) 
                                       entryCompilation.name 
-                                      entryIface
+                                      entryCompilation
     
     // init function
     let mainInit = 
-        ProgramGenerator.mainInit ctx (AppName.init moduleName) compilations entryCompilation
+        ProgramGenerator.mainInit ctx (AppName.init moduleName) entryCompilation
         
  
     let printState =
         ProgramGenerator.printState ctx (AppName.printState moduleName) entryCompilation
+
+    // just an idea how to determine static memory usage
+    //let printStatistics =
+    //    """
+    //    void blc_blech_ScatteredLocals_printStats() {
+    //        printf("Context size: %d bytes\n", sizeof blc_blech_ctx);
+    //    }
+    //    """ |> txt
+        
     
     // combine all into one Doc
     [ Comment.generatedCode
@@ -318,17 +327,20 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         Seq.map includeHfile hfiles
         |> dpBlock
 
-
     // Type Declarations
     let userTypes = 
         ctx.tcc.userTypes.Values
         |> Seq.map cpUserType
         |> dpBlock
 
+    // Activity Contexts
+    let activityContexts =
+        List.map cpContextTypeDeclaration compilations
+        |> dpBlock
 
     let externFunctions =
         let ifaceOf (fp: FunctionPrototype) =
-            {Iface.Empty with inputs = fp.inputs; outputs = fp.outputs}
+            {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
         cWrappers
         |> Seq.map (fun fp -> cpExternFunction fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
         |> dpToplevel
@@ -350,14 +362,19 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
 
     let programFunctionPrototypes =
         // TODO: The tick function can return a value, not always void, fjg. 18.04.19
+        let qname = AppName.init moduleName
         let voidType = (ValueTypes ValueTypes.Void) 
-        [ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
-          ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType ]
+        //[ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
+        //  ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType ]
+        // is that the correct merge?
+        [ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
+          ProgramGenerator.programFunctionProtoype false qname (Compilation.mkNew qname) voidType
+          ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation voidType ]
         |> dpToplevel
 
     let traceFunctionPrototype =
         let voidType = (ValueTypes ValueTypes.Void)
-        [ ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation.iface voidType ]
+        [ ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation voidType ]
         |> dpToplevel
 
     // combine all into one Doc
@@ -367,6 +384,8 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
       blechHeader
       Comment.userTypes
       userTypes    // all user types are global
+      Comment.activityContexts
+      activityContexts
       // userConst // only exposed constants and params go there, currently none
       Comment.cPrototypes
       externFunctions
@@ -407,7 +426,7 @@ let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleN
     // static variables
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPointName)
     
-    let staticVars = cpMainParametersAsStatics entryCompilation.iface
+    let staticVars = cpMainParametersAsStatics entryCompilation
 
     let mainLoop = 
         ProgramGenerator.appMainLoop ctx (AppName.init moduleName)

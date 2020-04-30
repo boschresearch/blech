@@ -1195,7 +1195,7 @@ let public fPackage lut (pack: AST.Package) =
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
 let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
-    let lut = TypeCheckContext.Empty cliContext ncEnv
+    let lut = TypeCheckContext.Init cliContext ncEnv
     fPackage lut pack
     |> function
         | Ok p -> 

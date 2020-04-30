@@ -53,7 +53,7 @@ module Thread =
 
     /// Returns all ancestors starting with this thread itself and
     /// ascending to root
-    let rec internal allAncestors thread =
+    let rec allAncestors thread =
         match thread.Ancestor with
         | None -> [thread]
         | Some ancestor -> thread :: allAncestors ancestor

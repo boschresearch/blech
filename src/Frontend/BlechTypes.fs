@@ -495,6 +495,13 @@ and TypedMemLoc =
         | Loc qname -> qname
         | FieldAccess (tml, _) 
         | ArrayAccess (tml, _) -> tml.QNamePrefix
+
+    /// Given a QName "ctx" and a TML "a.b.c" produce "ctx.a.b.c"
+    member this.PrependFieldAccess newLoc =
+        match this with
+        | Loc qname -> FieldAccess(Loc newLoc, qname.basicId)
+        | FieldAccess (tml, ident) -> FieldAccess(tml.PrependFieldAccess newLoc, ident) 
+        | ArrayAccess (tml, idx) -> ArrayAccess(tml.PrependFieldAccess newLoc, idx)
     
     member this.AddFieldAccess ident = FieldAccess (this, ident)
     

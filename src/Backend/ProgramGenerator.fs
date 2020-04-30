@@ -62,7 +62,7 @@ let private cpMainOutputParam (output: ParamDecl) =
         
 
 // translates the interface of the EntryPoint activity to C function interface for 'tick' and 'init'
-let private cpMainIface scalarPassByPointer (iface: Iface) =
+let private cpMainIface scalarPassByPointer (iface: Compilation) =
     let cargs = 
         List.concat [
             iface.inputs |> List.map (cpMainInputParam scalarPassByPointer)
@@ -85,7 +85,7 @@ let private staticStateToArgument (p: ParamDecl) =
 
 
 /// Call to entry point activity
-let private cpGlobalCall primitivePassByAddress (iface: Iface) =
+let private cpGlobalCall primitivePassByAddress (iface: Compilation) =
     let inputParamToArgument (p: ParamDecl) = 
         match p.datatype with
         | ValueTypes vt when vt.IsPrimitive ->
@@ -104,8 +104,7 @@ let private cpGlobalCall primitivePassByAddress (iface: Iface) =
     [
         iface.inputs |> List.map inputParamToArgument
         iface.outputs |> List.map outputParamToArgument
-        iface.locals |> List.map staticStateToArgument
-        iface.pcs |> List.map staticStateToArgument
+        iface.actctx |> Option.toList |> List.map (fun _ -> txt "&blc_blech_ctx")
         iface.retvar |> Option.toList |> List.map staticStateToArgument
     ]
     |> List.concat
@@ -115,7 +114,7 @@ let private cpGlobalCall primitivePassByAddress (iface: Iface) =
 /// Call parameters for the tick and the printState functions
 /// To be used from the test app only
 
-let internal cpAppCall (entryPointIface: Iface) =
+let internal cpAppCall (entryPointIface: Compilation) =
     [
         entryPointIface.inputs |> List.map staticStateToArgument
         entryPointIface.outputs |> List.map staticStateToArgument
@@ -142,20 +141,28 @@ let internal mainCallback primitivePassByAddress tick entryName entryIface =
     <.> txt "}"
 
 /// Generate a C function "void init(void)" which initialises program counters
-let internal mainInit ctx init compilations (entryCompilation: Compilation) =    
+let internal mainInit ctx init (entryCompilation: Compilation) =    
     txt "void" 
     <+> cpProgramName init 
     <+> txt "(void)"
     <+> txt "{"
-    <.> ActivityTranslator.mainPCinit ctx compilations entryCompilation
+    <.> ActivityTranslator.mainPCinit ctx entryCompilation
     <.> txt "}"
 
 
-let internal printState ctx printState entryCompilation = 
+let internal printState ctx printState (entryCompilation: Compilation) = 
     let showPcs =
-        entryCompilation.iface.pcs
-        |> List.map (fun p -> translateQnameToGeneratedName p.name)
-        |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", pc)
+        let rec getAllPcs pref ctx =
+            ctx.subcontexts
+            |> Seq.collect (fun kvp -> getAllPcs ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> ppName |> render None)) kvp.Value)
+            |> Seq.append (seq{pref, ctx.pcs})
+        
+        getAllPcs "" entryCompilation.GetActCtx
+        |> Seq.map (fun (pref,tree) -> pref, PCtree.asList tree)
+        |> Seq.collect (fun (pref,pc) -> pc |> List.map(fun p -> pref,p))
+        |> Seq.toList
+        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + translateQnameToGeneratedName pc.name)
+        |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", "blc_blech_ctx." + pc)
         |> List.unzip
         |> (fun (ppList, argList) -> String.concat @",\n\t\t\t\t" ppList, String.concat ", " argList)
         |> (fun (a, b) -> sprintf """printf ("\t\t\t\"pcs\": {\n\t\t\t\t%s\n\t\t\t},\n", %s);""" a b)
@@ -183,16 +190,16 @@ let internal printState ctx printState entryCompilation =
             | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
             | _ -> failwithf "No format string for composite data type %A." dty
 
-        let printPrimitive isLocal (n: TypedMemLoc) =
+        let printPrimitive isLocal prefStr (n: TypedMemLoc) =
             let dty = getDatatypeFromTML ctx.tcc n
             match dty with
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
-                sprintf """printf("%s", %s);""" formStr (ppTml isLocal ctx n |> render None)
+                sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx n |> render None))
                 //sprintf """printf("%s", %s);""" formStr (cpStateElement ctx n |> render None)
             | _ -> failwith "printPrimitive called on non-primitive."
 
-        let rec printArray isLocal level (n: TypedMemLoc) =
+        let rec printArray isLocal level prefStr (n: TypedMemLoc) =
             let ind = String.replicate level @"\t"
             let dty = getDatatypeFromTML ctx.tcc n
             match dty with
@@ -200,11 +207,11 @@ let internal printState ctx printState entryCompilation =
                 ([for i in [SizeZero .. SizeOne .. size - SizeOne] do 
                         //let idx = { rhs = IntConst (System.Numerics.BigInteger i); typ = ValueTypes (IntType Int64) ; range = Range.range0}
                         let idx = { rhs = NatConst <| N64 i; typ = ValueTypes (NatType Nat64) ; range = Range.range0}
-                        yield sprintf """printf("%s");""" ind + (printAnything isLocal (level + 1) (TypedMemLoc.ArrayAccess (n, idx)))]
+                        yield sprintf """printf("%s");""" ind + (printAnything isLocal (level + 1) prefStr (TypedMemLoc.ArrayAccess (n, idx)))]
                  |> String.concat "\n\tprintf(\",\\n\");\n\t")
             | _ -> failwith "printArray called on non-array."
 
-        and printStruct isLocal level (n: TypedMemLoc) =
+        and printStruct isLocal level prefStr (n: TypedMemLoc) =
             let ind = String.replicate level @"\t"
             let prefix x = "\\\"" + (x.basicId.ToString()) + """\" : """
             let dty = getDatatypeFromTML ctx.tcc n
@@ -213,45 +220,57 @@ let internal printState ctx printState entryCompilation =
                 let printField isLocal (v:VarDecl)  = 
                     sprintf """printf("%s");""" ind 
                     + sprintf """printf("%s");""" (prefix v.name) 
-                    + printAnything isLocal (level + 1) (TypedMemLoc.FieldAccess (n, v.name.basicId))
+                    + printAnything isLocal (level + 1) prefStr (TypedMemLoc.FieldAccess (n, v.name.basicId))
                 List.map (printField isLocal) fields 
                 |> String.concat "\n\tprintf(\",\\n\");\n\t"
             | _ -> 
                 failwith "printStruct called on non-struct."
         
-        and printAnything isLocal level (n: TypedMemLoc) =
+        and printAnything isLocal level prefStr (n: TypedMemLoc) =
             let ind = String.replicate level @"\t"
             let dty = getDatatypeFromTML ctx.tcc n
             match dty with
             | ValueTypes _ when dty.IsPrimitive ->
-                printPrimitive isLocal n
+                printPrimitive isLocal prefStr n
             | ValueTypes (ValueTypes.StructType _) ->
                 sprintf """printf("{\n");"""
-                + printStruct isLocal (level + 1) n
+                + printStruct isLocal (level + 1) prefStr n
                 + sprintf """printf("\n%s}");""" ind
             | ValueTypes (ArrayType _) ->
                 sprintf """printf("[\n");"""
-                + printArray isLocal (level + 1) n
+                + printArray isLocal (level + 1) prefStr n
                 + sprintf """printf("\n%s]");""" ind
             | _ -> failwith "Only value types implemented."
             
-        let rec printVar isLocal level (n: TypedMemLoc) (pos: Range.range) =
+        let rec printVar isLocal level prefStr (n: TypedMemLoc) (pos: Range.range) =
             // silently ignore if given tml is not in type check context
             // this happens for external prev variables that are added
             // as locals into the iface (after type checking)
             let ind = String.replicate level @"\t"
             let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
             sprintf """printf("%s%s");""" ind prefix
-            + printAnything isLocal level n    
+            + printAnything isLocal level prefStr n    
                     
-        let printParamDecl isLocal (p: ParamDecl) = 
-            printVar isLocal 4 (Loc p.name) p.pos
+        let printParamDecl isLocal prefStr (p: ParamDecl) = 
+            printVar isLocal 4 prefStr (Loc p.name) p.pos
 
         let vars = 
+            let rec getAllLocals pref ctx =
+                ctx.subcontexts
+                |> Seq.collect (fun kvp -> getAllLocals ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> ppName |> render None)) kvp.Value)
+                |> Seq.append (seq{pref, ctx.locals})
+            
+            let allLocals =
+                getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
+                |> Seq.collect (fun (pref,locals) -> locals |> List.map(fun p -> pref,p))
+                |> Seq.toList
+                |> List.map (fun (pref,local) -> (if pref.Equals "" then "" else pref + "."), local)
+                |> List.unzip
+                
             [
-                entryCompilation.iface.inputs |> List.map (printParamDecl false)
-                entryCompilation.iface.outputs |> List.map (printParamDecl false)
-                entryCompilation.iface.locals |> List.map (printParamDecl true) 
+                entryCompilation.inputs |> List.map (printParamDecl false "")
+                entryCompilation.outputs |> List.map (printParamDecl false "")
+                allLocals ||> List.map2 (printParamDecl true)
             ]
             |> List.concat
             |> List.filter (System.String.IsNullOrWhiteSpace >> not)
@@ -267,7 +286,7 @@ let internal printState ctx printState entryCompilation =
 
     txt "void" 
     <+> cpProgramName printState
-    <+> cpMainIface false entryCompilation.iface
+    <+> cpMainIface false entryCompilation
     <+> txt "{"
     <.> (cpIndent (dpBlock [showPcs; showVars]))
     <.> txt "}"
@@ -281,13 +300,13 @@ let appMainLoop (ctx: Arguments.BlechCOptions) init tick printState entryCompila
 
     let tickCall = 
         cpProgramName tick
-        <^> cpAppCall entryCompilation.iface
+        <^> cpAppCall entryCompilation
         <^> semi
         |> cpIndent
 
     let printStateCall =
         cpProgramName printState
-        <^> cpAppCall entryCompilation.iface
+        <^> cpAppCall entryCompilation
         <^> semi
         |> cpIndent
 

@@ -528,6 +528,46 @@ and makeTmpForComplexConst inFunction ctx (expr: TypedRhs) =
     | _ -> [], Orig expr
 // factored out name printing decision to a callback function
 and private cpRenderData subProgKind usage timepoint (ctx: TranslationContext) (tml:TypedMemLoc) renderName =
+    // hack: if local in activity, wrap it inside a blc_blech_ctx struct,
+    //       then all of the rendering code may be reused (for now)
+    let declKind = getDeclKind ctx tml
+    let tml, ctx =
+        match subProgKind with
+        | Function -> tml, ctx
+        | Activity ->
+            if declKind.Equals Local then 
+                let elementType = getDatatypeFromTML ctx.tcc tml
+                let elementDecl =
+                    {
+                        VarDecl.pos = range0
+                        name = tml.QNamePrefix
+                        datatype = elementType
+                        mutability = ctx.tcc.nameToDecl.[tml.QNamePrefix].TryGetMutability |> Option.get
+                        initValue = 
+                            Blech.Frontend.TyChkAmendment.getDefaultValueFor range0 "" elementType 
+                            |> function | Ok i -> i | Error _ -> failwith "meh"
+                        annotation = Attribute.VarDecl.Empty
+                        allReferences = HashSet()
+                    }
+                let ctxQName = mkAuxQNameFrom "blc_blech_ctx"
+                let ctxTypeName = mkAuxQNameFrom "FOOBAR"
+                let ctxType =
+                    ValueTypes (ValueTypes.StructType(range0,ctxTypeName,[elementDecl]))
+                let ctxDecl =
+                    {
+                        ParamDecl.pos = range0
+                        name = ctxQName
+                        datatype = ctxType
+                        isMutable = true
+                        allReferences = HashSet()
+                    }
+                let extNameToDecl = Dictionary(ctx.tcc.nameToDecl)
+                extNameToDecl.Add(ctxQName, ParamDecl ctxDecl)
+                let extCtx = {ctx with tcc = {ctx.tcc with nameToDecl = extNameToDecl}}
+
+                tml.PrependFieldAccess ctxQName, extCtx
+            else tml, ctx
+    // end of hack
     let container, fields = decomposeTml tml
     // hack: if prev on external variable, change name and treat as a current local variable
     let timepoint, container =
@@ -967,7 +1007,11 @@ let rec private genericPpTml isLocal ctx ppNameInActivity = function
         preStmts @ [(genericPpTml isLocal ctx ppNameInActivity subtml) <^> (brackets idxDoc)]
         |> dpBlock
     
-let ppTml isLocal ctx = genericPpTml isLocal ctx ppNameInActivity
+let ppTml isLocal ctx tml = 
+    if not isLocal then
+        genericPpTml isLocal ctx ppNameInActivity tml
+    else
+        txt tml.QNamePrefix.basicId
 
 //unused variants:
 //let ppDerefTml = genericPpTml (ppName >> cpDeref >> parens)

@@ -54,8 +54,7 @@ and private translateFunctionStatement ctx curComp stmt =
             // add v to local variables. Unlike activities in functions we do not expose local
             // variables in the interface but nonetheless they are needed to distinguish between
             // local and output variable access which for primitive types is direct or derefenrecing.
-            let newIface = Iface.addLocals (!curComp).iface {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = v.mutability.Equals Mutability.Variable; allReferences = HashSet()}
-            curComp := {!curComp with iface = newIface}
+            //curComp := Compilation.addLocal !curComp {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = v.mutability.Equals Mutability.Variable; allReferences = HashSet()}
             let norm =
                 normaliseVarDecl ctx.tcc v
                 |> List.map (function 
@@ -162,7 +161,7 @@ and private translateFunctionStatement ctx curComp stmt =
             else // otherwise copy the value into retvar
                 // construct typed lhs
                 let lhs =
-                    let name = (!curComp).iface.retvar |> Option.get |> (fun p -> p.name)
+                    let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
                     let typ =
                         match ctx.tcc.nameToDecl.[(!curComp).name] with
                         | FunctionPrototype p -> p.returns
@@ -207,9 +206,7 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v, cpType (ValueTypes Void)
     
-    let iface = {Iface.Empty with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
-    
-    let curComp = ref {Compilation.Empty with name = name; iface = iface}
+    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
     
     let code = translateFunction ctx curComp subProgDecl
     
@@ -217,7 +214,7 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
         txt "static" // TODO must be non-static if function is exposed, fjg 17.01.19
         <+> retType
         <+> ppName (!curComp).name
-        <+> cpFunctionIface (!curComp).iface
+        <+> cpFunctionIface (!curComp)
         <+> txt "{"
         <.> cpIndent code
         <.> txt "}"
@@ -225,7 +222,7 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
     let signature =
         retType
         <+> ppName (!curComp).name
-        <+> cpFunctionIface (!curComp).iface
+        <+> cpFunctionIface (!curComp)
         <^> semi
 
     let optDoc = 

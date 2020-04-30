@@ -113,28 +113,20 @@ let private cpOutputParam (output: ParamDecl) =
     | ValueTypes (ArrayType _) -> cpArrayDecl output.name output.datatype
     | _ -> cpType output.datatype <+> cpDeref (ppName (output.name))
 
-
-let private cpPc (pc: ParamDecl) = 
-    txt "blc_pc_t" <+> cpDeref (ppName (pc.name))
-
-
-// let private cpLocal = cpOutputParam
-/// Local variable parameter for activity
-let private cpLocal (local: ParamDecl) =
-    match local.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDeclInActivity local.name local.datatype
-    | _ -> cpType local.datatype <+> cpDeref (ppNameInActivity (local.name))
+let private cpActContext name =
+    let typename = txt "struct" <+> ppGlobalName name
+    let ctxname = txt "blc_blech_ctx" //ppName name
+    typename <+> cpDeref ctxname
 
 let private cpRetvar = cpOutputParam
 
 /// Translates a Blech Activity interface to a
 /// C Function interface and returns a Doc representation thereof
-let internal cpIface (iface: Iface) =
+let internal cpIface (iface: Compilation) =
     [
         iface.inputs |> List.map cpInputParam
         iface.outputs |> List.map cpOutputParam
-        iface.locals |> List.map cpLocal
-        iface.pcs |> List.map cpPc
+        iface.actctx |> Option.toList |> List.map (fun _ -> cpActContext iface.name)
         iface.retvar |> Option.toList |> List.map cpRetvar
     ]
     |> List.concat
@@ -142,7 +134,7 @@ let internal cpIface (iface: Iface) =
 
 /// Translates a Blech Function interface to a
 /// C Function interface and returns a Doc representation thereof
-let internal cpFunctionIface (iface: Iface) =
+let internal cpFunctionIface (iface: Compilation) =
     let cargs = 
         List.concat [
             iface.inputs |> List.map cpInputParam
@@ -155,18 +147,13 @@ let internal cpFunctionIface (iface: Iface) =
 /// Translate the locals, retvar, and program counters, of the entry point as a list of declarations of static global variables.
 // Note no initialisation takes places here, this is done in the entry point
 // activity in the surface.
-let internal cpMainStateAsStatics (iface: Iface) =
-    [
-        iface.locals
-        iface.retvar |> Option.toList
-    ]
-    |> List.concat
-    |> List.map (fun p -> txt "static" <+> cpArrayDeclInActivity p.name p.datatype <^> semi)
-    |> List.append <| List.map (fun (p: ParamDecl) -> txt "static" <+> txt "blc_pc_t" <+> ppName (p.name) <^> semi) iface.pcs
-    |> dpBlock
+let internal cpMainStateAsStatics (iface: Compilation) =
+    let typename = txt "struct" <+> ppGlobalName iface.name
+    let ctxname = txt "blc_blech_ctx" //ppName iface.name
+    typename <+> ctxname <^> semi
 
 /// Translate the inputs and outputs of the entry point as a list of declarations of static global variables 
-let internal cpMainParametersAsStatics (iface: Iface) =
+let internal cpMainParametersAsStatics (iface: Compilation) =
     [
         iface.inputs
         iface.outputs
@@ -175,6 +162,37 @@ let internal cpMainParametersAsStatics (iface: Iface) =
     |> List.map (fun p -> txt "static" <+> cpArrayDeclInActivity p.name p.datatype <^> semi)
     |> dpBlock
 
+let internal cpContextTypeDeclaration (comp: Compilation) =
+    match comp.actctx with 
+    | None -> empty // this is a function, nothing to print
+    | Some _ -> // ok, print activity context struct
+        let typename = ppGlobalName comp.name
+        let locals = 
+            // since shadowing is prohibited in local scopes, it is sufficient to 
+            // use basicIds for context field names
+            comp.GetActCtx.locals
+            |> List.map (fun local -> cpArrayDeclDoc (txt local.name.basicId) local.datatype <^> semi)
+            |> dpBlock
+        let pcs = 
+            comp.GetActCtx.pcs.AsList
+            |> List.map (fun pc -> txt "blc_pc_t" <+> txt pc.name.basicId <^> semi)
+            |> dpBlock
+        let subctx =
+            comp.GetActCtx.subcontexts
+            |> Seq.map (fun subctx -> txt "struct" 
+                                    <+> ppGlobalName (snd subctx.Key) // C type name
+                                    <+> txt (fst subctx.Key) <^> txt "_" <^> ppName (snd subctx.Key) // field name
+                                    <^> semi)
+            |> dpBlock
+        let fields = // we do this little detour to remove empty lines
+            [ locals
+              pcs
+              subctx ]
+            |> dpBlock
+
+        txt "struct" <+> typename <+> txt "{"
+        <.> cpIndent fields
+        <.> txt "}" <^> semi
 
 //=============================================================================
 // Statements
