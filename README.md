@@ -5,6 +5,7 @@
 
 Blech is a language for developing reactive, real-time critical embedded software.
 This open source project implements a compiler which translates Blech to C.
+More information can be found on the [Blech homepage](https://boschresearch.github.io/blech-doc/).
 
 The software is not ready for production use. It has neither been developed nor
 tested for a specific use case. However, the license conditions of the
