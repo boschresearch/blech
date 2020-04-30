@@ -49,12 +49,12 @@ module Arguments =
         | Version
         | Rebuild 
         | Dry_Run
-        | [<Unique; AltCommandLine("-v")>] Verbosity of level:Verbosity 
+        | [<Unique; AltCommandLine("-v")>] Verbosity of level : Verbosity 
         
-        | [<Unique>] App of name:string
-        | [<Unique; AltCommandLine("-sp")>] Source_Path of path:string 
-        | [<Unique; AltCommandLine("-od")>] Out_Dir of directory:string
-        | [<Unique; AltCommandLine("-bp")>] Blech_Path of path:string
+        | [<Unique; EqualsAssignment>] App of name : string option
+        | [<Unique; AltCommandLine("-sp")>] Source_Path of path : string 
+        | [<Unique; AltCommandLine("-od")>] Out_Dir of directory : string
+        | [<Unique; AltCommandLine("-bp")>] Blech_Path of path : string
         
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
@@ -62,7 +62,7 @@ module Arguments =
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
-        | [<Last; Unique; MainCommand>] Input of filename:string
+        | [<Last; Unique; MainCommand>] Input of filename : string
         
         interface IArgParserTemplate with
             member args.Usage =
@@ -74,7 +74,7 @@ module Arguments =
                 | Dry_Run _ -> 
                     "do not write any result files."
                 | App _ -> 
-                    "generate <name>.c as main application."
+                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
                 | Source_Path _ ->
                     "search for blech modules in <path> templates, "
                     + "defaults to " + "\"" + defaultSourcePath + "\"" + "."
@@ -118,7 +118,7 @@ module Arguments =
     type BlechCOptions =  // TODO: Move this to separate file in utils
         {
             inputFile: string
-            appName: string
+            appName: string option
             sourcePath: string
             outDir: string
             blechPath: string
@@ -132,7 +132,7 @@ module Arguments =
         }
         static member Default = {
                 inputFile = ""
-                appName = defaultAppName
+                appName = None
                 sourcePath = defaultSourcePath
                 outDir = defaultOutDir
                 blechPath = defaultBlechPath
@@ -153,7 +153,11 @@ module Arguments =
         | Input fn ->
             { opts with inputFile = fn}
         | App an ->
-            { opts with appName = an }
+            match an with
+            | Some _ -> 
+                { opts with appName = an }
+            | None ->
+                { opts with appName = Some defaultAppName }
         | Rebuild ->
             { opts with isRebuild = true }
         | Dry_Run ->
