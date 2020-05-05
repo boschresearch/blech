@@ -50,9 +50,9 @@ let private cpTabsize = 4
 let internal cpIndent = indent cpTabsize
 
 let private BLC = "blc" // do not add trailing "_" this is done by assembleName
-let private AUX = "aux_" + BLC
-let private PREV = "prev_" + BLC
-let private CTX = "blc_blech_ctx"
+let private AUX = BLC + "_blech_aux"
+let private PREV = BLC + "_blech_prev"
+let private CTX = BLC + "_blech_ctx"
 
 let private fromContext prefix =
     CTX + "->" + prefix
@@ -67,25 +67,58 @@ let private assembleName pref infixLst identifier =
     |> txt
 
 let private auxiliaryName name = assembleName AUX [] name.basicId
-
-let private prevName tcc name =
-    let isExternal =
-        match tcc.nameToDecl.[name] with
-        | Declarable.ExternalVarDecl _ -> true
-        | _ -> false
-    if isExternal then
-        // prev external variable
-        assembleName
-        <| fromContext PREV
-        <| []
-        <| name.basicId
-    else
-        // prev internal variable
-        assembleName PREV [] name.basicId
-
 let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
 let private globalName name = assembleName BLC (name.moduleName @ name.prefix) name.basicId
+
+
+[<DefaultAugmentation(false)>] // default Is* is on its way https://github.com/fsharp/fslang-suggestions/issues/222
+                               // for the moment we do this as in https://stackoverflow.com/a/23665277/2289899
+/// Represents information on how to render a Blech name to a C name
+type CName =
+    | Global of QName
+    | ModuleLocal of QName
+    | Auxiliary of QName
+    | PrevInternal of QName
+    | PrevExternal of QName
+    | Auto of QName
+    | CtxLocal of QName
+
+    member this.QName =
+        match this with
+        | Global q
+        | ModuleLocal q
+        | Auxiliary q
+        | PrevInternal q
+        | PrevExternal q
+        | Auto q
+        | CtxLocal q -> q
+
+    member this.Render =
+        match this with
+        | Global q -> globalName q
+        | ModuleLocal q -> moduleLocalName q
+        | Auxiliary q -> auxiliaryName q
+        | PrevInternal q -> assembleName PREV [] q.basicId
+        | PrevExternal q ->
+            assembleName
+            <| fromContext PREV
+            <| []
+            <| q.basicId
+        | Auto q -> autoName q
+        | CtxLocal q ->
+            assembleName
+            <| fromContext BLC
+            <| []
+            <| q.basicId
+
+    member this.IsAuxiliary =
+        match this with
+        | Auxiliary _ -> true
+        | Global _ | ModuleLocal _
+        | PrevInternal _ | PrevExternal _
+        | Auto _ | CtxLocal _ -> false
+
 
 let private isInFunction tcc name =
     match name.prefix with
@@ -112,7 +145,7 @@ let private isInActivity tcc name =
 /// tcc - type check context
 /// name - QName
 // covers functions, activities, user types, variables
-let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) =
+let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CName =
     // Either a static QName of Function/Activity, user type or top level constant
     // or a const/param local inside a function/activity
     // TODO: do we want to lift these to the top level? Why not use C's statics inside functions?? fg 13.03.20
@@ -125,12 +158,12 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) =
     if needsStaticName then
         // decide here whether name is exported or not
         // for now always generate full global name
-        globalName name
+        Global name
     elif name.IsAuxiliary then
         // no prev on auxiliary variables
         assert timepointOpt.Equals (Some Current)
         // prepend aux_blc_
-        auxiliaryName name
+        Auxiliary name
     else
         assert name.IsDynamic
         assert (name.prefix <> [])
@@ -141,20 +174,22 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) =
 
         if timepointOpt.Equals (Some Previous) then
             // Prev
-            prevName tcc name
+            let isExternal =
+                match tcc.nameToDecl.[name] with
+                | Declarable.ExternalVarDecl _ -> true
+                | _ -> false
+            if isExternal then PrevExternal name
+            else PrevInternal name
         elif isParam then
             // formal parameter
-            autoName name
+            Auto name
         elif isInFunction tcc name then
             // function local
-            autoName name
+            Auto name
         else
             // activity local
             assert isInActivity tcc name
-            assembleName
-            <| fromContext BLC
-            <| []
-            <| name.basicId
+            CtxLocal name
 
 /// Shorthand for ppName None tcc name
 let cpStaticName = cpName None TypeCheckContext.Empty           
@@ -188,7 +223,7 @@ let rec internal cpType typ =
         | FloatType.Float64 -> txt "blc_float64"
     | ValueTypes (ValueTypes.StructType (_, typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
-        txt "struct" <+> cpStaticName typeName
+        txt "struct" <+> (cpStaticName typeName).Render
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | Any
@@ -202,16 +237,16 @@ let rec internal sizeofMacro = function
 | x ->
     txt "sizeof" <^> parens (cpType x)
     
-type CAccessPath =
-    | Name of Doc
-    | AddrOf of CAccessPath
-    | ValueOf of CAccessPath
+type CBlob =
+    | Name of CName
+    | AddrOf of CBlob
+    | ValueOf of CBlob
 
-    member this.ToDoc =
+    member this.Render =
         match this with
-        | Name d -> d
-        | AddrOf cap -> txt "&(" <^> cap.ToDoc <^> txt ")"
-        | ValueOf cap -> txt "*(" <^> cap.ToDoc <^> txt ")"
+        | Name d -> d.Render
+        | AddrOf cap -> txt "&(" <^> cap.Render <^> txt ")"
+        | ValueOf cap -> txt "*(" <^> cap.Render <^> txt ")"
 
     member this.Simplify =
         match this with
@@ -223,163 +258,231 @@ type CAccessPath =
         | AddrOf (AddrOf x) -> (AddrOf x).Simplify // TODO: these two cases cannot happen as long as we do not have references
         | ValueOf (ValueOf x) -> (ValueOf x).Simplify
 
-let cpCAccessPath (cap: CAccessPath) = cap.ToDoc
+    member this.IsAuxiliary =
+        match this with
+        | Name n -> n.IsAuxiliary
+        | AddrOf c 
+        | ValueOf c -> c.IsAuxiliary
 
-let getValueFromName timepoint tcc name : CAccessPath =
+
+//let cpCAccessPath (cap: CAccessPath) = cap.ToDoc
+
+let getValueFromName timepoint tcc name : CBlob =
     let typeAndIsOutput =
         match tcc.nameToDecl.TryGetValue name with
         | true, Declarable.ParamDecl p -> Some p.datatype, p.isMutable
         | _ -> None, false
-    let nameDoc = cpName (Some timepoint) tcc name
+    let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
     | Some typ, true ->
         if typ.IsPrimitive then
             // primitive typed, output parameter
-            ValueOf (Name nameDoc)
+            ValueOf (Name cName)
         // TODO: elif struct type then also *<name>?
         else
-            Name nameDoc
+            Name cName
     | _ ->
-        Name nameDoc
+        Name cName
 
 //=============================================================================
 // Printing expressions
 //=============================================================================
 
-type RenderedExpression =
+type RenderFun = CExpr list -> Doc
+and CExpr =
+    | Path of CPath
+    | Value of Doc
+    | ComplexExpr of RenderFun * CExpr list
+    member this.Render =
+        match this with
+        | Path p -> p.Render
+        | Value d -> d
+        | ComplexExpr (f, c) -> f c
+
+and CPath =
+    | Loc of CBlob
+    | FieldAccess of CPath * Doc
+    | ArrayAccess of CPath * CExpr
+    member this.Render =
+        match this with
+        | Loc cb -> cb.Render
+        | FieldAccess (cp, f) -> cp.Render <^> txt "." <^> f
+        | ArrayAccess (cp, e) -> cp.Render <^> txt "[" <^> e.Render <^> txt "]"
+
+    member this.IsAuxiliary =
+        match this with
+        | Loc cb -> cb.IsAuxiliary
+        | FieldAccess (cp, _) 
+        | ArrayAccess (cp, _) -> cp.IsAuxiliary
+
+
+type PrereqExpression =
     {
         prereqStmts: Doc list
-        renderedExpr: Doc
+        cExpr: CExpr
     }
+    member this.Render = this.cExpr.Render
 
-let mkRenderedExpr p e =
-    { RenderedExpression.prereqStmts = p
-      renderedExpr = e }
+let mkPrereqExpr p e =
+    { PrereqExpression.prereqStmts = p
+      cExpr = e }
 
-let RenderedExprBind f re =
-    let result = f re.renderedExpr
-    mkRenderedExpr
-    <| re.prereqStmts @ result.prereqStmts
-    <| result.renderedExpr
+let prereqExprBind f pe =
+    let result = f pe.cExpr
+    mkPrereqExpr
+    <| pe.prereqStmts @ result.prereqStmts
+    <| result.cExpr
 
-    
-let GetRenderedExpr re = re.renderedExpr
-let GetPrereq re = re.prereqStmts
+let getCExpr pe = pe.cExpr
+let getPrereq pe = pe.prereqStmts
 
+let isExprAuxiliary pe =
+    let expr = getCExpr pe
+    match expr with
+    | Path p -> p.IsAuxiliary
+    // values or complex expression cannot be the result of creating an auxiliary variable
+    | Value _ 
+    | ComplexExpr _ -> false
 
-let rec cpTml timepoint tcc tml : RenderedExpression =
+type PrereqPath =
+    {
+        prereqStmts: Doc list
+        path: CPath
+    }
+    member this.Render = this.path.Render
+    member this.ToExpr =
+        mkPrereqExpr
+        <| this.prereqStmts
+        <| Path this.path
+
+let mkCPath p c =
+    { prereqStmts = p
+      path = c }
+
+let rec cpTml timepoint tcc (tml: TypedMemLoc) : PrereqPath =
     match tml with
-    | Loc name ->
-        mkRenderedExpr
+    | TypedMemLoc.Loc name -> 
+        mkCPath
         <| []
-        <| (getValueFromName timepoint tcc name).ToDoc
-    | FieldAccess (pref, field) ->
-        let f d = 
-            mkRenderedExpr
-            <| []
-            <| (d <^> txt "." <^> txt field)
-        cpTml timepoint tcc pref
-        |> RenderedExprBind f
-    | ArrayAccess (pref, idx) ->
-        let f d =
-            let renderedIdx = cpExpr tcc idx
-            mkRenderedExpr
-            <| renderedIdx.prereqStmts
-            <| (d <^> txt "[" <^> renderedIdx.renderedExpr <^> txt "]")
-        cpTml timepoint tcc pref
-        |> RenderedExprBind f
+        <| Loc (getValueFromName timepoint tcc name)
+    | TypedMemLoc.FieldAccess (pref, field) ->
+        let pp = cpTml timepoint tcc pref
+        mkCPath
+        <| pp.prereqStmts
+        <| FieldAccess (pp.path, (txt field))
+    | TypedMemLoc.ArrayAccess (pref, idx) ->
+        let pp = cpTml timepoint tcc pref
+        let suffix = cpExpr tcc idx
+        mkCPath
+        <| pp.prereqStmts @ suffix.prereqStmts
+        <| ArrayAccess (pp.path, suffix.cExpr)
 
 and private binExpr tcc s1 s2 infx =
     let re1 = cpExpr tcc s1
     let re2 = cpExpr tcc s2
-    let processedExpr =
-        GetRenderedExpr re1
+    let render (rs: CExpr list) =
+        rs.[0].Render
         |> (</>) <| txt infx
-        |> (<+>) <| GetRenderedExpr re2
+        |> (<+>) <| rs.[1].Render
         |> parens
-    mkRenderedExpr
-    <| (GetPrereq re1 @ GetPrereq re2)
-    <| processedExpr
+    mkPrereqExpr
+    <| (getPrereq re1 @ getPrereq re2)
+    <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
 
 and private binConj tcc s1 s2 =
     let re1 = cpExpr tcc s1
     let re2 = cpExpr tcc s2
-    match GetPrereq re2 with
-    | [] -> 
-        let processedExpr =
-            GetRenderedExpr re1
+    match getPrereq re2 with
+    | [] -> // this case is an optimisation
+        let render (rs: CExpr list) =
+            rs.[0].Render
             |> (</>) <| txt "&&"
-            |> (<+>) <| GetRenderedExpr re2
+            |> (<+>) <| rs.[1].Render
             |> parens
-        mkRenderedExpr
-        <| (GetPrereq re1 @ GetPrereq re2)
-        <| processedExpr
+        mkPrereqExpr
+        <| (getPrereq re1 @ getPrereq re2)
+        <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
     | _ -> 
         // make sure the second expression only get evaluated if
         // the first one was true
-        let tmpVarIf = mkIndexedAuxQNameFrom "tmpVarIfStmt" |> auxiliaryName
+        let tmpVarIf =
+            mkIndexedAuxQNameFrom "tmpVarIfStmt"
+            |> TypedMemLoc.Loc
+            |> cpTml Current tcc
+            |> (fun x -> x.ToExpr)
+        let renderedTmpVarIf = tmpVarIf.Render
         let initTmpVarIf =
-            cpType (ValueTypes BoolType) <+> tmpVarIf <+> txt "= 0" <^> semi
+            cpType (ValueTypes BoolType) <+> renderedTmpVarIf <+> txt "= 0" <^> semi
         let body =
-            re2.prereqStmts @ [tmpVarIf <+> txt "=" <+> re2.renderedExpr <^> semi]
+            re2.prereqStmts @ [renderedTmpVarIf <+> txt "=" <+> re2.cExpr.Render <^> semi]
             |> dpBlock
         let ifWrapper = 
-            txt "if (" <+> re1.renderedExpr <+> txt ") {"
+            txt "if (" <+> re1.cExpr.Render <+> txt ") {"
             <.> cpIndent body
             <.> txt "}"
-        mkRenderedExpr
+        mkPrereqExpr
         <| (re1.prereqStmts @ [initTmpVarIf; ifWrapper])
-        <| tmpVarIf
+        <| getCExpr tmpVarIf
 
 and private binDisj tcc s1 s2 =
     let re1 = cpExpr tcc s1
     let re2 = cpExpr tcc s2
-    match GetPrereq re2 with
-    | [] -> 
-        let processedExpr =
-            GetRenderedExpr re1
+    match getPrereq re2 with
+    | [] -> // this case is an optimisation
+        let render (rs: CExpr list) =
+            rs.[0].Render
             |> (</>) <| txt "||"
-            |> (<+>) <| GetRenderedExpr re2
+            |> (<+>) <| rs.[1].Render
             |> parens
-        mkRenderedExpr
-        <| (GetPrereq re1 @ GetPrereq re2)
-        <| processedExpr
+        mkPrereqExpr
+        <| (getPrereq re1 @ getPrereq re2)
+        <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
     | _ -> 
         // make sure the second expression only get evaluated if
         // the first one was false
-        let tmpVarIf = mkIndexedAuxQNameFrom "tmpVarIfStmt" |> auxiliaryName
+        let tmpVarIf = 
+            mkIndexedAuxQNameFrom "tmpVarIfStmt"
+            |> TypedMemLoc.Loc
+            |> cpTml Current tcc
+            |> (fun x -> x.ToExpr)
         let initTmpVarIf =
-            cpType (ValueTypes BoolType) <+> tmpVarIf <+> txt "= 1" <^> semi
+            cpType (ValueTypes BoolType) <+> tmpVarIf.Render <+> txt "= 1" <^> semi
         let body =
-            re2.prereqStmts @ [tmpVarIf <+> txt "=" <+> re2.renderedExpr <^> semi]
+            re2.prereqStmts @ [tmpVarIf.Render <+> txt "=" <+> re2.cExpr.Render <^> semi]
             |> dpBlock
         let ifWrapper = 
-            txt "if (" <+> txt "!(" <^> re1.renderedExpr <^> txt ")" <+> txt ") {"
+            txt "if (" <+> txt "!(" <^> re1.cExpr.Render <^> txt ")" <+> txt ") {"
             <.> cpIndent body
             <.> txt "}"
-        mkRenderedExpr
+        mkPrereqExpr
         <| (re1.prereqStmts @ [initTmpVarIf; ifWrapper])
-        <| tmpVarIf
+        <| getCExpr tmpVarIf
 
-and cpExpr tcc expr : RenderedExpression =
+and cpExpr tcc expr : PrereqExpression =
     match expr.rhs with
-    | RhsCur tml -> cpTml Current tcc tml //|> RenderedExprFromTML
-    | Prev tml -> cpTml Previous tcc tml //|> RenderedExprFromTML
+    | RhsCur tml -> cpTml Current tcc tml |> (fun x -> x.ToExpr)
+    | Prev tml -> cpTml Previous tcc tml |> (fun x -> x.ToExpr)
     // call
     | FunCall (whoToCall, inputs, outputs) ->
         let reIns = inputs |> List.map (cpInputArg tcc)
         let reOuts = outputs |> List.map (cpOutputArg tcc)
-        let name = cpStaticName whoToCall
+        let name = (cpStaticName whoToCall).Render
         let retType =
             match tcc.nameToDecl.[whoToCall].TryGetReturnType with
             | Some t -> t
             | None -> failwith "Expected to call a function but found something else!"
-        // in case we call a function that returns a non-primitive value
+        
         if retType.IsPrimitive then
-            mkRenderedExpr
-            <| (reIns @ reOuts |> List.collect GetPrereq)
-            <| (name <^> (reIns @ reOuts |> List.map GetRenderedExpr |> dpCommaSeparatedInBraces))
+            // in case we call a function that returns a primitive value
+            // rely on C return values
+            let render (rs: CExpr list) =
+                name <^> (rs |> List.map (fun x -> x.Render) |> dpCommaSeparatedInParens)
+            mkPrereqExpr
+            <| (reIns @ reOuts |> List.collect getPrereq)
+            <| ComplexExpr (render, (reIns @ reOuts |> List.map getCExpr))
         else
+            // in case we call a function that returns a non-primitive value
+            // create a receiver passed as an extra parameter
             let lhsName = mkIndexedAuxQNameFrom "receiverVar"
             let lhsTyp = expr.typ
             let tmpDecl = cpArrayDeclDoc (auxiliaryName lhsName) lhsTyp <^> semi
@@ -394,57 +497,71 @@ and cpExpr tcc expr : RenderedExpression =
                     allReferences = HashSet() 
                 }
             TypeCheckContext.addDeclToLut tcc lhsName (Declarable.VarDecl v)
-            let tmpLhs = LhsCur (Loc lhsName)
+            let tmpLhs = LhsCur (TypedMemLoc.Loc lhsName)
             let tmpExpr = {lhs = tmpLhs; typ = lhsTyp; range = v.pos}
             let reReceiver = cpOutputArg tcc tmpExpr
             let funCall =
                 name 
-                <^> (reIns @ reOuts @ [reReceiver] |> List.map GetRenderedExpr |> dpCommaSeparatedInBraces) 
+                <^> (reIns @ reOuts @ [reReceiver] |> List.map (getCExpr >> (fun x -> x.Render)) |> dpCommaSeparatedInParens) 
                 <^> semi
-            mkRenderedExpr
-            <| ((reIns @ reOuts @ [reReceiver] |> List.collect GetPrereq) @ [tmpDecl; funCall])
-            <| GetRenderedExpr reReceiver
+            mkPrereqExpr
+            <| ((reIns @ reOuts @ [reReceiver] |> List.collect getPrereq) @ [tmpDecl; funCall])
+            <| getCExpr reReceiver
 
     // constants and literals
-    | BoolConst b -> mkRenderedExpr [] (if b then txt "1" else txt "0")
-    | IntConst i -> mkRenderedExpr [] (txt <| string i)
-    | NatConst n -> mkRenderedExpr [] (txt <| string n)
-    | BitsConst b -> mkRenderedExpr [] (txt <| string b)
-    | FloatConst f -> mkRenderedExpr [] (txt <| string f)
+    | BoolConst b -> mkPrereqExpr [] (Value (if b then txt "1" else txt "0"))
+    | IntConst i -> mkPrereqExpr [] (string i |> txt |> Value)
+    | NatConst n -> mkPrereqExpr [] (string n |> txt |> Value)
+    | BitsConst b -> mkPrereqExpr [] (string b |> txt |> Value)
+    | FloatConst f -> mkPrereqExpr [] (string f |> txt |> Value)
     | ResetConst -> failwith "By now, the type checker should have substituted reset const by the type's default value."
     | StructConst assignments ->
         let resAssigns =
             assignments |> List.map (snd >> cpExpr tcc)
-        mkRenderedExpr
-        <| (resAssigns |> List.collect GetPrereq)
-        <| (resAssigns |> List.map GetRenderedExpr |> dpCommaSeparatedInBraces)
+        let render (rs: CExpr list) =
+            rs
+            |> List.map (fun r -> r.Render)
+            |> dpCommaSeparatedInBraces
+        mkPrereqExpr
+        <| (resAssigns |> List.collect getPrereq)
+        <| ComplexExpr (render, (resAssigns |> List.map getCExpr))
     | ArrayConst elems ->    
         let resAssigns =
             elems |> List.map (snd >> cpExpr tcc)
-        mkRenderedExpr
-        <| (resAssigns |> List.collect GetPrereq)
-        <| (resAssigns |> List.map GetRenderedExpr |> dpCommaSeparatedInBraces)
+        let render (rs: CExpr list) =
+            rs
+            |> List.map (fun r -> r.Render)
+            |> dpCommaSeparatedInBraces
+        mkPrereqExpr
+        <| (resAssigns |> List.collect getPrereq)
+        <| ComplexExpr (render, (resAssigns |> List.map getCExpr))
     //
     | Convert (subExpr, targetType, behaviour) ->   // TODO: Currently we generate a C cast for every behaviour, this will change with exceptions, fjg. 24.03.20
         let re = cpExpr tcc subExpr
         let rt = cpType targetType
-        mkRenderedExpr
+        let render (rs: CExpr list) =
+            parens rt <^> rs.[0].Render
+        mkPrereqExpr
         <| re.prereqStmts
-        <| (parens rt <^> re.renderedExpr)
+        <| ComplexExpr (render, [re.cExpr])
     // logical
     | Neg subExpr -> 
         let re = cpExpr tcc subExpr
-        mkRenderedExpr
+        let render (rs: CExpr list) =
+            txt "!" <^> parens rs.[0].Render
+        mkPrereqExpr
         <| re.prereqStmts
-        <| (txt "!" <^> parens re.renderedExpr)
-    | Conj(s1, s2) -> binConj tcc s1 s2 
-    | Disj(s1, s2) -> binDisj tcc s1 s2
+        <| ComplexExpr (render, [re.cExpr])
+    | Conj (s1, s2) -> binConj tcc s1 s2 
+    | Disj (s1, s2) -> binDisj tcc s1 s2
     // bitwise
     | Bnot subExpr -> 
         let re = cpExpr tcc subExpr
-        mkRenderedExpr
+        let render (rs: CExpr list) =
+            (txt "~" <^> parens rs.[0].Render)
+        mkPrereqExpr
         <| re.prereqStmts
-        <| (txt "~" <^> parens re.renderedExpr)
+        <| ComplexExpr (render, [re.cExpr])
     | Band (s1, s2) -> binExpr tcc s1 s2 "&"
     | Bor (s1, s2) -> binExpr tcc s1 s2 "|"
     | Bxor (s1, s2) -> binExpr tcc s1 s2 "^"
@@ -470,9 +587,11 @@ and cpExpr tcc expr : RenderedExpression =
             let re1 = cpInputArg tcc s1
             let re2 = cpInputArg tcc s2
             let length = sizeofMacro s1.typ
-            mkRenderedExpr
-            <| (GetPrereq re1 @ GetPrereq re2)
-            <| (txt "0 == memcmp" <^> dpCommaSeparatedInParens [GetRenderedExpr re1; GetRenderedExpr re2; length])
+            let render (rs: CExpr list) =
+                txt "0 == memcmp" <^> dpCommaSeparatedInParens [rs.[0].Render; rs.[1].Render; length]
+            mkPrereqExpr
+            <| (getPrereq re1 @ getPrereq re2)
+            <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
         | ValueTypes Void
         | Any
         | AnyComposite 
@@ -487,23 +606,20 @@ and cpExpr tcc expr : RenderedExpression =
     | Div (s1, s2) -> binExpr tcc s1 s2 "/"
     | Mod (s1, s2) -> binExpr tcc s1 s2 "%"
 
-and cpInputArg tcc expr : RenderedExpression = 
+and cpInputArg tcc expr : PrereqExpression = 
     // if expr is a structured literal, make a new name for it
     cpExpr tcc expr // FIXME: dummy code
     //TODO:
-    //match makeTmpForComplexConst tcc expr with
-    //| E re -> re
-    //| T rtml ->
-    //    match expr.typ with
-    //    | ValueTypes (ValueTypes.StructType _) ->
-    //        // if struct, then prepend &
-    //        let newTML = (AddrOf rtml.renderedTML).Simplify
-    //        mkRenderedTML rtml.prereqStmts newTML
-    //        |> RenderedExprFromTML
-    //    | _ -> 
-    //        RenderedExprFromTML rtml
+    //let singleArgLocation = makeTmpForComplexConst tcc expr
+    //match singleArgLocation.typ with
+    //| ValueTypes (ValueTypes.StructType _) when isExprAuxiliary singleArgLocation ->
+    //    // if auxiliary struct, then prepend &
+    //    mkRenderedExpr
+    //    <| GetPrereq singleArgLocation
+    //    <| (txt "&" <^> parens (GetRenderedExpr singleArgLocation))
+    //| _ -> singleArgLocation
 
-and cpOutputArg tcc expr : RenderedExpression = 
+and cpOutputArg tcc expr : PrereqExpression = 
     // unless array, prepend &
     cpLexpr tcc expr // FIXME: dummy code
     // TODO:
@@ -517,10 +633,10 @@ and cpOutputArg tcc expr : RenderedExpression =
     //        renderedTML = AddrOf re.renderedTML
     //    }
 
-and cpLexpr tcc expr : RenderedExpression =
+and cpLexpr tcc expr : PrereqExpression =
     match expr.lhs with
     | Wildcard -> failwith "Lhs cannot be a wildcard at this stage."
-    | LhsCur tml -> cpTml Current tcc tml //|> RenderedExprFromTML
+    | LhsCur tml -> cpTml Current tcc tml |> (fun x -> x.ToExpr)
     | LhsNext _ -> failwith "render next locations not implemented yet."
 
 and internal cpArrayDeclDoc name typ =
@@ -637,10 +753,10 @@ let mkRenderedStmt p r =
     { prereqStmts = p
       renderedStmt = r }
 
-let RenderedStmtFromExpr (re: RenderedExpression) =
+let RenderedStmtFromExpr (re: PrereqExpression) =
     mkRenderedStmt
     <| re.prereqStmts
-    <| re.renderedExpr
+    <| re.cExpr.Render
 
 
 let cpAssign tcc left right : RenderedStmt =
@@ -649,15 +765,15 @@ let cpAssign tcc left right : RenderedStmt =
     let directAssigment = 
         mkRenderedStmt
         <| leftRE.prereqStmts @ rightRE.prereqStmts
-        <| (leftRE.renderedExpr <+> txt "=" <+> rightRE.renderedExpr <^> semi)
+        <| (leftRE.cExpr.Render <+> txt "=" <+> rightRE.cExpr.Render <^> semi)
     match left.typ with
     | ValueTypes (ValueTypes.ArrayType _) ->
         // memcopy arrays
         let memcpy =
             txt "memcpy"
             <^> dpCommaSeparatedInParens
-                [ leftRE.renderedExpr
-                  rightRE.renderedExpr
+                [ leftRE.cExpr.Render
+                  rightRE.cExpr.Render
                   sizeofMacro right.typ ]
             <^> semi
         mkRenderedStmt
@@ -697,7 +813,7 @@ let cpFunctionCall tcc whoToCall inputs outputs : RenderedStmt =
 /// receiverVar - optional TypedLhs (r = run A...)
 /// termRetcodeVarName - QName of the variable that stores the termination information
 let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar isDummy termRetcodeVarName : RenderedStmt =
-    let renderedCalleeName = cpStaticName whoToCall
+    let renderedCalleeName = (cpStaticName whoToCall).Render
     let renderedInputs = inputs |> List.map (cpInputArg tcc)
     let renderedOutputs = outputs |> List.map (cpOutputArg tcc)
     let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedCalleeName
@@ -706,22 +822,22 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar isDummy termR
         |> Option.map (cpOutputArg tcc)
     let actCall = 
         [
-            renderedInputs |> List.map GetRenderedExpr
-            renderedOutputs |> List.map GetRenderedExpr
+            renderedInputs |> List.map (getCExpr >> (fun x -> x.Render))
+            renderedOutputs |> List.map (getCExpr >> (fun x -> x.Render))
             [subctx]
-            renderedRetvarOpt |> Option.toList |> List.map GetRenderedExpr
+            renderedRetvarOpt |> Option.toList |> List.map (getCExpr >> (fun x -> x.Render))
         ]
         |> List.concat
         |> dpCommaSeparatedInParens
         |> (<^>) renderedCalleeName
     let prereqStmts =
         [
-            renderedInputs |> List.collect GetPrereq
-            renderedOutputs |> List.collect GetPrereq
-            renderedRetvarOpt |> Option.toList |> List.collect GetPrereq 
+            renderedInputs |> List.collect getPrereq
+            renderedOutputs |> List.collect getPrereq
+            renderedRetvarOpt |> Option.toList |> List.collect getPrereq 
         ]
         |> List.concat
-    let actCallStmt = (cpName (Some Current) tcc termRetcodeVarName) <+> txt "=" <+> actCall <^> semi
+    let actCallStmt = (cpName (Some Current) tcc termRetcodeVarName).Render <+> txt "=" <+> actCall <^> semi
     mkRenderedStmt prereqStmts actCallStmt
 
 
