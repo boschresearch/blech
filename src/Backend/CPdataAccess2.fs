@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - for information on the respective copyright owner
+﻿// Copyright (c) 2020 - for information on the respective copyright owner
 // see the NOTICE file and/or the repository 
 // https://github.com/boschresearch/blech.
 //
@@ -315,6 +315,12 @@ and CPath =
         | FieldAccess (cp, _) 
         | ArrayAccess (cp, _) -> cp.IsAuxiliary
 
+    member this.PrependAddrOf =
+        match this with
+        | Loc blob -> AddrOf blob |> Loc
+        | FieldAccess (cp, f) -> FieldAccess(cp.PrependAddrOf, f)
+        | ArrayAccess (cp, i) -> ArrayAccess(cp.PrependAddrOf, i)
+
 
 type PrereqExpression =
     {
@@ -337,8 +343,7 @@ let getCExpr pe = pe.cExpr
 let getPrereq pe = pe.prereqStmts
 
 let isExprAuxiliary pe =
-    let expr = getCExpr pe
-    match expr with
+    match getCExpr pe with
     | Path p -> p.IsAuxiliary
     // values or complex expression cannot be the result of creating an auxiliary variable
     | Value _ 
@@ -608,30 +613,32 @@ and cpExpr tcc expr : PrereqExpression =
 
 and cpInputArg tcc expr : PrereqExpression = 
     // if expr is a structured literal, make a new name for it
-    cpExpr tcc expr // FIXME: dummy code
-    //TODO:
-    //let singleArgLocation = makeTmpForComplexConst tcc expr
-    //match singleArgLocation.typ with
-    //| ValueTypes (ValueTypes.StructType _) when isExprAuxiliary singleArgLocation ->
-    //    // if auxiliary struct, then prepend &
-    //    mkRenderedExpr
-    //    <| GetPrereq singleArgLocation
-    //    <| (txt "&" <^> parens (GetRenderedExpr singleArgLocation))
-    //| _ -> singleArgLocation
+    let singleArgLocation: PrereqExpression = makeTmpForComplexConst tcc expr
+    match expr.typ with
+    | ValueTypes (ValueTypes.StructType _) when isExprAuxiliary singleArgLocation ->
+        // if auxiliary struct, then prepend &
+        let cExpr = 
+            match getCExpr singleArgLocation with
+            | Path cPath -> cPath.PrependAddrOf |> Path
+            | x -> x // impossible due to isExprAuxiliary check above
+        mkPrereqExpr
+        <| getPrereq singleArgLocation
+        <| cExpr
+    | _ -> singleArgLocation
 
 and cpOutputArg tcc expr : PrereqExpression = 
     // unless array, prepend &
-    cpLexpr tcc expr // FIXME: dummy code
-    // TODO:
-    //let re = cpLexpr tcc expr
-    //match expr.typ with
-    //| ValueTypes (ValueTypes.ArrayType _) -> re
-    //| _ ->
-    //    let newTML = (AddrOf re.)
-    //    {
-    //        prereqStmts = re.prereqStmts
-    //        renderedTML = AddrOf re.renderedTML
-    //    }
+    let pe = cpLexpr tcc expr
+    match expr.typ with
+    | ValueTypes (ValueTypes.ArrayType _) -> pe
+    | _ ->
+        let cExpr = 
+            match getCExpr pe with
+            | Path cPath -> cPath.PrependAddrOf |> Path
+            | x -> x // impossible, a lhs cannot be a complex expression or just a value
+        mkPrereqExpr
+        <| getPrereq pe
+        <| cExpr
 
 and cpLexpr tcc expr : PrereqExpression =
     match expr.lhs with
@@ -649,94 +656,90 @@ and internal cpArrayDeclDoc name typ =
             cpType t <+> n, empty
     cpRecArrayDeclDoc name typ ||> (<^>)
 
-// TODO: old garbage?
 /// Given an expression that is a struct or array literal,
 /// or a name that stands for a literal (const variable),
 /// or a function call returning such data type,
 /// this function creates code that stores the literal value
 /// in a temporary variable and returns a name that can be 
 /// used as an argument for a function or activity.
-//let makeTmpForComplexConst tcc (expr: TypedRhs) : TMLorExpr =
-//    //let myPrint (lhs: LhsStructure) =
-//    //    let rec myPrintTml =
-//    //        function
-//    //        | Loc qname -> qname.ToString()
-//    //        | TypedMemLoc.FieldAccess (tml, ident) -> myPrintTml tml + "." + ident
-//    //        | TypedMemLoc.ArrayAccess (tml, idx) -> sprintf "%s[%s]" (myPrintTml tml) (idx.ToString())
+and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
+    //let myPrint (lhs: LhsStructure) =
+    //    let rec myPrintTml =
+    //        function
+    //        | Loc qname -> qname.ToString()
+    //        | TypedMemLoc.FieldAccess (tml, ident) -> myPrintTml tml + "." + ident
+    //        | TypedMemLoc.ArrayAccess (tml, idx) -> sprintf "%s[%s]" (myPrintTml tml) (idx.ToString())
 
-//    //    match lhs with
-//    //    | Wildcard -> txt "_"
-//    //    | LhsCur t -> t.ToDoc
-//    //    | LhsNext t -> txt "next" <+> t.ToDoc
+    //    match lhs with
+    //    | Wildcard -> txt "_"
+    //    | LhsCur t -> t.ToDoc
+    //    | LhsNext t -> txt "next" <+> t.ToDoc
 
-//    let cpMemSetDoc typ lhsDoc =
-//        txt "memset"
-//        <^> dpCommaSeparatedInParens
-//            [ lhsDoc
-//              txt "0"
-//              sizeofMacro typ]
-//        <^> semi
+    let cpMemSetDoc typ lhsDoc =
+        txt "memset"
+        <^> dpCommaSeparatedInParens
+            [ lhsDoc
+              txt "0"
+              sizeofMacro typ]
+        <^> semi
     
-//    let copyContents =
-//        let lhsName = mkIndexedAuxQNameFrom "tmpLiteral"
-//        let cname = cpName (Some Current) tcc lhsName
-//        match expr.typ with
-//        | ValueTypes (ValueTypes.StructType _) ->
-//            let tmpDecl = cpType expr.typ <+> cname <^> semi // <+> txt "=" <+> literal
-//            let init = cpMemSetDoc expr.typ (txt "&" <^> cname)
-//            let lhs = {lhs = LhsCur (Loc lhsName); typ = expr.typ; range = range0}
-//            let assignments = 
-//                normaliseAssign tcc (range0, lhs, expr)
-//                |> List.map (function 
-//                    | Stmt.Assign(_, lhs, rhs) -> 
-//                        let rightRE = cpExpr tcc rhs
-//                        let leftRE = cpLexpr tcc lhs
-//                        let assignment = leftRE.renderedExpr <+> txt "=" <+> rightRE.renderedExpr <^> semi
-//                        rightRE.prereqStmts @ leftRE.prereqStmts @ [assignment] |> dpBlock
-//                    | _ -> failwith "Must be an assignment here!") // not nice
-//            mkRenderedTML (tmpDecl :: init :: assignments) (Name cname)
-//            |> T
-//        | ValueTypes (ValueTypes.ArrayType _) ->
-//            let tmpDecl = cpArrayDeclDoc cname expr.typ <^> semi
-//            let init = cpMemSetDoc expr.typ cname
-//            let lhs = {lhs = LhsCur (Loc lhsName); typ = expr.typ; range = range0}
-//            let assignments = 
-//                normaliseAssign tcc (range0, lhs, expr)
-//                |> List.map (function 
-//                    | Stmt.Assign(_, lhs, rhs) ->
-//                        let rightRE = cpExpr tcc rhs
-//                        let leftRE = cpLexpr tcc lhs
-//                        let assignment = leftRE.renderedExpr <+> txt "=" <+> rightRE.renderedExpr <^> semi
-//                        rightRE.prereqStmts @ [assignment] |> dpBlock
-//                    | _ -> failwith "Must be an assignment here!") // not nice
-//            mkRenderedTML (tmpDecl :: init :: assignments) (Name cname) // the only difference to above
-//            |> T
-//        | _ -> failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
+    let copyContents =
+        let lhsName = mkIndexedAuxQNameFrom "tmpLiteral"
+        let lhsTyp = expr.typ
+        let tmpDecl = cpArrayDeclDoc (auxiliaryName lhsName) lhsTyp <^> semi
+        let init =
+            match expr.typ with
+            | ValueTypes (ValueTypes.StructType _) ->
+                //let cname = cpName (Some Current) tcc lhsName
+            
+                //let v = 
+                //    { 
+                //        VarDecl.pos = range0
+                //        name = lhsName
+                //        datatype = lhsTyp
+                //        mutability = Mutability.Variable
+                //        initValue = {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = expr.range} // that is garbage
+                //        annotation = Attribute.VarDecl.Empty
+                //        allReferences = HashSet() 
+                //    }
+                //TypeCheckContext.addDeclToLut tcc lhsName (Declarable.VarDecl v)
+                cpMemSetDoc expr.typ (txt "&" <^> auxiliaryName lhsName)
+            | ValueTypes (ValueTypes.ArrayType _) ->
+                cpMemSetDoc expr.typ (auxiliaryName lhsName)
+            | _ -> failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
+        let lhs = {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = expr.typ; range = range0}
+        let assignments = 
+            normaliseAssign tcc (range0, lhs, expr)
+            |> List.map (function 
+                | Stmt.Assign(_, lhs, rhs) -> 
+                    let rightRE = cpExpr tcc rhs
+                    let leftRE = cpLexpr tcc lhs
+                    let assignment = leftRE.Render <+> txt "=" <+> rightRE.Render <^> semi
+                    rightRE.prereqStmts @ leftRE.prereqStmts @ [assignment] |> dpBlock
+                | _ -> failwith "Must be an assignment here!") // not nice
+        mkPrereqExpr
+        <| (tmpDecl :: init :: assignments)
+        <| (TypedMemLoc.Loc lhsName |> cpTml Current tcc |> (fun x -> x.ToExpr.cExpr))
 
-//    let storeIntermediateValue whoToCall inputs outputs=
-//        let lhsName = mkIndexedAuxQNameFrom "tmpLiteral"
-//        let cname = cpName (Some Current) tcc lhsName
-//        let funCall = cpFunctionCall tcc whoToCall inputs outputs
-
-    
-//    match expr.typ with
-//    | ValueTypes (ValueTypes.StructType _)
-//    | ValueTypes (ValueTypes.ArrayType _) ->
-//        match expr.rhs with
-//        | StructConst _ 
-//        | ArrayConst _ ->
-//            copyContents
-//        | RhsCur tml when isConstVarDecl tcc tml ->        
-//            copyContents
-//        | FunCall (whoToCall,inputs,outputs) ->
-//            storeIntermediateValue whoToCall inputs outputs
-//        | _ ->
-//            // nothing to do for param/let/var names
-//            // other cases of expression cannot appear here
-//            E <| cpExpr tcc expr
-//    | _ ->
-//        // nothing to do for simple types
-//        E <| cpExpr tcc expr
+    match expr.typ with
+    | ValueTypes (ValueTypes.StructType _)
+    | ValueTypes (ValueTypes.ArrayType _) ->
+        match expr.rhs with
+        | StructConst _ 
+        | ArrayConst _ ->
+            copyContents
+        | RhsCur tml when isConstVarDecl tcc tml ->        
+            copyContents
+        //| FunCall (whoToCall,inputs,outputs) ->
+            // this case is handled inside cpExpr, it will automatically
+            // generate a tmp variable for storing a complex return value
+        | _ ->
+            // nothing to do for param/let/var names
+            // other cases of expression cannot appear here
+            cpExpr tcc expr
+    | _ ->
+        // nothing to do for simple types
+        cpExpr tcc expr
     
 
 
