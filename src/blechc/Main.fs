@@ -222,7 +222,7 @@ module Main =
 
                     // generated test app
                     let appFile = Path.Combine(cliContext.outDir, SearchPath.appNameToCFile cliContext.appName)
-                    let app = CodeGeneration.emitApp cliContext package compilations ep.name
+                    let app = CodeGeneration.emitApp translationContext package compilations ep.name
                     FileInfo(appFile).Directory.Create()
                     File.WriteAllText(appFile, app)
             

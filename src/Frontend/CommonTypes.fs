@@ -69,7 +69,7 @@ type QName =
 
     /// Creates a QName for program names: tick, init, printState
     static member CreateProgramName moduleName id =
-        QName.Create moduleName [] id (IdLabel.Auxiliary) // Program identifiers are always top-level and do not need a path
+        QName.Create moduleName [] id (IdLabel.Static) // Program identifiers are always top-level and do not need a path
          
     member qn.IsAuxiliary = 
         qn.label = Auxiliary

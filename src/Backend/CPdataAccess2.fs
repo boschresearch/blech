@@ -36,6 +36,22 @@ open Blech.Backend
 open Blech.Backend.Normalisation
 open System.Collections.Generic
 
+
+module AppName =
+
+    let predefinedNames =
+        [| "tick"; "init"; "printState" |]
+    let private idxTick = 0
+    let private idxInit = 1
+    let private idxPrint = 2
+
+    let private programName idx moduleName =
+        QName.CreateProgramName moduleName predefinedNames.[idx]
+
+    let tick = programName idxTick
+    let init = programName idxInit
+    let printState = programName idxPrint
+
 type TemporalQualification =
     | Current
     | Previous
@@ -49,10 +65,11 @@ let private cpTabsize = 4
 /// Produce an indented block of given sequence of statements (Docs)
 let internal cpIndent = indent cpTabsize
 
-let private BLC = "blc" // do not add trailing "_" this is done by assembleName
-let private AUX = BLC + "_blech_aux"
-let private PREV = BLC + "_blech_prev"
-let private CTX = BLC + "_blech_ctx"
+let BLC = "blc" // do not add trailing "_" this is done by assembleName
+let BLECH = BLC + "_blech"
+let AUX = BLECH + "_aux"
+let PREV = BLECH + "_prev"
+let CTX = BLECH + "_ctx"
 
 let private fromContext prefix =
     CTX + "->" + prefix
@@ -70,7 +87,10 @@ let private auxiliaryName name = assembleName AUX [] name.basicId
 let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
 let private globalName name = assembleName BLC (name.moduleName @ name.prefix) name.basicId
-
+let private programName name = assembleName BLECH name.moduleName name.basicId
+let private ctxName name = assembleName (fromContext BLC) [] name.basicId
+let private externalPrev name = assembleName (fromContext PREV) [] name.basicId
+let private internalPrev name = assembleName PREV [] name.basicId
 
 [<DefaultAugmentation(false)>] // default Is* is on its way https://github.com/fsharp/fslang-suggestions/issues/222
                                // for the moment we do this as in https://stackoverflow.com/a/23665277/2289899
@@ -83,6 +103,7 @@ type CName =
     | PrevExternal of QName
     | Auto of QName
     | CtxLocal of QName
+    | ProgramName of QName // this category currently represents names of tick, init, print functions
 
     member this.QName =
         match this with
@@ -92,32 +113,27 @@ type CName =
         | PrevInternal q
         | PrevExternal q
         | Auto q
-        | CtxLocal q -> q
+        | CtxLocal q 
+        | ProgramName q -> q
 
     member this.Render =
         match this with
         | Global q -> globalName q
         | ModuleLocal q -> moduleLocalName q
         | Auxiliary q -> auxiliaryName q
-        | PrevInternal q -> assembleName PREV [] q.basicId
-        | PrevExternal q ->
-            assembleName
-            <| fromContext PREV
-            <| []
-            <| q.basicId
+        | PrevInternal q -> internalPrev q
+        | PrevExternal q -> externalPrev q
         | Auto q -> autoName q
-        | CtxLocal q ->
-            assembleName
-            <| fromContext BLC
-            <| []
-            <| q.basicId
+        | CtxLocal q -> ctxName q
+        | ProgramName q -> programName q
 
     member this.IsAuxiliary =
         match this with
         | Auxiliary _ -> true
         | Global _ | ModuleLocal _
         | PrevInternal _ | PrevExternal _
-        | Auto _ | CtxLocal _ -> false
+        | Auto _ | CtxLocal _ 
+        | ProgramName _ -> false
 
 
 let private isInFunction tcc name =
@@ -156,9 +172,13 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
         | _,_ -> false
 
     if needsStaticName then
-        // decide here whether name is exported or not
-        // for now always generate full global name
-        Global name
+        if Array.contains name.basicId AppName.predefinedNames then
+            // special case we have a generated "program name" such as init
+            ProgramName name
+        else
+            // otherwise, decide here whether name is exported or not
+            // for now always generate full global name
+            Global name
     elif name.IsAuxiliary then
         // no prev on auxiliary variables
         assert timepointOpt.Equals (Some Current)
@@ -191,8 +211,13 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
             assert isInActivity tcc name
             CtxLocal name
 
+let renderCName tp tcc name = (cpName (Some tp) tcc name).Render
+
 /// Shorthand for ppName None tcc name
-let cpStaticName = cpName None TypeCheckContext.Empty           
+/// >| Render
+let cpStaticName = 
+    cpName None TypeCheckContext.Empty
+    >> (fun x -> x.Render)
 
 /// Translates a primitive Blech type or a type name to a C type and returns a Doc representation thereof
 let rec internal cpType typ =
@@ -223,7 +248,7 @@ let rec internal cpType typ =
         | FloatType.Float64 -> txt "blc_float64"
     | ValueTypes (ValueTypes.StructType (_, typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
-        txt "struct" <+> (cpStaticName typeName).Render
+        txt "struct" <+> (cpStaticName typeName)
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | Any
@@ -471,7 +496,7 @@ and cpExpr tcc expr : PrereqExpression =
     | FunCall (whoToCall, inputs, outputs) ->
         let reIns = inputs |> List.map (cpInputArg tcc)
         let reOuts = outputs |> List.map (cpOutputArg tcc)
-        let name = (cpStaticName whoToCall).Render
+        let name = (cpStaticName whoToCall)
         let retType =
             match tcc.nameToDecl.[whoToCall].TryGetReturnType with
             | Some t -> t
@@ -646,7 +671,7 @@ and cpLexpr tcc expr : PrereqExpression =
     | LhsCur tml -> cpTml Current tcc tml |> (fun x -> x.ToExpr)
     | LhsNext _ -> failwith "render next locations not implemented yet."
 
-and internal cpArrayDeclDoc name typ =
+and cpArrayDeclDoc name typ =
     let rec cpRecArrayDeclDoc n t =
         match t with
         | ValueTypes (ArrayType(size, elemTyp)) ->
@@ -663,18 +688,6 @@ and internal cpArrayDeclDoc name typ =
 /// in a temporary variable and returns a name that can be 
 /// used as an argument for a function or activity.
 and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
-    //let myPrint (lhs: LhsStructure) =
-    //    let rec myPrintTml =
-    //        function
-    //        | Loc qname -> qname.ToString()
-    //        | TypedMemLoc.FieldAccess (tml, ident) -> myPrintTml tml + "." + ident
-    //        | TypedMemLoc.ArrayAccess (tml, idx) -> sprintf "%s[%s]" (myPrintTml tml) (idx.ToString())
-
-    //    match lhs with
-    //    | Wildcard -> txt "_"
-    //    | LhsCur t -> t.ToDoc
-    //    | LhsNext t -> txt "next" <+> t.ToDoc
-
     let cpMemSetDoc typ lhsDoc =
         txt "memset"
         <^> dpCommaSeparatedInParens
@@ -751,6 +764,9 @@ type RenderedStmt =
         prereqStmts: Doc list
         renderedStmt: Doc
     }
+    member this.Render =
+        this.prereqStmts @ [this.renderedStmt]
+        |> dpBlock
 
 let mkRenderedStmt p r =
     { prereqStmts = p
@@ -815,8 +831,8 @@ let cpFunctionCall tcc whoToCall inputs outputs : RenderedStmt =
 /// outputs
 /// receiverVar - optional TypedLhs (r = run A...)
 /// termRetcodeVarName - QName of the variable that stores the termination information
-let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar isDummy termRetcodeVarName : RenderedStmt =
-    let renderedCalleeName = (cpStaticName whoToCall).Render
+let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVarName : RenderedStmt =
+    let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = inputs |> List.map (cpInputArg tcc)
     let renderedOutputs = outputs |> List.map (cpOutputArg tcc)
     let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedCalleeName
@@ -843,7 +859,39 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar isDummy termR
     let actCallStmt = (cpName (Some Current) tcc termRetcodeVarName).Render <+> txt "=" <+> actCall <^> semi
     mkRenderedStmt prereqStmts actCallStmt
 
-
+/// Sets non array typed prev variables to their types default
+/// TODO: make work with all types
+let cpAssignDefaultPrevInActivity ctx qname =
+    let tml = TypedMemLoc.Loc qname
+    let dty = getDatatypeFromTML ctx tml
+    let prevname = (cpName (Some Previous) ctx qname).Render
+    let {prereqStmts=prereq; cExpr=value} = cpExpr ctx {rhs = RhsCur tml; typ = dty; range = range0} //range0, since this does not exist in the Blech source code
+    prereq
+    @ [prevname <+> txt "=" <+> value.Render <^> semi]
+    |> dpBlock
            
-           
+let cpAssignPrevInActivity tcc qname =
+    let tml = TypedMemLoc.Loc qname
+    let dty = getDatatypeFromTML tcc tml
+    let prevname = (cpName (Some Previous) tcc qname).Render
+    let initvalue = (getValueFromName Current tcc qname).Render
+    
+    match dty with
+    | ValueTypes (ArrayType _) ->
+        let declare = cpArrayDeclDoc prevname dty <^> semi
+        let memcpy =
+            txt "memcpy"
+            <+> dpCommaSeparatedInParens
+                [ prevname
+                  initvalue
+                  sizeofMacro dty ]
+            <^> semi
+        declare <..> memcpy
+    | _ ->
+        cpType dty 
+        <+> prevname <+> txt "=" 
+        <+> initvalue <^> semi
         
+//TODO eliminate these
+let internal cpDeref o = txt "*" <^> o
+let internal cpRefto o = txt "&" <^> o

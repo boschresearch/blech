@@ -25,7 +25,7 @@ open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes
 open Blech.Frontend.PrettyPrint.DocPrint
 
-open CPdataAccess
+open CPdataAccess2
 open CPrinter
 
 
@@ -95,17 +95,6 @@ module Comment =
         cpGeneratedComment <| txt "the test main loop"
 
 
-module AppName =
-
-    let private programName id moduleName =
-        QName.CreateProgramName moduleName id
-
-    let tick = programName "tick"
-    let init = programName "init"
-    let printState = programName "printState"
-    
-    
-       
 /// Translates all sub programs of a module into a list of compilations
 let public translate ctx (pack: BlechModule) =
     // translate all subprograms in order
@@ -158,7 +147,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
                     failwith "This should never happen"            
             
             let macro = 
-                txt "#define" <+> ppStaticName ec.name <+> cexpr
+                txt "#define" <+> cpStaticName ec.name <+> cexpr
                 |> groupWith (txt " \\")
             
             cpOptDocComments ec.annotation.doc
@@ -171,9 +160,10 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
 
     let userParams =
         let renderParam (v: VarDecl) =
-            let prereqStmt, processedRhs = cpExprInFunction ctx v.initValue
-            assert (List.length prereqStmt = 0)
-            let decl = txt "static" <+> cpArrayDeclInActivity v.name v.datatype <+> txt "=" <+> processedRhs <^> semi
+            let {prereqStmts=prereqStmts; cExpr=cExpr} = cpExpr ctx.tcc v.initValue
+            let vname = (cpName (Some Current) ctx.tcc v.name).Render
+            assert (List.length prereqStmts = 0)
+            let decl = txt "static" <+> cpArrayDeclDoc vname v.datatype <+> txt "=" <+> cExpr.Render <^> semi
 
             cpOptDocComments v.annotation.doc
             |> dpOptLinePrefix
@@ -223,7 +213,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
     
     let directCCalls = 
         cCalls
-        |> Seq.map (fun fp -> cpDirectCCall fp)
+        |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
         |> dpToplevel
 
 
@@ -237,7 +227,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
 
     // tick function
     let mainCallback = 
-        ProgramGenerator.mainCallback ctx.cliContext.passPrimitiveByAddress 
+        ProgramGenerator.mainCallback ctx.tcc ctx.cliContext.passPrimitiveByAddress 
                                       (AppName.tick moduleName) 
                                       entryCompilation.name 
                                       entryCompilation
@@ -342,12 +332,12 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         let ifaceOf (fp: FunctionPrototype) =
             {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
         cWrappers
-        |> Seq.map (fun fp -> cpExternFunction fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
+        |> Seq.map (fun fp -> cpExternFunction ctx.tcc fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
         |> dpToplevel
 
     let directCCalls = // TODO: directCCalls must not be exported, check this, fjg. 20.02.19
         cCalls
-        |> Seq.map (fun fp -> cpDirectCCall fp)
+        |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
         |> dpBlock
 
 
@@ -411,8 +401,7 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
 
 /// Emit C code for main app as Doc
 /// compilations is required to find the entry point name
-//let cpApp ctx (compilations: Compilation list) entryPoint =
-let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPointName =
+let private cpApp ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPointName =
     // C header
     let cHeaders = txt "#include <stdio.h>"
 
@@ -426,7 +415,7 @@ let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleN
     // static variables
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPointName)
     
-    let staticVars = cpMainParametersAsStatics entryCompilation
+    let staticVars = cpMainParametersAsStatics ctx.tcc entryCompilation
 
     let mainLoop = 
         ProgramGenerator.appMainLoop ctx (AppName.init moduleName)
@@ -437,7 +426,7 @@ let private cpApp (ctx: Arguments.BlechCOptions) (moduleName: SearchPath.ModuleN
     // combine all into one Doc
     [ Comment.generatedCode
       Comment.cHeaders
-      (if ctx.trace then cHeaders else empty)
+      (if ctx.cliContext.trace then cHeaders else empty)
       Comment.blechHeader
       blechHeader
       Comment.blechCInclude

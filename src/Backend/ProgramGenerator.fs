@@ -31,7 +31,7 @@ open Blech.Frontend.TypeCheckContext
 
 open Blech.Backend
 
-open CPdataAccess
+open CPdataAccess2
 open CPrinter
 
 
@@ -43,22 +43,22 @@ let private cpMainInputParam scalarPassByPointer (input: ParamDecl) =
     txt "const"
     <+> match input.datatype with
         | ValueTypes (ArrayType _) ->
-            cpArrayDeclDoc (ppStaticName input.name) input.datatype
+            cpArrayDeclDoc (cpStaticName input.name) input.datatype
         | ValueTypes typ when typ.IsPrimitive ->
             cpType input.datatype
             <+> if scalarPassByPointer then 
-                    cpByPointer (ppStaticName input.name)
+                    cpByPointer (cpStaticName input.name)
                 else 
-                    ppStaticName input.name
+                    cpStaticName input.name
         | _ ->
-            cpType input.datatype <+> cpDeref (txt "const" <+> ppStaticName input.name)
+            cpType input.datatype <+> cpDeref (txt "const" <+> cpStaticName input.name)
 
 
 /// Outputs of the main functions 'tick' and 'init'. 
 let private cpMainOutputParam (output: ParamDecl) =
     match output.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDeclDoc (ppStaticName output.name) output.datatype
-    | _ -> cpType output.datatype <+> cpDeref (ppStaticName output.name)
+    | ValueTypes (ArrayType _) -> cpArrayDeclDoc (cpStaticName output.name) output.datatype
+    | _ -> cpType output.datatype <+> cpDeref (cpStaticName output.name)
         
 
 // translates the interface of the EntryPoint activity to C function interface for 'tick' and 'init'
@@ -75,37 +75,24 @@ let private cpMainIface scalarPassByPointer (iface: Compilation) =
 /// The following are specific functions to call the entry point activity from the tick function
 /// They are called nowhere else
 
-let private staticStateToArgument (p: ParamDecl) =
-    match p.datatype with
-    | ValueTypes BoolType | ValueTypes (IntType _) | ValueTypes (NatType _) | ValueTypes (BitsType _) | ValueTypes (FloatType _) 
-        when not p.isMutable ->
-        ppNameInGlobalCall p.name
-    | ValueTypes (ArrayType _) -> ppNameInGlobalCall p.name
-    | _ -> cpRefto <| ppNameInGlobalCall p.name
-
-
+let private paramAsInput (p: ParamDecl) = 
+    { rhs = RhsCur (TypedMemLoc.Loc p.name)
+      typ = p.datatype
+      range = p.pos }
+let private paramAsOutput (p: ParamDecl) = 
+    { lhs = LhsCur (TypedMemLoc.Loc p.name)
+      typ = p.datatype
+      range = p.pos }
 /// Call to entry point activity
-let private cpGlobalCall primitivePassByAddress (iface: Compilation) =
-    let inputParamToArgument (p: ParamDecl) = 
-        match p.datatype with
-        | ValueTypes vt when vt.IsPrimitive ->
-            if primitivePassByAddress then
-                cpDeref (ppNameInGlobalCall p.name)
-            else
-                ppNameInGlobalCall p.name
-        | ValueTypes _ ->
-            ppNameInGlobalCall p.name
-        | _ ->
-            cpRefto <| ppNameInGlobalCall p.name
-
-    let outputParamToArgument (p: ParamDecl) = 
-            ppNameInGlobalCall p.name
-
+let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
     [
-        iface.inputs |> List.map inputParamToArgument
-        iface.outputs |> List.map outputParamToArgument
+        if primitivePassByAddress then
+            iface.inputs |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
+        else
+            iface.inputs |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
+        iface.outputs |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
         iface.actctx |> Option.toList |> List.map (fun _ -> txt "&blc_blech_ctx")
-        iface.retvar |> Option.toList |> List.map staticStateToArgument
+        iface.retvar |> Option.toList |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
     ]
     |> List.concat
     |> dpCommaSeparatedInParens
@@ -114,27 +101,40 @@ let private cpGlobalCall primitivePassByAddress (iface: Compilation) =
 /// Call parameters for the tick and the printState functions
 /// To be used from the test app only
 
-let internal cpAppCall (entryPointIface: Compilation) =
-    [
-        entryPointIface.inputs |> List.map staticStateToArgument
-        entryPointIface.outputs |> List.map staticStateToArgument
-    ]
-    |> List.concat
-    |> dpCommaSeparatedInParens
+let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
+    let renderedCalleeName = (cpStaticName whoToCall)
+    let renderedInputs = entryPointIface.inputs |> List.map (paramAsInput >> cpInputArg tcc)
+    let renderedOutputs = entryPointIface.outputs |> List.map (paramAsOutput >> cpOutputArg tcc)
+    let actCall = 
+        [
+            renderedInputs |> List.map (getCExpr >> (fun x -> x.Render))
+            renderedOutputs |> List.map (getCExpr >> (fun x -> x.Render))
+        ]
+        |> List.concat
+        |> dpCommaSeparatedInParens
+        |> (<^>) renderedCalleeName
+    let prereqStmts =
+        [
+            renderedInputs |> List.collect getPrereq
+            renderedOutputs |> List.collect getPrereq
+        ]
+        |> List.concat
+    prereqStmts @ [actCall <^> semi]
+    |> dpBlock
 
 
 /// Generate a C function "void tick(...)" which calls
 /// enters the entry point activity in every tick.
-let internal mainCallback primitivePassByAddress tick entryName entryIface = 
+let internal mainCallback tcc primitivePassByAddress tick entryName entryIface = 
     // Generates a c function call to the  EntryPoint activity
     let entryPointCall =
-        ppName entryName
-        <^> cpGlobalCall primitivePassByAddress entryIface 
+        cpStaticName entryName
+        <^> cpGlobalCall tcc primitivePassByAddress entryIface 
         <^> semi
         |> cpIndent
 
     txt "void"
-    <+> cpProgramName tick
+    <+> cpStaticName tick
     <+> cpMainIface primitivePassByAddress entryIface 
     <+> txt "{"
     <.> entryPointCall
@@ -143,7 +143,7 @@ let internal mainCallback primitivePassByAddress tick entryName entryIface =
 /// Generate a C function "void init(void)" which initialises program counters
 let internal mainInit ctx init (entryCompilation: Compilation) =    
     txt "void" 
-    <+> cpProgramName init 
+    <+> cpStaticName init 
     <+> txt "(void)"
     <+> txt "{"
     <.> ActivityTranslator.mainPCinit ctx entryCompilation
@@ -152,16 +152,16 @@ let internal mainInit ctx init (entryCompilation: Compilation) =
 
 let internal printState ctx printState (entryCompilation: Compilation) = 
     let showPcs =
-        let rec getAllPcs pref ctx =
-            ctx.subcontexts
-            |> Seq.collect (fun kvp -> getAllPcs ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> ppName |> render None)) kvp.Value)
-            |> Seq.append (seq{pref, ctx.pcs})
+        let rec getAllPcs pref actctx =
+            actctx.subcontexts
+            |> Seq.collect (fun kvp -> getAllPcs ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
+            |> Seq.append (seq{pref, actctx.pcs})
         
         getAllPcs "" entryCompilation.GetActCtx
         |> Seq.map (fun (pref,tree) -> pref, PCtree.asList tree)
         |> Seq.collect (fun (pref,pc) -> pc |> List.map(fun p -> pref,p))
         |> Seq.toList
-        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + translateQnameToGeneratedName pc.name)
+        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + ((Auxiliary pc.name).Render |> render None))
         |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", "blc_blech_ctx." + pc)
         |> List.unzip
         |> (fun (ppList, argList) -> String.concat @",\n\t\t\t\t" ppList, String.concat ", " argList)
@@ -195,7 +195,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             match dty with
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
-                sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx n |> render None))
+                sprintf """printf("%s", %s);""" formStr (prefStr + ((cpTml Current ctx.tcc n).Render |> render None))
                 //sprintf """printf("%s", %s);""" formStr (cpStateElement ctx n |> render None)
             | _ -> failwith "printPrimitive called on non-primitive."
 
@@ -252,13 +252,13 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             + printAnything isLocal level prefStr n    
                     
         let printParamDecl isLocal prefStr (p: ParamDecl) = 
-            printVar isLocal 4 prefStr (Loc p.name) p.pos
+            printVar isLocal 4 prefStr (TypedMemLoc.Loc p.name) p.pos
 
         let vars = 
-            let rec getAllLocals pref ctx =
-                ctx.subcontexts
-                |> Seq.collect (fun kvp -> getAllLocals ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> ppName |> render None)) kvp.Value)
-                |> Seq.append (seq{pref, ctx.locals})
+            let rec getAllLocals pref actctx =
+                actctx.subcontexts
+                |> Seq.collect (fun kvp -> getAllLocals ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
+                |> Seq.append (seq{pref, actctx.locals})
             
             let allLocals =
                 getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
@@ -285,32 +285,27 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             |> txt
 
     txt "void" 
-    <+> cpProgramName printState
+    <+> cpStaticName printState
     <+> cpMainIface false entryCompilation
     <+> txt "{"
     <.> (cpIndent (dpBlock [showPcs; showVars]))
     <.> txt "}"
 
-
-let appMainLoop (ctx: Arguments.BlechCOptions) init tick printState entryCompilation =
+let appMainLoop ctx init tick printState entryCompilation =
     let initCall = 
-        cpProgramName init
+        cpStaticName init
         <^> txt "()"
         <^> semi
 
     let tickCall = 
-        cpProgramName tick
-        <^> cpAppCall entryCompilation
-        <^> semi
+        cpAppCall ctx.tcc tick entryCompilation
         |> cpIndent
 
     let printStateCall =
-        cpProgramName printState
-        <^> cpAppCall entryCompilation
-        <^> semi
+        cpAppCall ctx.tcc printState entryCompilation
         |> cpIndent
 
-    if ctx.trace then
+    if ctx.cliContext.trace then
         txt """int main(void) {
     int running = 0; /* number of iterations */
     int bound = 60;
@@ -360,6 +355,6 @@ let appMainLoop (ctx: Arguments.BlechCOptions) init tick printState entryCompila
 
 let programFunctionProtoype primitivePassByAddress name iface returns =
     cpType returns
-    <+> cpProgramName name
+    <+> cpStaticName name
     <+> cpMainIface primitivePassByAddress iface
     <^> semi
