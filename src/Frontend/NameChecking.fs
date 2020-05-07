@@ -300,6 +300,24 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         |> Option.fold checkExpr <| vd.initialiser
         |> addDecl <| vd <| IdLabel.Static// added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
 
+    let checkLocation ctx (lhs: AST.Receiver) =
+        match lhs with
+        | AST.Location (Loc l) -> 
+            checkDynamicAccessPath ctx l
+        | AST.FreshLocation vd ->
+            Option.fold checkDataType ctx vd.datatype
+            |> addDecl <| vd <| IdLabel.Dynamic 
+        | _ ->
+            ctx
+
+    //let checkFreshLocation ctx (lhs: AST.LhsInAssignment) =
+    //    match lhs with
+    //    | AST.FreshLoc vd ->
+    //        Option.fold checkDataType ctx vd.datatype
+    //        |> addDecl <| vd <| IdLabel.Dynamic 
+    //    | _ ->
+    //        ctx
+
 
     let checkCondition ctx (cond: AST.Condition) =
         match cond with
@@ -323,7 +341,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             match lhs with
             | AST.Wildcard _ -> ctx
             | AST.Loc l -> checkDynamicAccessPath ctx l
-            | AST.EventLoc l -> checkDynamicAccessPath ctx l
+            //| AST.FreshLoc _ -> failwith "This should never happen"
             |> checkExpr <| rhs
 
         | Assert (_, conds, msg) ->
@@ -395,25 +413,22 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> List.fold checkStatement <| body
             |> exitSubScope                         // scope closed at 'end'
 
-        | ActivityCall (_, optLhs, ap, inputs, outputs) ->
-            match optLhs with
-            | Some (AST.Loc l)
-            | Some (AST.EventLoc l) ->
-                checkDynamicAccessPath ctx l
-            | Some (AST.Wildcard _) 
-            | None 
-                -> ctx
-            |> checkCode <| ap
+        | ActivityCall (_, optReceiver, ap, inputs, outputs) -> 
+            // fresh location added to scope last, 'run let x = Activity(x)' should be wrong
+            checkCode ctx ap
             |> List.fold checkExpr <| inputs
             |> List.fold checkDynamicAccessPath <| outputs
+            |> Option.fold checkLocation <| optReceiver 
 
         | FunctionCall (_, fp, inputs, outputs) ->
             checkCode ctx fp
             |> List.fold checkExpr <| inputs
             |> List.fold checkDynamicAccessPath <| outputs
 
-        | Emit (_, pname) ->
-            checkDynamicAccessPath ctx pname
+        | Emit (_, receiver, optExpr) ->
+            // fresh location added to scope last, 'emit let x = x + 1' should be wrong
+            Option.fold checkExpr ctx optExpr 
+            |> checkLocation <| receiver
 
         | Return (_, expr) ->
             Option.fold checkExpr ctx expr 

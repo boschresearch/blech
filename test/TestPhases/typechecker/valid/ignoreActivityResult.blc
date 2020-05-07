@@ -6,5 +6,5 @@ activity calc() returns int64
 end
 
 activity main ()()
-    _ = run calc()
+    run _ = calc()
 end

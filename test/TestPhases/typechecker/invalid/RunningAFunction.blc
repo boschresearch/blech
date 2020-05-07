@@ -6,5 +6,5 @@ end
 
 activity main ()()
     var x: float64
-    x = run calc()
+    run x = calc()
 end

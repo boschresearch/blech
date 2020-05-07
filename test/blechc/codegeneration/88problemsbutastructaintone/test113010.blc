@@ -15,7 +15,7 @@ end
 
 activity A(x: S)()
     var r: bool
-    r = run B(x.i) // input inarg simple fieldaccess cur
+    run r =  B(x.i) // input inarg simple fieldaccess cur
     await true
 end
 

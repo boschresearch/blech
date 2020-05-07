@@ -16,7 +16,7 @@ end
 activity A(x: float64)()
     var r: bool
     await true
-    r = run B(x > 0.0) // input expression
+    run r = B(x > 0.0) // input expression
     await true
 end
 

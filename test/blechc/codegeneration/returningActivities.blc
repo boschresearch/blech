@@ -7,5 +7,5 @@ end
 @[EntryPoint]
 activity A()()
     var x: int32
-    x = run B()()
+    run x = B()()
 end

@@ -7,6 +7,6 @@ end
 activity start ()()
     
     let myS: int8 = 0
-    myS = run rrr(false)
+    run myS = rrr(false)
 
 end

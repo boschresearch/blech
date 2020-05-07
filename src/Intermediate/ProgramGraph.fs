@@ -320,7 +320,13 @@ module ProgramGraph =
         pg
 
     /// Generate a program graph for an activity call        
-    let private createActCall context line thread (pos, name, retvar, inputs, outputs) termVar =
+    let private createActCall context line thread (pos, name, receiver, inputs, outputs) termVar =
+        let retvar = 
+            match receiver with
+            | Some (UsedLoc tlhs) -> Some tlhs
+            | Some (FreshLoc _) -> failwith "currently no causality analysis and code generation for FreshLoc" 
+            | None -> None
+
         let pgAwait = createAwait context line thread "ticker" {rhs = BoolConst true; typ = ValueTypes BoolType; range = line}
 
         let pg = createEmpty line thread (CallInit (pos, name, retvar, inputs, outputs, termVar))

@@ -332,12 +332,33 @@ and ParamDecl =  // TODO: add annotations, fjg 21.03.19
     }
 
     member this.ToDoc =
-        if this.isMutable then txt "var" else txt "let"
-        <+> txt (this.name.ToString())
+        // if this.isMutable then txt "var" else txt "let" <-- this was outdated
+        // <+> 
+        txt (this.name.ToString())
         <^> txt ":" <+> this.datatype.ToDoc
 
     override this.ToString () = render None <| this.ToDoc 
 
+/// A location declaration occurs inside a statement or a match condition.
+/// It introduces a local variable.
+/// It is either mutable 'let' or immutable 'var'.
+//and LocationDecl = 
+//    {
+//        pos: range
+//        name: QName
+//        datatype: Types
+//        isMutable: bool
+//        // no init value for locations 
+//        // no annotations for locations
+//        allReferences: HashSet<range>
+//    }
+
+//    member this.ToDoc =
+//        if this.isMutable then txt "var" else txt "let"
+//        <+> txt (this.name.ToString())
+//        <^> txt ":" <+> this.datatype.ToDoc
+
+//    override this.ToString () = render None <| this.ToDoc 
 
 //=============================================================================   
 // Code capsules 
@@ -518,7 +539,7 @@ and TypedMemLoc =
 /// left hand side expressions, must represent a memory location that is written to
 and LhsStructure =
     // discard the assigned rhs value
-    | Wildcard               
+    | Wildcard 
     // locations
     | LhsCur of TypedMemLoc  
     | LhsNext of TypedMemLoc
@@ -739,6 +760,32 @@ and TypedLhs =
 
 
 //=============================================================================
+// Receiver: Adds locations declarations to run and emit statements on top of TypedLhs
+// Condition: Adds matching and condition list on top of TypedRhs // to be defined
+//=============================================================================
+
+
+and Receiver =
+    | UsedLoc of TypedLhs
+    | FreshLoc of VarDecl
+
+    member this.ToDoc =
+       match this with
+       | UsedLoc tlhs -> tlhs.lhs.ToDoc
+       | FreshLoc ldecl -> ldecl.ToDoc
+    override this.ToString() = render None <| this.ToDoc
+    member this.Range = 
+        match this with
+        | UsedLoc tlhs -> tlhs.Range
+        | FreshLoc ldecl -> ldecl.pos
+    member this.Typ =
+        match this with
+        | UsedLoc tlhs -> tlhs.typ
+        | FreshLoc vdecl -> vdecl.datatype
+
+
+
+//=============================================================================
 // Statements 
 //=============================================================================
 
@@ -763,8 +810,9 @@ and Stmt =
     // scoping
     | StmtSequence of Stmt list // DO block, ...for scoping reasons
     // calling
-    | ActivityCall of range * QName * TypedLhs option * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
+    | ActivityCall of range * QName * Receiver option * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
     | FunctionCall of range * QName * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
+    // | Emit of range * Receiver * TypedRhs option // line, event, payload
     | Return of range * TypedRhs option // line, expressions to return
     
     member this.ToDoc =

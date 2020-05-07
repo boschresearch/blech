@@ -129,7 +129,7 @@ type TyCheckError =
     | ArgTypeMismatchL of range * ParamDecl * TypedLhs
     | MustReturnFirstClassType of range * Identifier
     | NonFirstClassReturnStmt of range
-    | ValueMustBeOfValueType of TypedLhs
+    | ValueMustBeOfValueType of Receiver
     | ExpectedBoolConds of TypedRhs * TypedRhs
     | MustBeNumeric of TypedRhs * TypedRhs
     | SameTypeRequired of TypedRhs * TypedRhs

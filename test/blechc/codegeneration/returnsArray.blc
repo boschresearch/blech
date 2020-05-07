@@ -28,7 +28,7 @@ activity start ()()
     
     var myS: [LEN]Foo
     var asdf: [LEN]Foo
-    myS = run rrr(false)(asdf)
+    run myS = rrr(false)(asdf)
 
-    _ = run rrr(true)(asdf)
+    run _ = rrr(true)(asdf)
 end
