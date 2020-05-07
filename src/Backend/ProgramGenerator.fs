@@ -195,7 +195,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             match dty with
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
-                sprintf """printf("%s", %s);""" formStr (prefStr + ((cpTml Current ctx.tcc n).Render |> render None))
+                sprintf """printf("%s", %s);""" formStr (prefStr + BLC + "_" + n.ToBasicString())
             | _ -> failwith "printPrimitive called on non-primitive."
 
         let rec printArray isLocal level prefStr (n: TypedMemLoc) =
@@ -260,7 +260,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
                 |> Seq.append (seq{pref, actctx.locals})
             
             let allLocals =
-                getAllLocals "" entryCompilation.GetActCtx
+                getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
                 |> Seq.collect (fun (pref,locals) -> locals |> List.map(fun p -> pref,p))
                 |> Seq.toList
                 |> List.map (fun (pref,local) -> (if pref.Equals "" then "" else pref + "."), local)
