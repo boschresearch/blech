@@ -261,7 +261,17 @@ let rec internal sizeofMacro = function
     size |> string |> txt <+> txt "*" <+> sizeofMacro (ValueTypes elemTyp)
 | x ->
     txt "sizeof" <^> parens (cpType x)
-    
+
+
+let private cpMemSetDoc typ lhsDoc =
+    txt "memset"
+    <^> dpCommaSeparatedInParens
+        [ lhsDoc
+          txt "0"
+          sizeofMacro typ]
+    <^> semi
+
+   
 type CBlob =
     | Name of CName
     | AddrOf of CBlob
@@ -270,8 +280,8 @@ type CBlob =
     member this.Render =
         match this with
         | Name d -> d.Render
-        | AddrOf cap -> txt "&(" <^> cap.Render <^> txt ")"
-        | ValueOf cap -> txt "*(" <^> cap.Render <^> txt ")"
+        | AddrOf cap -> txt "(&" <^> cap.Render <^> txt ")"
+        | ValueOf cap -> txt "(*" <^> cap.Render <^> txt ")"
 
     member this.Simplify =
         match this with
@@ -290,8 +300,6 @@ type CBlob =
         | ValueOf c -> c.IsAuxiliary
 
 
-//let cpCAccessPath (cap: CAccessPath) = cap.ToDoc
-
 let getValueFromName timepoint tcc name : CBlob =
     let typeAndIsOutput =
         match tcc.nameToDecl.TryGetValue name with
@@ -299,13 +307,11 @@ let getValueFromName timepoint tcc name : CBlob =
         | _ -> None, false
     let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
-    | Some typ, true ->
-        if typ.IsPrimitive then
-            // primitive typed, output parameter
-            ValueOf (Name cName)
-        // TODO: elif struct type then also *<name>?
-        else
-            Name cName
+    | Some(ValueTypes (ValueTypes.StructType _)),_ ->
+        ValueOf (Name cName)
+    | Some typ, true when typ.IsPrimitive ->
+        // primitive typed, output parameter
+        ValueOf (Name cName)
     | _ ->
         Name cName
 
@@ -388,6 +394,7 @@ type PrereqPath =
 let mkCPath p c =
     { prereqStmts = p
       path = c }
+
 
 let rec cpTml timepoint tcc (tml: TypedMemLoc) : PrereqPath =
     match tml with
@@ -604,7 +611,7 @@ and cpExpr tcc expr : PrereqExpression =
     | Les (s1, s2) -> binExpr tcc s1 s2 "<"
     | Leq (s1, s2) -> binExpr tcc s1 s2 "<="
     | Equ (s1, s2) ->
-        assert (s1.typ = s2.typ)
+        //assert (s1.typ = s2.typ) //fails for "x == 42" feature/bug?
         match s1.typ with //do not care about s2, since type checker ensures it is the same
         | ValueTypes BoolType
         | ValueTypes (IntType _)
@@ -640,7 +647,7 @@ and cpInputArg tcc expr : PrereqExpression =
     // if expr is a structured literal, make a new name for it
     let singleArgLocation: PrereqExpression = makeTmpForComplexConst tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.StructType _) when isExprAuxiliary singleArgLocation ->
+    | ValueTypes (ValueTypes.StructType _) -> //when isExprAuxiliary singleArgLocation ->
         // if auxiliary struct, then prepend &
         let cExpr = 
             match getCExpr singleArgLocation with
@@ -688,14 +695,6 @@ and cpArrayDeclDoc name typ =
 /// in a temporary variable and returns a name that can be 
 /// used as an argument for a function or activity.
 and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
-    let cpMemSetDoc typ lhsDoc =
-        txt "memset"
-        <^> dpCommaSeparatedInParens
-            [ lhsDoc
-              txt "0"
-              sizeofMacro typ]
-        <^> semi
-    
     let copyContents =
         let lhsName = mkIndexedAuxQNameFrom "tmpLiteral"
         let lhsTyp = expr.typ
@@ -719,7 +718,8 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
                 cpMemSetDoc expr.typ (txt "&" <^> auxiliaryName lhsName)
             | ValueTypes (ValueTypes.ArrayType _) ->
                 cpMemSetDoc expr.typ (auxiliaryName lhsName)
-            | _ -> failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
+            | _ ->
+                empty //failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
         let lhs = {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = expr.typ; range = range0}
         let assignments = 
             normaliseAssign tcc (range0, lhs, expr)
@@ -759,26 +759,31 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
 //=============================================================================
 // Printing statements
 //=============================================================================
-type RenderedStmt =
-    {
-        prereqStmts: Doc list
-        renderedStmt: Doc
-    }
-    member this.Render =
-        this.prereqStmts @ [this.renderedStmt]
-        |> dpBlock
+//type RenderedStmt =
+//    {
+//        prereqStmts: Doc list
+//        renderedStmt: Doc
+//    }
+//    member this.Render =
+//        this.prereqStmts @ [this.renderedStmt]
+//        |> dpBlock
+
+let nullify tcc lhs =
+    // ensure we get a pointer to the data, means no * for structs
+    let lhsDoc = (cpOutputArg tcc lhs).Render
+    cpMemSetDoc lhs.typ lhsDoc
 
 let mkRenderedStmt p r =
-    { prereqStmts = p
-      renderedStmt = r }
+    p @ [r]
+    |> dpBlock
 
-let RenderedStmtFromExpr (re: PrereqExpression) =
-    mkRenderedStmt
-    <| re.prereqStmts
-    <| re.cExpr.Render
+//let RenderedStmtFromExpr (re: PrereqExpression) =
+//    mkRenderedStmt
+//    <| re.prereqStmts
+//    <| (re.cExpr.Render <^> semi)
 
 
-let cpAssign tcc left right : RenderedStmt =
+let rec cpAssign tcc left right =
     let leftRE = cpLexpr tcc left
     let rightRE = cpExpr tcc right
     let directAssigment = 
@@ -798,9 +803,20 @@ let cpAssign tcc left right : RenderedStmt =
         mkRenderedStmt
         <| leftRE.prereqStmts @ rightRE.prereqStmts
         <| memcpy
-    | ValueTypes (ValueTypes.StructType _) ->
-        // assign structs
-        directAssigment 
+    | ValueTypes (ValueTypes.StructType _) -> // assign structs
+        let norm =
+            normaliseAssign tcc (left.Range, left, right)
+            |> List.map (function 
+                | Stmt.Assign(_, lhs, rhs) -> cpAssign tcc lhs rhs
+                | _ -> failwith "Must be an assignment here!") // not nice
+        
+        match right.rhs with
+        | StructConst _
+        | ArrayConst _ -> //when isLiteral right ->
+            let reinit = nullify tcc left
+            reinit :: norm |> dpBlock
+        | _ -> // x = y needs no rewriting, assign directly
+            directAssigment 
     | ValueTypes Void 
     | ValueTypes BoolType 
     | ValueTypes (IntType _)
@@ -817,10 +833,13 @@ let cpAssign tcc left right : RenderedStmt =
     | AnyFloat -> failwith "Any types must have been eliminated by the type checker. This is a bug."
 
 
-let cpFunctionCall tcc whoToCall inputs outputs : RenderedStmt =
-    {rhs = FunCall (whoToCall, inputs, outputs); typ = ValueTypes Void; range = range0}
-    |> cpExpr tcc
-    |> RenderedStmtFromExpr
+let cpFunctionCall tcc whoToCall inputs outputs =
+    let pe =
+        {rhs = FunCall (whoToCall, inputs, outputs); typ = ValueTypes Void; range = range0}
+        |> cpExpr tcc
+    mkRenderedStmt
+    <| pe.prereqStmts
+    <| (pe.cExpr.Render <^> semi)
 
 
 /// Create a Doc for an activity call
@@ -831,7 +850,7 @@ let cpFunctionCall tcc whoToCall inputs outputs : RenderedStmt =
 /// outputs
 /// receiverVar - optional TypedLhs (r = run A...)
 /// termRetcodeVarName - QName of the variable that stores the termination information
-let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVarName : RenderedStmt =
+let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVarName =
     let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = inputs |> List.map (cpInputArg tcc)
     let renderedOutputs = outputs |> List.map (cpOutputArg tcc)

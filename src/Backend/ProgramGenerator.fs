@@ -43,22 +43,22 @@ let private cpMainInputParam scalarPassByPointer (input: ParamDecl) =
     txt "const"
     <+> match input.datatype with
         | ValueTypes (ArrayType _) ->
-            cpArrayDeclDoc (cpStaticName input.name) input.datatype
+            cpArrayDeclDoc (Global input.name).Render input.datatype
         | ValueTypes typ when typ.IsPrimitive ->
             cpType input.datatype
             <+> if scalarPassByPointer then 
-                    cpByPointer (cpStaticName input.name)
+                    cpByPointer (Global input.name).Render
                 else 
-                    cpStaticName input.name
+                    (Global input.name).Render
         | _ ->
-            cpType input.datatype <+> cpDeref (txt "const" <+> cpStaticName input.name)
+            cpType input.datatype <+> cpDeref (txt "const" <+> (Global input.name).Render)
 
 
 /// Outputs of the main functions 'tick' and 'init'. 
 let private cpMainOutputParam (output: ParamDecl) =
     match output.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDeclDoc (cpStaticName output.name) output.datatype
-    | _ -> cpType output.datatype <+> cpDeref (cpStaticName output.name)
+    | ValueTypes (ArrayType _) -> cpArrayDeclDoc (Global output.name).Render output.datatype
+    | _ -> cpType output.datatype <+> cpDeref (Global output.name).Render
         
 
 // translates the interface of the EntryPoint activity to C function interface for 'tick' and 'init'
@@ -161,7 +161,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
         |> Seq.map (fun (pref,tree) -> pref, PCtree.asList tree)
         |> Seq.collect (fun (pref,pc) -> pc |> List.map(fun p -> pref,p))
         |> Seq.toList
-        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + ((Auxiliary pc.name).Render |> render None))
+        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + pc.name.basicId)
         |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", "blc_blech_ctx." + pc)
         |> List.unzip
         |> (fun (ppList, argList) -> String.concat @",\n\t\t\t\t" ppList, String.concat ", " argList)
@@ -196,7 +196,6 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
                 sprintf """printf("%s", %s);""" formStr (prefStr + ((cpTml Current ctx.tcc n).Render |> render None))
-                //sprintf """printf("%s", %s);""" formStr (cpStateElement ctx n |> render None)
             | _ -> failwith "printPrimitive called on non-primitive."
 
         let rec printArray isLocal level prefStr (n: TypedMemLoc) =
@@ -261,7 +260,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
                 |> Seq.append (seq{pref, actctx.locals})
             
             let allLocals =
-                getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
+                getAllLocals "" entryCompilation.GetActCtx
                 |> Seq.collect (fun (pref,locals) -> locals |> List.map(fun p -> pref,p))
                 |> Seq.toList
                 |> List.map (fun (pref,local) -> (if pref.Equals "" then "" else pref + "."), local)
@@ -279,6 +278,10 @@ let internal printState ctx printState (entryCompilation: Compilation) =
         | [] ->
             txt """printf ("\t\t\t\"vars\": {}\n");"""
         | vs ->
+            // the generated variable access will -> into the context but here the context is give as a value directly
+            // so we rewrite all -> into .
+            // yes this is a temprorary hack
+            let vs = vs |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
             """printf("\t\t\t\"vars\": {\n");"""
             + String.concat "\n\tprintf(\",\\n\");\n\t" vs
             + """printf("\n\t\t\t}\n");"""

@@ -54,40 +54,48 @@ and private translateFunctionStatement ctx curComp stmt =
             // add v to local variables. Unlike activities in functions we do not expose local
             // variables in the interface but nonetheless they are needed to distinguish between
             // local and output variable access which for primitive types is direct or derefenrecing.
-            //curComp := Compilation.addLocal !curComp {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = v.mutability.Equals Mutability.Variable; allReferences = HashSet()}
-            let norm =
-                normaliseVarDecl ctx.tcc v
-                |> List.map (function 
-                    | Stmt.Assign(_, lhs, rhs) -> (cpAssign ctx.tcc lhs rhs).Render
-                        //match lhs.typ with
-                        //| ValueTypes (ArrayType _) ->
-                        //    cpMemCpyArr true ctx lhs.lhs rhs
-                        //| _ ->
-                        //    cpAssign ctx.tcc lhs rhs
-                    | _ -> failwith "Must be an assignment here!") // not nice
-            match v.datatype with
-            | ValueTypes (ValueTypes.StructType _) 
-            | ValueTypes (ValueTypes.ArrayType _) ->
-                let vname = (cpName (Some Current) ctx.tcc v.name).Render
-                let init = cpArrayDeclDoc vname v.datatype <^> semi
-                // re-initialise the whole blob and then set the given fields
-                let reinit =
-                    txt "memset"
-                    <^> dpCommaSeparatedInParens
-                        [ vname
-                          txt "0"
-                          sizeofMacro v.datatype]
-                    <^> semi
-                init :: reinit :: norm |> vsep
-            | _ ->
-                let {prereqStmts=prereqStmts; cExpr=cExpr} = cpExpr ctx.tcc v.initValue
-                let vname = (cpName (Some Current) ctx.tcc v.name).Render
-                let init = cpArrayDeclDoc vname v.datatype <+> txt "=" <+> cExpr.Render <^> semi
-                prereqStmts @ [init] |> vsep
+            let vname = (cpName (Some Current) ctx.tcc v.name).Render
+            let init = cpArrayDeclDoc vname v.datatype <^> semi
+            let lhs =
+                { lhs = LhsCur(TypedMemLoc.Loc v.name)
+                  typ = v.datatype
+                  range = v.pos }
+            [ init
+              cpAssign ctx.tcc lhs v.initValue ]
+            |> dpBlock
+            //let norm =
+            //    normaliseVarDecl ctx.tcc v
+            //    |> List.map (function 
+            //        | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+            //            //match lhs.typ with
+            //            //| ValueTypes (ArrayType _) ->
+            //            //    cpMemCpyArr true ctx lhs.lhs rhs
+            //            //| _ ->
+            //            //    cpAssign ctx.tcc lhs rhs
+            //        | _ -> failwith "Must be an assignment here!") // not nice
+            //match v.datatype with
+            //| ValueTypes (ValueTypes.StructType _) 
+            //| ValueTypes (ValueTypes.ArrayType _) ->
+            //    let vname = (cpName (Some Current) ctx.tcc v.name).Render
+            //    let init = cpArrayDeclDoc vname v.datatype <^> semi
+            //    // re-initialise the whole blob and then set the given fields
+            //    let reinit =
+            //        txt "memset"
+            //        <^> dpCommaSeparatedInParens
+            //            [ vname
+            //              txt "0"
+            //              sizeofMacro v.datatype]
+            //        <^> semi
+            //    init :: reinit :: norm |> vsep
+            //| _ ->
+            //    let {prereqStmts=prereqStmts; cExpr=cExpr} = cpExpr ctx.tcc v.initValue
+            //    let vname = (cpName (Some Current) ctx.tcc v.name).Render
+            //    let init = cpArrayDeclDoc vname v.datatype <+> txt "=" <+> cExpr.Render <^> semi
+            //    prereqStmts @ [init] |> vsep
     | Stmt.ExternalVarDecl _ -> failwith "Found an external variable in a function. This should have been detected earlier."            
     // actions
     | Stmt.Assign (r, lhs, rhs) ->
-        (cpAssign ctx.tcc lhs rhs).Render
+        cpAssign ctx.tcc lhs rhs
         //let norm =
         //    normaliseAssign ctx.tcc (r, lhs, rhs)
         //    |> List.map (function 

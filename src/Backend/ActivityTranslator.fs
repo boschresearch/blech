@@ -93,7 +93,7 @@ let rec private cpAction ctx curComp action =
             let norm =
                 normaliseVarDecl ctx.tcc v
                 |> List.map (function 
-                    | Stmt.Assign(_, lhs, rhs) -> (cpAssign ctx.tcc lhs rhs).Render
+                    | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
                         //match lhs.typ with
                         //| ValueTypes (ArrayType _) ->
                         //    cpMemCpyArr false ctx lhs.lhs rhs
@@ -105,13 +105,18 @@ let rec private cpAction ctx curComp action =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
                 | ValueTypes (ArrayType _) ->
-                    let curname = (cpName (Some Current) ctx.tcc v.name).Render
-                    txt "memset"
-                    <^> dpCommaSeparatedInParens
-                        [ curname
-                          txt "0"
-                          sizeofMacro v.datatype]
-                    <^> semi
+                    let lhs =
+                        { lhs = LhsCur(TypedMemLoc.Loc v.name)
+                          typ = v.datatype
+                          range = v.pos }
+                    nullify ctx.tcc lhs
+                    //let curname = (cpName (Some Current) ctx.tcc v.name).Render
+                    //txt "memset"
+                    //<^> dpCommaSeparatedInParens
+                    //    [ curname
+                    //      txt "0"
+                    //      sizeofMacro v.datatype]
+                    //<^> semi
                 | _ -> empty
             reinit :: norm @ [prevInit] |> dpBlock
 
@@ -132,7 +137,7 @@ let rec private cpAction ctx curComp action =
             // the code for that is generated in function "translate" below
             txt "/* The extern declaration is outside the Blech code */"
                     
-    | Action.Assign (r, lhs, rhs) -> (cpAssign ctx.tcc lhs rhs).Render
+    | Action.Assign (r, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
         //let norm =
         //    normaliseAssign ctx.tcc (r, lhs, rhs)
         //    |> List.map (function 
@@ -175,7 +180,7 @@ let rec private cpAction ctx curComp action =
         //|> (<^>) <| semi
         failwith "Print, Assert, Assume not implemented yet."
     | Action.FunctionCall (r, whoToCall, inputs, outputs) ->
-        (cpFunctionCall ctx.tcc whoToCall inputs outputs).Render
+        cpFunctionCall ctx.tcc whoToCall inputs outputs
         // Since function calls statements and expressions are translated in the same way
         // simply call the expression translation here
         //let prereqStmts, processedCall =
@@ -243,7 +248,8 @@ let rec private cpAction ctx curComp action =
 
 let private accessPC4name tcc name =
     //txt (CTX + "->") <^> ppName name
-    (cpName (Some Current) tcc name).Render
+    //(cpName (Some Current) tcc name).Render
+    txt "blc_blech_ctx->" <^> txt name.basicId
 
 let private cpResetPc tcc (pc: ParamDecl) =
     txt "BLC_SWITCH_TO_NEXTSTEP(" <^> accessPC4name tcc pc.name <^> txt ")" <^> semi
@@ -386,8 +392,8 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
             // receiverVar has some value, nothing to do
             receiverVar, false, [] 
 
-    let {prereqStmts=prereqStmts; renderedStmt=translatedCall} = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver tempVarName
-    prereqStmts @ receiverDecl |> dpBlock, translatedCall
+    let translatedCall = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver tempVarName
+    receiverDecl @ [translatedCall] |> dpBlock
 
 
 let rec private processNode ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) =
@@ -672,12 +678,11 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             
         // in case the return value is ignored with _
         // create a temporary variable to receive the value
-        let tmpDecl, translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
+        let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
         
         dpBlock
         <| [ initCalleesPCs
              declRetcodeVar
-             tmpDecl
              translatedCall
              nextNodeStep ]
         
@@ -711,11 +716,10 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             let lhsTyp = ValueTypes(IntType Int32)
             cpType lhsTyp <+> renderCName Current ctx.tcc retcodeVar <^> semi
 
-        let tmpDecl, translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
+        let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
         
         dpBlock
         <| [ declRetcodeVar
-             tmpDecl
              translatedCall
              nextStep ]
 
@@ -939,7 +943,7 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
 /// Generate statements which initialises program counters 
 /// used in the init function
 let internal mainPCinit ctx (entryCompilation: Compilation) =
-    let mainPc = txt (CTX + ".") <^> renderCName Current ctx.tcc entryCompilation.GetActCtx.pcs.mainpc.name
+    let mainPc = txt "blc_blech_ctx." <^> txt entryCompilation.GetActCtx.pcs.mainpc.name.basicId
     let initVal = initValue ctx entryCompilation.name
     let initVal2 = 2 * initVal |> string |> txt
     mainPc <+> txt "=" <+> initVal2 <^> semi // assignPC won't work here, mind the level of indirection!

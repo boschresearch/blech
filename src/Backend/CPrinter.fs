@@ -161,10 +161,10 @@ let internal cpContextTypeDeclaration (comp: Compilation) =
     | Some _ -> // ok, print activity context struct
         let typename = cpStaticName comp.name
         let locals = 
-            // since shadowing is prohibited in local scopes, it is sufficient to 
-            // use basicIds for context field names
+            // in order to avoid clashes between a Blech variable "pc_1" and 
+            // a context element pc_1, we need the blc_ prefix
             comp.GetActCtx.locals
-            |> List.map (fun local -> cpArrayDeclDoc (txt local.name.basicId) local.datatype <^> semi)
+            |> List.map (fun local -> cpArrayDeclDoc (txt (BLC + "_" + local.name.basicId)) local.datatype <^> semi)
             |> dpBlock
         let pcs = 
             comp.GetActCtx.pcs.AsList
