@@ -272,22 +272,49 @@ let private cpMemSetDoc typ lhsDoc =
     <^> semi
 
    
-type CBlob =
+type RenderFun = CExpr list -> Doc
+and CExpr =
+    | Blob of CBlob
+    | Value of Doc
+    | ComplexExpr of RenderFun * CExpr list
+    member this.Render =
+        match this with
+        | Blob p -> p.Render
+        | Value d -> d
+        | ComplexExpr (f, c) -> f c
+
+and CPath =
     | Name of CName
+    | FieldAccess of CBlob * Doc
+    | ArrayAccess of CBlob * CExpr
+    member this.Render =
+        match this with
+        | Name cb -> cb.Render
+        | FieldAccess (cp, f) -> cp.Render <^> txt "." <^> f
+        | ArrayAccess (cp, e) -> cp.Render <^> txt "[" <^> e.Render <^> txt "]"
+
+    member this.IsAuxiliary =
+        match this with
+        | Name cb -> cb.IsAuxiliary
+        | FieldAccess (cp, _) 
+        | ArrayAccess (cp, _) -> cp.IsAuxiliary
+
+and CBlob =
+    | Loc of CPath
     | AddrOf of CBlob
     | ValueOf of CBlob
 
     member this.Render =
         match this with
-        | Name d -> d.Render
+        | Loc d -> d.Render
         | AddrOf cap -> txt "(&" <^> cap.Render <^> txt ")"
         | ValueOf cap -> txt "(*" <^> cap.Render <^> txt ")"
 
     member this.Simplify =
         match this with
-        | Name _
-        | AddrOf (Name _)
-        | ValueOf (Name _) -> this
+        | Loc _
+        | AddrOf (Loc _)
+        | ValueOf (Loc _) -> this
         | AddrOf (ValueOf x) 
         | ValueOf (AddrOf x) -> x.Simplify
         | AddrOf (AddrOf x) -> (AddrOf x).Simplify // TODO: these two cases cannot happen as long as we do not have references
@@ -295,9 +322,12 @@ type CBlob =
 
     member this.IsAuxiliary =
         match this with
-        | Name n -> n.IsAuxiliary
+        | Loc n -> n.IsAuxiliary
         | AddrOf c 
         | ValueOf c -> c.IsAuxiliary
+
+    member this.PrependAddrOf =
+        (AddrOf this).Simplify
 
 
 let getValueFromName timepoint tcc name : CBlob =
@@ -308,50 +338,16 @@ let getValueFromName timepoint tcc name : CBlob =
     let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
     | Some(ValueTypes (ValueTypes.StructType _)),_ ->
-        ValueOf (Name cName)
+        ValueOf (Loc (Name cName))
     | Some typ, true when typ.IsPrimitive ->
         // primitive typed, output parameter
-        ValueOf (Name cName)
+        ValueOf (Loc (Name cName))
     | _ ->
-        Name cName
+        Loc (Name cName)
 
 //=============================================================================
 // Printing expressions
 //=============================================================================
-
-type RenderFun = CExpr list -> Doc
-and CExpr =
-    | Path of CPath
-    | Value of Doc
-    | ComplexExpr of RenderFun * CExpr list
-    member this.Render =
-        match this with
-        | Path p -> p.Render
-        | Value d -> d
-        | ComplexExpr (f, c) -> f c
-
-and CPath =
-    | Loc of CBlob
-    | FieldAccess of CPath * Doc
-    | ArrayAccess of CPath * CExpr
-    member this.Render =
-        match this with
-        | Loc cb -> cb.Render
-        | FieldAccess (cp, f) -> cp.Render <^> txt "." <^> f
-        | ArrayAccess (cp, e) -> cp.Render <^> txt "[" <^> e.Render <^> txt "]"
-
-    member this.IsAuxiliary =
-        match this with
-        | Loc cb -> cb.IsAuxiliary
-        | FieldAccess (cp, _) 
-        | ArrayAccess (cp, _) -> cp.IsAuxiliary
-
-    member this.PrependAddrOf =
-        match this with
-        | Loc blob -> AddrOf blob |> Loc
-        | FieldAccess (cp, f) -> FieldAccess(cp.PrependAddrOf, f)
-        | ArrayAccess (cp, i) -> ArrayAccess(cp.PrependAddrOf, i)
-
 
 type PrereqExpression =
     {
@@ -375,44 +371,44 @@ let getPrereq pe = pe.prereqStmts
 
 let isExprAuxiliary pe =
     match getCExpr pe with
-    | Path p -> p.IsAuxiliary
+    | Blob p -> p.IsAuxiliary
     // values or complex expression cannot be the result of creating an auxiliary variable
     | Value _ 
     | ComplexExpr _ -> false
 
-type PrereqPath =
+type PrereqBlob =
     {
         prereqStmts: Doc list
-        path: CPath
+        path: CBlob
     }
     member this.Render = this.path.Render
     member this.ToExpr =
         mkPrereqExpr
         <| this.prereqStmts
-        <| Path this.path
+        <| Blob this.path
 
 let mkCPath p c =
     { prereqStmts = p
       path = c }
 
 
-let rec cpTml timepoint tcc (tml: TypedMemLoc) : PrereqPath =
+let rec cpTml timepoint tcc (tml: TypedMemLoc) : PrereqBlob =
     match tml with
     | TypedMemLoc.Loc name -> 
         mkCPath
         <| []
-        <| Loc (getValueFromName timepoint tcc name)
+        <| getValueFromName timepoint tcc name
     | TypedMemLoc.FieldAccess (pref, field) ->
         let pp = cpTml timepoint tcc pref
         mkCPath
         <| pp.prereqStmts
-        <| FieldAccess (pp.path, (txt field))
+        <| Loc (FieldAccess (pp.path, (txt field)))
     | TypedMemLoc.ArrayAccess (pref, idx) ->
         let pp = cpTml timepoint tcc pref
         let suffix = cpExpr tcc idx
         mkCPath
         <| pp.prereqStmts @ suffix.prereqStmts
-        <| ArrayAccess (pp.path, suffix.cExpr)
+        <| Loc (ArrayAccess (pp.path, suffix.cExpr))
 
 and private binExpr tcc s1 s2 infx =
     let re1 = cpExpr tcc s1
@@ -651,7 +647,7 @@ and cpInputArg tcc expr : PrereqExpression =
         // if auxiliary struct, then prepend &
         let cExpr = 
             match getCExpr singleArgLocation with
-            | Path cPath -> cPath.PrependAddrOf |> Path
+            | Blob cPath -> cPath.PrependAddrOf |> Blob
             | x -> x // impossible due to isExprAuxiliary check above
         mkPrereqExpr
         <| getPrereq singleArgLocation
@@ -666,7 +662,7 @@ and cpOutputArg tcc expr : PrereqExpression =
     | _ ->
         let cExpr = 
             match getCExpr pe with
-            | Path cPath -> cPath.PrependAddrOf |> Path
+            | Blob cPath -> cPath.PrependAddrOf |> Blob
             | x -> x // impossible, a lhs cannot be a complex expression or just a value
         mkPrereqExpr
         <| getPrereq pe
@@ -786,37 +782,44 @@ let mkRenderedStmt p r =
 let rec cpAssign tcc left right =
     let leftRE = cpLexpr tcc left
     let rightRE = cpExpr tcc right
-    let directAssigment = 
-        mkRenderedStmt
-        <| leftRE.prereqStmts @ rightRE.prereqStmts
-        <| (leftRE.cExpr.Render <+> txt "=" <+> rightRE.cExpr.Render <^> semi)
-    match left.typ with
-    | ValueTypes (ValueTypes.ArrayType _) ->
+    let directAssignment (newRight: PrereqExpression) = 
+        leftRE.prereqStmts @ newRight.prereqStmts, (leftRE.cExpr.Render <+> txt "=" <+> newRight.cExpr.Render <^> semi)
+    let directArrayAssignment newRight =
         // memcopy arrays
         let memcpy =
             txt "memcpy"
             <^> dpCommaSeparatedInParens
                 [ leftRE.cExpr.Render
-                  rightRE.cExpr.Render
+                  newRight.cExpr.Render
                   sizeofMacro right.typ ]
             <^> semi
-        mkRenderedStmt
-        <| leftRE.prereqStmts @ rightRE.prereqStmts
-        <| memcpy
-    | ValueTypes (ValueTypes.StructType _) -> // assign structs
-        let norm =
-            normaliseAssign tcc (left.Range, left, right)
-            |> List.map (function 
-                | Stmt.Assign(_, lhs, rhs) -> cpAssign tcc lhs rhs
-                | _ -> failwith "Must be an assignment here!") // not nice
-        
+        leftRE.prereqStmts @ newRight.prereqStmts, memcpy
+    //let norm newLeft = // unit function, prevents StackOverflow (evaluation only when called explicitly)
+    //    normaliseAssign tcc (left.Range, newLeft, right)
+    //    |> List.map (function 
+    //        | Stmt.Assign(_, lhs, rhs) -> cpAssign tcc lhs rhs
+    //        | _ -> failwith "Must be an assignment here!") // not nice
+    match left.typ with
+    | ValueTypes (ValueTypes.ArrayType _) ->
         match right.rhs with
-        | StructConst _
-        | ArrayConst _ -> //when isLiteral right ->
-            let reinit = nullify tcc left
-            reinit :: norm |> dpBlock
+        | ArrayConst _ -> // this can be optimised for constant rhs, as it used to be
+            let tmp = makeTmpForComplexConst tcc right
+            //let reinit = nullify tcc left
+            let prereq, assignTmpToLhs = directArrayAssignment tmp
+            prereq @ [assignTmpToLhs] |> dpBlock
+        | _ -> // memcpy
+            let a, b = directArrayAssignment rightRE
+            mkRenderedStmt a b 
+    | ValueTypes (ValueTypes.StructType _) -> // assign structs
+        match right.rhs with
+        | StructConst _ ->
+            let tmp = makeTmpForComplexConst tcc right
+            //let reinit = nullify tcc left
+            let prereq, assignTmpToLhs = directAssignment tmp
+            prereq @ [assignTmpToLhs] |> dpBlock
         | _ -> // x = y needs no rewriting, assign directly
-            directAssigment 
+            let a, b = directAssignment rightRE
+            mkRenderedStmt a b 
     | ValueTypes Void 
     | ValueTypes BoolType 
     | ValueTypes (IntType _)
@@ -824,7 +827,8 @@ let rec cpAssign tcc left right =
     | ValueTypes (BitsType _) 
     | ValueTypes (FloatType _) ->
         // assign primitives
-        directAssigment
+        let a, b = directAssignment rightRE
+        mkRenderedStmt a b
     | ReferenceTypes _ -> failwith "Code generation for reference types not implemented."
     | Any // used for wildcard
     | AnyComposite // compound literals
