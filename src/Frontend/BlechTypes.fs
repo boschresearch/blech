@@ -134,7 +134,7 @@ type ValueTypes =
         | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
         | StructType (r,_,_) -> Some r
 
-
+    
 /// Reference Types are not used anywhere as of the first release 2019/2020
 /// Only introduced as a reminder that not all types are value types and
 /// subsequent phases should already pay attention to this
