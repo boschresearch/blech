@@ -318,7 +318,13 @@ and ExternalVarDecl =
         this.annotation.ToDoc @ [vdDoc]
         |> dpToplevelClose
 
-    override this.ToString () = render None <| this.ToDoc 
+    override this.ToString () = render None <| this.ToDoc
+    
+    member this.IsConst =
+        this.mutability.Equals Mutability.CompileTimeConstant
+    
+    member this.IsParam =
+        this.mutability.Equals Mutability.StaticParameter
 
 /// A parameter declaration consists of a name and datatype
 /// unlike a variable declaration, an argument declaration has no init value

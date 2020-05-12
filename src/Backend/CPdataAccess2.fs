@@ -164,12 +164,21 @@ let private isInActivity tcc name =
 let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CName =
     // Either a static QName of Function/Activity, user type or top level constant
     // or a const/param local inside a function/activity
-    // TODO: do we want to lift these to the top level? Why not use C's statics inside functions?? fg 13.03.20
+    // TODO: do we want to lift these to the top level? Why not use C's statics inside functions??
+    //       or define macros locally for compile time const?? fg 13.03.20
     let needsStaticName =
         name.IsStatic ||
         match tcc.nameToDecl.TryGetValue name with
         | true, Declarable.VarDecl v -> v.IsConst || v.IsParam
-        | _,_ -> false
+        | true, Declarable.ExternalVarDecl v -> 
+            //printfn "Found %s in tcc" (name.ToString())
+            v.IsConst || v.IsParam
+        | _, _ -> false
+        // for debugging
+        //| true,_ -> false
+        //| false, _ ->
+        //    printfn "No such name %s in tcc" (name.ToString())
+        //    false
 
     if needsStaticName then
         if Array.contains name.basicId AppName.predefinedNames then
@@ -191,13 +200,13 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
             match tcc.nameToDecl.TryGetValue name with
             | true, Declarable.ParamDecl _ -> true
             | _ -> false
+        // Prev
+        let isExternal =
+            match tcc.nameToDecl.[name] with
+            | Declarable.ExternalVarDecl _ -> true
+            | _ -> false
 
         if timepointOpt.Equals (Some Previous) then
-            // Prev
-            let isExternal =
-                match tcc.nameToDecl.[name] with
-                | Declarable.ExternalVarDecl _ -> true
-                | _ -> false
             if isExternal then PrevExternal name
             else PrevInternal name
         elif isParam then
@@ -209,7 +218,8 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
         else
             // activity local
             assert isInActivity tcc name
-            CtxLocal name
+            if isExternal then Auto name // access current value locally declared extern variable
+            else CtxLocal name // current value of normal activity variable
 
 let renderCName tp tcc name = (cpName (Some tp) tcc name).Render
 
@@ -643,8 +653,8 @@ and cpInputArg tcc expr : PrereqExpression =
     // if expr is a structured literal, make a new name for it
     let singleArgLocation: PrereqExpression = makeTmpForComplexConst tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.StructType _) -> //when isExprAuxiliary singleArgLocation ->
-        // if auxiliary struct, then prepend &
+    | ValueTypes (ValueTypes.StructType _) ->
+        // if struct, then prepend &
         let cExpr = 
             match getCExpr singleArgLocation with
             | Blob cPath -> cPath.PrependAddrOf |> Blob

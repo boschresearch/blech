@@ -38,35 +38,37 @@ open CPrinter
 let private cpByPointer param = chr '*' <^> param
 
 /// Inputs of the main functions 'tick' and 'init'
-let private cpMainInputParam scalarPassByPointer (input: ParamDecl) =
+let private cpMainInputParam tcc scalarPassByPointer (input: ParamDecl) =
+    let paramName = input.name |> renderCName Current tcc
     // determine whether it is a primitive value type or not
     txt "const"
     <+> match input.datatype with
         | ValueTypes (ArrayType _) ->
-            cpArrayDeclDoc (Global input.name).Render input.datatype
+            cpArrayDeclDoc paramName input.datatype
         | ValueTypes typ when typ.IsPrimitive ->
             cpType input.datatype
             <+> if scalarPassByPointer then 
-                    cpByPointer (Global input.name).Render
+                    cpByPointer paramName
                 else 
-                    (Global input.name).Render
+                    paramName
         | _ ->
-            cpType input.datatype <+> cpDeref (txt "const" <+> (Global input.name).Render)
+            cpType input.datatype <+> cpDeref (txt "const" <+> paramName)
 
 
 /// Outputs of the main functions 'tick' and 'init'. 
-let private cpMainOutputParam (output: ParamDecl) =
+let private cpMainOutputParam tcc (output: ParamDecl) =
+    let paramName = output.name |> renderCName Current tcc
     match output.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDeclDoc (Global output.name).Render output.datatype
-    | _ -> cpType output.datatype <+> cpDeref (Global output.name).Render
+    | ValueTypes (ArrayType _) -> cpArrayDeclDoc paramName output.datatype
+    | _ -> cpType output.datatype <+> cpDeref paramName
         
 
 // translates the interface of the EntryPoint activity to C function interface for 'tick' and 'init'
-let private cpMainIface scalarPassByPointer (iface: Compilation) =
+let private cpMainIface tcc scalarPassByPointer (iface: Compilation) =
     let cargs = 
         List.concat [
-            iface.inputs |> List.map (cpMainInputParam scalarPassByPointer)
-            iface.outputs |> List.map cpMainOutputParam
+            iface.inputs |> List.map (cpMainInputParam tcc scalarPassByPointer)
+            iface.outputs |> List.map (cpMainOutputParam tcc)
         ]
     (if List.isEmpty cargs then [txt "void"] else cargs)
     |> dpCommaSeparatedInParens
@@ -83,6 +85,7 @@ let private paramAsOutput (p: ParamDecl) =
     { lhs = LhsCur (TypedMemLoc.Loc p.name)
       typ = p.datatype
       range = p.pos }
+
 /// Call to entry point activity
 let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
     [
@@ -102,21 +105,34 @@ let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
 /// To be used from the test app only
 
 let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
+    let addAmp pe =
+            match getCExpr pe with
+            | Blob cPath -> cPath.PrependAddrOf |> Blob
+            | x -> x // impossible, a lhs cannot be a complex expression or just a value
+    let procIn (t, pe) =
+        match t with
+        | ValueTypes (ValueTypes.StructType _) ->
+            addAmp pe
+        | _ -> getCExpr pe
+    let procOut (t, pe) =
+        match t with
+        | ValueTypes (ValueTypes.ArrayType _) -> getCExpr pe
+        | _ -> addAmp pe
     let renderedCalleeName = (cpStaticName whoToCall)
-    let renderedInputs = entryPointIface.inputs |> List.map (paramAsInput >> cpInputArg tcc)
-    let renderedOutputs = entryPointIface.outputs |> List.map (paramAsOutput >> cpOutputArg tcc)
+    let renderedInputs = entryPointIface.inputs |> List.map (paramAsInput >> (fun i -> i.typ, cpInputArg tcc i))
+    let renderedOutputs = entryPointIface.outputs |> List.map (paramAsOutput >> (fun o -> o.typ, cpOutputArg tcc o))
     let actCall = 
         [
-            renderedInputs |> List.map (getCExpr >> (fun x -> x.Render))
-            renderedOutputs |> List.map (getCExpr >> (fun x -> x.Render))
+            renderedInputs |> List.map (procIn >> (fun x -> x.Render))
+            renderedOutputs |> List.map (procOut >> (fun x -> x.Render))
         ]
         |> List.concat
         |> dpCommaSeparatedInParens
         |> (<^>) renderedCalleeName
     let prereqStmts =
         [
-            renderedInputs |> List.collect getPrereq
-            renderedOutputs |> List.collect getPrereq
+            renderedInputs |> List.collect (snd >> getPrereq)
+            renderedOutputs |> List.collect (snd >> getPrereq)
         ]
         |> List.concat
     prereqStmts @ [actCall <^> semi]
@@ -135,7 +151,7 @@ let internal mainCallback tcc primitivePassByAddress tick entryName entryIface =
 
     txt "void"
     <+> cpStaticName tick
-    <+> cpMainIface primitivePassByAddress entryIface 
+    <+> cpMainIface tcc primitivePassByAddress entryIface 
     <+> txt "{"
     <.> entryPointCall
     <.> txt "}"
@@ -149,6 +165,52 @@ let internal mainInit ctx init (entryCompilation: Compilation) =
     <.> ActivityTranslator.mainPCinit ctx entryCompilation
     <.> txt "}"
 
+open Blech.Frontend
+let rec private ppTopLevelArgument (tcc: TypeCheckContext) = function
+    | TypedMemLoc.Loc qname ->
+        // cannot simply use getValueFromName because of primitive-pass-by-value special case
+        let result = BLC + "_" + qname.basicId |> txt
+        let typeAndIsOutput =
+            match tcc.nameToDecl.TryGetValue qname with
+            | true, Declarable.ParamDecl p -> Some p.datatype, p.isMutable
+            | _ -> None, false
+        let needDeref = false
+        // if given qname is an input AND primitive AND primitive pass by address is true 
+        let needDeref = 
+            needDeref
+            || match typeAndIsOutput with
+               | Some t, true when t.IsPrimitive && tcc.cliContext.passPrimitiveByAddress -> true
+               | _ -> false
+        // if given qname is an output AND primitive
+        let needDeref = 
+            needDeref
+            || match typeAndIsOutput with
+               | Some t, true when t.IsPrimitive-> true
+               | _ -> false
+        // or given qname is a struct 
+        let needDeref = 
+            needDeref
+            || match fst typeAndIsOutput with
+               | Some (ValueTypes (ValueTypes.StructType _)) -> true
+               | _ -> false
+        // then dereference
+        if needDeref then
+            txt "(*" <^> result <^> txt")"
+        // otherwise just print the name
+        else
+            result
+    | TypedMemLoc.FieldAccess (subtml, ident) ->
+        (ppTopLevelArgument tcc subtml) <^> dot <^> txt ident
+    | TypedMemLoc.ArrayAccess (subtml, idx) ->
+        let {prereqStmts=preStmts; cExpr=idxDoc} = cpExpr tcc idx
+        preStmts @ [(ppTopLevelArgument tcc subtml) <^> (brackets idxDoc.Render)]
+        |> dpBlock
+    
+let ppTml isLocal ctx (tml: TypedMemLoc) = 
+    if isLocal then
+        BLC + "_" + tml.ToBasicString() |> txt
+    else
+        ppTopLevelArgument ctx tml
 
 let internal printState ctx printState (entryCompilation: Compilation) = 
     let showPcs =
@@ -195,7 +257,8 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             match dty with
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
-                sprintf """printf("%s", %s);""" formStr (prefStr + BLC + "_" + n.ToBasicString())
+                sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx.tcc n |> render None))
+                //sprintf """printf("%s", %s);""" formStr (prefStr + BLC + "_" + n.ToBasicString())
             | _ -> failwith "printPrimitive called on non-primitive."
 
         let rec printArray isLocal level prefStr (n: TypedMemLoc) =
@@ -269,7 +332,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             [
                 entryCompilation.inputs |> List.map (printParamDecl false "")
                 entryCompilation.outputs |> List.map (printParamDecl false "")
-                allLocals ||> List.map2 (printParamDecl true)
+                allLocals ||> List.map2 (printParamDecl true) |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
             ]
             |> List.concat
             |> List.filter (System.String.IsNullOrWhiteSpace >> not)
@@ -281,7 +344,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             // the generated variable access will -> into the context but here the context is give as a value directly
             // so we rewrite all -> into .
             // yes this is a temprorary hack
-            let vs = vs |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
+            //let vs = vs |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
             """printf("\t\t\t\"vars\": {\n");"""
             + String.concat "\n\tprintf(\",\\n\");\n\t" vs
             + """printf("\n\t\t\t}\n");"""
@@ -289,7 +352,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
 
     txt "void" 
     <+> cpStaticName printState
-    <+> cpMainIface false entryCompilation
+    <+> cpMainIface ctx.tcc false entryCompilation
     <+> txt "{"
     <.> (cpIndent (dpBlock [showPcs; showVars]))
     <.> txt "}"
@@ -356,8 +419,8 @@ let appMainLoop ctx init tick printState entryCompilation =
 // Program Function prototypes: tick, init, printState
 //=============================================================================
 
-let programFunctionProtoype primitivePassByAddress name iface returns =
+let programFunctionPrototype tcc primitivePassByAddress name iface returns =
     cpType returns
     <+> cpStaticName name
-    <+> cpMainIface primitivePassByAddress iface
+    <+> cpMainIface tcc primitivePassByAddress iface
     <^> semi

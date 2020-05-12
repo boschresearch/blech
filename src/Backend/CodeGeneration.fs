@@ -147,7 +147,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
                     failwith "This should never happen"            
             
             let macro = 
-                txt "#define" <+> cpStaticName ec.name <+> cexpr
+                txt "#define" <+> (renderCName Current ctx.tcc ec.name) <+> cexpr
                 |> groupWith (txt " \\")
             
             cpOptDocComments ec.annotation.doc
@@ -357,14 +357,14 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         //[ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
         //  ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType ]
         // is that the correct merge?
-        [ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
-          ProgramGenerator.programFunctionProtoype false qname (Compilation.mkNew qname) voidType
-          ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation voidType ]
+        [ ProgramGenerator.programFunctionPrototype ctx.tcc ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
+          ProgramGenerator.programFunctionPrototype ctx.tcc false qname (Compilation.mkNew qname) voidType
+          ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
         |> dpToplevel
 
     let traceFunctionPrototype =
         let voidType = (ValueTypes ValueTypes.Void)
-        [ ProgramGenerator.programFunctionProtoype false (AppName.printState moduleName) entryCompilation voidType ]
+        [ ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
         |> dpToplevel
 
     // combine all into one Doc

@@ -54,7 +54,7 @@ let private setExternPrevForNextReaction ctx (v: ExternalVarDecl) =
                   sizeofMacro v.datatype ]
             <^> semi
     | _ ->
-        txt "*" <^> prevname <+> txt "=" <+> curname <^> semi
+        prevname <+> txt "=" <+> curname <^> semi
 
 let rec private cpAction ctx curComp action =
     match action with
@@ -124,13 +124,14 @@ let rec private cpAction ctx curComp action =
         if List.contains v.name (!curComp).varsToPrev then
             // Dually to local variables--prev on external variables are 
             // generated as static C variables and thus added to the local interface here
-            let prevName = {v.name with basicId = "prev_"+v.name.basicId}
+            let prevName = {v.name with basicId = "blech_prev_" + v.name.basicId} // TODO hack, fix the string magic!
             let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := newIface
+            // add new declaration to type check table
+            TypeCheckContext.addDeclToLut ctx.tcc prevName (Declarable.ExternalVarDecl {v with name = prevName})
             // make sure the prev variable is initialised in the first reaction
             // this is crucial if the prev value is used in the same block where the variable is declared
             setExternPrevForNextReaction ctx.tcc v
-                
         else
             // the external is used like a normal variable but in fact it is an auto C variable
             // initialisation happens in every reaction
