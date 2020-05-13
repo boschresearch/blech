@@ -139,7 +139,7 @@ type TyCheckError =
     | VoidSubprogCannotReturnValues of range // is actually just a ReturnTypeMismatch with a "void" built in
     | VoidReturnStmtMustReturn of range * Types // is actually just a ReturnTypeMismatch with a "void" built in
     | MustReturnSomething of range * ValueTypes
-    | ReturnTypeMismatch of range * ValueTypes * Types
+    | ReturnTypeMismatch of range * Types * Types
     | ActCallMustExplicitlyIgnoreResult of range * Identifier
     | MayOrMayNotReturn of range * ValueTypes * ValueTypes
     | ValueStructContainsRef of Name * VarDecl
@@ -329,7 +329,7 @@ type TyCheckError =
             | VoidSubprogCannotReturnValues p -> p, sprintf "The return statement may not have a value payload since the subprogram is declared as void. (It does not have a \"returns\" declaration.)"
             | VoidReturnStmtMustReturn (p, t) -> p, sprintf "The return statement must have a payload of type %s according to the declaration of the subprogram." (t.ToString())
             | MustReturnSomething (p, f) -> p, sprintf "The subprogram declares the return type %s. However no return statements were found." ((ValueTypes f).ToString())
-            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) ((ValueTypes f1).ToString())
+            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) (f1.ToString())
             | ActCallMustExplicitlyIgnoreResult (p, n) -> p, sprintf "The call of %s must explicitly ignore the non-void return value." (string n)
             | MayOrMayNotReturn (p, f1, f2) -> p, sprintf "The subprogram possibly returns a %s on some execution paths (but not on all). However it must always return a %s." ((ValueTypes f2).ToString()) ((ValueTypes f1).ToString())
             | ValueStructContainsRef (name, refField) -> name.range, sprintf "The structure %s is value typed but contains the reference typed element %s." name.idToString refField.name.basicId

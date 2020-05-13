@@ -319,12 +319,30 @@ module ProgramGraph =
         do addNameRead context startawait cond
         pg
 
-    /// Generate a program graph for an activity call        
-    let private createActCall context line thread (pos, name, receiver, inputs, outputs) termVar =
+    /// Generate a program graph for the sequential composition of the
+    /// given program graphs
+    let private sequentialise pg pgs =
+        match pgs with
+        | [] -> pg
+        | _ ->
+            let glue lastGraph nextGraph =
+                do replaceExitBy lastGraph nextGraph.Entry
+                nextGraph
+            let lastGraph = List.fold glue pg pgs
+            let allGraphs =
+                pg :: pgs 
+                |> List.map (fun pg -> pg.Graph)
+                |> Graph.JoinAll
+            { Entry = pg.Entry
+              Exit = lastGraph.Exit
+              Graph = allGraphs }
+
+    /// Generate a program graph for an activity call
+    /// Creates a separate Action.VarDecl for a fresh location receiver
+    let private createActCall context line thread (pos, name, optReceiver: Receiver option, inputs, outputs) termVar =
         let retvar = 
-            match receiver with
-            | Some (UsedLoc tlhs) -> Some tlhs
-            | Some (FreshLoc _) -> failwith "currently no causality analysis and code generation for FreshLoc" 
+            match optReceiver with
+            | Some  receiver -> Some receiver.ToTypedLhs
             | None -> None
 
         let pgAwait = createAwait context line thread "ticker" {rhs = BoolConst true; typ = ValueTypes BoolType; range = line}
@@ -367,9 +385,17 @@ module ProgramGraph =
         | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         
         
-        { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
+        let pgActCall = { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 
+        match optReceiver with
+        | Some (FreshLoc vdecl) -> 
+            let pgVarDecl = createAction context vdecl.pos thread (Action.VarDecl vdecl) 
+            sequentialise pgVarDecl [pgActCall]
+        | Some _
+        | None ->
+            pgActCall
     
+
     /// This function is here temporarily. It solves the following problem:
     /// Since the abort conditions are pushed into the body of the abort statement
     /// conditions may become concurrent in the context of a cobegin in the body.
@@ -507,23 +533,7 @@ module ProgramGraph =
 
         { pg with Graph = Graph.JoinAll [pg.Graph; subPg.Graph] }
 
-    /// Generate a program graph for the sequential composition of the
-    /// given program graphs
-    let private sequentialise pg pgs =
-        match pgs with
-        | [] -> pg
-        | _ ->
-            let glue lastGraph nextGraph =
-                do replaceExitBy lastGraph nextGraph.Entry
-                nextGraph
-            let lastGraph = List.fold glue pg pgs
-            let allGraphs =
-                pg :: pgs 
-                |> List.map (fun pg -> pg.Graph)
-                |> Graph.JoinAll
-            { Entry = pg.Entry
-              Exit = lastGraph.Exit
-              Graph = allGraphs }
+    
 
     /// Returns program graph for if cond then pg1 else pg2
     let private createIf context line thread cond pg1 pg2  =

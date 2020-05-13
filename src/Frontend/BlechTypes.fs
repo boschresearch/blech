@@ -783,7 +783,14 @@ and Receiver =
         | UsedLoc tlhs -> tlhs.typ
         | FreshLoc vdecl -> vdecl.datatype
 
-
+    member this.ToTypedLhs = 
+        match this with
+        | UsedLoc tlhs -> 
+            tlhs
+        | FreshLoc varDecl ->
+            let lhs : LhsStructure = LhsCur (Loc varDecl.name)
+            { lhs = lhs; typ = varDecl.datatype; range = varDecl.pos }
+    
 
 //=============================================================================
 // Statements 

@@ -155,7 +155,7 @@ let private checkStmtsMatchReturn pos body retType =
             else Error [MustReturnSomething (pos, retType)]
         | Must f ->
             if isLeftSupertypeOfRight (ValueTypes retType) (ValueTypes f) then Ok retType
-            else Error [ReturnTypeMismatch (pos, retType, ValueTypes f)]
+            else Error [ReturnTypeMismatch (pos, ValueTypes retType, ValueTypes f)]
         | May f -> Error [MayOrMayNotReturn (pos, retType, f)]
         )
 
@@ -848,17 +848,17 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Some rcvr ->
                 let typ = rcvr.Typ
                 if isReceiverAssignable lut rcvr then
-                    if rcvr.Typ.IsAssignable then
+                    if typ.IsAssignable then
                         if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
                             Ok (Some rcvr) 
                         else 
-                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
+                            Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
                     else
                         Error [AssignmentToLetFields (pos, rcvr.ToString())]
                 else Error [AssignmentToImmutable (pos, rcvr.ToString())]
             )
     
-    let checkVoidReceiver (rcv: AST.Receiver option) decl =
+    let checkNeedForReceiver (rcv: AST.Receiver option) decl =
         match rcv with
         | Some location ->
             match decl.returns with
@@ -868,14 +868,12 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
                 Ok (Some location)
         | None ->
             match decl.returns with
-            | Void ->
-                Ok None
-                
-            | _ -> 
+            | Void -> 
+                Ok None                
+            | _ ->
                 // Error [Dummy (decl.pos, "receiver necessary")]
                 Error [Dummy (pos, "receiver necessary")]
                 
-
     let checkLocation rcv =
         match rcv with
         | Some (AST.Location lhs) ->
@@ -887,7 +885,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
         | None ->
             Ok None
     
-    checkVoidReceiver rcv decl
+    checkNeedForReceiver rcv decl
     |> Result.bind checkLocation
     |> Result.bind (fun receiver -> checkReturnType receiver decl.name decl.returns)
 
