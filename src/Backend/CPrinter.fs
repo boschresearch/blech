@@ -18,6 +18,7 @@ module Blech.Backend.CPrinter
 
 open System.Collections.Generic
 
+open Blech.Common
 open Blech.Common.PPrint
 open Blech.Common.Range
 
@@ -260,9 +261,12 @@ let internal cpDirectCCall (fp: FunctionPrototype) =
     let args =
         List.map (fun (p: ParamDecl) -> ppName p.name) (fp.inputs @ fp.outputs) 
     let cbinding = fp.annotation.TryGetCBinding
-    let call =
-        txt (Option.get cbinding)
-        <^> dpCommaSeparatedInParens args
+    //let call =
+    //    txt (Option.get cbinding)
+    //    <^> dpCommaSeparatedInParens args
+    let call = 
+        let sargs = List.map (fun doc -> render None doc) args
+        txt <| Bindings.replace (Option.get cbinding) sargs
     let macro = 
         (txt "#define"
         <+> ppName fp.name

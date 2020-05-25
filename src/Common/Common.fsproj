@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="Arguments.fs" />
+    <Compile Include="Bindings.fs" />
     <Compile Include="Logging.fs" />
     <Compile Include="Services.fs" />
     <Compile Include="PPrint.fs" />

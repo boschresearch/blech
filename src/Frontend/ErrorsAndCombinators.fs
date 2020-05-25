@@ -199,7 +199,7 @@ type TyCheckError =
     // pragmas
     | UnknownPragma of range
     // Dummy error used during development
-    // | Dummy of range * string
+    | Dummy of range * string
 
     interface Diagnostics.IDiagnosable with
         member err.MainInformation =
@@ -407,7 +407,7 @@ type TyCheckError =
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
             
-            // | Dummy (p, msg) -> p, msg
+            | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
                 { range = srcPos
