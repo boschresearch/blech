@@ -18,7 +18,6 @@ namespace Blech.Common
 
 module Bindings = 
     open System.Text.RegularExpressions
-    open PPrint
     
     [<Literal>]
     let private parameterPattern = "\$[1-9][0-9]*"
@@ -26,12 +25,12 @@ module Bindings =
     let private getIndex (m: Match) = 
         int <| m.Value.Substring 1
 
-    let getIndexes binding =
+    let getIndices binding =
         let rx = Regex parameterPattern
         let matches = rx.Matches binding
         [ for m in matches -> getIndex m ]
 
-    let replace binding (ids: string list) =
+    let replaceParameters binding (ids: string list) =
         let replace (m : Match) =
             let i = getIndex m
             ids.Item (i - 1)

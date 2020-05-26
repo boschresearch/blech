@@ -266,7 +266,7 @@ let internal cpDirectCCall (fp: FunctionPrototype) =
     //    <^> dpCommaSeparatedInParens args
     let call = 
         let sargs = List.map (fun doc -> render None doc) args
-        txt <| Bindings.replace (Option.get cbinding) sargs
+        txt <| Bindings.replaceParameters (Option.get cbinding) sargs
     let macro = 
         (txt "#define"
         <+> ppName fp.name

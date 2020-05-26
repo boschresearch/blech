@@ -25,7 +25,7 @@ module BindingsTest =
     
     [<Test>]
     let testGetIndexes () =
-        let indexes = getIndexes binding
+        let indexes = getIndices binding
 
         Assert.AreEqual(2, indexes.[0])   
         Assert.AreEqual(1, indexes.[1])   
@@ -35,7 +35,7 @@ module BindingsTest =
     [<Test>]
     let testReplace () =
         let ids = ["a"; "b"]
-        let code = replace binding ids
+        let code = replaceParameters binding ids
 
         Assert.AreEqual(code, "do { strcpy(b.buf, a.buf); b.len = a.len; } while (0)")   
         
