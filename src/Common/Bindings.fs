@@ -25,7 +25,7 @@ module Bindings =
     let private getIndex (m: Match) = 
         int <| m.Value.Substring 1
 
-    let getIndices binding =
+    let getParameterIndices binding =
         let rx = Regex parameterPattern
         let matches = rx.Matches binding
         [ for m in matches -> getIndex m ]
@@ -33,6 +33,7 @@ module Bindings =
     let replaceParameters binding (ids: string list) =
         let replace (m : Match) =
             let i = getIndex m
+            assert (i > 0 && i <= List.length ids)
             ids.Item (i - 1)
         let evaluator = MatchEvaluator replace
         

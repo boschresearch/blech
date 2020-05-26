@@ -21,21 +21,21 @@ open Blech.Common.Bindings // system under test
 
 [<TestFixture>]
 module BindingsTest =
-    let binding = "do { strcpy($2.buf, $1.buf); $2.len = $1.len; } while (0)"
+    let binding = "do { strcpy($2->buf, $1->buf); $2->len = $1->len; } while (0)"
     
     [<Test>]
     let testGetIndexes () =
-        let indexes = getIndices binding
+        let idcs = getParameterIndices binding
 
-        Assert.AreEqual(2, indexes.[0])   
-        Assert.AreEqual(1, indexes.[1])   
-        Assert.AreEqual(2, indexes.[2])   
-        Assert.AreEqual(1, indexes.[3])   
+        Assert.AreEqual(2, idcs.[0])   
+        Assert.AreEqual(1, idcs.[1])   
+        Assert.AreEqual(2, idcs.[2])   
+        Assert.AreEqual(1, idcs.[3])   
     
     [<Test>]
     let testReplace () =
         let ids = ["a"; "b"]
         let code = replaceParameters binding ids
 
-        Assert.AreEqual(code, "do { strcpy(b.buf, a.buf); b.len = a.len; } while (0)")   
+        Assert.AreEqual(code, "do { strcpy(b->buf, a->buf); b->len = a->len; } while (0)")   
         

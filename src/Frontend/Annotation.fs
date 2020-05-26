@@ -167,7 +167,7 @@ module Annotation =
             match fpattr.TryGetCBinding with
             | Some cbinding -> 
                 let maxIndex = List.length fp.inputs + List.length fp.outputs
-                let idcsOutOfBounds = List.filter (fun i -> i > maxIndex) (Bindings.getIndices cbinding)
+                let idcsOutOfBounds = List.filter (fun i -> i > maxIndex) (Bindings.getParameterIndices cbinding)
                 if List.isEmpty idcsOutOfBounds then
                     Ok fpattr
                 else
