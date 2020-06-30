@@ -768,28 +768,27 @@ and TypedLhs =
 and Receiver =
     | UsedLoc of TypedLhs
     | FreshLoc of VarDecl
+    | ReturnLoc of Types * range
 
     member this.ToDoc =
        match this with
        | UsedLoc tlhs -> tlhs.lhs.ToDoc
        | FreshLoc ldecl -> ldecl.ToDoc
+       | ReturnLoc _ -> txt "return"
+    
     override this.ToString() = render None <| this.ToDoc
+    
     member this.Range = 
         match this with
         | UsedLoc tlhs -> tlhs.Range
         | FreshLoc ldecl -> ldecl.pos
+        | ReturnLoc (_, rng) -> rng
+    
     member this.Typ =
         match this with
         | UsedLoc tlhs -> tlhs.typ
         | FreshLoc vdecl -> vdecl.datatype
-
-    member this.ToTypedLhs = 
-        match this with
-        | UsedLoc tlhs -> 
-            tlhs
-        | FreshLoc varDecl ->
-            let lhs : LhsStructure = LhsCur (Loc varDecl.name)
-            { lhs = lhs; typ = varDecl.datatype; range = varDecl.pos }
+        | ReturnLoc (typ, _) -> typ
     
 
 //=============================================================================

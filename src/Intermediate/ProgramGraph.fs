@@ -342,8 +342,14 @@ module ProgramGraph =
     let private createActCall context line thread (pos, name, optReceiver: Receiver option, inputs, outputs) termVar =
         let retvar = 
             match optReceiver with
-            | Some  receiver -> Some receiver.ToTypedLhs
-            | None -> None
+            | Some (FreshLoc varDecl) ->
+                Some { lhs = LhsCur (Loc varDecl.name); typ = varDecl.datatype; range = varDecl.pos }
+            | Some (UsedLoc tlhs) -> 
+                Some tlhs
+            | Some (ReturnLoc _) -> // TODO: Discuss this with Friedrich, fjg. 31.06.20
+                None
+            | None -> 
+                None
 
         let pgAwait = createAwait context line thread "ticker" {rhs = BoolConst true; typ = ValueTypes BoolType; range = line}
 

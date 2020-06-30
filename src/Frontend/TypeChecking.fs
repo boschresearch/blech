@@ -43,11 +43,16 @@ type private StmtRetType =
 /// Determine the return type of a statement
 let rec private stmtType stmt =
     match stmt with
-    // atomic statements, except "return"
+    // atomic statements, except "return" and "run"
     | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _ | Await _ 
-    | Stmt.ExternalVarDecl _ | ActivityCall _ | FunctionCall _ -> 
+    | Stmt.ExternalVarDecl _ | FunctionCall _ -> 
         Ok NoReturn
-    // the "return" statement
+    // Must, if "return run"
+    | ActivityCall (_, _, receiverOpt, _, _) ->
+        match receiverOpt with
+        | Some (ReturnLoc (ValueTypes t, _)) -> Ok (Must t)
+        | _ -> Ok NoReturn
+    // the "return" statement    
     | Return (pos, exprOpt) ->
         match exprOpt with 
         | Some expr ->
@@ -361,8 +366,10 @@ let private determineCalledSingletons lut bodyRes =
         match optRcv with
         | Some (UsedLoc lhs) -> 
             checkLhs [lhs]
-        | Some (FreshLoc _) -> []
-        | None -> []
+        | Some (FreshLoc _)
+        | Some (ReturnLoc _)
+        | None -> 
+            []
     and singletonCalls expr =
         let recurFields fields =
             fields
@@ -824,11 +831,6 @@ let private checkFreshLocation lut (v: AST.VarDecl) (rhsTyp: Types) =
 
 let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl = 
 
-    let isReceiverAssignable lut receiver = 
-        match receiver with
-        | UsedLoc tlhs -> isLhsMutable lut tlhs.lhs
-        | FreshLoc _ -> true // a fresh location can always be assigned too
-
     let checkReturnType (storage: Receiver option) declName declReturns =
         match storage with
         | None ->
@@ -840,22 +842,33 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Any -> // wildcard
                 Ok None
             | ValueTypes _ ->
-                Ok (Some receiver) 
-            | _ -> Error [ ValueMustBeOfValueType (receiver) ]
+                Ok storage 
+            | _ -> Error [ ValueMustBeOfValueType (receiver) ]  // TOOD: This will change with references, fjg 30.06.20
         |> Result.bind (
             function
             | None -> Ok None
-            | Some rcvr ->
-                let typ = rcvr.Typ
-                if isReceiverAssignable lut rcvr then
-                    if typ.IsAssignable then
+            | Some (ReturnLoc (typ, _)) ->
+                if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                    Ok storage 
+                else 
+                    Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]                
+            | Some (FreshLoc vdecl) ->
+                let typ = vdecl.datatype
+                if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                    Ok storage 
+                else 
+                    Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
+            | Some (UsedLoc tlhs) ->
+                let typ = tlhs.typ
+                if isLhsMutable lut tlhs.lhs then
+                    if typ.IsAssignable then  // TODO: This will always be true if we assign structs with let fields, fjg 30.06.20
                         if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                            Ok (Some rcvr) 
+                            Ok storage 
                         else 
                             Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
                     else
-                        Error [AssignmentToLetFields (pos, rcvr.ToString())]
-                else Error [AssignmentToImmutable (pos, rcvr.ToString())]
+                        Error [AssignmentToLetFields (pos, tlhs.ToString())]
+                else Error [AssignmentToImmutable (pos, tlhs.ToString())]
             )
     
     let checkNeedForReceiver (rcv: AST.Receiver option) decl =
@@ -883,7 +896,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             checkFreshLocation lut vdecl (ValueTypes decl.returns)   // TODO: Currently the return value must be a value types, this might change
             |> Result.bind (fun tvdecl -> Ok (Some (FreshLoc tvdecl)))
         | Some (AST.ReturnLocation rng) ->
-            Ok None // TODO: typecheck the return location, fjg. 30.06.20
+            Ok (Some (ReturnLoc (ValueTypes decl.returns, rng))) 
         | None ->
             Ok None
     
