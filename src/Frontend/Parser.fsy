@@ -994,6 +994,12 @@ OptOutputs
 
 OptReturn
     :                                           { [] }
+    | RETURN OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  OptSemicolon
+                                                { [ Stmt.ActivityCall (tailCallRange $1 <| snd $6 <| snd $7, 
+                                                                     Some (ReturnLocation $1) ,
+                                                                     Code.Procedure $4, 
+                                                                     fst $6, 
+                                                                     fst $7) ] }
     /* --- return from function or activity --- */
     | RETURN OptExpr OptSemicolon               { [ Stmt.Return (returnRange $1 $2,
                                                                  $2) ] }

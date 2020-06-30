@@ -401,14 +401,6 @@ module PrettyPrint =
                  |> indent dpTabsize) <.>
                 txt "end"
 
-            let ppWithOptReceiver suffix = function 
-                | None ->
-                    suffix
-                | Some rcvr -> 
-                    rcvr <+> 
-                    (chr '=' <.> suffix
-                     |> gnest dpTabsize)
-
             let ppSubProgramCall pName inputs optOutputs =
                 let progName = 
                     match pName with
@@ -421,8 +413,15 @@ module PrettyPrint =
                  |> group)
 
             let fActCall (_, optReceiver, pName, inputs, optOutputs) = 
-                txt "run" <+>
-                (optReceiver |> ppWithOptReceiver (ppSubProgramCall pName inputs optOutputs)) 
+                match optReceiver with
+                | None -> 
+                    txt "run"
+                | Some (Text "return") ->
+                    txt "return run"
+                | Some rcvr ->
+                    txt "run" <+> rcvr <+> chr '='
+                <.> (ppSubProgramCall pName inputs optOutputs) 
+                |> gnest dpTabsize
 
             let fFunCall (_, pName, inputs, optOutputs) =
                 ppSubProgramCall pName inputs optOutputs 
@@ -787,10 +786,13 @@ module PrettyPrint =
             // --- Receiver
 
             let fReceiver = function    
-                | Location lhs -> fLexpr lhs
+                | Location lhs -> 
+                    fLexpr lhs
                 | FreshLocation vdecl -> 
                     ppPermission vdecl.permission
                     <+> dpName vdecl.name
+                | ReturnLocation _ ->
+                    txt "return"
 
             // --- Conditions
 

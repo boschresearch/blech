@@ -817,11 +817,11 @@ and Stmt =
     // scoping
     | StmtSequence of Stmt list // DO block, ...for scoping reasons
     // calling
-    | ActivityCall of range * QName * Receiver option * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
+    | ActivityCall of range * QName * Receiver option * TypedRhs list * TypedLhs list // line, who to call, result, inputs, outputs
     | FunctionCall of range * QName * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
     // | Emit of range * Receiver * TypedRhs option // line, event, payload
     | Return of range * TypedRhs option // line, expressions to return
-    
+        
     member this.ToDoc =
         match this with
         | VarDecl v -> v.ToDoc
@@ -887,7 +887,7 @@ and Stmt =
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
             let outs = outs |> List.map (fun o -> o.ToDoc)
-            prefix <^> txt "run" <+> (dpBlechCall qname ins outs)
+            txt "run" <^> prefix <+> (dpBlechCall qname ins outs)
         | FunctionCall (_, qname, ins, outs) ->
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
@@ -897,7 +897,7 @@ and Stmt =
             match exprOpt with
             | None -> txt "return"
             | Some expr -> txt "return" <+> expr.ToDoc
-    
+            
     override this.ToString () = 
         render None <| this.ToDoc
 

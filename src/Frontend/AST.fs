@@ -743,10 +743,12 @@ and Expr =
 and Receiver =
     | Location of LhsInAssignment
     | FreshLocation of VarDecl
+    | ReturnLocation of range 
     member rcv.Range =
         match rcv with
         | Location lhsia -> lhsia.Range
         | FreshLocation vdecl -> vdecl.Range
+        | ReturnLocation range -> range
 
 and Condition = 
     | Cond of Expr
@@ -796,8 +798,9 @@ and Stmt =
     // scoping
     | SubScope of range:range * StmtSequence // DO block END, ...for scoping reasons
     // calling
-    | ActivityCall of range:range * Receiver option * Code * Expr list * DynamicAccessPath list // range, where to store return values, who to call, method, inputs, outputs
-    | FunctionCall of range:range * Code * Expr list * DynamicAccessPath list // range, who to call, method, inputs, outputs
+    | ActivityCall of range:range * Receiver option * Code * Expr list * DynamicAccessPath list // range, where to store return values, who to call, inputs, outputs
+    | FunctionCall of range:range * Code * Expr list * DynamicAccessPath list // range, who to call, inputs, outputs
+    
     //| Emit of range:range * DynamicAccessPath // range, event to emit
     | Emit of range:range * Receiver * Expr option // range, event to emit
     | Return of range:range * Expr option // range, expression to return
@@ -1005,7 +1008,9 @@ let callRange optRange range inClose optOutClose =
     match optOutClose with
     | None -> unionRanges start inClose
     | Some outClose -> unionRanges start outClose
-   
+
+let tailCallRange start inClose optOutClose =
+    callRange None start inClose optOutClose
    
 let freshLocationRange (qual: Permission) (name: Name) (optType: DataType option) =
     match optType with

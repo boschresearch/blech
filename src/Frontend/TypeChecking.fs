@@ -881,7 +881,9 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             |> Result.bind (fun tlhs -> Ok (Some (UsedLoc tlhs)))
         | Some (AST.FreshLocation vdecl) ->
             checkFreshLocation lut vdecl (ValueTypes decl.returns)   // TODO: Currently the return value must be a value types, this might change
-            |> Result.bind (fun tvdecl -> Ok (Some (FreshLoc tvdecl)))           
+            |> Result.bind (fun tvdecl -> Ok (Some (FreshLoc tvdecl)))
+        | Some (AST.ReturnLocation rng) ->
+            Ok None // TODO: typecheck the return location, fjg. 30.06.20
         | None ->
             Ok None
     
@@ -892,7 +894,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
 
 /// Type check activity calls.
 /// An activity may return a value that is stored in resStorage upon termination.
-/// This is different to a function call which 
+/// This is different to a function call
 let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
     let checkIsActivity decl =
         if not decl.isFunction then Ok()
@@ -914,6 +916,7 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
             |> combine <| checkAssignReceiver pos lut rcv decl
             |> Result.map (createCall decl.name)
             )
+
 
 
 
@@ -1110,6 +1113,44 @@ let private fReturn retTypOpt pos exprOpt =
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
     | Some tr, None -> tr |> Result.bind (fun t -> Error [VoidReturnStmtMustReturn(pos,t)])
 
+
+/// Type check activity calls in return statement, i.e. tail calls
+/// An activity may return a value that is returned by the calling activity.
+
+//let private fReturnActCall lut (retTypeOpt : Result<Types, _> option) pos (ap: AST.Code) (inputs: Result<_,_> list) outputs =
+    
+//    let checkProcedureAndReturn decl =
+//        if decl.isFunction then
+//            Error [RunAFun(pos, decl)]
+//        else   
+//            match retTypeOpt with
+//            | None ->
+//                match decl.returns with
+//                | Void -> Ok ()
+//                | _ -> Error [Dummy (pos, "return run call must be void") ]  // Todo: Error message
+//            | Some retTypeResult ->
+//                retTypeResult
+//                |> Result.bind ( 
+//                    fun (typ: Types) -> 
+//                        if isLeftSupertypeOfRight typ (ValueTypes decl.returns) then 
+//                            Ok () 
+//                        else 
+//                            Error [Dummy (pos, "return type mismatch")] )  // Todo: Error message
+    
+//    let createTailCall name ((_, ins), outs) =
+//        ReturnActivityCall (pos, name, ins, outs)
+    
+//    match ap with
+//    | AST.Procedure dname ->
+//        ensureCurrent dname
+//        |> Result.map lut.ncEnv.dpathToQname
+//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
+//        |> Result.bind (fun decl ->
+//            checkProcedureAndReturn decl
+//            |> combine <| checkInputs pos inputs decl.name decl.inputs
+//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
+//            |> Result.map (createTailCall decl.name)
+//            )
 
 let private fPragma = unsupported1 "pragma inside stmt sequence"
 

@@ -432,7 +432,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
         | Return (_, expr) ->
             Option.fold checkExpr ctx expr 
-
+            
         | Pragma _ 
         | Nothing ->
             ctx
