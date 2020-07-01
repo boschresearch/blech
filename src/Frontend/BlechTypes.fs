@@ -55,44 +55,6 @@ type Mutability =
 
     member this.ToDoc = txt <| this.ToString()
 
-
-/// Float constants are represented as strings to ensure that a value's
-/// representation in the generated code is exactly the same as in
-/// the original Blech source code.
-//type FloatConst =
-//    | Single of string
-//    | Double of string
-//    override this.ToString () =
-//        let dotZero =
-//            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
-//            elif this.GetString.Contains "." then ""
-//            else ".0"
-//        match this with
-//        | Single s -> s + dotZero + "f"
-//        | Double s -> s + dotZero 
-//    member this.ToDoc = this.ToString () |> txt
-//    member private this.GetString : string =
-//        match this with
-//        | Single s 
-//        | Double s -> s
-//    member private this.ReplaceString s =
-//        match this with
-//        | Single _ -> Single s
-//        | Double _ -> Double s
-//    member this.ToFloat = this.GetString |> float
-//    member this.IsZero =
-//        this.ToFloat = 0.0
-//    member this.Negate =
-//        let s = this.GetString
-//        ( if s.StartsWith "-" then s.[1..]
-//          else "-" + s )
-//        |> this.ReplaceString
-//    static member Zero precision =
-//        match precision with
-//        | FloatType.Float32 -> FloatConst.Single "0.0"
-//        | FloatType.Float64 -> FloatConst.Double "0.0"
-
-
 /// Data types
 /// Only value-typed data may be returned from functions or activities
 type ValueTypes =
@@ -104,10 +66,7 @@ type ValueTypes =
     | BitsType of BitsType
     | FloatType of FloatType
     //structured
-    | ArrayType of size: Size * datatype: ValueTypes // TODO: Correct this comment, fjg. 14.02.20
-                                                     // we use int for size to save ourselves from casting expressions 
-                                                     // like 'size-1' or to pass size to functions that expect int
-                                                     // such as List.replicate
+    | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
     | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
     
@@ -156,7 +115,6 @@ and ReferenceTypes =
             Some r
 
 
-// TODO: check if simple any types really need to carry their value, fjg. 27.01.20
 and Types = 
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
@@ -581,7 +539,7 @@ and RhsStructure =
     | FunCall of QName * TypedRhs list * TypedLhs list
     // constants and literals
     | BoolConst of bool
-    | NatConst of Constants.Nat // Todo: check correct usage everywhere, fjg. 11.02.20
+    | NatConst of Constants.Nat
     | IntConst of Constants.Int
     | BitsConst of Constants.Bits
     | FloatConst of Constants.Float
