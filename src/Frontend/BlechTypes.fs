@@ -878,15 +878,20 @@ and Stmt =
             ss
             |> List.map (fun s -> s.ToDoc)
             |> vsep
-        | ActivityCall (_, qname, retvar, ins, outs) -> // TODO: this is not correct for return locations, fjg. 31.06.20
-            let prefix =
+        | ActivityCall (_, qname, retvar, ins, outs) ->
+            let run = 
                 match retvar with
-                | None -> empty
-                | Some lhs -> lhs.ToDoc <+> txt "=" <+> empty
+                | None -> txt "run"
+                | Some (ReturnLoc _) ->
+                    txt "return run"
+                | Some (UsedLoc tlhs) ->
+                    txt "run" <+> tlhs.ToDoc <+> txt "="
+                | Some (FreshLoc vdecl) ->
+                    txt "run" <+> vdecl.ToDoc <+> txt "="
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
             let outs = outs |> List.map (fun o -> o.ToDoc)
-            txt "run" <^> prefix <+> (dpBlechCall qname ins outs)
+            run <+> dpBlechCall qname ins outs
         | FunctionCall (_, qname, ins, outs) ->
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
