@@ -1126,45 +1126,6 @@ let private fReturn retTypOpt pos exprOpt =
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
     | Some tr, None -> tr |> Result.bind (fun t -> Error [VoidReturnStmtMustReturn(pos,t)])
 
-
-/// Type check activity calls in return statement, i.e. tail calls
-/// An activity may return a value that is returned by the calling activity.
-
-//let private fReturnActCall lut (retTypeOpt : Result<Types, _> option) pos (ap: AST.Code) (inputs: Result<_,_> list) outputs =
-    
-//    let checkProcedureAndReturn decl =
-//        if decl.isFunction then
-//            Error [RunAFun(pos, decl)]
-//        else   
-//            match retTypeOpt with
-//            | None ->
-//                match decl.returns with
-//                | Void -> Ok ()
-//                | _ -> Error [Dummy (pos, "return run call must be void") ]  // Todo: Error message
-//            | Some retTypeResult ->
-//                retTypeResult
-//                |> Result.bind ( 
-//                    fun (typ: Types) -> 
-//                        if isLeftSupertypeOfRight typ (ValueTypes decl.returns) then 
-//                            Ok () 
-//                        else 
-//                            Error [Dummy (pos, "return type mismatch")] )  // Todo: Error message
-    
-//    let createTailCall name ((_, ins), outs) =
-//        ReturnActivityCall (pos, name, ins, outs)
-    
-//    match ap with
-//    | AST.Procedure dname ->
-//        ensureCurrent dname
-//        |> Result.map lut.ncEnv.dpathToQname
-//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-//        |> Result.bind (fun decl ->
-//            checkProcedureAndReturn decl
-//            |> combine <| checkInputs pos inputs decl.name decl.inputs
-//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-//            |> Result.map (createTailCall decl.name)
-//            )
-
 let private fPragma = unsupported1 "pragma inside stmt sequence"
 
 let private fNothing = unsupported1 "the empty statement" Range.range0
