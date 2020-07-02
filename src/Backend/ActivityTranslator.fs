@@ -379,10 +379,17 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
         let tmpLhs = Some {lhs = LhsCur (Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
         let prereqStmts, translatedCall = cpActCall ctx callee.name inputs outputs lhsLocals lhsPcs tmpLhs true tempVarName
         prereqStmts @ [tmpDecl] |> dpBlock, translatedCall
-    | _ -> 
+    | Some _, Some {lhs = ReturnVar} ->
+        let callerRetVar = Option.get (!curComp).iface.retvar
+        let returnLhs = Some { lhs = LhsCur (Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
+        let prereqStmts, translatedCall = cpActCall ctx callee.name inputs outputs lhsLocals lhsPcs returnLhs false tempVarName
+        prereqStmts |> dpBlock, translatedCall
+    | Some _, Some _ 
+    | None, None -> 
         let prereqStmts, translatedCall = cpActCall ctx callee.name inputs outputs lhsLocals lhsPcs receiverVar false tempVarName
         prereqStmts |> dpBlock, translatedCall
-
+    | None, Some _ ->
+        failwith "A receiver for void return cannot occur at this stage."
 
 let rec private processNode ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) =
     match node.Payload.Typ with
@@ -828,6 +835,7 @@ let private collectVarsToPrev2 pg =
     let rec processLhs lhs =
         match lhs.lhs with
         | Wildcard -> []
+        | ReturnVar -> []
         | LhsCur tml
         | LhsNext tml ->
             tml.FindAllIndexExpr

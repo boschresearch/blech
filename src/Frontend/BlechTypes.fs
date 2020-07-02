@@ -498,13 +498,16 @@ and TypedMemLoc =
 and LhsStructure =
     // discard the assigned rhs value
     | Wildcard 
+    // return location for activity calls
+    | ReturnVar 
     // locations
-    | LhsCur of TypedMemLoc  
+    | LhsCur of TypedMemLoc
     | LhsNext of TypedMemLoc
     
     member this.ToDoc =
         match this with
         | Wildcard -> txt "_"
+        | ReturnVar -> txt "return"
         | LhsCur t -> t.ToDoc
         | LhsNext t -> txt "next" <+> t.ToDoc
     
@@ -513,12 +516,14 @@ and LhsStructure =
     member this.AddFieldAccess ident = 
         match this with
         | Wildcard -> failwith "Cannot add a field access to a wildcard."
+        | ReturnVar -> failwith "Cannot add a field access to a return."
         | LhsCur t -> LhsCur (t.AddFieldAccess ident)
         | LhsNext t -> LhsNext (t.AddFieldAccess ident)
     
     member this.AddArrayAccess (idx: TypedRhs) = 
         match this with
         | Wildcard -> failwith "Cannot add a field access to a wildcard."
+        | ReturnVar -> failwith "Cannot add a field access to a wildcard."
         | LhsCur t -> LhsCur (t.AddArrayAccess idx)
         | LhsNext t -> LhsNext (t.AddArrayAccess idx)
     
@@ -726,13 +731,13 @@ and TypedLhs =
 and Receiver =
     | UsedLoc of TypedLhs
     | FreshLoc of VarDecl
-    | ReturnLoc of Types * range
+    | ReturnLoc of TypedLhs
 
     member this.ToDoc =
        match this with
        | UsedLoc tlhs -> tlhs.lhs.ToDoc
        | FreshLoc ldecl -> ldecl.ToDoc
-       | ReturnLoc _ -> txt "return"
+       | ReturnLoc tlhs -> tlhs.lhs.ToDoc
     
     override this.ToString() = render None <| this.ToDoc
     
@@ -740,13 +745,13 @@ and Receiver =
         match this with
         | UsedLoc tlhs -> tlhs.Range
         | FreshLoc ldecl -> ldecl.pos
-        | ReturnLoc (_, rng) -> rng
+        | ReturnLoc tlhs -> tlhs.Range
     
     member this.Typ =
         match this with
         | UsedLoc tlhs -> tlhs.typ
         | FreshLoc vdecl -> vdecl.datatype
-        | ReturnLoc (typ, _) -> typ
+        | ReturnLoc tlhs -> tlhs.typ
     
 
 //=============================================================================

@@ -481,7 +481,8 @@ and makeTmpForComplexConst inFunction ctx (expr: TypedRhs) =
             | TypedMemLoc.ArrayAccess (tml, idx) -> sprintf "%s[%s]" (myPrintTml tml) (idx.ToString())
 
         match lhs with
-        | Wildcard -> txt "_"
+        | Wildcard -> failwith "Complex const assignment to Wildcard should not occur."
+        | ReturnVar -> failwith "Complex const assignment to ReturnVar should not occur."
         | LhsCur t -> t.ToDoc
         | LhsNext t -> txt "next" <+> t.ToDoc
     
@@ -591,6 +592,7 @@ and private decomposeLhs = function
     | LhsCur name -> Current, name
     | LhsNext _ -> failwith "render next locations not implemented yet."
     | Wildcard -> failwith "Lhs cannot be a wildcard at this stage."
+    | ReturnVar -> failwith "Lhs cannot be a return var at this stage."
 
 and private selectNameRendererInActivity ctx tml =
     match getDeclKind ctx tml with
@@ -680,6 +682,7 @@ and cpMemCpyDoc inFunction ctx lhs rhsDoc =
 and cpMemSet inFunction ctx lhs =
     match lhs.lhs with
     | Wildcard -> empty // nothing to do, any result would be thrown away
+    | ReturnVar -> empty // nothing to do, any result will be copied to return var of calling activity
     | LhsCur _
     | LhsNext _ ->
         let prereqLhs, processedLhs = 

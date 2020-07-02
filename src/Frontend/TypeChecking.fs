@@ -50,7 +50,7 @@ let rec private stmtType stmt =
     // Must, if "return run"
     | ActivityCall (_, _, receiverOpt, _, _) ->
         match receiverOpt with
-        | Some (ReturnLoc (ValueTypes t, _)) -> Ok (Must t)
+        | Some (ReturnLoc {typ = ValueTypes t}) -> Ok (Must t) // TODO: Restructure types, return should allow Value and Referencetypes, but no AnyTypes, fjg 2.7.20
         | _ -> Ok NoReturn
     // the "return" statement    
     | Return (pos, exprOpt) ->
@@ -178,6 +178,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
         let checkLhs out =
             match out.lhs with
             | Wildcard -> Ok ()
+            | ReturnVar -> Ok ()
             | LhsCur tml
             | LhsNext tml ->
                 tml.FindAllIndexExpr
@@ -357,6 +358,7 @@ let private determineCalledSingletons lut bodyRes =
         let checkLhs out =
             match out.lhs with
             | Wildcard -> []
+            | ReturnVar -> []
             | LhsCur tml
             | LhsNext tml ->
                 tml.FindAllIndexExpr
@@ -847,11 +849,11 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
         |> Result.bind (
             function
             | None -> Ok None
-            | Some (ReturnLoc (typ, _)) ->
-                if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+            | Some (ReturnLoc {typ = t}) ->
+                if isLeftSupertypeOfRight t (ValueTypes declReturns) then 
                     Ok storage 
                 else 
-                    Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]                
+                    Error [ReturnTypeMismatch(pos, t, ValueTypes declReturns)]                
             | Some (FreshLoc vdecl) ->
                 let typ = vdecl.datatype
                 if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
@@ -896,7 +898,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             checkFreshLocation lut vdecl (ValueTypes decl.returns)   // TODO: Currently the return value must be a value types, this might change
             |> Result.bind (fun tvdecl -> Ok (Some (FreshLoc tvdecl)))
         | Some (AST.ReturnLocation rng) ->
-            Ok (Some (ReturnLoc (ValueTypes decl.returns, rng))) 
+            Ok (Some (ReturnLoc { lhs = ReturnVar; typ = ValueTypes decl.returns; range = rng })) 
         | None ->
             Ok None
     

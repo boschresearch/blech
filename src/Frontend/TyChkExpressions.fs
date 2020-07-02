@@ -85,6 +85,7 @@ let internal isLhsMutable lut lhs =
 
     match lhs with
     | Wildcard -> true
+    | ReturnVar -> true
     | LhsCur tml
     | LhsNext tml -> fst <| isTmlMutable tml
 

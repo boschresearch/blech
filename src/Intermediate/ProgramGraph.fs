@@ -157,6 +157,7 @@ module IntermediateContext =
             do appendAllWritten context tlhs.Range memLabel node
         match tlhs.lhs with
         | Wildcard -> ()
+        | ReturnVar -> ()
         | LhsCur tml ->
             tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
             do addWrittenLabel (AccessLabel.Cur tml)
@@ -346,8 +347,8 @@ module ProgramGraph =
                 Some { lhs = LhsCur (Loc varDecl.name); typ = varDecl.datatype; range = varDecl.pos }
             | Some (UsedLoc tlhs) -> 
                 Some tlhs
-            | Some (ReturnLoc _) -> // TODO: Discuss this with Friedrich, fjg. 31.06.20
-                None
+            | Some (ReturnLoc tlhs) ->
+                Some tlhs
             | None -> 
                 None
 
