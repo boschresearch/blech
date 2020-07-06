@@ -715,12 +715,21 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             cpType lhsTyp <+> ppName retcodeVar <^> semi
 
         let tmpDecl, translatedCall = makeActCall ctx compilations curComp node pos whoToCall receiverVar inputs outputs retcodeVar
-        
+
+        let returnOrProceed = 
+            match receiverVar with
+            | Some {lhs = ReturnVar} -> // return run... end this thread
+                // if (0 == retcode) {end thread} else {nextStep}
+                let hasActTerminated = txt "0 ==" <+> ppName retcodeVar
+                cpIfElse hasActTerminated (endThread node) nextStep
+            | _ -> // normal run... proceed to the next block
+                nextStep
+
         dpBlock
         <| [ declRetcodeVar
              tmpDecl
              translatedCall
-             nextStep ]
+             returnOrProceed ]
 
 let private translateBlock ctx compilations curComp block =
     // traverse subgraph
