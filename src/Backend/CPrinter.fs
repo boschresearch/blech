@@ -253,7 +253,7 @@ let internal cpExternFunction tcc docs name iface (returns: ValueTypes) =
                       datatype = ValueTypes returns
                       isMutable = true 
                       allReferences = HashSet() }
-            // we never refer to this variable in code generation, so there is no need to add it any context
+            TypeCheckContext.addDeclToLut tcc qname (Declarable.ParamDecl v)
             {iface with retvar = Some v}, cpType (ValueTypes Void)
 
     let prototype = 

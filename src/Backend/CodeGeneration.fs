@@ -332,7 +332,8 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
         let ifaceOf (fp: FunctionPrototype) =
             {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
         cWrappers
-        |> Seq.map (fun fp -> cpExternFunction ctx.tcc fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
+        |> Seq.toList // change to List for eager evaluation since ctx.tcc may be updated during the map iteration
+        |> List.map (fun fp -> cpExternFunction ctx.tcc fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
         |> dpToplevel
 
     let directCCalls = // TODO: directCCalls must not be exported, check this, fjg. 20.02.19

@@ -545,14 +545,16 @@ and cpExpr tcc expr : PrereqExpression =
             TypeCheckContext.addDeclToLut tcc lhsName (Declarable.VarDecl v)
             let tmpLhs = LhsCur (TypedMemLoc.Loc lhsName)
             let tmpExpr = {lhs = tmpLhs; typ = lhsTyp; range = v.pos}
-            let reReceiver = cpOutputArg tcc tmpExpr
+            let reReceiverAsOutArg = cpOutputArg tcc tmpExpr
+            let tmpRExpr = {rhs = RhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = v.pos}
+            let reReceiverAsRhs = cpExpr tcc tmpRExpr
             let funCall =
                 name 
-                <^> (reIns @ reOuts @ [reReceiver] |> List.map (getCExpr >> (fun x -> x.Render)) |> dpCommaSeparatedInParens) 
+                <^> (reIns @ reOuts @ [reReceiverAsOutArg] |> List.map (getCExpr >> (fun x -> x.Render)) |> dpCommaSeparatedInParens) 
                 <^> semi
             mkPrereqExpr
-            <| ((reIns @ reOuts @ [reReceiver] |> List.collect getPrereq) @ [tmpDecl; funCall])
-            <| getCExpr reReceiver
+            <| ((reIns @ reOuts @ [reReceiverAsOutArg] |> List.collect getPrereq) @ [tmpDecl; funCall])
+            <| getCExpr reReceiverAsRhs // return receiver as a right-hand-side expression
 
     // constants and literals
     | BoolConst b -> mkPrereqExpr [] (Value (if b then txt "1" else txt "0"))
@@ -793,26 +795,37 @@ let mkRenderedStmt p r =
 
 
 let rec cpAssign tcc left right =
-    let leftRE = cpLexpr tcc left
     let rightRE = cpExpr tcc right
     let directAssignment (newRight: PrereqExpression) = 
-        leftRE.prereqStmts @ newRight.prereqStmts, (leftRE.cExpr.Render <+> txt "=" <+> newRight.cExpr.Render <^> semi)
-    let directArrayAssignment newRight =
-        // memcopy arrays
-        let memcpy =
-            txt "memcpy"
-            <^> dpCommaSeparatedInParens
-                [ leftRE.cExpr.Render
-                  newRight.cExpr.Render
-                  sizeofMacro right.typ ]
-            <^> semi
-        leftRE.prereqStmts @ newRight.prereqStmts, memcpy
+        match left.lhs with
+        | Wildcard ->
+            newRight.prereqStmts, newRight.cExpr.Render <^> semi
+        | LhsCur _
+        | LhsNext _ ->
+            let leftRE = cpLexpr tcc left
+            leftRE.prereqStmts @ newRight.prereqStmts, (leftRE.cExpr.Render <+> txt "=" <+> newRight.cExpr.Render <^> semi)
+    let directArrayAssignment (newRight: PrereqExpression) =
+        match left.lhs with
+        | Wildcard ->
+            newRight.prereqStmts, newRight.cExpr.Render <^> semi
+        | LhsCur _
+        | LhsNext _ ->
+            let leftRE = cpLexpr tcc left
+            // memcopy arrays
+            let memcpy =
+                txt "memcpy"
+                <^> dpCommaSeparatedInParens
+                    [ leftRE.cExpr.Render
+                      newRight.cExpr.Render
+                      sizeofMacro right.typ ]
+                <^> semi
+            leftRE.prereqStmts @ newRight.prereqStmts, memcpy
     //let norm newLeft = // unit function, prevents StackOverflow (evaluation only when called explicitly)
     //    normaliseAssign tcc (left.Range, newLeft, right)
     //    |> List.map (function 
     //        | Stmt.Assign(_, lhs, rhs) -> cpAssign tcc lhs rhs
     //        | _ -> failwith "Must be an assignment here!") // not nice
-    match left.typ with
+    match right.typ with
     | ValueTypes (ValueTypes.ArrayType _) ->
         match right.rhs with
         | ArrayConst _ -> // this can be optimised for constant rhs, as it used to be
