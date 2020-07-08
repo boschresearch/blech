@@ -1,0 +1,23 @@
+@[EntryPoint]
+activity A () (a: int32, b: int32, c: int32, d: int32)
+    a = 1
+    b = a
+    c = b
+    d = c
+    cobegin
+        repeat
+            a = c
+            c = 0
+            await true
+            a = a + 1
+            c = b - a
+            await true
+        end
+    with
+        repeat
+            await true
+            b = b + a
+            d = 2 * c
+        end
+    end
+end

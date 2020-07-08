@@ -349,8 +349,11 @@ let getValueFromName timepoint tcc name : CBlob =
     match typeAndIsOutput with
     | Some(ValueTypes (ValueTypes.StructType _)),_ ->
         ValueOf (Loc (Name cName))
-    | Some typ, true when typ.IsPrimitive ->
+    | Some typ, true when typ.IsPrimitive && timepoint.Equals Current ->
         // primitive typed, output parameter
+        // the check for current is necessary here: although "no prev on ref"
+        // it is possible that the code generation (of abort) has internally
+        // introduced a prev location (may become obsolete in the future)
         ValueOf (Loc (Name cName))
     | _ ->
         Loc (Name cName)

@@ -922,12 +922,10 @@ Stmt
 
     /* --- preemptions --- */
     | WHEN ConditionSeq Preemption Block END  
-                                                { Stmt.Preempt (unionRanges $1 $5, $3, 
-                                                                $2, Before, $4) }        
+                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
     
     | WHEN ConditionSeq Preemption Block THEN Block END   /* todo: add optional then block to AST, fjg 27.9.19 */
-                                                { Stmt.Preempt (unionRanges $1 $7, $3, 
-                                                                $2, Before, $4) }        
+                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
 
     | WHEN error END                            { logParserError $1;
                                                   Stmt.Nothing }        

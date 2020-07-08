@@ -142,6 +142,11 @@ let mkAuxQNameFrom s =
 let mkIndexedAuxQNameFrom s = 
     QName.CreateAuxiliary [] <| mkAuxIdentifierFrom s
 
+let mkPrefixIndexedNameFrom s =
+    let cur = !auxVarIndex
+    auxVarIndex := 1 + !auxVarIndex
+    sprintf "%s_%s" (string cur) s
+
     
 /// Strength is required for cobegin blocks
 type Strength = 

@@ -865,8 +865,10 @@ let private fIteratorFor = unsupported5 "for-iterators" //TODO
 
 let private fPreempt range preemption moment conds body =
     let createPreemption (c, b) = Preempt (range, preemption, c, moment, b)
+        
     // we could introduce a warning if body has no delay (preemption useless)
     // checkStmtsWillPause range name body
+
     match moment with 
     // we do not support OnNext preemptions yet
     | Moment.OnNext -> unsupported1 "Next step preemptions are not yet supported." range 
