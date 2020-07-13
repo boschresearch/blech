@@ -264,6 +264,8 @@ and VarDecl =
         initialiser: Expr option
         annotations: Annotation list
     }
+    member this.Range = this.range
+
     interface IDeclarable with
         member this.Range = this.range
         member this.name = this.name
@@ -604,13 +606,14 @@ and Literal =
 and LhsInAssignment =
     | Wildcard of range
     | Loc of DynamicAccessPath
-    | EventLoc of DynamicAccessPath
+    //| FreshLoc of VarDecl  // Used in emit and run statements
+    //| EventLoc of DynamicAccessPath
     member this.Range =
         match this with
         | Wildcard r -> r
         | Loc l -> l.Range
-        | EventLoc l -> l.Range
-    
+        //| FreshLoc lv -> lv.Range
+        //| EventLoc l -> l.Range
 
 /// Code refers to executable code
 and Code = 
@@ -735,9 +738,21 @@ and Expr =
         | Parens (range=r)
             -> r
 
+/// Receivers and Conditions
+
+and Receiver =
+    | Location of LhsInAssignment
+    | FreshLocation of VarDecl
+    | ReturnLocation of range 
+    member rcv.Range =
+        match rcv with
+        | Location lhsia -> lhsia.Range
+        | FreshLocation vdecl -> vdecl.Range
+        | ReturnLocation range -> range
+
 and Condition = 
     | Cond of Expr
-    | SignalBinding of VarDecl
+    | SignalBinding of VarDecl // TODO: probably needs an Expr because this is not an initialiser, fjg 6.5.20
     | Tick of StaticNamedPath * range:range
     member c.Range = 
         match c with
@@ -783,9 +798,11 @@ and Stmt =
     // scoping
     | SubScope of range:range * StmtSequence // DO block END, ...for scoping reasons
     // calling
-    | ActivityCall of range:range * LhsInAssignment option * Code * Expr list * DynamicAccessPath list // range, where to store return values, who to call, method, inputs, outputs
-    | FunctionCall of range:range * Code * Expr list * DynamicAccessPath list // range, who to call, method, inputs, outputs
-    | Emit of range:range * DynamicAccessPath // range, event to emit
+    | ActivityCall of range:range * Receiver option * Code * Expr list * DynamicAccessPath list // range, where to store return values, who to call, inputs, outputs
+    | FunctionCall of range:range * Code * Expr list * DynamicAccessPath list // range, who to call, inputs, outputs
+    
+    //| Emit of range:range * DynamicAccessPath // range, event to emit
+    | Emit of range:range * Receiver * Expr option // range, event to emit
     | Return of range:range * Expr option // range, expression to return
         
     member stmt.Range =
@@ -991,9 +1008,11 @@ let callRange optRange range inClose optOutClose =
     match optOutClose with
     | None -> unionRanges start inClose
     | Some outClose -> unionRanges start outClose
+
+let tailCallRange start inClose optOutClose =
+    callRange None start inClose optOutClose
    
-   
-let loopVarRange (qual: Permission) (name: Name) (optType: DataType option) =
+let freshLocationRange (qual: Permission) (name: Name) (optType: DataType option) =
     match optType with
     | None -> unionRanges qual.Range name.Range
     | Some typ -> unionRanges qual.Range typ.Range
@@ -1117,6 +1136,7 @@ type ASTNode =
     | StructTypeDecl' of StructTypeDecl
     | NewTypeDecl' of NewTypeDecl
     | TypeDecl' of TypeDecl
+    | Receiver of Receiver
     | Lexpr' of LhsInAssignment
     | Expr' of Expr
     | Condition of Condition
@@ -1128,8 +1148,8 @@ type ASTNode =
 // end of AST data structures
 
 /// Postorder (i.e. bottom-up) AST walker.
-let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
+let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
     match treeNode with
     | Package p -> 
         let result = List.map (fun m -> recurse (ASTNode.Member' m)) p.members
@@ -1240,8 +1260,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
             let result = List.map (fun s -> recurse (ASTNode.Stmt s)) body
             fSubScope (range, result)
         // calling
-        | ActivityCall (range, optLhs, pname, inputOptList, outputOptList) ->
-            let leftRes = Option.map (fun l -> recurse (ASTNode.Lexpr' l)) optLhs
+        | ActivityCall (range, optReceiver, pname, inputOptList, outputOptList) ->
+            let leftRes = Option.map (fun l -> recurse (ASTNode.Receiver l)) optReceiver
             let resIn = List.map (fun i -> recurse(ASTNode.Expr' i)) inputOptList
             let resOut = List.map (fun o -> recurse(ASTNode.Expr' (Expr.Var o))) outputOptList // is this OK?
             fActCall (range, leftRes, pname, resIn, resOut)
@@ -1249,8 +1269,10 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
             let resIn = List.map (fun i -> recurse(ASTNode.Expr' i)) inputOptList
             let resOut = List.map (fun o -> recurse(ASTNode.Expr' (Expr.Var o))) outputOptList // is this OK?
             fFunCall (range, pname, resIn, resOut)
-        | Emit(range, pname) ->
-            fEmit(range, pname)
+        | Emit(range, receiver, optExpr) ->
+            let rcvrRes = recurse (ASTNode.Receiver receiver)
+            let optPayloadRes = Option.map (fun rhs -> recurse (ASTNode.Expr' rhs)) optExpr
+            fEmit(range, rcvrRes, optPayloadRes)
         | Return (range, expr) ->
             let result = Option.map (fun e -> recurse (ASTNode.Expr' e)) expr 
             fReturn (range, result)
@@ -1301,6 +1323,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
         //let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.aliasfor
         let resAtt = List.map (fun a -> recurse (ASTNode.Annotation' a)) t.annotations
         fTypeDecl (t.range, t.name, resDat, resAtt) 
+    | Receiver r -> 
+        fReceiver r
     | Lexpr' l ->
         fLexpr l
     | Expr' e ->

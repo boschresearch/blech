@@ -491,9 +491,9 @@ Location
                                                     qname = ref None } }
 
 AssignLocation
-    : Location                                  { Loc $1 }
-    | WILDCARD                                  { Wildcard (snd $1) }
-    | EMIT Location                             { EventLoc $2 }
+    : Location                                  { LhsInAssignment.Loc $1 }
+    | WILDCARD                                  { LhsInAssignment.Wildcard (snd $1) }
+ /*   | EMIT Location                             { EventLoc $2 } */
 
 LocationList
     : Location                     
@@ -724,7 +724,7 @@ VerificationCondition   /* fjg todo: Add slices and and strings as built-in slic
 /* ----- Local Declarations ----- */
 
 LocalVariable
-    :  OptAnnotations VariableQualifier OptRef Name TypeAnnotation OptOnClock  /* fjg todo: add clock to AST and range */
+    : OptAnnotations VariableQualifier OptRef Name TypeAnnotation OptOnClock  /* fjg todo: add clock to AST and range */
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $5.Range
                                                              name = $4
                                                              permission = $2
@@ -733,6 +733,7 @@ LocalVariable
                                                              datatype = Some $5
                                                              initialiser = None
                                                              annotations = $1 } }
+    
     | OptAnnotations EXTERN VariableQualifier OptRef Name TypeAnnotation OptOnClock  /* fjg todo: add clock to AST and range */
                                                 { LocalVar { VarDecl.range = unionRanges $2 $6.Range
                                                              name = $5
@@ -743,8 +744,7 @@ LocalVariable
                                                              initialiser = None
                                                              annotations = $1 } }
 
-
-    |  OptAnnotations VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr OptOnClock  
+    | OptAnnotations VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr OptOnClock  
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $7.Range
                                                              name = $4
                                                              permission = $2
@@ -766,8 +766,7 @@ LocalConstant
                                                              initialiser = None
                                                              annotations = $1 } } 
 
-
-    |  OptAnnotations ConstantQualifier OptRef Name OptTypeAnnotation ASSIGN Expr
+    | OptAnnotations ConstantQualifier OptRef Name OptTypeAnnotation ASSIGN Expr
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $7.Range
                                                              name = $4
                                                              permission = $2
@@ -781,44 +780,49 @@ LocalConstant
 /* ----- Statements ----- */
 
 ForLoops                
-    : FOR LoopVariable ASSIGN Expr COMMA Expr DO Block END             
+    : FOR FreshLocation ASSIGN Expr COMMA Expr DO Block END             
                                                 { Stmt.NumericFor (unionRanges $1 $9, 
                                                                    $2, $4, $6, None, $8) }  
-    | FOR LoopVariable ASSIGN Expr COMMA Expr COMMA Expr DO Block END  
+    | FOR FreshLocation ASSIGN Expr COMMA Expr COMMA Expr DO Block END  
                                                 { Stmt.NumericFor (unionRanges $1 $11, 
                                                                    $2, $4, $6, Some $8, $10) }
-    | FOR LoopVariable IN Expr DO Block END               
+    | FOR FreshLocation IN Expr DO Block END               
                                                 { Stmt.IteratorFor (unionRanges $1 $7, 
                                                                     $2, Iterator.In, $4, $6) }
-    | FOR LoopVariable OF Expr DO Block END                            
+    | FOR FreshLocation OF Expr DO Block END                            
                                                 { Stmt.IteratorFor (unionRanges $1 $7, 
                                                                     $2, Iterator.Of, $4, $6) }
     | FOR error END                  
                                                 { logParserError $1;
                                                   Stmt.Nothing }
+
     
-LoopVariable
-    : VariableQualifier OptRef Name OptTypeAnnotation   
-                                                { { VarDecl.range = loopVarRange $1 $3 $4 
-                                                    name = $3 
+FreshLocation
+    : VariableQualifier Name OptTypeAnnotation   
+                                                { { VarDecl.range = freshLocationRange $1 $2 $3 
+                                                    name = $2 
                                                     permission = $1
-                                                    isReference = $2 <> Option.None
+                                                    isReference = false
                                                     isExtern = false
-                                                    datatype = $4 
+                                                    datatype = $3 
                                                     initialiser = None 
                                                     annotations = [] } }
 
 
-FunctionCalls                         /* TODO: Add OptPartial to AST, fjg 24.09.19 */
-    : Location OptPartial Inputs OptOutputs                { Stmt.FunctionCall (callRange None $1.Range <| snd $3 <| snd $4, 
+FunctionCall                          /* TODO: Add OptPartial to AST, fjg 24.09.19 */
+    : Location OptPartial Inputs OptOutputs                
+                                                { Stmt.FunctionCall (callRange None $1.Range <| snd $3 <| snd $4, 
                                                                      Code.Procedure $1, 
                                                                      fst $3, 
                                                                      fst $4) }
     | Location ErrorBeforeEOL EOL               { logParserError $1.Range;
                                                   Stmt.Nothing }
 
+ValueReceiver
+    : AssignLocation                            { Receiver.Location $1 } 
+    | FreshLocation                             { Receiver.FreshLocation $1 }
 
-ActivityCalls                        /* fjg: todo: add next info and clock info to AST */
+ActivityCall                         /* fjg: todo: add next info and clock info to AST */
                                      /* TODO: Add OptPartial to AST, fjg 24.09.19 */
     : OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  
                                                 { Stmt.ActivityCall (callRange $1 $2 <| snd $5 <| snd $6, 
@@ -826,21 +830,37 @@ ActivityCalls                        /* fjg: todo: add next info and clock info 
                                                                      Code.Procedure $3, 
                                                                      fst $5, 
                                                                      fst $6) }
-    
-    | AssignLocation ASSIGN OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  
+  
+    | OptNext RUN ValueReceiver ASSIGN Location OptPartial Inputs OptOutputs OptOnClock  
+                                                { Stmt.ActivityCall (callRange $1 $2 <| snd $7 <| snd $8, 
+                                                                     Some $3,
+                                                                     Code.Procedure $5, 
+                                                                     fst $7, 
+                                                                     fst $8) }
+/*
+    | OptNext RUN LocalVariable ASSIGN Location OptPartial Inputs OptOutputs OptOnClock  
                                                 { Stmt.ActivityCall (callRange None $1.Range <| snd $7 <| snd $8, 
                                                                      Some $1,
                                                                      Code.Procedure $5, 
                                                                      fst $7, 
                                                                      fst $8) }
+*/
+/*
     | AssignLocation ASSIGN ErrorBeforeEOL EOL  
                                                 { logParserError $1.Range;
                                                   Stmt.Nothing }
-
+*/
     | OptNext RUN ErrorBeforeEOL EOL            
                                                 { logParserError $2;
                                                   Stmt.Nothing }
 
+EmitStatement
+    : EMIT ValueReceiver                        { Stmt.Emit (unionRanges $1 $2.Range,
+                                                             $2,
+                                                             None) }
+    | EMIT ValueReceiver ASSIGN Expr            { Stmt.Emit (unionRanges $1 $4.Range,
+                                                             $2,
+                                                             Some $4) }
 
 Block
     : StmtSequence OptReturn                    { $1 @ $2 |> filterOutNothingStmts }
@@ -867,7 +887,7 @@ Stmt
     /* --- local declarations --- */
     | LocalVariable                             { $1 }
     | LocalConstant                             { $1 }
-   
+    
     /* --- assign --- */ 
     | AssignLocation ASSIGN Expr                { Stmt.Assign (unionRanges $1.Range $3.Range,
                                                                $1, 
@@ -883,11 +903,12 @@ Stmt
 
     /* --- emit statement */
 
-    | EMIT Location                             { Stmt.Emit (unionRanges $1 $2.Range, $2) }
+    | EmitStatement                             { $1 }
+    /* | EMIT Location                             { Stmt.Emit (unionRanges $1 $2.Range, $2) } */
 
     /* --- subprogram activation --- */                                                             
-    | FunctionCalls                             { $1 }                
-    | ActivityCalls                             { $1 } 
+    | FunctionCall                              { $1 }                
+    | ActivityCall                              { $1 } 
 
     /* --- conditional --- */
     | IF ConditionSeq THEN Block END                 
@@ -973,6 +994,12 @@ OptOutputs
 
 OptReturn
     :                                           { [] }
+    | RETURN OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  OptSemicolon
+                                                { [ Stmt.ActivityCall (tailCallRange $1 <| snd $6 <| snd $7, 
+                                                                     Some (ReturnLocation $1) ,
+                                                                     Code.Procedure $4, 
+                                                                     fst $6, 
+                                                                     fst $7) ] }
     /* --- return from function or activity --- */
     | RETURN OptExpr OptSemicolon               { [ Stmt.Return (returnRange $1 $2,
                                                                  $2) ] }
@@ -990,6 +1017,7 @@ StmtSequence
     | SEMICOLON StmtSequence                    { $2 }
 
 SignalBinding
+    /*
     : VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr        /* Expr must be side-effect free */     
                                                 { Condition.SignalBinding { VarDecl.range = unionRanges $1.Range $6.Range
                                                                             name = $3
@@ -999,6 +1027,12 @@ SignalBinding
                                                                             datatype = $4
                                                                             initialiser = Some $6
                                                                             annotations =  [] } }     
+    */ 
+    : FreshLocation ASSIGN Expr        /* Expr must be side-effect free, Usage of Expr as initialiser is probably wrong */     
+                                                { Condition.SignalBinding { $1 with
+                                                                                VarDecl.range = unionRanges $1.Range $3.Range
+                                                                                initialiser = Some $3 } }    
+
 
 ClockTick
     : TICK PointedName                          { Condition.Tick ($2, unionRanges $1 $2.Range) }

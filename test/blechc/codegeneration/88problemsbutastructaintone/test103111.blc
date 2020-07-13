@@ -20,7 +20,7 @@ activity A()
     var x: T = {x=71.23}
     if true then
         var y: bool
-        y = run B(prev x.s)() // local inarg struct fieldaccess prev
+        run y = B(prev x.s)() // local inarg struct fieldaccess prev
     end
     await true
     

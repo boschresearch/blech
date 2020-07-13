@@ -1,0 +1,22 @@
+activity Increment(n: nat32) returns nat32
+    await true
+    return n+1
+end
+
+
+activity Eleven () returns nat32
+    var willBeTen: nat32 = 0
+    repeat
+        run let n = Increment(willBeTen)
+        willBeTen = n
+    until willBeTen == 10 end
+    return run Increment(willBeTen)
+end
+
+@[EntryPoint]
+activity Main()
+    var eleven: nat32
+    repeat
+        run eleven = Eleven()
+    end
+end

@@ -19,7 +19,7 @@ activity A()(x: T)
     x = {x=71.23}
     if true then
         var y: bool
-        y = run B(x.x)() // output inarg simple fieldaccess cur
+        run y = B(x.x)() // output inarg simple fieldaccess cur
     end
     await true
     

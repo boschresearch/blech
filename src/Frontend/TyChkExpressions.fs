@@ -31,7 +31,7 @@ open TyChkAmendment
 // Functions for checking type and expression properties
 //=========================================================================
 
-let private ensureCurrent (dname: AST.DynamicAccessPath) =
+let internal ensureCurrent (dname: AST.DynamicAccessPath) =
     match dname.timepoint with
     | AST.TemporalQualification.Current ->
         // While checkExpr tries to evaluate trivial expressions, it does NOT
@@ -85,6 +85,7 @@ let internal isLhsMutable lut lhs =
 
     match lhs with
     | Wildcard -> true
+    | ReturnVar -> true
     | LhsCur tml
     | LhsNext tml -> fst <| isTmlMutable tml
 
@@ -1198,10 +1199,10 @@ let private conversion behaviour range (checkedExpr: TypedRhs, checkedToType: Ty
 
 /// Check that arguments in the output position match the number and type of
 /// the formal parameters.
-let private checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> list) declName (outputParams: ParamDecl list) =
+let internal checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> list) declName (outputParams: ParamDecl list) =
     let rec typecheckOutputs = function
         | [] -> []
-        | (paramDecl, (argExpr: TypedLhs))::ls -> 
+        | ((paramDecl: ParamDecl), (argExpr: TypedLhs))::ls -> 
             if argExpr.typ = paramDecl.datatype then // Given location must have the same type as formal output parameter for proper reading and writing from within the callee (10.04.18)
                 if argExpr.lhs.Equals Wildcard then 
                     Error [ExprMustBeALocationL (pos, argExpr)] :: typecheckOutputs ls
@@ -1224,10 +1225,10 @@ let private checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> li
 
 /// Check that arguments in the input position match the number and type of
 /// the formal parameters.        
-let private checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams: ParamDecl list) =
+let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams: ParamDecl list) =
     let rec typecheckInputs = function
         | [] -> []
-        | (argDecl, (expr: TypedRhs))::ls -> 
+        | ((argDecl: ParamDecl), (expr: TypedRhs))::ls -> 
             match amendRhsExpr true argDecl.datatype expr with // this behaves like an initialisation
             | Ok amendedExpr ->
                 if argDecl.datatype.IsValueType() || isExprALocation amendedExpr then
@@ -1602,9 +1603,9 @@ and internal checkAssignLExpr lut lhs =
     match lhs with
     | AST.Wildcard _ -> 
         Ok { lhs = Wildcard; typ = Any; range = lhs.Range }
-    | AST.Loc dname
-    | AST.EventLoc dname ->
+    | AST.Loc dname ->
         checkLExpr lut dname
+    
 
 
 /// Type check functions calls.
@@ -1645,56 +1646,58 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
 /// Type check activity calls.
 /// An activity may return a value that is stored in resStorage upon termination.
 /// This is different to a function call which 
-let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_> list) outputs =
-    let checkIsActivity decl =
-        if not decl.isFunction then Ok()
-        else Error [RunAFun(pos, decl)]
-    let checkReturnType storage declName declReturns =
-        match storage with
-        | None ->
-            match declReturns with
-            | Void -> Ok None
-            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
-        | Some leftExprRes ->
-            leftExprRes |> Result.bind (
-                fun lexpr -> 
-                    match lexpr.typ with 
-                    | Any -> // wildcard
-                        Ok None
-                    | ValueTypes _ ->
-                        Ok (Some lexpr) 
-                    | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
-                )
-        |> Result.bind (
-            function
-            | None -> Ok None
-            | Some (lexpr: TypedLhs) ->
-                let typ = lexpr.typ
-                if isLhsMutable lut lexpr.lhs then
-                    if lexpr.typ.IsAssignable then
-                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                            Ok (Some lexpr) 
-                        else 
-                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
-                    else
-                        Error [AssignmentToLetFields (pos, lexpr.ToString())]
-                else Error [AssignmentToImmutable (pos, lexpr.ToString())]
-                )
-    let createCall name (((_, ins), outs), retvar) =
-        ActivityCall (pos, name, retvar, ins, outs)
+
+// MOVED TO TYPECHECKING BECAUSE IT IS A STATEMENT
+//let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_> list) outputs =
+//    let checkIsActivity decl =
+//        if not decl.isFunction then Ok()
+//        else Error [RunAFun(pos, decl)]
+//    let checkReturnType storage declName declReturns =
+//        match storage with
+//        | None ->
+//            match declReturns with
+//            | Void -> Ok None
+//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
+//        | Some leftExprRes ->
+//            leftExprRes |> Result.bind (
+//                fun lexpr -> 
+//                    match lexpr.typ with 
+//                    | Any -> // wildcard
+//                        Ok None
+//                    | ValueTypes _ ->
+//                        Ok (Some lexpr) 
+//                    | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
+//                )
+//        |> Result.bind (
+//            function
+//            | None -> Ok None
+//            | Some (lexpr: TypedLhs) ->
+//                let typ = lexpr.typ
+//                if isLhsMutable lut lexpr.lhs then
+//                    if lexpr.typ.IsAssignable then
+//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+//                            Ok (Some lexpr) 
+//                        else 
+//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
+//                    else
+//                        Error [AssignmentToLetFields (pos, lexpr.ToString())]
+//                else Error [AssignmentToImmutable (pos, lexpr.ToString())]
+//                )
+//    let createCall name (((_, ins), outs), retvar) =
+//        ActivityCall (pos, name, retvar, ins, outs)
     
-    match ap with
-    | AST.Procedure dname ->
-        ensureCurrent dname
-        |> Result.map lut.ncEnv.dpathToQname
-        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-        |> Result.bind (fun decl ->
-            checkIsActivity decl
-            |> combine <| checkInputs pos inputs decl.name decl.inputs
-            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-            |> combine <| checkReturnType resStorage decl.name decl.returns
-            |> Result.map (createCall decl.name)
-            )
+//    match ap with
+//    | AST.Procedure dname ->
+//        ensureCurrent dname
+//        |> Result.map lut.ncEnv.dpathToQname
+//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
+//        |> Result.bind (fun decl ->
+//            checkIsActivity decl
+//            |> combine <| checkInputs pos inputs decl.name decl.inputs
+//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
+//            |> combine <| checkReturnType resStorage decl.name decl.returns
+//            |> Result.map (createCall decl.name)
+//            )
 
 /// Check that condition is a boolean, side-effect free expression
 let internal fCondition lut cond = 

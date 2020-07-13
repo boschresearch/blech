@@ -1,0 +1,35 @@
+activity TailCallIt () returns bool
+    await true
+    return true
+end
+
+activity VoidReturn ()
+    await true
+    return
+end
+
+activity CallIt () returns bool
+    await true
+    if true then
+        return true
+    else 
+        cobegin
+            var b: bool
+            run b = TailCallIt()
+        with
+            run var b = TailCallIt()
+        with
+            run _ = TailCallIt()
+        end
+        // return false
+        return run TailCallIt()
+    end
+end
+
+@[EntryPoint]
+activity Main () ()
+    run _ = CallIt()
+    run var b = CallIt()
+    run b = CallIt()
+    run VoidReturn()
+end

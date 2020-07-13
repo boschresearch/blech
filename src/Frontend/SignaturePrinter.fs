@@ -256,10 +256,7 @@ module SignaturePrinter =
         | AST.LhsInAssignment.Wildcard _ -> 
             txt "_"
         | AST.LhsInAssignment.Loc l -> 
-            bpDynamicAccessPath l
-        | AST.LhsInAssignment.EventLoc l -> 
-            txt "emit" <^> bpDynamicAccessPath l
-        
+            bpDynamicAccessPath l    
             
     and private ppStructField name value =
         bpName name <+> chr '=' <+> bpExpr value

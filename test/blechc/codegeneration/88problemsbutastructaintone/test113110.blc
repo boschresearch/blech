@@ -15,7 +15,7 @@ end
 
 activity A(x: T)()
     var r: bool
-    r = run B(x.s) // input inarg struct fieldaccess cur
+    run r = B(x.s) // input inarg struct fieldaccess cur
     await true
 end
 

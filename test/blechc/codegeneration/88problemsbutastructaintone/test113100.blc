@@ -15,7 +15,7 @@ end
 
 activity A(x: S)()
     var r: bool
-    r = run B(x) // input inarg struct direct cur
+    run r = B(x) // input inarg struct direct cur
     await true
 end
 

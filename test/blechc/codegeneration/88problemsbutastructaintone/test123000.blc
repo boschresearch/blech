@@ -17,7 +17,7 @@ activity A()(x: float64)
     x = 1.23
     await true
     var y: bool
-    y = run B(x)() // output inarg simple direct cur
+    run y = B(x)() // output inarg simple direct cur
     await true
 end
 

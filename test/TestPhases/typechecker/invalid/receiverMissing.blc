@@ -1,0 +1,14 @@
+activity NonVoidReturn () returns bool
+    await true
+    return false
+end
+
+function f() returns bool
+    return false
+end
+
+@[EntryPoint]
+activity Main ()
+    f()
+    run NonVoidReturn()
+end
