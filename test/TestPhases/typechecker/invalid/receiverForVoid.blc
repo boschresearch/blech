@@ -1,0 +1,13 @@
+activity VoidReturn ()
+    await true
+    return
+end
+
+
+@[EntryPoint]
+activity Main ()
+    var v: bool
+    run v = VoidReturn()
+    run var void = VoidReturn()
+    run _ = VoidReturn()
+end

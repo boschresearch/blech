@@ -1,0 +1,9 @@
+activity NonVoidReturn () returns bool
+    await true
+    return true
+end
+
+@[EntryPoint]
+activity Main () ()
+    return run NonVoidReturn()
+end

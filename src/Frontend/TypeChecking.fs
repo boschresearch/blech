@@ -878,7 +878,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
         | Some location ->
             match decl.returns with
             | Void ->
-                Error [Dummy (location.Range, "no receiver for void return allowed")]
+                Error [ReceiverForVoidReturn (location.Range, decl)]
             | _ ->
                 Ok (Some location)
         | None ->
@@ -886,8 +886,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Void -> 
                 Ok None                
             | _ ->
-                // Error [Dummy (decl.pos, "receiver necessary")]
-                Error [Dummy (pos, "receiver necessary")]
+                Error [MissingReceiver (pos, decl)]
                 
     let checkLocation rcv =
         match rcv with

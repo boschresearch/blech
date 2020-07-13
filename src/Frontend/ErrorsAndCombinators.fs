@@ -198,7 +198,12 @@ type TyCheckError =
     | IllegalEntryPoint of range * AST.Package
     // pragmas
     | UnknownPragma of range
-    // Dummy error used during development
+    
+    // --- result receivers ---
+    | ReceiverForVoidReturn of range * FunctionPrototype
+    | MissingReceiver of range * FunctionPrototype
+
+    // --- Dummy error, just for development purposes ---
     | Dummy of range * string
 
     interface Diagnostics.IDiagnosable with
@@ -406,7 +411,13 @@ type TyCheckError =
             | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
-            
+
+
+            // --- result receivers ---
+            | ReceiverForVoidReturn (p, activity) -> p, "No receiver for void return allowed."
+            | MissingReceiver (p, activity) -> p, sprintf "The returned value of '%s' must be ignored explicitly." (activity.name.ToString())
+
+            // --- Dummy error, just for development purposes ---
             | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
@@ -551,8 +562,22 @@ type TyCheckError =
                   { range = second; message = "redefinition"; isPrimary = true } ]
             | UnknownPragma range -> 
                 [ { range = range; message = "not known"; isPrimary = true} ]
+            
+            // --- result receivers ---
+            | ReceiverForVoidReturn (receiver, decl) -> 
+                [ { range = receiver; message = "wrong receiver"; isPrimary = true} 
+                  { range =  decl.pos ; message = "declaration"; isPrimary = false} ]
+            | MissingReceiver (call, decl) -> 
+                [ { range = call; message = "activity call"; isPrimary = true} 
+                  { range =  decl.pos ; message = "declaration"; isPrimary = false } ]
+                    
+            
+            // --- Dummy error, just for development purposes ---
+            
+
             | _ ->
                 []
+
 
         member err.NoteInformation = 
             match err with
@@ -638,6 +663,17 @@ type TyCheckError =
                 ["Delete one of the annotations."]
             | UnknownPragma _ ->
                 ["This is not a defined Blech pragma attribute, check the spelling."]
+            
+            // --- result receivers ---
+            | ReceiverForVoidReturn _ ->
+                ["Remove the receiver."]
+            | MissingReceiver _-> 
+                [ "Use a wildcard '_' to ignore the return value." ]
+            
+            // --- Dummy error, just for development purposes ---
+            | Dummy _ ->
+                [ "Development message. Replace by a specific error message"]            
+            
             | _ ->
                 []
 
