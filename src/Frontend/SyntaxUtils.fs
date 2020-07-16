@@ -399,7 +399,6 @@ module ParserUtils =
             <|| ParserContext.getDiagnosticsLogger ()
             <| NotUnitOne (nat, r)
 
-
     /// Checks the correct module in the package head
     let checkModuleName (name: AST.StaticNamedPath) =
         if not (name.identifiers = ParserContext.getModuleName ()) then

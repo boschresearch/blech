@@ -32,6 +32,17 @@ open Blech.Common
 
 let newline = ('\n' | '\r' '\n')
 
+(* strings follow https://docs.python.org/2.0/ref/strings.html
+   verbatim strings follow f# and c#
+   TODO: add triplequoted and multiline strings, fjg. 16.07.20 *)
+
+let shortstringchar = [^ '\\' '\"' '\n']
+let escapeseq = '\\' ['\x00' - '\x7F']
+let shortstringitem = (shortstringchar | escapeseq)
+let stringliteral = '"' shortstringitem* '"'
+let doublequotes = "\"\""
+let verbatimstringliteral = "@\"" (shortstringitem | doublequotes)* '"'
+
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
 
 let binliteral = "0b"('_'?['0'-'1'])+
@@ -309,11 +320,16 @@ rule Token = parse
 
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-    | '\"' [^ '\"']* '\"'   { let l, r = getLexemeAndRange lexbuf in      
-                              (* The string value strips of "", the range contains "" *)
-                              STRING (l.Substring(1, l.Length - 2), r) }   
+    | stringliteral         { let l, r = getLexemeAndRange lexbuf in      
+                              // The string value strips of " ", the range contains " "
+                              // escape sequences get replaced by their respective char
+                              STRING ( sprintf "%s" <| l.Substring(1, l.Length - 2), r ) }   
+    | verbatimstringliteral { let l, r = getLexemeAndRange lexbuf in      
+                              // The string value strips of @" ", the range contains @" "
+                              // replaces "" with "
+                              STRING ( l.Substring(2, l.Length - 3).Replace("\"\"", "\""), r ) }
 
-     | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
+    | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
                             { ID (getLexemeAndRange lexbuf) }
 
     | '_'+                  { WILDCARD (getLexemeAndRange lexbuf) }
@@ -354,7 +370,7 @@ and SkipBlockComment = parse
 
 
 and SkipLineComment = parse
-    | chunkwithoutnewline                 { Token lexbuf }
+    | chunkwithoutnewline   { Token lexbuf }
 
 and SkipLineOnError = parse
     | newline               { let eol = EOL (getRange lexbuf) in

@@ -30,11 +30,13 @@ module Bindings =
         let matches = rx.Matches binding
         [ for m in matches -> getIndex m ]
 
-    let replaceParameters binding (ids: string list) =
+    let replaceParameters binding (actualParams: string list) =
         let replace (m : Match) =
             let i = getIndex m
-            assert (i > 0 && i <= List.length ids)
-            ids.Item (i - 1)
+            match List.tryItem (i-1) actualParams with
+            | None -> "$" + string i
+            | Some actParam -> actParam
+
         let evaluator = MatchEvaluator replace
         
         Regex.Replace (binding, parameterPattern, evaluator)

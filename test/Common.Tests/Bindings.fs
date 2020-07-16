@@ -22,7 +22,8 @@ open Blech.Common.Bindings // system under test
 [<TestFixture>]
 module BindingsTest =
     let binding = "do { strcpy($2->buf, $1->buf); $2->len = $1->len; } while (0)"
-    
+    let binding2 = "strncpy(*($1).buf, *($2).buf, $3)"
+
     [<Test>]
     let testGetIndexes () =
         let idcs = getParameterIndices binding
@@ -36,6 +37,12 @@ module BindingsTest =
     let testReplace () =
         let ids = ["a"; "b"]
         let code = replaceParameters binding ids
+        Assert.AreEqual(code, "do { strcpy(b->buf, a->buf); b->len = a->len; } while (0)")
 
-        Assert.AreEqual(code, "do { strcpy(b->buf, a->buf); b->len = a->len; } while (0)")   
-        
+        // to few parameters
+        let code = replaceParameters binding ["x"]
+        Assert.AreEqual(code, "do { strcpy($2->buf, x->buf); $2->len = x->len; } while (0)")
+
+        let exprs = ["a"; "f()"; "42"]
+        let code2 = replaceParameters binding2 exprs
+        Assert.AreEqual(code2, "strncpy(*(a).buf, *(f()).buf, 42)")
