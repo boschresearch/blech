@@ -19,7 +19,7 @@ namespace Blech.Common
 module BlechString = 
     open System.Text.RegularExpressions
     
-    let invalidEscapeSequence = Regex @"\\[^abfnrtv\\""' 0-9 x]"
+    let invalidEscapeSequence = Regex @"\\[^ abfnrtv\\""' 0-9 x]"
     
     let decimalEscape = Regex @"\\[0-9]{1,3}"
     
