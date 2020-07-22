@@ -19,6 +19,9 @@ module Blech.Frontend.SyntaxUtils
 open Constants
 open CommonTypes
 
+open System.Text.RegularExpressions
+
+
 module SyntaxErrors =
     open Blech.Common
     open Blech.Common.Range
@@ -75,7 +78,7 @@ module SyntaxErrors =
                     [ { range = moduleName.Range 
                         message = "should map to file and/or directory."
                         isPrimary = true } ]
-                
+
                 | UnexpectedToken (_token, range, _, start) ->
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
@@ -118,6 +121,9 @@ module SyntaxErrors =
 
     type LexerError =
         | CommentNotClosed of here: Range.range * opened: Range.range
+        | InvalidEscapeSequence of strRng: Range.range * value: string * escRng: Range.range
+        | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
+        | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
         | TabularUsed of here: Range.range
         | UnknownToken of token: string * here: Range.range
         | NotAPath of here: Range.range
@@ -129,6 +135,15 @@ module SyntaxErrors =
                 | CommentNotClosed (here = r) ->
                     { range = r
                       message = "comment '/*' not terminated." } 
+                | InvalidEscapeSequence (range, value, _) ->
+                    { range = range
+                      message =sprintf "invalid escape sequence '%s'." value }    
+                | DecimalEscapeTooLarge (range, value, _) ->
+                    { range = range
+                      message =sprintf "decimal escape '%s' too large." value }    
+                | InvalidHexEscape (range, value, _) ->
+                    { range = range
+                      message =sprintf "invalid hexadecimal escape '%s'." value }    
                 | TabularUsed where ->
                     { range = where
                       message = "illegal character tab ('\\t') found." }
@@ -137,15 +152,20 @@ module SyntaxErrors =
                       message = sprintf "unexpected or illegal character '%s' found." token }
                 | NotAPath (here = r) ->
                     { range = r
-                      message = "incorrect path specification" }
+                      message = "incorrect path specification." }
                 | EofInDocComment here ->
                     { range = here
-                      message = "end of file in doc comment" }
+                      message = "end of file in doc comment." }
                     
             member err.ContextInformation = 
                 match err with
                 | CommentNotClosed (opened = o) ->    
                     [ { range = o; message = "comment opened."; isPrimary = false } ]
+                | InvalidEscapeSequence (_, _, escRng)
+                | InvalidHexEscape (_, _, escRng) ->
+                    [ { range = escRng; message = "invalid"; isPrimary = true} ]
+                | DecimalEscapeTooLarge (_, _, escRng) ->
+                    [ { range = escRng; message = "too large"; isPrimary = true} ]
                 | TabularUsed here ->
                     [ { range = here; message = "tab character."; isPrimary = true } ]
                 | UnknownToken (here = r) ->
@@ -162,8 +182,22 @@ module SyntaxErrors =
 
             member err.NoteInformation = 
                 match err with
-                |TabularUsed _ ->
+                | TabularUsed _ ->
                     [ "Insert spaces, tabs are not allowed in Blech source code." ]
+                | InvalidEscapeSequence _ ->
+                    [ @"A literal string can contain the following C-like escape sequences:"
+                      @"'\a' (bell), '\b' (backspace), '\f' (form feed), '\n' (newline),"
+                      @"'\r' (carriage return), '\t' (horizontal tab), '\v' (vertical tab),"
+                      @"'\\' (backslash), '\""' (quotation mark [double quote]),"
+                      @"and '\'' (apostrophe [single quote])." ]
+                | DecimalEscapeTooLarge _ ->
+                    [ @"A decimal escape sequence '\ddd' specifies a byte in a literal string:"
+                      @"'ddd' specifies the numeric value with up to three decimal digits."
+                      @"Note that if a decimal escape sequence is to be followed by a digit,"
+                      @"it must be expressed using exactly three digits."]
+                | InvalidHexEscape _ ->
+                    [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
+                      @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
                 | UnknownToken _ ->
                     [ "Non-ASCII characters are not allowed in Blech source code."]
                 | NotAPath _ ->
@@ -177,6 +211,7 @@ module SyntaxErrors =
 module ParserUtils = 
     open System.Numerics
     open System
+
 
     open Blech.Common
     open SyntaxErrors
@@ -390,6 +425,7 @@ module ParserUtils =
                     Double.PositiveInfinity
         FAny (value, Some repr)
     
+    
     let parseOne (nat: string, r: Range.range) =
         match System.Int32.TryParse(nat) with
         | (true,value) when value = 1 -> 
@@ -485,11 +521,11 @@ module LexerUtils =
 
     /// Allows for collecting a doc string and its range
     type DocStringBuilder() =
-        let mutable doc: StringBuilder = new StringBuilder()
+        let mutable doc: StringBuilder = StringBuilder()
         let mutable range: Range.range = Range.range0
 
         member this.Init startRange =
-            doc <- new StringBuilder()
+            doc <- StringBuilder()
             range <- startRange
             this
         
@@ -511,7 +547,7 @@ module LexerUtils =
     let mutable commentStart: Range.range option = None
     let mutable commentDepth = 0
 
-    let mutable docString = new DocStringBuilder()
+    let mutable docString = DocStringBuilder()
    
     
 
@@ -538,38 +574,75 @@ module LexerUtils =
 
     // error reporting functions for lexer
 
+    let private reportError e = 
+        Diagnostics.Logger.logError 
+        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
+        <| e
+
     /// reports error: comment not terminated
     let commentNotClosed (lexbuf : LexBuffer<char>) =
         assert Option.isSome commentStart
-        Diagnostics.Logger.logError 
-        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
-        <| CommentNotClosed (getRange lexbuf, Option.get commentStart)
+        reportError <| CommentNotClosed (getRange lexbuf, Option.get commentStart)
 
 
     /// reports error: usage of TABULATOR
     let tabularUsed (lexbuf : LexBuffer<char>) =
-        Diagnostics.Logger.logError 
-        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
-        <| TabularUsed (getRange lexbuf)
+        reportError <| TabularUsed (getRange lexbuf)
 
 
     /// reports error: usage of non-ASCII character
     let unknownToken (lexbuf : LexBuffer<char>) =
-        Diagnostics.Logger.logError 
-        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
-        <| UnknownToken (getLexemeAndRange lexbuf)
+        reportError <| UnknownToken (getLexemeAndRange lexbuf)
         
     
     /// reports error: wrong path syntax
     let notAPath (lexbuf: LexBuffer<char>) =
-        Diagnostics.Logger.logError 
-        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
-        <| NotAPath (getRange lexbuf)
+        reportError <| NotAPath (getRange lexbuf)
     
 
     /// reports error: doc comment before EOF
     let eofInDocComment docRange =
-        Diagnostics.Logger.logError 
-        <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
-        <|  EofInDocComment docRange
+        reportError <|  EofInDocComment docRange
+
     
+    /// checks escape sequences in string literals
+    let checkStringLiteral(str: string, rng: Range.range) = 
+        let escapeRange (m : Match) = 
+            Range.range(rng.FileIndex,  
+                        rng.StartLine, rng.StartColumn + m.Index + 1, 
+                        rng.StartLine, rng.StartColumn + m.Index + m.Length)
+                 
+        let checkEscapeSeqs =
+            let ms = BlechString.invalidEscapeSequence.Matches str
+            if ms.Count > 0 then
+                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, escapeRange m)]
+            else
+                Ok ()
+
+        let checkDecimalEscapes =
+           let ms = BlechString.decimalEscape.Matches str
+           if ms.Count > 0 then
+                Error [for m in ms do 
+                       if not (BlechString.isValidDecimalEscape m.Value) then
+                            DecimalEscapeTooLarge (rng, m.Value, escapeRange m) ]
+           else
+                Ok ()
+         
+        let checkHexEscapes =
+            let ms = BlechString.invalidHexEscape.Matches str
+            printf "Matches: %A" ms
+            if ms.Count > 0 then
+                Error [for m in ms -> InvalidHexEscape (rng, m.Value, escapeRange m)]
+            else
+                Ok ()
+ 
+
+        let res =  
+            TyChecked.combine checkEscapeSeqs  checkDecimalEscapes //TODO: Split ErrorsAndCombinators into Combinators and TypecheckErrors, fjg 22.07.20 
+            |> TyChecked.combine <| checkHexEscapes
+        match res with
+        | Ok _ -> 
+            true
+        | Error errs ->
+            ignore <| List.map reportError errs
+            false

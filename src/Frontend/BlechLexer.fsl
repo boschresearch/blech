@@ -32,17 +32,6 @@ open Blech.Common
 
 let newline = ('\n' | '\r' '\n')
 
-(* strings follow https://docs.python.org/2.0/ref/strings.html
-   verbatim strings follow f# and c#
-   TODO: add triplequoted and multiline strings, fjg. 16.07.20 *)
-
-let shortstringchar = [^ '\\' '\"' '\n']
-let escapeseq = '\\' ['\x00' - '\x7F']
-let shortstringitem = (shortstringchar | escapeseq)
-let stringliteral = '"' shortstringitem* '"'
-let doublequotes = "\"\""
-let verbatimstringliteral = "@\"" (shortstringitem | doublequotes)* '"'
-
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
 
 let binliteral = "0b"('_'?['0'-'1'])+
@@ -75,6 +64,23 @@ let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
 let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
+
+(* strings follow https://docs.python.org/2.0/ref/strings.html
+   verbatim strings follow f# and c#
+   TODO: add triplequoted and multiline strings, fjg. 16.07.20 *)
+
+let shortstringchar = [^ '\\' '\"' '\n']
+// let escapechar = ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '"' '\'']
+// let decimalchar = (digit | digit digit | digit digit digit)
+// let escapeseq = '\\' (escapechar | decimalchar)
+// let escapeseq = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
+let escapeseq = '\\' ['\x00' - '\xff']
+let shortstringitem = (shortstringchar | escapeseq)
+let stringliteral = '"' shortstringitem* '"'
+let doublequotes = "\"\""
+let verbatimstringliteral = "@\"" (shortstringitem | doublequotes)* '"'
+
+
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -320,11 +326,14 @@ rule Token = parse
 
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-    | stringliteral         { let l, r = getLexemeAndRange lexbuf in      
-                              // The string value strips of " ", the range contains " "
-                              // escape sequences get replaced by their respective char
-                              STRING ( sprintf "%s" <| l.Substring(1, l.Length - 2), r ) }   
-    | verbatimstringliteral { let l, r = getLexemeAndRange lexbuf in      
+    | stringliteral         { let lxm, rng = getLexemeAndRange lexbuf      
+                              let str = lxm.Substring(1, lxm.Length - 2)
+                              if checkStringLiteral(str, rng) then
+                                STRING ( str, rng ) 
+                              else
+                                EOF rng }
+                                  
+    | verbatimstringliteral { let l, r = getLexemeAndRange lexbuf      
                               // The string value strips of @" ", the range contains @" "
                               // replaces "" with "
                               STRING ( l.Substring(2, l.Length - 3).Replace("\"\"", "\""), r ) }
