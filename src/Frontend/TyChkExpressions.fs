@@ -21,7 +21,6 @@ open Blech.Common
 open Constants
 open CommonTypes
 open BlechTypes
-open TyChecked
 open Evaluation
 open TypeCheckContext
 open TyChkAmendment
@@ -735,7 +734,7 @@ let private checkBitwise operator (expr1: TypedRhs) (expr2: TypedRhs) =
     let e1 = tryAmendPrimitiveAny expr2.typ expr1
     let e2 = tryAmendPrimitiveAny expr1.typ expr2
 
-    combine e1 e2
+    Result.combine e1 e2
     |> Result.bind (combineBitwiseOp operator)
 
 /// Returns the bitwise or of two typed expressions or an error in case of type mismatch.
@@ -785,7 +784,7 @@ let private checkShiftOp lut shift (expr: TypedRhs) (amount: TypedRhs) =
         | AnyInt
         | AnyBits ->
             tryEvalCompShiftAmount lut bt.GetSize amount
-            |> combine (Ok expr)
+            |> Result.combine (Ok expr)
             |> Result.bind (combineShiftOp shift)
         | _ ->
             Error [ NoShiftAmountType amount ] 
@@ -841,7 +840,7 @@ let private checkRelational operator (expr1: TypedRhs) (expr2: TypedRhs) =
     let e1 = tryPromotePrimitiveAny expr2.typ expr1
     let e2 = tryPromotePrimitiveAny expr1.typ expr2
     
-    combine e1 e2
+    Result.combine e1 e2
     |> Result.bind (combineRelationalOp operator)
 
 
@@ -915,7 +914,7 @@ let private checkArithmetic operator (expr1: TypedRhs) (expr2: TypedRhs) =
     let e1 = tryAmendPrimitiveAny expr2.typ expr1
     let e2 = tryAmendPrimitiveAny expr1.typ expr2
 
-    combine e1 e2
+    Result.combine e1 e2
     |> Result.bind (combineArithmeticOp operator)
 
 
@@ -1217,8 +1216,8 @@ let internal checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> l
             else
                 Error [ArgTypeMismatchL (pos, paramDecl, argExpr)] :: typecheckOutputs ls
     if outputArgs.Length = outputParams.Length then
-        contract outputArgs
-        |> Result.bind(List.zip outputParams >> typecheckOutputs >> contract)
+        Result.contract outputArgs
+        |> Result.bind(List.zip outputParams >> typecheckOutputs >> Result.contract)
     else
         Error [MismatchArgNum (pos, declName.ToString(), outputArgs.Length, outputParams.Length)]
 
@@ -1238,8 +1237,8 @@ let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams
             | Error e ->
                 Error e :: typecheckInputs ls
     if inputArgs.Length = inputParams.Length then
-        contract inputArgs
-        |> Result.bind(List.zip inputParams >> typecheckInputs >> contract)
+        Result.contract inputArgs
+        |> Result.bind(List.zip inputParams >> typecheckInputs >> Result.contract)
     else
         Error [MismatchArgNum (pos, declName.ToString(), inputArgs.Length, inputParams.Length)]
 
@@ -1277,8 +1276,8 @@ let rec private checkAggregateLiteral lut al r =
         // for every given struct field "ident=expr", check expr recursively
         | AST.StructFields fields ->
             fields
-            |> List.map (fun field -> Ok field.name.id |> combine <| checkExpr lut field.expr)
-            |> contract
+            |> List.map (fun field -> Ok field.name.id |> Result.combine <| checkExpr lut field.expr)
+            |> Result.contract
             |> Result.map (fun typedFields -> { rhs = StructConst typedFields; typ = AnyComposite; range = r })
         // for every array field "[idx]=expr", 
         //  check expr recursively
@@ -1311,21 +1310,21 @@ let rec private checkAggregateLiteral lut al r =
                             )
                     |> function
                     | Ok thisFieldNum -> // field index determined successfully
-                        (combine 
+                        (Result.combine 
                         <| Ok thisFieldNum
                         <| checkExpr lut field.value) // yields a pair of index and typechecked value 
                         :: checkFields (thisFieldNum + Constants.SizeOne) rest // continue with the next array index
                     | Error x -> [Error x] // in case of error, just wrap it in a list and stop recursion
             
             checkFields Constants.SizeZero fields
-            |> contract
+            |> Result.contract
             |> Result.map (fun ckdFields -> { rhs = ArrayConst ckdFields; typ = AnyComposite; range = r})
 
 /// Translate a dynamic access path to a typed memory location
 and private checkUntimedDynamicAccessPath lut dname =
     let qname, subexpr = lut.ncEnv.decomposeDpath dname
     let tmlInit =
-        combine 
+        Result.combine 
         <| Ok (Loc qname) 
         <| (getTypeFromDecl lut qname dname.range)
     match subexpr with
@@ -1395,7 +1394,7 @@ and private checkUntimedDynamicAccessPath lut dname =
 /// typecheck e1 and e2 and combine
 /// using f.
 and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
-    combine (checkExpr lut e1) (checkExpr lut e2)
+    Result.combine (checkExpr lut e1) (checkExpr lut e2)
     |> Result.bind f
 
 
@@ -1404,7 +1403,7 @@ and private combineTwoExpr lut (e1: AST.Expr) (e2: AST.Expr) f =
 /// typecheck bits and amount and combine
 /// using shf.
 and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
-    combine (checkExpr lut bits) (checkExpr lut amount)
+    Result.combine (checkExpr lut bits) (checkExpr lut amount)
     |> Result.bind (shiftFun lut)
 
 
@@ -1414,7 +1413,7 @@ and private combineShift lut (bits: AST.Expr) (amount: AST.Expr) shiftFun =
 /// using reTypeFun.
 and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFun =
     let rng = Range.unionRanges expr.Range typ.Range
-    combine (checkExpr lut expr) (checkDataType lut typ)
+    Result.combine (checkExpr lut expr) (checkDataType lut typ)
     |> Result.bind (reTypeFun rng)
 
 
@@ -1422,7 +1421,7 @@ and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFu
 /// We guarantee that compile time expressions are evaluated to a literal
 /// BoolConst, IntConst, FloatConst, ResetConst, StructConst, ArrayConst
 /// where the latter two may only contain const literals in their fields recursively.
-and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
+and internal checkExpr (lut: TypeCheckContext) expr = 
     match expr with
     | AST.Expr.Const literal -> checkSimpleLiteral literal
     | AST.Expr.AggregateConst (ac, r) -> checkAggregateLiteral lut ac r
@@ -1636,9 +1635,9 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
         |> Result.bind (getSubProgDeclAsPrototype lut pos)
         |> Result.bind (fun decl ->
             checkIsFunction decl
-            |> combine <| checkInputs pos inputs decl.name decl.inputs
-            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-            |> combine <| checkReturnType decl.name decl.returns
+            |> Result.combine <| checkInputs pos inputs decl.name decl.inputs
+            |> Result.combine <| checkOutputs lut pos outputs decl.name decl.outputs
+            |> Result.combine <| checkReturnType decl.name decl.returns
             |> Result.map (createCall (decl.name, decl.returns))
             )
 

@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="BlechStrings.fs" />
     <Compile Include="Arguments.fs" />
+    <Compile Include="BlechString.fs" />
     <Compile Include="Bindings.fs" />
     <Compile Include="Logging.fs" />
     <Compile Include="Services.fs" />

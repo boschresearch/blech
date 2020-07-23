@@ -22,10 +22,11 @@
 ///============================================================================
 module Blech.Frontend.TyChkAmendment
 
+open Blech.Common
+
 open Constants
 open CommonTypes
 open BlechTypes
-open TyChecked
 open Evaluation
 
 module Range = Blech.Common.Range
@@ -347,7 +348,7 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
     
     kvps                   // type checked key value pairs as given by the programmer
     |> List.map processKvp // check that each kvp belongs to this struct
-    |> contract
+    |> Result.contract
     |> Result.map(
         merge // fill up all non-0 values that were not specified by the programmer
         >> (fun (literal) -> { rhs = StructConst literal; typ = lTyp; range = pos })
@@ -379,7 +380,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
                      
             values 
             |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
-            |> contract
+            |> Result.contract
             |> Result.map (
                 List.zip indices
                 >> merge // fill up array initialisers if necessary
@@ -452,8 +453,7 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
 /// Poor man's type deduction for variable initialisation.
 /// If either type or initial value is given, infer the other one if possible.
 /// If both are given, check that the types agree.
-let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<TypedRhs> option) =
-
+let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt = 
     let inferFromRhs (expr: TypedRhs) =
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)
@@ -478,9 +478,9 @@ let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<Ty
     | Some dtyRes, None ->
         dtyRes 
         |> Result.map (getInitValueWithoutZeros pos name)
-        |> Result.bind (combine dtyRes)
+        |> Result.bind (Result.combine dtyRes)
     | Some dtyRes, Some vRes ->
-        combine dtyRes vRes
+        Result.combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
             amendRhsExpr true dty v
             |> Result.map (fun amendedV -> (dty, amendedV))

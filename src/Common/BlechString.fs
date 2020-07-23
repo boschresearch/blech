@@ -26,15 +26,14 @@ module BlechString =
     let invalidHexEscape = Regex @"\\x([^ 0-9 a-f A-F].|.[^ 0-9 a-f A-F])"
     
 
-    let private decimalEscapeToInt (decEsc: string) : int = 
+    let decimalEscapeToInt (decEsc: string) : int = 
         let dec = decEsc.Substring(1)
         System.Int32.Parse dec
         
     let isValidDecimalEscape (decEsc: string) =
         let dec = decimalEscapeToInt decEsc
-        printfn "Decimal: %d" dec
         (0 <= dec) && (dec <= 255)
 
-    let decimalToOctalEscape (decEsc: string) =
-        let dec = decimalEscapeToInt decEsc
-        "\\" + sprintf "%03o" dec  // octal with 3 digits
+    let decimalToOctalEscape (decimal : int) =
+        assert (0 <= decimal && decimal <= 255)
+        "\\" + sprintf "%03o" decimal  // octal with 3 digits

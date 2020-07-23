@@ -20,7 +20,6 @@
     <Compile Include="PrettyPrint.fs" />
     <Compile Include="Attribute.fs" />
     <Compile Include="BlechTypes.fs" />
-    <Compile Include="ErrorsAndCombinators.fs" />
     <Compile Include="SyntaxUtils.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="BlechLexer.fs" />
@@ -28,6 +27,7 @@
     <Compile Include="SymbolTable.fs" />
     <Compile Include="NameChecking.fs" />
     <Compile Include="SignaturePrinter.fs" />
+    <Compile Include="TyChkErrors.fs" />
     <Compile Include="TypeCheckContext.fs" />
     <Compile Include="Evaluation.fs" />
     <Compile Include="TyChkAmendment.fs" />

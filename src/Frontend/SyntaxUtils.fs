@@ -638,8 +638,8 @@ module LexerUtils =
  
 
         let res =  
-            TyChecked.combine checkEscapeSeqs  checkDecimalEscapes //TODO: Split ErrorsAndCombinators into Combinators and TypecheckErrors, fjg 22.07.20 
-            |> TyChecked.combine <| checkHexEscapes
+            Result.combine checkEscapeSeqs  checkDecimalEscapes 
+            |> Result.combine <| checkHexEscapes
         match res with
         | Ok _ -> 
             true
