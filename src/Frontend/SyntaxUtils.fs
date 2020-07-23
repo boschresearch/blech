@@ -613,24 +613,24 @@ module LexerUtils =
                         rng.StartLine, rng.StartColumn + m.Index + m.Length)
                  
         let checkEscapeSeqs =
-            let ms = BlechString.invalidEscapeSequence.Matches str
+            let ms = BlechString.invalidCharacterEscape.Matches str
             if ms.Count > 0 then
                 Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, escapeRange m)]
             else
                 Ok ()
 
         let checkDecimalEscapes =
-           let ms = BlechString.decimalEscape.Matches str
-           if ms.Count > 0 then
-                Error [for m in ms do 
-                       if not (BlechString.isValidDecimalEscape m.Value) then
-                            DecimalEscapeTooLarge (rng, m.Value, escapeRange m) ]
-           else
+            let ms = 
+                BlechString.decimalEscape.Matches str
+                |> Seq.filter (fun (m : Match) -> not (BlechString.isValidDecimalEscape (m.Value)))
+            if  Seq.length ms > 0 then
+                Error [ for m in ms ->
+                            DecimalEscapeTooLarge (rng, m.Value, escapeRange m)]
+            else
                 Ok ()
          
         let checkHexEscapes =
             let ms = BlechString.invalidHexEscape.Matches str
-            printf "Matches: %A" ms
             if ms.Count > 0 then
                 Error [for m in ms -> InvalidHexEscape (rng, m.Value, escapeRange m)]
             else

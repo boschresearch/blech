@@ -16,10 +16,14 @@
 
 namespace Blech.Common
 
+
+// Blech strings follow Lua for escape codes https://www.lua.org/manual/5.4/manual.html#3.1
+
 module BlechString = 
+
     open System.Text.RegularExpressions
     
-    let invalidEscapeSequence = Regex @"\\[^ abfnrtv\\""' 0-9 x]"
+    let invalidCharacterEscape = Regex @"\\[^ abfnrtv\\""' 0-9 x]"
     
     let decimalEscape = Regex @"\\[0-9]{1,3}"
     
@@ -32,7 +36,7 @@ module BlechString =
         
     let isValidDecimalEscape (decEsc: string) =
         let dec = decimalEscapeToInt decEsc
-        (0 <= dec) && (dec <= 255)
+        0 <= dec && dec <= 255
 
     let decimalToOctalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
