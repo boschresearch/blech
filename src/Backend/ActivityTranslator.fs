@@ -729,13 +729,13 @@ let private translateBlock ctx compilations curComp block =
     // at each location perform the required action, then traverse all outgoing CONTROL FLOW edges and (respecting the guards)
     // perform the next action or set the pc
     // note that due to current block construction, each block contains only a sequence, branching control flow can only occur at the last (exit) node
-    let pc =
-        { name = mkAuxQNameFrom <| render None (pc4block block)
-          pos = range0
-          datatype = ValueTypes (NatType Nat32)
-          isMutable = true
-          allReferences = HashSet() }
-    curComp := Compilation.addPc !curComp block pc
+    //let pc =
+    //    { name = mkAuxQNameFrom <| render None (pc4block block)
+    //      pos = range0
+    //      datatype = ValueTypes (NatType Nat32)
+    //      isMutable = true
+    //      allReferences = HashSet() }
+    //curComp := Compilation.addPc !curComp block pc
     let prioAsPc = 2 * block.Priority |> string |> txt
     let cond = accessPC4block block <+> txt "==" <+> prioAsPc
     let body = processNode ctx compilations curComp block.innerNodes.[0]
@@ -926,9 +926,22 @@ let private collectVarsToPrev2 pg =
     |> List.distinct
 
 let private translateActivity ctx compilations curComp (subProgDecl: SubProgramDecl) =
+    let addPc _ (node : Node) =
+        let pc =
+            { name = mkAuxQNameFrom <| render None (pc4node node)
+              pos = range0
+              datatype = ValueTypes (NatType Nat32)
+              isMutable = true
+              allReferences = HashSet() }
+        curComp := Compilation.addPc !curComp node.Payload.Thread pc
+        false
     let name = subProgDecl.name
     //curComp := { !curComp with varsToPrev = collectVarsToPrev subProgDecl.body }
     curComp := { !curComp with varsToPrev = collectVarsToPrev2 ctx.pgs.[name] }
+    // build pc tree by traversing the program graph and create a pc per thread
+    let progGraph = ctx.pgs.[name]
+    let aborted = GenericGraph.depthsFirstForward [progGraph.Entry] addPc GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
+    assert not aborted
     let blockGraph = ctx.bgs.[name].blockGraph
     // perform scheduling (i.e. compute block priorities)
     BlockGraph.assignPriorities blockGraph

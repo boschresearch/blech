@@ -137,7 +137,7 @@ module PCtree =
         if alreadyAdded then 
             tree // nothing to do
         else
-            let allAncestors = Thread.allAncestors thread |> List.rev // sort from top to bottom
+            let allAncestors = Thread.allAncestors thread |> List.rev // sort from root to current thread
             addrec tree allAncestors pc
 
 
@@ -173,12 +173,6 @@ module Compilation =
             doc = None
         }
 
-    /// The Thread of a block is the Thread of its nodes
-    /// By construction all nodes in a block must have belong in the same thread
-    let private getBlockThread block =
-        block.innerNodes.[0].Payload.Thread
-        // fails if innerNodes is empty - which is impossible at this stage
-
     let internal addLocal comp local = 
         { comp with Compilation.actctx = 
                     comp.GetActCtx 
@@ -193,13 +187,13 @@ module Compilation =
     /// Add program counter to this computation's activity context
     /// the block determines where in the PC tree to put it
     /// based on thread relationships
-    let internal addPc comp (block: Block) pc =
+    let internal addPc comp thread pc =
         match comp.actctx with
         | None ->
             // assert that the first added pc is the main pc
             // (the main thread has no ancestors)
-            assert (getBlockThread block).Ancestor.IsNone
-            { comp with actctx = ActivityContext.mkNew (getBlockThread block) pc |> Some }
+            assert thread.Ancestor.IsNone
+            { comp with actctx = ActivityContext.mkNew thread pc |> Some }
         | Some ac ->
             // if this function has been called for another block
             // in the same thread then the given pc will already
@@ -207,7 +201,7 @@ module Compilation =
             if ac.pcs.Contains pc then comp 
             else
                 // assert that the newly added pc is NOT the main pc
-                assert (getBlockThread block).Ancestor.IsSome
-                let newTree = PCtree.add ac.pcs (getBlockThread block) pc
+                assert thread.Ancestor.IsSome
+                let newTree = PCtree.add ac.pcs thread pc
                 let newAc = {ac with pcs = newTree}
                 { comp with actctx = newAc |> Some }
