@@ -124,7 +124,7 @@ let rec private cpAction ctx curComp action =
         if List.contains v.name (!curComp).varsToPrev then
             // Dually to local variables--prev on external variables are 
             // generated as static C variables and thus added to the local interface here
-            let prevName = {v.name with basicId = "blech_prev_" + v.name.basicId} // TODO hack, fix the string magic!
+            let prevName = {v.name with prefix = "blech_prev" :: v.name.prefix} // TODO hack, fix the string magic!
             let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := newIface
             // add new declaration to type check table

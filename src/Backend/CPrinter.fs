@@ -164,7 +164,7 @@ let internal cpContextTypeDeclaration (comp: Compilation) =
             // in order to avoid clashes between a Blech variable "pc_1" and 
             // a context element pc_1, we need the blc_ prefix
             comp.GetActCtx.locals
-            |> List.map (fun local -> cpArrayDeclDoc (txt (BLC + "_" + local.name.basicId)) local.datatype <^> semi)
+            |> List.map (fun local -> cpArrayDeclDoc (txt (BLC + "_" + local.name.ToUnderscoreString())) local.datatype <^> semi)
             |> dpBlock
         let pcs = 
             comp.GetActCtx.pcs.AsList

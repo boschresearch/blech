@@ -85,6 +85,9 @@ type QName =
     // unused
     //member qn.toPrefix = 
     //    qn.prefix @ [qn.basicId]
+
+    member this.ToUnderscoreString() =
+        List.foldBack (fun n s -> n + "_" + s) this.prefix this.basicId
    
     override qn.ToString() =
         List.foldBack (fun n s -> n + "." + s) qn.prefix qn.basicId

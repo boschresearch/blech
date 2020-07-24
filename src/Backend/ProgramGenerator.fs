@@ -208,7 +208,7 @@ let rec private ppTopLevelArgument (tcc: TypeCheckContext) = function
     
 let ppTml isLocal ctx (tml: TypedMemLoc) = 
     if isLocal then
-        BLC + "_" + tml.ToBasicString() |> txt
+        BLC + "_" + tml.ToUnderscoreString() |> txt
     else
         ppTopLevelArgument ctx tml
 
@@ -258,7 +258,6 @@ let internal printState ctx printState (entryCompilation: Compilation) =
             | ValueTypes _ when dty.IsPrimitive ->
                 let formStr = getFormatStrForArithmetic dty
                 sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx.tcc n |> render None))
-                //sprintf """printf("%s", %s);""" formStr (prefStr + BLC + "_" + n.ToBasicString())
             | _ -> failwith "printPrimitive called on non-primitive."
 
         let rec printArray isLocal level prefStr (n: TypedMemLoc) =

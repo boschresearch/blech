@@ -490,6 +490,13 @@ and TypedMemLoc =
         | Loc qname -> qname.basicId.ToString() // here basicId
         | FieldAccess (tml, ident) -> tml.ToBasicString() + "." + ident
         | ArrayAccess (tml, idx) -> sprintf "%s[%s]" (tml.ToBasicString()) (idx.ToString()) // TODO: problem, idx.ToString will give the long (not basic) string
+
+    /// Use when printing the state
+    member this.ToUnderscoreString () =
+        match this with
+        | Loc qname -> qname.ToUnderscoreString() 
+        | FieldAccess (tml, ident) -> tml.ToUnderscoreString() + "." + ident
+        | ArrayAccess (tml, idx) -> sprintf "%s[%s]" (tml.ToUnderscoreString()) (idx.ToString()) // TODO: problem, idx.ToString will give the long (not basic) string
     
     /// Fully qualified name as a Doc
     member this.ToDoc = txt <| this.ToString()
