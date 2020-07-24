@@ -22,6 +22,8 @@ namespace Blech.Common
 module BlechString = 
 
     open System.Text.RegularExpressions
+
+    let endOfLineSequence = Regex @"[\n\r]{1,2}"
     
     let invalidCharacterEscape = Regex @"\\[^ abfnrtv\\""' 0-9 x]"
     
@@ -41,3 +43,5 @@ module BlechString =
     let decimalToOctalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
         "\\" + sprintf "%03o" decimal  // octal with 3 digits
+
+    
