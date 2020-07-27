@@ -23,9 +23,18 @@ module BlechString =
 
     open System.Text.RegularExpressions
 
-    let endOfLineSequence = Regex @"[\n\r]{1,2}"
+    [<Literal>]
+    let private EndOfLine = @"[\n\r]{1,2}"
+
+    [<Literal>]
+    let private BackSlashNewlineWhitespace = @"\\\n[ \t]*"
+
+    [<Literal>]
+    let private ImmediateNewline = @"^\n"
+
+    let endOfLineSequence = Regex EndOfLine
     
-    let invalidCharacterEscape = Regex @"\\[^ abfnrtv\\""' 0-9 x]"
+    let invalidCharacterEscape = Regex @"\\[^abfnrtv\\""'0-9x]"
     
     let decimalEscape = Regex @"\\[0-9]{1,3}"
     
@@ -44,4 +53,9 @@ module BlechString =
         assert (0 <= decimal && decimal <= 255)
         "\\" + sprintf "%03o" decimal  // octal with 3 digits
 
+    let normalizeEndOfLine str =
+        Regex.Replace(str, EndOfLine, "\n")
     
+    let removeBackslashNewlineWhitespace str =
+        assert not (endOfLineSequence.IsMatch(str)) // expect normalized end of line string
+        Regex.Replace(str, BackSlashNewlineWhitespace, "")
