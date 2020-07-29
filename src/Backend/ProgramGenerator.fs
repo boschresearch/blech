@@ -89,12 +89,12 @@ let private paramAsOutput (p: ParamDecl) =
 /// Call to entry point activity
 let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
     [
+        iface.actctx |> Option.toList |> List.map (fun _ -> txt "&blc_blech_ctx")
         if primitivePassByAddress then
             iface.inputs |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
         else
             iface.inputs |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
         iface.outputs |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
-        iface.actctx |> Option.toList |> List.map (fun _ -> txt "&blc_blech_ctx")
         iface.retvar |> Option.toList |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
     ]
     |> List.concat

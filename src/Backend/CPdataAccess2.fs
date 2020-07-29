@@ -221,10 +221,14 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
             if isExternal then Auto name // access current value locally declared extern variable
             else CtxLocal name // current value of normal activity variable
 
-let renderCName tp tcc name = (cpName (Some tp) tcc name).Render
+/// Shorthand for cpName (Some tp) tcc name
+/// |> Render
+let renderCName tp tcc name = 
+    cpName (Some tp) tcc name
+    |> (fun x -> x.Render)
 
-/// Shorthand for ppName None tcc name
-/// >| Render
+/// Shorthand for cpName None Empty name
+/// |> Render
 let cpStaticName = 
     cpName None TypeCheckContext.Empty
     >> (fun x -> x.Render)
@@ -584,7 +588,7 @@ and cpExpr tcc expr : PrereqExpression =
         <| (resAssigns |> List.collect getPrereq)
         <| ComplexExpr (render, (resAssigns |> List.map getCExpr))
     //
-    | Convert (subExpr, targetType, behaviour) ->   // TODO: Currently we generate a C cast for every behaviour, this will change with exceptions, fjg. 24.03.20
+    | Convert (subExpr, targetType, behaviour) -> // TODO: Currently we generate a C cast for every behaviour, this will change with exceptions, fjg. 24.03.20
         let re = cpExpr tcc subExpr
         let rt = cpType targetType
         let render (rs: CExpr list) =
@@ -714,19 +718,6 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
         let init =
             match expr.typ with
             | ValueTypes (ValueTypes.StructType _) ->
-                //let cname = cpName (Some Current) tcc lhsName
-            
-                //let v = 
-                //    { 
-                //        VarDecl.pos = range0
-                //        name = lhsName
-                //        datatype = lhsTyp
-                //        mutability = Mutability.Variable
-                //        initValue = {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = expr.range} // that is garbage
-                //        annotation = Attribute.VarDecl.Empty
-                //        allReferences = HashSet() 
-                //    }
-                //TypeCheckContext.addDeclToLut tcc lhsName (Declarable.VarDecl v)
                 cpMemSetDoc expr.typ (txt "&" <^> auxiliaryName lhsName)
             | ValueTypes (ValueTypes.ArrayType _) ->
                 cpMemSetDoc expr.typ (auxiliaryName lhsName)
@@ -771,15 +762,6 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
 //=============================================================================
 // Printing statements
 //=============================================================================
-//type RenderedStmt =
-//    {
-//        prereqStmts: Doc list
-//        renderedStmt: Doc
-//    }
-//    member this.Render =
-//        this.prereqStmts @ [this.renderedStmt]
-//        |> dpBlock
-
 let nullify tcc lhs =
     // ensure we get a pointer to the data, means no * for structs
     let lhsDoc = (cpOutputArg tcc lhs).Render
@@ -788,12 +770,6 @@ let nullify tcc lhs =
 let mkRenderedStmt p r =
     p @ [r]
     |> dpBlock
-
-//let RenderedStmtFromExpr (re: PrereqExpression) =
-//    mkRenderedStmt
-//    <| re.prereqStmts
-//    <| (re.cExpr.Render <^> semi)
-
 
 let rec cpAssign tcc left right =
     let rightRE = cpExpr tcc right
@@ -825,11 +801,6 @@ let rec cpAssign tcc left right =
             leftRE.prereqStmts @ newRight.prereqStmts, memcpy
         | ReturnVar ->
             failwith "ReturnVar cannot be the left-hand-side of an assignment."
-    //let norm newLeft = // unit function, prevents StackOverflow (evaluation only when called explicitly)
-    //    normaliseAssign tcc (left.Range, newLeft, right)
-    //    |> List.map (function 
-    //        | Stmt.Assign(_, lhs, rhs) -> cpAssign tcc lhs rhs
-    //        | _ -> failwith "Must be an assignment here!") // not nice
     match right.typ with
     | ValueTypes (ValueTypes.ArrayType _) ->
         match right.rhs with
@@ -895,9 +866,9 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVa
         |> Option.map (cpOutputArg tcc)
     let actCall = 
         [
+            [subctx]
             renderedInputs |> List.map (getCExpr >> (fun x -> x.Render))
             renderedOutputs |> List.map (getCExpr >> (fun x -> x.Render))
-            [subctx]
             renderedRetvarOpt |> Option.toList |> List.map (getCExpr >> (fun x -> x.Render))
         ]
         |> List.concat

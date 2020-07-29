@@ -343,7 +343,7 @@ let private endReaction source target =
     // note that for termination in block i, the pc is set to 2i + 1
     assignPc source (2 * newVal + 1)
 
-let private endThread node = assignPc node 0
+let private endThread node = assignPc node 0 // TODO end all subthreads, too, fg 29.07.2020
 
 let private areInSameBlock ctx actBeingTranslated n1 n2 =
     ctx.bgs.[actBeingTranslated].node2BlockNode.[n1] = ctx.bgs.[actBeingTranslated].node2BlockNode.[n2]
@@ -368,7 +368,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
     let callee = compilations |> List.find (fun c -> c.name = whoToCall) // TODO: expensive
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
-    let receiver, _, receiverDecl = // TODO, refactor and remove ignored values, enumerate all pattern match cases, fg 29.07.2020
+    let receiver, receiverDecl =
         match callee.retvar, receiverVar with
         | Some r, None ->
             // calle does return something but no receiver var has been specified (_)
@@ -388,14 +388,21 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
                 }
             TypeCheckContext.addDeclToLut ctx.tcc lhsName (Declarable.VarDecl v)
             let tmpLhs = Some {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
-            tmpLhs, true, [tmpDecl]
+            tmpLhs, [tmpDecl]
         | Some _, Some {lhs = ReturnVar} ->
+            // caller does not store return value but immediately returns it further up the call chain
             let callerRetVar = Option.get (!curComp).retvar
             let returnLhs = Some { lhs = LhsCur (TypedMemLoc.Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
-            returnLhs, false ,[]
-        | _ ->
-            // receiverVar has some value, nothing to do
-            receiverVar, false, [] 
+            returnLhs, []
+        | Some _, Some _
+            // caller receives the returned value in some receiver variable (cannot be wildcard at this point)
+        | None, None ->
+            // calle does not return anything and thus there is not receiver variable
+            receiverVar, []
+        | None, Some _ ->
+            // this is unreachable
+            // ruled out by type checker: calle returns nothing but caller provides a receiver
+            failwith "Caller provides a receiver but there is nothing to be returned."
 
     let translatedCall = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver tempVarName
     receiverDecl @ [translatedCall] |> dpBlock
@@ -727,7 +734,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             match receiverVar with
             | Some {lhs = ReturnVar} -> // return run... end this thread
                 // if (0 == retcode) {end thread} else {nextStep}
-                let hasActTerminated = txt "0 ==" <+> renderCName Current ctx.tcc retcodeVar // TODO: make sure subPCs are also set to 0
+                let hasActTerminated = txt "0 ==" <+> renderCName Current ctx.tcc retcodeVar
                 cpIfElse hasActTerminated (endThread node) nextStep
             | _ -> // normal run... proceed to the next block
                 nextStep
@@ -742,13 +749,6 @@ let private translateBlock ctx compilations curComp block =
     // at each location perform the required action, then traverse all outgoing CONTROL FLOW edges and (respecting the guards)
     // perform the next action or set the pc
     // note that due to current block construction, each block contains only a sequence, branching control flow can only occur at the last (exit) node
-    //let pc =
-    //    { name = mkAuxQNameFrom <| render None (pc4block block)
-    //      pos = range0
-    //      datatype = ValueTypes (NatType Nat32)
-    //      isMutable = true
-    //      allReferences = HashSet() }
-    //curComp := Compilation.addPc !curComp block pc
     let prioAsPc = 2 * block.Priority |> string |> txt
     let cond = accessPC4block block <+> txt "==" <+> prioAsPc
     let body = processNode ctx compilations curComp block.innerNodes.[0]

@@ -117,9 +117,9 @@ let private cpRetvar = cpOutputParam
 /// C Function interface and returns a Doc representation thereof
 let internal cpIface tcc (iface: Compilation) =
     [
+        iface.actctx |> Option.toList |> List.map (fun _ -> cpActContext iface.name)
         iface.inputs |> List.map (cpInputParam tcc)
         iface.outputs |> List.map (cpOutputParam tcc)
-        iface.actctx |> Option.toList |> List.map (fun _ -> cpActContext iface.name)
         iface.retvar |> Option.toList |> List.map (cpRetvar tcc)
     ]
     |> List.concat
