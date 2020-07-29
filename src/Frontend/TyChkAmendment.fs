@@ -156,6 +156,7 @@ let internal getInitValueWithoutZeros pos name dty =
                 | xs -> Some {expr with rhs = constBuilder xs}
         match expr.rhs with
         | BoolConst false -> None
+        | NatConst value when value.IsZero -> None
         | IntConst value when value.IsZero -> None
         | BitsConst value when value.IsZero-> None
         | FloatConst value when value.IsZero -> None
