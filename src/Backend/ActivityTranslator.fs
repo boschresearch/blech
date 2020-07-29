@@ -94,11 +94,6 @@ let rec private cpAction ctx curComp action =
                 normaliseVarDecl ctx.tcc v
                 |> List.map (function 
                     | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
-                        //match lhs.typ with
-                        //| ValueTypes (ArrayType _) ->
-                        //    cpMemCpyArr false ctx lhs.lhs rhs
-                        //| _ ->
-                        //    cpAssignInActivity ctx lhs.lhs rhs
                     | _ -> failwith "Must be an assignment here!") // not nice
             // zero out everything that is not set explicitly
             let reinit =
@@ -110,13 +105,6 @@ let rec private cpAction ctx curComp action =
                           typ = v.datatype
                           range = v.pos }
                     nullify ctx.tcc lhs
-                    //let curname = (cpName (Some Current) ctx.tcc v.name).Render
-                    //txt "memset"
-                    //<^> dpCommaSeparatedInParens
-                    //    [ curname
-                    //      txt "0"
-                    //      sizeofMacro v.datatype]
-                    //<^> semi
                 | _ -> empty
             reinit :: norm @ [prevInit] |> dpBlock
 
