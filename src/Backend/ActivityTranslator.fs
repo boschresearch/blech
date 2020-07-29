@@ -990,33 +990,6 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         
     let code = translateActivity ctx compilations curComp subProgDecl
 
-    // if this is the entry point activity, add its iface variables to the 
-    // type check context (as we do for activity calls)
-    // this ensures that generated local variables (prev on extern) are added to 
-    // the tcc.
-    //if subProgDecl.IsEntryPoint then
-    //    (!curComp).iface.locals
-    //    |> List.iter (fun localVar ->
-    //        try ctx.tcc.nameToDecl.Add(localVar.name, Declarable.ParamDecl localVar)
-    //        with _ -> () // if this variable is already in there, nothing to do
-    //        )
-    // this should have happened automatically with the new activity contexts
-    
-    // start quick fix: make sure main pc is the first in !curComp.iface
-    // this because we rely on the fact that the first pc is the main pc in various places
-    
-    //let mainPC = pc4node ctx.pgs.[name].Entry |> render None
-    
-    //let myCmp (p1: ParamDecl) (p2: ParamDecl) =
-    //    if (p1.name.ToString()) = mainPC then -1
-    //    elif (p2.name.ToString()) = mainPC then 1
-    //    else 0
-    
-    //let sortedPcs = List.sortWith myCmp (!curComp).iface.pcs
-    
-    //curComp := {!curComp with iface = {(!curComp).iface with pcs = sortedPcs}}
-    // end quick fix
-
     let resetPCs =
         (!curComp).GetActCtx.pcs.AsList
         |> List.map (cpResetPc ctx.tcc)
