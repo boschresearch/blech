@@ -221,11 +221,15 @@ module Main =
                     File.WriteAllText(headerFile, header)
 
                     // generated test app
-                    let appFile = Path.Combine(cliContext.outDir, SearchPath.appNameToCFile cliContext.appName)
-                    let app = CodeGeneration.emitApp translationContext package compilations ep.name
-                    FileInfo(appFile).Directory.Create()
-                    File.WriteAllText(appFile, app)
-            
+                    match cliContext.appName with
+                    | Some an ->
+                        let appFile = Path.Combine(cliContext.outDir, SearchPath.appNameToCFile an)
+                        let app = CodeGeneration.emitApp translationContext package compilations ep.name
+                        FileInfo(appFile).Directory.Create()
+                        File.WriteAllText(appFile, app)
+                    | None -> 
+                        ()
+
                 else 
                     match astAndEnvRes with
                     | Ok (package, lut) ->

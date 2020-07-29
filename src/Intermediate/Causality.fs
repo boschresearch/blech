@@ -258,6 +258,7 @@ let rec internal findNameWritten wrPair (tlhs: TypedLhs) =
         |> List.fold findNameRead wrPair
     match tlhs.lhs with
     | Wildcard -> wrPair
+    | ReturnVar -> wrPair
     | LhsCur tml ->
         let wrp1 = newWrPair tml 
         ((Cur tml) :: fst wrp1, snd wrp1)

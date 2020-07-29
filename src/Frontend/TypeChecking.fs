@@ -43,11 +43,16 @@ type private StmtRetType =
 /// Determine the return type of a statement
 let rec private stmtType stmt =
     match stmt with
-    // atomic statements, except "return"
+    // atomic statements, except "return" and "run"
     | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _ | Await _ 
-    | Stmt.ExternalVarDecl _ | ActivityCall _ | FunctionCall _ -> 
+    | Stmt.ExternalVarDecl _ | FunctionCall _ -> 
         Ok NoReturn
-    // the "return" statement
+    // Must, if "return run"
+    | ActivityCall (_, _, receiverOpt, _, _) ->
+        match receiverOpt with
+        | Some (ReturnLoc {typ = ValueTypes t}) -> Ok (Must t) // TODO: Restructure types, return should allow Value and Referencetypes, but no AnyTypes, fjg 2.7.20
+        | _ -> Ok NoReturn
+    // the "return" statement    
     | Return (pos, exprOpt) ->
         match exprOpt with 
         | Some expr ->
@@ -155,7 +160,7 @@ let private checkStmtsMatchReturn pos body retType =
             else Error [MustReturnSomething (pos, retType)]
         | Must f ->
             if isLeftSupertypeOfRight (ValueTypes retType) (ValueTypes f) then Ok retType
-            else Error [ReturnTypeMismatch (pos, retType, ValueTypes f)]
+            else Error [ReturnTypeMismatch (pos, ValueTypes retType, ValueTypes f)]
         | May f -> Error [MayOrMayNotReturn (pos, retType, f)]
         )
 
@@ -173,6 +178,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
         let checkLhs out =
             match out.lhs with
             | Wildcard -> Ok ()
+            | ReturnVar -> Ok ()
             | LhsCur tml
             | LhsNext tml ->
                 tml.FindAllIndexExpr
@@ -352,11 +358,20 @@ let private determineCalledSingletons lut bodyRes =
         let checkLhs out =
             match out.lhs with
             | Wildcard -> []
+            | ReturnVar -> []
             | LhsCur tml
             | LhsNext tml ->
                 tml.FindAllIndexExpr
                 |> List.collect singletonCalls
-        lhss |> List.collect checkLhs 
+        lhss |> List.collect checkLhs
+    and checkOptReceiver optRcv = 
+        match optRcv with
+        | Some (UsedLoc lhs) -> 
+            checkLhs [lhs]
+        | Some (FreshLoc _)
+        | Some (ReturnLoc _)
+        | None -> 
+            []
     and singletonCalls expr =
         let recurFields fields =
             fields
@@ -401,7 +416,8 @@ let private determineCalledSingletons lut bodyRes =
                     @ spd.singletons
                 | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
             let resInputs = List.collect singletonCalls inputs
-            let resReceiver = receiverOpt |> Option.toList |> checkLhs
+            // let resReceiver = receiverOpt |> Option.toList |> checkLhs
+            let resReceiver = checkOptReceiver receiverOpt 
             let resOutputs = outputs |> checkLhs
             recSingletons @ resReceiver @ resInputs @ resOutputs
         | FunctionCall (_, name, inputs, outputs) ->
@@ -769,6 +785,156 @@ let private fClockDecl (cld: AST.ClockDecl) = unsupported1 "clock declarations" 
 
 
 //=============================================================================
+// Receivers and Conditions
+//=============================================================================
+
+let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOpt vDeclAnno =
+    let mutability =
+        match permission with 
+        | AST.ReadOnly (ro, _) ->
+            match ro with
+            | AST.Let -> Mutability.Immutable
+            | _ -> failwith "Location must not be const or param"
+        | AST.ReadWrite _ -> Mutability.Variable
+    
+    let createVarDecl ((qualifiedName, (dty, value)), anno) =
+        let v = {
+            pos = pos
+            BlechTypes.VarDecl.name = qualifiedName
+            datatype = dty
+            mutability = mutability
+            initValue = value
+            annotation = anno
+            allReferences = HashSet()
+        }    
+        do addDeclToLut lut qualifiedName (Declarable.VarDecl v)
+        v
+
+    let dtyAndInit = 
+        let dtyRes = 
+            match dtyOpt with
+            | None -> Ok rhsTyp  // if no datatype is given take the activity return type as the location type
+            | Some lhsTypRes -> lhsTypRes    
+        dtyRes
+        |> Result.map (getInitValueWithoutZeros Range.range0 "")
+        |> Result.bind (combine dtyRes)
+        
+
+    Ok (lut.ncEnv.nameToQname name)
+    |> combine <| dtyAndInit
+    |> combine <| vDeclAnno
+    |> Result.map createVarDecl
+
+let private checkFreshLocation lut (v: AST.VarDecl) (rhsTyp: Types) =
+    assert (Option.isNone v.initialiser)
+    fFreshLocation lut v.range v.name v.permission rhsTyp
+    <| Option.map (fDataType lut) v.datatype
+    <| Annotation.checkVarDecl lut v 
+
+let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl = 
+
+    let checkReturnType (storage: Receiver option) declName declReturns =
+        match storage with
+        | None ->
+            match declReturns with
+            | Void -> Ok None
+            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
+        | Some receiver ->
+            match receiver.Typ with 
+            | Any -> // wildcard
+                Ok None
+            | ValueTypes _ ->
+                Ok storage 
+            | _ -> Error [ ValueMustBeOfValueType (receiver) ]  // TOOD: This will change with references, fjg 30.06.20
+        |> Result.bind (
+            function
+            | None -> Ok None
+            | Some (ReturnLoc {typ = t}) ->
+                if isLeftSupertypeOfRight t (ValueTypes declReturns) then 
+                    Ok storage 
+                else 
+                    Error [ReturnTypeMismatch(pos, t, ValueTypes declReturns)]                
+            | Some (FreshLoc vdecl) ->
+                let typ = vdecl.datatype
+                if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                    Ok storage 
+                else 
+                    Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
+            | Some (UsedLoc tlhs) ->
+                let typ = tlhs.typ
+                if isLhsMutable lut tlhs.lhs then
+                    if typ.IsAssignable then  // TODO: This will always be true if we assign structs with let fields, fjg 30.06.20
+                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                            Ok storage 
+                        else 
+                            Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
+                    else
+                        Error [AssignmentToLetFields (pos, tlhs.ToString())]
+                else Error [AssignmentToImmutable (pos, tlhs.ToString())]
+            )
+    
+    let checkNeedForReceiver (rcv: AST.Receiver option) decl =
+        match rcv with
+        | Some location ->
+            match decl.returns with
+            | Void ->
+                Error [ReceiverForVoidReturn (location.Range, decl)]
+            | _ ->
+                Ok (Some location)
+        | None ->
+            match decl.returns with
+            | Void -> 
+                Ok None                
+            | _ ->
+                Error [MissingReceiver (pos, decl)]
+                
+    let checkLocation rcv =
+        match rcv with
+        | Some (AST.Location lhs) ->
+            checkAssignLExpr lut lhs
+            |> Result.bind (fun tlhs -> Ok (Some (UsedLoc tlhs)))
+        | Some (AST.FreshLocation vdecl) ->
+            checkFreshLocation lut vdecl (ValueTypes decl.returns)   // TODO: Currently the return value must be a value types, this might change
+            |> Result.bind (fun tvdecl -> Ok (Some (FreshLoc tvdecl)))
+        | Some (AST.ReturnLocation rng) ->
+            Ok (Some (ReturnLoc { lhs = ReturnVar; typ = ValueTypes decl.returns; range = rng })) 
+        | None ->
+            Ok None
+    
+    checkNeedForReceiver rcv decl
+    |> Result.bind checkLocation
+    |> Result.bind (fun receiver -> checkReturnType receiver decl.name decl.returns)
+
+
+/// Type check activity calls.
+/// An activity may return a value that is stored in resStorage upon termination.
+/// This is different to a function call
+let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
+    let checkIsActivity decl =
+        if not decl.isFunction then Ok()
+        else Error [RunAFun(pos, decl)]
+    
+    let createCall name (((_, ins), outs), retvar) =
+        ActivityCall (pos, name, retvar, ins, outs)
+    
+    match ap with
+    | AST.Procedure dname ->
+        ensureCurrent dname
+        |> Result.map lut.ncEnv.dpathToQname
+        |> Result.bind (getSubProgDeclAsPrototype lut pos)
+        |> Result.bind (fun decl ->
+            checkIsActivity decl
+            |> combine <| checkInputs pos inputs decl.name decl.inputs
+            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
+            //|> combine <| checkReturnType resStorage decl.name decl.returns
+            |> combine <| checkAssignReceiver pos lut rcv decl
+            |> Result.map (createCall decl.name)
+            )
+
+
+
+
+//=============================================================================
 // Define all actions for AST transformation and do the type checking
 //=============================================================================
 
@@ -886,7 +1052,59 @@ let private fSubScope _ stmts =
     |> Result.map StmtSequence
 
 
-let private fActCall = checkActCall
+//let private fActCall lut pos actp resStorage inputs outputs =
+//    let checkIsActivity decl =
+//        if not decl.isFunction then Ok()
+//        else Error [RunAFun(pos, decl)]
+//    let checkReturnType storage declName declReturns =
+//        match storage with
+//        | None ->
+//            match declReturns with
+//            | Void -> Ok None
+//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
+//        | Some (Ok (FreshLoc vdecl)) -> // Receiver declaration disabled after type check: delete this case to enable 
+//            unsupported1 "Receiver declaration in run statement" vdecl.pos
+//        | Some receiverRes ->
+//            receiverRes 
+//            |> Result.bind ( 
+//                fun (receiver: Receiver) -> 
+//                match receiver.Typ with 
+//                | Any -> // wildcard
+//                    Ok None
+//                | ValueTypes _ ->
+//                    Ok (Some receiver) 
+//                | _ -> Error [ ValueMustBeOfValueType (receiver) ]
+//                )
+//        |> Result.bind (
+//            function
+//            | None -> Ok None
+//            | Some rcvr ->
+//                let typ = rcvr.Typ
+//                if isReceiverMutable lut rcvr then
+//                    if rcvr.Typ.IsAssignable then
+//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+//                            Ok (Some rcvr) 
+//                        else 
+//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
+//                    else
+//                        Error [AssignmentToLetFields (pos, rcvr.ToString())]
+//                else Error [AssignmentToImmutable (pos, rcvr.ToString())]
+//            )
+//    let createCall name (((_, ins), outs), retvar) =
+//        ActivityCall (pos, name, retvar, ins, outs)
+    
+//    match actp with
+//    | AST.Procedure dname ->
+//        ensureCurrent dname
+//        |> Result.map lut.ncEnv.dpathToQname
+//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
+//        |> Result.bind (fun decl ->
+//            checkIsActivity decl
+//            |> combine <| checkInputs pos inputs decl.name decl.inputs
+//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
+//            |> combine <| checkReturnType resStorage decl.name decl.returns
+//            |> Result.map (createCall decl.name)
+//            )
 
 
 let private fFunCall lut pos fp inputs outputs =
@@ -894,7 +1112,7 @@ let private fFunCall lut pos fp inputs outputs =
     |> Result.map(fun ((n, i, o), _) -> FunctionCall (pos, n, i, o))
 
 
-let private fEmit = unsupported2 "event emissions" //TODO
+let private fEmit = unsupported3 "event emissions" //TODO
 
 
 /// Check that type of returned expression fits the declared return type of a subprogram
@@ -910,7 +1128,6 @@ let private fReturn retTypOpt pos exprOpt =
         |> Result.map (fun e -> Return (pos, Some e))
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
     | Some tr, None -> tr |> Result.bind (fun t -> Error [VoidReturnStmtMustReturn(pos,t)])
-
 
 let private fPragma = unsupported1 "pragma inside stmt sequence"
 
@@ -985,17 +1202,17 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
     | AST.SubScope (range, body) ->
         fSubScope range <| List.map (recStmt lut retTypOpt) body
     // calling
-    | AST.ActivityCall (range, optLhs, pname, inputOptList, outputOptList) ->
-        fActCall lut range pname
-        <| Option.map (checkAssignLExpr lut) optLhs
+    | AST.ActivityCall (range, optReceiver, pname, inputOptList, outputOptList) ->
+        fActCall lut range optReceiver pname
+        //<| Option.map ( checkAssignReceiver lut) optReceiver
         <| List.map (checkExpr lut >> Result.map(tryEvalConst lut)) inputOptList
         <| List.map (checkLExpr lut) outputOptList
     | ASTStmt.FunctionCall (range, pname, inputOptList, outputOptList) ->
         fFunCall lut range pname
         <| List.map (checkExpr lut >> Result.map(tryEvalConst lut)) inputOptList
         <| List.map (checkLExpr lut) outputOptList
-    | AST.Emit(range, pname) ->
-        fEmit range pname
+    | AST.Emit(range, pname, optExpr) ->
+        fEmit range pname optExpr
     | AST.Return (range, optExpr) ->
         fReturn retTypOpt range 
         <| Option.map (checkExpr lut >> Result.map(tryEvalConst lut)) optExpr 

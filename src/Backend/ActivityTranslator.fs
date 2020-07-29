@@ -368,7 +368,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
     let callee = compilations |> List.find (fun c -> c.name = whoToCall) // TODO: expensive
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
-    let receiver, _, receiverDecl =
+    let receiver, _, receiverDecl = // TODO, refactor and remove ignored values, enumerate all pattern match cases, fg 29.07.2020
         match callee.retvar, receiverVar with
         | Some r, None ->
             // calle does return something but no receiver var has been specified (_)
@@ -389,6 +389,10 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
             TypeCheckContext.addDeclToLut ctx.tcc lhsName (Declarable.VarDecl v)
             let tmpLhs = Some {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
             tmpLhs, true, [tmpDecl]
+        | Some _, Some {lhs = ReturnVar} ->
+            let callerRetVar = Option.get (!curComp).retvar
+            let returnLhs = Some { lhs = LhsCur (Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
+            returnLhs, false ,[]
         | _ ->
             // receiverVar has some value, nothing to do
             receiverVar, false, [] 
@@ -718,11 +722,20 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             cpType lhsTyp <+> renderCName Current ctx.tcc retcodeVar <^> semi
 
         let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
-        
+
+        let returnOrProceed = 
+            match receiverVar with
+            | Some {lhs = ReturnVar} -> // return run... end this thread
+                // if (0 == retcode) {end thread} else {nextStep}
+                let hasActTerminated = txt "0 ==" <+> ppName retcodeVar
+                cpIfElse hasActTerminated (endThread node) nextStep
+            | _ -> // normal run... proceed to the next block
+                nextStep
+
         dpBlock
         <| [ declRetcodeVar
              translatedCall
-             nextStep ]
+             returnOrProceed ]
 
 let private translateBlock ctx compilations curComp block =
     // traverse subgraph
@@ -829,6 +842,7 @@ let private collectVarsToPrev2 pg =
     let rec processLhs lhs =
         match lhs.lhs with
         | Wildcard -> []
+        | ReturnVar -> []
         | LhsCur tml
         | LhsNext tml ->
             tml.FindAllIndexExpr

@@ -14,6 +14,6 @@ end
 
 activity main ()()
     var x: int64
-    x = run doingStuff()
+    run x = doingStuff()
     await false
 end

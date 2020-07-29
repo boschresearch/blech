@@ -55,44 +55,6 @@ type Mutability =
 
     member this.ToDoc = txt <| this.ToString()
 
-
-/// Float constants are represented as strings to ensure that a value's
-/// representation in the generated code is exactly the same as in
-/// the original Blech source code.
-//type FloatConst =
-//    | Single of string
-//    | Double of string
-//    override this.ToString () =
-//        let dotZero =
-//            if this.GetString.Contains "e" || this.GetString.Contains "E" then ""
-//            elif this.GetString.Contains "." then ""
-//            else ".0"
-//        match this with
-//        | Single s -> s + dotZero + "f"
-//        | Double s -> s + dotZero 
-//    member this.ToDoc = this.ToString () |> txt
-//    member private this.GetString : string =
-//        match this with
-//        | Single s 
-//        | Double s -> s
-//    member private this.ReplaceString s =
-//        match this with
-//        | Single _ -> Single s
-//        | Double _ -> Double s
-//    member this.ToFloat = this.GetString |> float
-//    member this.IsZero =
-//        this.ToFloat = 0.0
-//    member this.Negate =
-//        let s = this.GetString
-//        ( if s.StartsWith "-" then s.[1..]
-//          else "-" + s )
-//        |> this.ReplaceString
-//    static member Zero precision =
-//        match precision with
-//        | FloatType.Float32 -> FloatConst.Single "0.0"
-//        | FloatType.Float64 -> FloatConst.Double "0.0"
-
-
 /// Data types
 /// Only value-typed data may be returned from functions or activities
 type ValueTypes =
@@ -104,10 +66,7 @@ type ValueTypes =
     | BitsType of BitsType
     | FloatType of FloatType
     //structured
-    | ArrayType of size: Size * datatype: ValueTypes // TODO: Correct this comment, fjg. 14.02.20
-                                                     // we use int for size to save ourselves from casting expressions 
-                                                     // like 'size-1' or to pass size to functions that expect int
-                                                     // such as List.replicate
+    | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
     | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
     
@@ -134,7 +93,7 @@ type ValueTypes =
         | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
         | StructType (r,_,_) -> Some r
 
-
+    
 /// Reference Types are not used anywhere as of the first release 2019/2020
 /// Only introduced as a reminder that not all types are value types and
 /// subsequent phases should already pay attention to this
@@ -156,7 +115,6 @@ and ReferenceTypes =
             Some r
 
 
-// TODO: check if simple any types really need to carry their value, fjg. 27.01.20
 and Types = 
     | ValueTypes of ValueTypes
     | ReferenceTypes of ReferenceTypes
@@ -338,12 +296,33 @@ and ParamDecl =  // TODO: add annotations, fjg 21.03.19
     }
 
     member this.ToDoc =
-        if this.isMutable then txt "var" else txt "let"
-        <+> txt (this.name.ToString())
+        // if this.isMutable then txt "var" else txt "let" <-- this was outdated
+        // <+> 
+        txt (this.name.ToString())
         <^> txt ":" <+> this.datatype.ToDoc
 
     override this.ToString () = render None <| this.ToDoc 
 
+/// A location declaration occurs inside a statement or a match condition.
+/// It introduces a local variable.
+/// It is either mutable 'let' or immutable 'var'.
+//and LocationDecl = 
+//    {
+//        pos: range
+//        name: QName
+//        datatype: Types
+//        isMutable: bool
+//        // no init value for locations 
+//        // no annotations for locations
+//        allReferences: HashSet<range>
+//    }
+
+//    member this.ToDoc =
+//        if this.isMutable then txt "var" else txt "let"
+//        <+> txt (this.name.ToString())
+//        <^> txt ":" <+> this.datatype.ToDoc
+
+//    override this.ToString () = render None <| this.ToDoc 
 
 //=============================================================================   
 // Code capsules 
@@ -538,14 +517,17 @@ and TypedMemLoc =
 /// left hand side expressions, must represent a memory location that is written to
 and LhsStructure =
     // discard the assigned rhs value
-    | Wildcard               
+    | Wildcard 
+    // return location for activity calls
+    | ReturnVar 
     // locations
-    | LhsCur of TypedMemLoc  
+    | LhsCur of TypedMemLoc
     | LhsNext of TypedMemLoc
     
     member this.ToDoc =
         match this with
         | Wildcard -> txt "_"
+        | ReturnVar -> txt "return"
         | LhsCur t -> t.ToDoc
         | LhsNext t -> txt "next" <+> t.ToDoc
     
@@ -554,12 +536,14 @@ and LhsStructure =
     member this.AddFieldAccess ident = 
         match this with
         | Wildcard -> failwith "Cannot add a field access to a wildcard."
+        | ReturnVar -> failwith "Cannot add a field access to a return."
         | LhsCur t -> LhsCur (t.AddFieldAccess ident)
         | LhsNext t -> LhsNext (t.AddFieldAccess ident)
     
     member this.AddArrayAccess (idx: TypedRhs) = 
         match this with
         | Wildcard -> failwith "Cannot add a field access to a wildcard."
+        | ReturnVar -> failwith "Cannot add a field access to a wildcard."
         | LhsCur t -> LhsCur (t.AddArrayAccess idx)
         | LhsNext t -> LhsNext (t.AddArrayAccess idx)
     
@@ -580,7 +564,7 @@ and RhsStructure =
     | FunCall of QName * TypedRhs list * TypedLhs list
     // constants and literals
     | BoolConst of bool
-    | NatConst of Constants.Nat // Todo: check correct usage everywhere, fjg. 11.02.20
+    | NatConst of Constants.Nat
     | IntConst of Constants.Int
     | BitsConst of Constants.Bits
     | FloatConst of Constants.Float
@@ -759,6 +743,38 @@ and TypedLhs =
 
 
 //=============================================================================
+// Receiver: Adds locations declarations to run and emit statements on top of TypedLhs
+// Condition: Adds matching and condition list on top of TypedRhs // to be defined
+//=============================================================================
+
+
+and Receiver =
+    | UsedLoc of TypedLhs
+    | FreshLoc of VarDecl
+    | ReturnLoc of TypedLhs
+
+    member this.ToDoc =
+       match this with
+       | UsedLoc tlhs -> tlhs.lhs.ToDoc
+       | FreshLoc ldecl -> ldecl.ToDoc
+       | ReturnLoc tlhs -> tlhs.lhs.ToDoc
+    
+    override this.ToString() = render None <| this.ToDoc
+    
+    member this.Range = 
+        match this with
+        | UsedLoc tlhs -> tlhs.Range
+        | FreshLoc ldecl -> ldecl.pos
+        | ReturnLoc tlhs -> tlhs.Range
+    
+    member this.Typ =
+        match this with
+        | UsedLoc tlhs -> tlhs.typ
+        | FreshLoc vdecl -> vdecl.datatype
+        | ReturnLoc tlhs -> tlhs.typ
+    
+
+//=============================================================================
 // Statements 
 //=============================================================================
 
@@ -783,10 +799,11 @@ and Stmt =
     // scoping
     | StmtSequence of Stmt list // DO block, ...for scoping reasons
     // calling
-    | ActivityCall of range * QName * TypedLhs option * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
+    | ActivityCall of range * QName * Receiver option * TypedRhs list * TypedLhs list // line, who to call, result, inputs, outputs
     | FunctionCall of range * QName * TypedRhs list * TypedLhs list // line, who to call, inputs, outputs
+    // | Emit of range * Receiver * TypedRhs option // line, event, payload
     | Return of range * TypedRhs option // line, expressions to return
-    
+        
     member this.ToDoc =
         match this with
         | VarDecl v -> v.ToDoc
@@ -845,14 +862,19 @@ and Stmt =
             |> List.map (fun s -> s.ToDoc)
             |> vsep
         | ActivityCall (_, qname, retvar, ins, outs) ->
-            let prefix =
+            let run = 
                 match retvar with
-                | None -> empty
-                | Some lhs -> lhs.ToDoc <+> txt "=" <+> empty
+                | None -> txt "run"
+                | Some (ReturnLoc _) ->
+                    txt "return run"
+                | Some (UsedLoc tlhs) ->
+                    txt "run" <+> tlhs.ToDoc <+> txt "="
+                | Some (FreshLoc vdecl) ->
+                    txt "run" <+> vdecl.ToDoc <+> txt "="
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
             let outs = outs |> List.map (fun o -> o.ToDoc)
-            prefix <^> txt "run" <+> (dpBlechCall qname ins outs)
+            run <+> dpBlechCall qname ins outs
         | FunctionCall (_, qname, ins, outs) ->
             let qname = txt <| qname.ToString()
             let ins =  ins |> List.map (fun i -> i.ToDoc)
@@ -862,7 +884,7 @@ and Stmt =
             match exprOpt with
             | None -> txt "return"
             | Some expr -> txt "return" <+> expr.ToDoc
-    
+            
     override this.ToString () = 
         render None <| this.ToDoc
 

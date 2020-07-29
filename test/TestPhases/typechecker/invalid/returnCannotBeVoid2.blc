@@ -12,5 +12,5 @@ end
 
 @[EntryPoint]
 activity start ()()
-    _ = run rrr(true)
+    run _ = rrr(true)
 end

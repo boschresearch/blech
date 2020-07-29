@@ -25,7 +25,7 @@ end
 activity start ()()
     
     var myS: S
-    myS = run rrr(false)
+    run myS = rrr(false)
 
-    _ = run rrr(true)
+    run _ = rrr(true)
 end

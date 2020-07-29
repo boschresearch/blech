@@ -11,5 +11,5 @@ end
 
 activity main ()()
     var x: int64
-    x = run calc()
+    run x = calc()
 end

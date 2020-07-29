@@ -48,6 +48,8 @@ let rec internal normaliseAssign ctx (r, lhs, rhs) =
                 (r, { lhs = LhsNext (ArrayAccess(tml, makeIdx idx)); typ = expr.typ; range = expr.Range}, expr)
             | Wildcard ->
                 (r, { lhs = Wildcard; typ = expr.typ; range = expr.Range}, expr)
+            | ReturnVar -> 
+                failwith "This is not possible at this stage."
             |> normaliseAssign ctx // apply recursively, since substructure assignments need to be flattened, too
         [ for i in 0 .. assigments.Length - 1 -> fieldAsAssign i ]
         |> List.concat
@@ -63,6 +65,8 @@ let rec internal normaliseAssign ctx (r, lhs, rhs) =
                     (r, { lhs = LhsNext (FieldAccess(tml, ident)); typ = expr.typ; range = expr.Range}, expr)
                 | Wildcard ->
                     (r, { lhs = Wildcard; typ = lhs.typ; range = expr.Range}, expr)
+                | ReturnVar -> 
+                    failwith "This is not possible at this stage."
                 |> normaliseAssign ctx // apply recursively, since substructure assignments need to be flattened, too
             )
             |> List.concat

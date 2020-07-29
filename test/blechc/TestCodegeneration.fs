@@ -273,7 +273,7 @@ module CompilationProcedures =
         let args =  config.blechc
                     + " --source-path " + sourcePath 
                     + " --out-dir " + outDir 
-                    + " --app " + appName
+                    + " --app=" + appName
                     + " --trace"
                     + " " + inputFile
         let out, _ = execInCLI dotnet args CUR_DIR

@@ -15,7 +15,7 @@ activity main ()()
     cobegin
         var ll: int32
         let c: float32 = 4.2
-        _ = run A(i, c)(ll, d)
+        run _ = A(i, c)(ll, d)
     with weak
         repeat
             i = i + 5

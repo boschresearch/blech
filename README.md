@@ -5,6 +5,7 @@
 
 Blech is a language for developing reactive, real-time critical embedded software.
 This open source project implements a compiler which translates Blech to C.
+More information can be found on the [Blech homepage](https://www.blech-lang.org/).
 
 The software is not ready for production use. It has neither been developed nor
 tested for a specific use case. However, the license conditions of the
@@ -98,12 +99,21 @@ Typical invocations:
 
 ### Compile generated C files
 
-By default the compiler produces a main program in `blech.c` which can be used as a first test. To compile this code you need to include Blech specific C header files. These are located in `<path-to>/blech/src/blechc/include`. 
+The compiler can generate a test program with trace output using the following options:
+
+```
+blechc --app --trace someBlechFile.c
+```
+
+By default this produces a main program in `blech.c` which can be used as a first test. To compile this code you need 
+to include Blech specific C header files. These are located in `<path-to>/blech/src/blechc/include`. 
 On Windows C compilation may look like this.
 ```
 mingw32-cc.exe -I. -I<path-to>/blech/src/blechc/include blech.c
 ```
+
 Note that the current folder `.` is explicitly added as a path to be included.
+
 The resulting executable will run the program for 60 reactions and print the variable evaluations after every reaction in JSON format.
 
 To include the generated C code in your own project inspect `blech.c` for details. In particular, make sure you call the `init` function on initial startup and then `tick` with every reaction.

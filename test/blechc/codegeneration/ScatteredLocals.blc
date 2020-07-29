@@ -20,7 +20,7 @@ activity A()() returns int32
       var b: int32 = 0
       var r: float32 // must be defined before it is used to catch a return value
                      // TODO: leaving out this declaration produces an obscure compiler error that a user cannot understand
-      r = run B(x)(b)
+      run r = B(x)(b)
       while r > 0.0 repeat
           let diff = r - 10.0
           r = diff
@@ -36,5 +36,5 @@ end
 
 @[EntryPoint]
 activity main ()()
-  _ = run A()
+  run _ = A()
 end

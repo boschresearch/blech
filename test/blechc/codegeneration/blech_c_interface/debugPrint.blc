@@ -1,0 +1,15 @@
+
+@@[CInclude(header = "stdio.h")]
+
+@[CFunction(binding = @"fprintf(stderr, ""nat8: %d\n"", $1)")]
+extern function debugPrintNat8(n: nat8)
+
+@[EntryPoint]
+activity Main()
+    var n: nat8
+    repeat
+        n = n + 1
+        debugPrintNat8(n)
+        await true
+    end
+end

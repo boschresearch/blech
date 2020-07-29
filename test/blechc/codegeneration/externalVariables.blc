@@ -22,9 +22,9 @@ activity B (myS: S)
     extern var extVarArr: [8]int32
     var res: int32
 
-    if myS.s < 0.0 then _ = run A()
+    if myS.s < 0.0 then run _ =  A()
     else 
-        res = run A()
+        run res = A()
         extVarArr[0] = 77
         let foo2 = prev extVarArr
         let foo3 = prev extVarArr[0]

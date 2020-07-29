@@ -401,14 +401,6 @@ module PrettyPrint =
                  |> indent dpTabsize) <.>
                 txt "end"
 
-            let ppWithOptLhs suffix = function 
-                | None ->
-                    suffix
-                | Some lhs -> 
-                    lhs <+> 
-                    (chr '=' <.> suffix
-                     |> gnest dpTabsize)
-
             let ppSubProgramCall pName inputs optOutputs =
                 let progName = 
                     match pName with
@@ -420,16 +412,24 @@ module PrettyPrint =
                  |> align
                  |> group)
 
-            let fActCall (_, optLhs, pName, inputs, optOutputs) = 
-                txt "run" <+>
-                (optLhs |> ppWithOptLhs (ppSubProgramCall pName inputs optOutputs)) 
+            let fActCall (_, optReceiver, pName, inputs, optOutputs) = 
+                match optReceiver with
+                | None -> 
+                    txt "run"
+                | Some (Text "return") ->
+                    txt "return run"
+                | Some rcvr ->
+                    txt "run" <+> rcvr <+> chr '='
+                <.> (ppSubProgramCall pName inputs optOutputs) 
+                |> gnest dpTabsize
 
             let fFunCall (_, pName, inputs, optOutputs) =
                 ppSubProgramCall pName inputs optOutputs 
             
-            let fEmit (_, pName) =
-                txt "emit" <+> 
-                ppDynamicAccessPath pName.timepoint pName.path
+            let ppOptPayload = ppOptMsg
+
+            let fEmit (_, receiver, optPayload) =
+                txt "emit" <+> receiver <+> ppOptPayload (txt "=") optPayload
                 
             let fReturn (_, exprOpt) = 
                 let expr = match exprOpt with | None -> empty | Some e -> e
@@ -587,7 +587,6 @@ module PrettyPrint =
                 match access with
                 | Wildcard _ -> txt "_"
                 | Loc l -> ppLexpr l
-                | EventLoc l -> txt "emit" <^> ppLexpr l
             
             let ppBitVec (unsigned: bigint) prefix =
                 let s = 
@@ -784,6 +783,17 @@ module PrettyPrint =
 
             refFExpr := fExpr  // before doing anything supply the refernce
 
+            // --- Receiver
+
+            let fReceiver = function    
+                | Location lhs -> 
+                    fLexpr lhs
+                | FreshLocation vdecl -> 
+                    ppPermission vdecl.permission
+                    <+> dpName vdecl.name
+                | ReturnLocation _ ->
+                    txt "return"
+
             // --- Conditions
 
             let fCondition = function
@@ -886,8 +896,8 @@ module PrettyPrint =
 
             // call the catamorphism using the functions defined above
             // signature is
-            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
+            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
             render (Some 72) doc
 
         // end of template

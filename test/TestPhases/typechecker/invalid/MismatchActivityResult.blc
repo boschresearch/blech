@@ -7,5 +7,5 @@ end
 
 activity main ()()
     var x: int32
-    x = run calc()
+    run x = calc()
 end

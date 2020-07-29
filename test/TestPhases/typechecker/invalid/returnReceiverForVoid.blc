@@ -1,0 +1,8 @@
+activity VoidReturn ()
+    await true
+end
+
+@[EntryPoint]
+activity Main () ()
+    return run VoidReturn()
+end
