@@ -53,7 +53,7 @@ module Thread =
 
     /// Returns all ancestors starting with this thread itself and
     /// ascending to root
-    let rec internal allAncestors thread =
+    let rec allAncestors thread =
         match thread.Ancestor with
         | None -> [thread]
         | Some ancestor -> thread :: allAncestors ancestor
@@ -660,28 +660,18 @@ module ProgramGraph =
                 match moment with
                 // abort after was stripped from the syntax but still exists as a data structure
                 | Moment.After -> 
-                    let branches =
-                        [ Weak, body
-                          Weak, [Await(pos, cond)] ]
-                    createPGofStmt context thread (Cobegin (pos, branches))
+                    //let branches =
+                    //    [ Weak, body
+                    //      Weak, [Await(pos, cond)] ]
+                    //createPGofStmt context thread (Cobegin (pos, branches))
+                    failwith "Abort after does not exist. It was replaced by explicit cobegin weak."
                 | Moment.Before ->
                     // this is the only alive code path for the Abort case
                     createPGofBody context pos thread body
                     |> createAbortBefore context pos thread cond
                 | Moment.OnNext -> failwith "Cannot handle OnNext"
             | Reset ->
-                // transform into loop abort
-                let v = createHelperVariable context Range.range0 "abortFinished" (ValueTypes BoolType)
-                let tmpLhs = {lhs = LhsCur (Loc v.name); typ = v.datatype; range = v.pos}
-                let assignNotYetFinished = Stmt.Assign(pos, tmpLhs, {rhs = BoolConst false; typ = ValueTypes BoolType; range = Range.range0})
-                let assignFinished = Stmt.Assign(pos, tmpLhs, {rhs = BoolConst true; typ = ValueTypes BoolType; range = Range.range0})
-                let untilCond = {rhs = RhsCur(Loc v.name); typ = v.datatype; range = v.pos}
-                    
-                let rewrittenStmts =
-                    [ Stmt.VarDecl v
-                      Stmt.RepeatUntil(pos, [Stmt.Preempt(pos, Abort, cond, moment, assignNotYetFinished :: body @ [assignFinished])],untilCond, false) ]
-                    |> Stmt.StmtSequence 
-                createPGofStmt context thread rewrittenStmts
+                failwith "Reset should be transformed away before."
             | Suspend -> // does not exists in the current syntax but still lives as a data structure
                 failwith "Suspending is a bad idea."
         // scoping

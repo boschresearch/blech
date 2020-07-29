@@ -276,7 +276,13 @@ and ExternalVarDecl =
         this.annotation.ToDoc @ [vdDoc]
         |> dpToplevelClose
 
-    override this.ToString () = render None <| this.ToDoc 
+    override this.ToString () = render None <| this.ToDoc
+    
+    member this.IsConst =
+        this.mutability.Equals Mutability.CompileTimeConstant
+    
+    member this.IsParam =
+        this.mutability.Equals Mutability.StaticParameter
 
 /// A parameter declaration consists of a name and datatype
 /// unlike a variable declaration, an argument declaration has no init value
@@ -463,6 +469,13 @@ and TypedMemLoc =
         | Loc qname -> qname.basicId.ToString() // here basicId
         | FieldAccess (tml, ident) -> tml.ToBasicString() + "." + ident
         | ArrayAccess (tml, idx) -> sprintf "%s[%s]" (tml.ToBasicString()) (idx.ToString()) // TODO: problem, idx.ToString will give the long (not basic) string
+
+    /// Use when printing the state
+    member this.ToUnderscoreString () =
+        match this with
+        | Loc qname -> qname.ToUnderscoreString() 
+        | FieldAccess (tml, ident) -> tml.ToUnderscoreString() + "." + ident
+        | ArrayAccess (tml, idx) -> sprintf "%s[%s]" (tml.ToUnderscoreString()) (idx.ToString()) // TODO: problem, idx.ToString will give the long (not basic) string
     
     /// Fully qualified name as a Doc
     member this.ToDoc = txt <| this.ToString()
@@ -474,6 +487,13 @@ and TypedMemLoc =
         | Loc qname -> qname
         | FieldAccess (tml, _) 
         | ArrayAccess (tml, _) -> tml.QNamePrefix
+
+    /// Given a QName "ctx" and a TML "a.b.c" produce "ctx.a.b.c"
+    member this.PrependFieldAccess newLoc =
+        match this with
+        | Loc qname -> FieldAccess(Loc newLoc, qname.basicId)
+        | FieldAccess (tml, ident) -> FieldAccess(tml.PrependFieldAccess newLoc, ident) 
+        | ArrayAccess (tml, idx) -> ArrayAccess(tml.PrependFieldAccess newLoc, idx)
     
     member this.AddFieldAccess ident = FieldAccess (this, ident)
     

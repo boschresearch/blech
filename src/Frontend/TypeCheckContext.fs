@@ -66,6 +66,14 @@ type Declarable =
         | ParamDecl {isMutable = x} -> if x then Some Mutability.Variable else Some Mutability.Immutable
         | SubProgramDecl _
         | FunctionPrototype _ -> None
+
+    member this.TryGetReturnType =
+        match this with
+        | FunctionPrototype {returns = x}
+        | SubProgramDecl {returns = x} -> Some x
+        | VarDecl _
+        | ParamDecl _
+        | ExternalVarDecl _ -> None
     
     member this.AddReference pos =
         match this with
@@ -90,8 +98,14 @@ type TypeCheckContext =
         // member pragmas are collected in order to do annotation checking
         memberPragmas: ResizeArray<Attribute.MemberPragma> 
     }
+    static member Empty =
+        { cliContext = Arguments.BlechCOptions.Default
+          ncEnv = SymbolTable.LookupTable.Empty
+          nameToDecl = Dictionary() 
+          userTypes = Dictionary() 
+          memberPragmas = ResizeArray() }
 
-    static member Empty cliContext ncLut =
+    static member Init cliContext ncLut =
         { cliContext = cliContext
           ncEnv = ncLut
           nameToDecl = Dictionary() 

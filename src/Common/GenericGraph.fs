@@ -419,7 +419,7 @@ let private depthsFirstBackward nodes onNodeVisit onNodeFinish onCycleDetect onR
     depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit
 
 /// Simple function which is used as callback
-let private proceed _ _ = false
+let proceed _ _ = false
 
 /// The function returns true if the given graph has cycles, otherwise false
 let hasCycles (graph : Graph<_, _>) =

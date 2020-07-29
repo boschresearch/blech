@@ -150,7 +150,9 @@ module SymbolTable =
         // should be invisible outside this file
         // assumes declare before use        
         member lt.addUsage usageName declName =
-            lt.lookupTable.Add (usageName,  Use declName)
+            // Artificially generated names use the same range multiple times
+            // therefore it is possible that a key already exists
+            ignore <| lt.lookupTable.TryAdd (usageName,  Use declName)
 
         member lt.Show = 
             let pairs = seq { for KeyValue(k,v) in lt.lookupTable do yield k, v }

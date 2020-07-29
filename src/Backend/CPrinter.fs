@@ -27,7 +27,7 @@ open Blech.Frontend.CommonTypes
 open Blech.Frontend.PrettyPrint.DocPrint
 open Blech.Frontend
 
-open CPdataAccess
+open CPdataAccess2
 
 
 //=============================================================================
@@ -38,14 +38,6 @@ let cpGeneratedComment info =
     txt "/*"
     <.> txt "**" <+> info
     <.> txt "*/"
-
-//=============================================================================
-// Program names tick, init, printstate 
-//=============================================================================
-let cpProgramName programQName = 
-    translateQnameToProgramName programQName
-    |> txt
-
 
 //=============================================================================
 // Doc Comments
@@ -84,11 +76,9 @@ let internal cpUserType typ =
                 cpArrayDeclDoc nameDoc field.datatype <^> semi
             | _ ->
                 cpType field.datatype <+> txt field.name.basicId <^> semi
-        let ctype = 
-            txt "struct" <+> ppGlobalName typeName <+> txt "{"
-            <.> (List.map cpField fields |> dpBlock |> cpIndent)
-            <.> txt "};"
-        ctype
+        cpType typ <+> txt "{"
+        <.> (List.map cpField fields |> dpBlock |> cpIndent)
+        <.> txt "};"
     | _ -> failwith "The only printable user defined type is a value struct."
 
 //=============================================================================
@@ -97,58 +87,52 @@ let internal cpUserType typ =
 //=============================================================================
 
 /// Inputs cannot be changed and may be passed in by value
-let private cpInputParam (input: ParamDecl) =
+let private cpInputParam tcc (input: ParamDecl) =
+    let iname = (cpName (Some Current) tcc input.name).Render
     // determine whether it is a primitive value type or not
     txt "const"
     <+> match input.datatype with
         | ValueTypes (ArrayType _) ->
-            cpArrayDecl input.name input.datatype
+            cpArrayDeclDoc iname input.datatype
         | _ when input.datatype.IsPrimitive ->
-            cpType input.datatype <+> ppName (input.name)
+            cpType input.datatype <+> iname
         | _ ->
-            cpType input.datatype <+> cpDeref (txt "const" <+> ppName (input.name))
+            cpType input.datatype <+> cpDeref (txt "const" <+> iname)
         
 /// Outputs, PCs, Locals are changed and are always passed "by reference"
-let private cpOutputParam (output: ParamDecl) =
+let private cpOutputParam tcc (output: ParamDecl) =
+    let oname = (cpName (Some Current) tcc output.name).Render
     match output.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDecl output.name output.datatype
-    | _ -> cpType output.datatype <+> cpDeref (ppName (output.name))
+    | ValueTypes (ArrayType _) -> cpArrayDeclDoc oname output.datatype
+    | _ -> cpType output.datatype <+> cpDeref oname
 
-
-let private cpPc (pc: ParamDecl) = 
-    txt "blc_pc_t" <+> cpDeref (ppName (pc.name))
-
-
-// let private cpLocal = cpOutputParam
-/// Local variable parameter for activity
-let private cpLocal (local: ParamDecl) =
-    match local.datatype with
-    | ValueTypes (ArrayType _) -> cpArrayDeclInActivity local.name local.datatype
-    | _ -> cpType local.datatype <+> cpDeref (ppNameInActivity (local.name))
+let private cpActContext name =
+    let typename = txt "struct" <+> cpStaticName name
+    let ctxname = txt CTX
+    typename <+> cpDeref ctxname
 
 let private cpRetvar = cpOutputParam
 
 /// Translates a Blech Activity interface to a
 /// C Function interface and returns a Doc representation thereof
-let internal cpIface (iface: Iface) =
+let internal cpIface tcc (iface: Compilation) =
     [
-        iface.inputs |> List.map cpInputParam
-        iface.outputs |> List.map cpOutputParam
-        iface.locals |> List.map cpLocal
-        iface.pcs |> List.map cpPc
-        iface.retvar |> Option.toList |> List.map cpRetvar
+        iface.actctx |> Option.toList |> List.map (fun _ -> cpActContext iface.name)
+        iface.inputs |> List.map (cpInputParam tcc)
+        iface.outputs |> List.map (cpOutputParam tcc)
+        iface.retvar |> Option.toList |> List.map (cpRetvar tcc)
     ]
     |> List.concat
     |> dpCommaSeparatedInParens
 
 /// Translates a Blech Function interface to a
 /// C Function interface and returns a Doc representation thereof
-let internal cpFunctionIface (iface: Iface) =
+let internal cpFunctionIface tcc (iface: Compilation) =
     let cargs = 
         List.concat [
-            iface.inputs |> List.map cpInputParam
-            iface.outputs |> List.map cpOutputParam
-            iface.retvar |> Option.toList |> List.map cpRetvar
+            iface.inputs |> List.map (cpInputParam tcc)
+            iface.outputs |> List.map (cpOutputParam tcc)
+            iface.retvar |> Option.toList |> List.map (cpRetvar tcc)
         ]
     (if List.isEmpty cargs then [txt "void"] else cargs)
     |> dpCommaSeparatedInParens
@@ -156,26 +140,53 @@ let internal cpFunctionIface (iface: Iface) =
 /// Translate the locals, retvar, and program counters, of the entry point as a list of declarations of static global variables.
 // Note no initialisation takes places here, this is done in the entry point
 // activity in the surface.
-let internal cpMainStateAsStatics (iface: Iface) =
-    [
-        iface.locals
-        iface.retvar |> Option.toList
-    ]
-    |> List.concat
-    |> List.map (fun p -> txt "static" <+> cpArrayDeclInActivity p.name p.datatype <^> semi)
-    |> List.append <| List.map (fun (p: ParamDecl) -> txt "static" <+> txt "blc_pc_t" <+> ppName (p.name) <^> semi) iface.pcs
-    |> dpBlock
+let internal cpMainStateAsStatics (iface: Compilation) =
+    let typename = txt "struct" <+> cpStaticName iface.name
+    let ctxname = txt CTX
+    typename <+> ctxname <^> semi
 
 /// Translate the inputs and outputs of the entry point as a list of declarations of static global variables 
-let internal cpMainParametersAsStatics (iface: Iface) =
+let internal cpMainParametersAsStatics tcc (iface: Compilation) =
+    let render n = (cpName (Some Current) tcc n).Render
     [
         iface.inputs
         iface.outputs
     ]
     |> List.concat
-    |> List.map (fun p -> txt "static" <+> cpArrayDeclInActivity p.name p.datatype <^> semi)
+    |> List.map (fun p -> txt "static" <+> cpArrayDeclDoc (render p.name) p.datatype <^> semi)
     |> dpBlock
 
+let internal cpContextTypeDeclaration (comp: Compilation) =
+    match comp.actctx with 
+    | None -> empty // this is a function, nothing to print
+    | Some _ -> // ok, print activity context struct
+        let typename = cpStaticName comp.name
+        let locals = 
+            // in order to avoid clashes between a Blech variable "pc_1" and 
+            // a context element pc_1, we need the blc_ prefix
+            comp.GetActCtx.locals
+            |> List.map (fun local -> cpArrayDeclDoc (txt (BLC + "_" + local.name.ToUnderscoreString())) local.datatype <^> semi)
+            |> dpBlock
+        let pcs = 
+            comp.GetActCtx.pcs.AsList
+            |> List.map (fun pc -> txt "blc_pc_t" <+> txt pc.name.basicId <^> semi)
+            |> dpBlock
+        let subctx =
+            comp.GetActCtx.subcontexts
+            |> Seq.map (fun subctx -> txt "struct" 
+                                    <+> cpStaticName (snd subctx.Key) // C type name
+                                    <+> txt (fst subctx.Key) <^> txt "_" <^> cpStaticName (snd subctx.Key) // field name
+                                    <^> semi)
+            |> dpBlock
+        let fields = // we do this little detour to remove empty lines
+            [ locals
+              pcs
+              subctx ]
+            |> dpBlock
+
+        txt "struct" <+> typename <+> txt "{"
+        <.> cpIndent fields
+        <.> txt "}" <^> semi
 
 //=============================================================================
 // Statements
@@ -231,7 +242,7 @@ let internal cpRepeatUntil cond body =
 // Function prototypes
 //=============================================================================
 
-let internal cpExternFunction docs name iface (returns: ValueTypes) =
+let internal cpExternFunction tcc docs name iface (returns: ValueTypes) =
     // decide whether a return variable is needed based on returns type
     let completeInterface, retType =
         if returns.IsPrimitive then
@@ -243,13 +254,13 @@ let internal cpExternFunction docs name iface (returns: ValueTypes) =
                       datatype = ValueTypes returns
                       isMutable = true 
                       allReferences = HashSet() }
-            // we never refer to this variable in code generation, so there is no need to add it any context
+            TypeCheckContext.addDeclToLut tcc qname (Declarable.ParamDecl v)
             {iface with retvar = Some v}, cpType (ValueTypes Void)
 
     let prototype = 
         retType
-        <+> ppGlobalName name
-        <+> cpFunctionIface completeInterface
+        <+> cpStaticName name
+        <+> cpFunctionIface tcc completeInterface
         <^> semi
 
     cpOptDocComments docs 
@@ -257,16 +268,16 @@ let internal cpExternFunction docs name iface (returns: ValueTypes) =
     <| prototype
 
 
-let internal cpDirectCCall (fp: FunctionPrototype) =
+let internal cpDirectCCall tcc (fp: FunctionPrototype) =
     let args =
-        List.map (fun (p: ParamDecl) -> ppName p.name) (fp.inputs @ fp.outputs) 
+        List.map (fun (p: ParamDecl) -> (cpName (Some Current) tcc p.name).Render) (fp.inputs @ fp.outputs) 
     let cbinding = fp.annotation.TryGetCBinding
     let call = 
         let sargs = List.map (fun doc -> render None doc) args
         txt <| Bindings.replaceParameters (Option.get cbinding) sargs
     let macro = 
         (txt "#define"
-        <+> ppName fp.name
+        <+> (cpName (Some Current) tcc fp.name).Render
         <^> dpCommaSeparatedInParens args
         <.> (cpIndent call))
         |> groupWith (txt " \\")

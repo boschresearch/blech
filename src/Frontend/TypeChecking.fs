@@ -1031,8 +1031,10 @@ let private fIteratorFor = unsupported5 "for-iterators" //TODO
 
 let private fPreempt range preemption moment conds body =
     let createPreemption (c, b) = Preempt (range, preemption, c, moment, b)
+        
     // we could introduce a warning if body has no delay (preemption useless)
     // checkStmtsWillPause range name body
+
     match moment with 
     // we do not support OnNext preemptions yet
     | Moment.OnNext -> unsupported1 "Next step preemptions are not yet supported." range 
@@ -1412,7 +1414,7 @@ let public fPackage lut (pack: AST.Package) =
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
 let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
-    let lut = TypeCheckContext.Empty cliContext ncEnv
+    let lut = TypeCheckContext.Init cliContext ncEnv
     fPackage lut pack
     |> function
         | Ok p -> 
