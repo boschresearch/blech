@@ -686,6 +686,7 @@ and cpOutputArg tcc expr : PrereqExpression =
 and cpLexpr tcc expr : PrereqExpression =
     match expr.lhs with
     | Wildcard -> failwith "Lhs cannot be a wildcard at this stage."
+    | ReturnVar -> failwith "Lhs cannot be a ReturnVar at this stage."
     | LhsCur tml -> cpTml Current tcc tml |> (fun x -> x.ToExpr)
     | LhsNext _ -> failwith "render next locations not implemented yet."
 
@@ -804,6 +805,8 @@ let rec cpAssign tcc left right =
         | LhsNext _ ->
             let leftRE = cpLexpr tcc left
             leftRE.prereqStmts @ newRight.prereqStmts, (leftRE.cExpr.Render <+> txt "=" <+> newRight.cExpr.Render <^> semi)
+        | ReturnVar ->
+            failwith "ReturnVar cannot be the left-hand-side of an assignment."
     let directArrayAssignment (newRight: PrereqExpression) =
         match left.lhs with
         | Wildcard ->
@@ -820,6 +823,8 @@ let rec cpAssign tcc left right =
                       sizeofMacro right.typ ]
                 <^> semi
             leftRE.prereqStmts @ newRight.prereqStmts, memcpy
+        | ReturnVar ->
+            failwith "ReturnVar cannot be the left-hand-side of an assignment."
     //let norm newLeft = // unit function, prevents StackOverflow (evaluation only when called explicitly)
     //    normaliseAssign tcc (left.Range, newLeft, right)
     //    |> List.map (function 

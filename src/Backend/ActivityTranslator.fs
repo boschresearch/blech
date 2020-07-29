@@ -391,7 +391,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
             tmpLhs, true, [tmpDecl]
         | Some _, Some {lhs = ReturnVar} ->
             let callerRetVar = Option.get (!curComp).retvar
-            let returnLhs = Some { lhs = LhsCur (Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
+            let returnLhs = Some { lhs = LhsCur (TypedMemLoc.Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
             returnLhs, false ,[]
         | _ ->
             // receiverVar has some value, nothing to do
@@ -727,7 +727,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             match receiverVar with
             | Some {lhs = ReturnVar} -> // return run... end this thread
                 // if (0 == retcode) {end thread} else {nextStep}
-                let hasActTerminated = txt "0 ==" <+> ppName retcodeVar
+                let hasActTerminated = txt "0 ==" <+> renderCName Current ctx.tcc retcodeVar // TODO: make sure subPCs are also set to 0
                 cpIfElse hasActTerminated (endThread node) nextStep
             | _ -> // normal run... proceed to the next block
                 nextStep
