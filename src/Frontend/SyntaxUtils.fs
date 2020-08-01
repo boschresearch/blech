@@ -615,21 +615,21 @@ module LexerUtils =
         let checkCharacterEscapes =
             let ms = BlechString.getInvalidCharacterEscapes str
             if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getEscapeRange rng m)]
+                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange rng m)]
             else
                 Ok ()
 
         let checkDecimalEscapes =
             let ms = BlechString.getInvalidDecimalEscapes str
             if  Seq.length ms > 0 then
-                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getEscapeRange rng m)]
+                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange rng m)]
             else
                 Ok ()
          
         let checkHexEscapes =
             let ms = BlechString.getInvalidHexEscapes str
             if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getEscapeRange rng m)]
+                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange rng m)]
             else
                 Ok ()
  

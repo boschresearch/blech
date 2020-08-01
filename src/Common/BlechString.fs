@@ -156,8 +156,6 @@ module BlechString =
     // all expect a string with normalized end of line sequence
     // ---
 
-    type Lines = string []
-
     [<Literal>]
     let InvalidOpeningQuotes = "^.+\n"  // any character after """
 
@@ -171,8 +169,8 @@ module BlechString =
     let BeforeClosingQuotes = LeadingWhitespace + "$"  // whitespace before """
 
     
-    let splitMultilineStringLiteral (str : string) = 
-        str.Split '\n'
+    //let splitMultilineStringLiteral (str : string) = 
+    //    str.Split '\n'
         
     let getInvalidOpeningQuotes multilineStr =
         (Regex InvalidOpeningQuotes).Match multilineStr
@@ -193,9 +191,9 @@ module BlechString =
     // Functions for calculating error ranges
     // --
 
-    // TODO: This is totally wrong: onlyworks for "<str>" without line continuation, fjg. 1.8.2020
-    // Differentiate ranges for "..", @".." and """.."""
-    let getEscapeRange (stringRng : Range.range) (m : Match) = 
+    // TODO: This is totally wrong: onlyworks for "<str>" without line continuations, fjg. 1.8.2020
+    // Differentiate ranges for "..", @".." and """..""", allow line contunations
+    let getMatchRange (stringRng : Range.range) (m : Match) = 
         Range.range(stringRng.FileIndex,  
                     stringRng.StartLine, stringRng.StartColumn + m.Index + 1, 
                     stringRng.StartLine, stringRng.StartColumn + m.Index + m.Length)
