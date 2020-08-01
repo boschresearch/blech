@@ -19,37 +19,258 @@ namespace Blech.Common.Tests
 open NUnit.Framework
 open Blech.Common.BlechString // system under test
 
+module Literals =
+    [<Literal>]
+    let s = "abc
+def"
+
+
 [<TestFixture>]
 module BlechStringTest=
+
+    [<Test>]
+    let testNormalizeEndOfline () =
+        Assert.AreEqual (normalizeEndOfLine "a \n\r b", "a \n b")
+        Assert.AreEqual (normalizeEndOfLine "a \r\n b", "a \n b")
+        Assert.AreEqual (normalizeEndOfLine "a \n\n\r b", "a \n\n b")
+        Assert.AreEqual (normalizeEndOfLine "a \r\r\n b", "a \n\n b")
+        Assert.AreEqual (normalizeEndOfLine "a \r\r b", "a \n\n b")
+        Assert.AreEqual (normalizeEndOfLine "a \r\n\r b", "a \n\n b")
+        Assert.AreEqual (normalizeEndOfLine "\r\n a \r\r b", "\n a \n\n b")
+        Assert.AreEqual (
+            "abc
+def"
+            |> normalizeEndOfLine, 
+            "abc\ndef"
+            )
+        Assert.AreEqual (
+            "abc
+            def" 
+            |> normalizeEndOfLine,
+            "abc\n            def"
+            )
+
+    [<Test>]
+    let testRemoveBackslashNewlineWhitespace () =
+        Assert.AreEqual (
+            "abc\
+def"
+            |> normalizeEndOfLine 
+            |> removeBackslashNewlineWhitespace, 
+            "abcdef"
+            )
+
+        Assert.AreEqual (
+            "abc\
+             def"
+            |> normalizeEndOfLine 
+            |> removeBackslashNewlineWhitespace, 
+            "abcdef"
+            )
+
+        Assert.AreNotEqual (
+            // Invisible chars are the danger of this notation
+            "abc\   
+             def"
+            |> normalizeEndOfLine 
+            |> removeBackslashNewlineWhitespace, 
+            "abcdef"
+            )
+
+
+        Assert.AreEqual (
+            "abc
+def"
+            |>  normalizeEndOfLine
+            |> removeBackslashNewlineWhitespace, 
+            "abc\ndef"
+            )
+        Assert.AreEqual (
+            "abc
+            def" 
+            |> normalizeEndOfLine
+            |> removeBackslashNewlineWhitespace, 
+            "abc\n            def"
+            )
+
+    [<Test>]
+    let testRemoveBackslashZeeWhitespace () =
+        Assert.AreEqual (
+            "abcdef",
+            "abc\z
+def"
+            |> normalizeEndOfLine 
+            |> removeBackslashZeeWhitespace 
+            )
+
+        Assert.AreEqual (
+            "abcdef",
+            "abc\z    
+             def"
+            |> normalizeEndOfLine 
+            |> removeBackslashZeeWhitespace 
+            )
+
+        Assert.AreEqual (
+            "abc\ndef",
+            "abc\n\z    
+             def"
+            |> normalizeEndOfLine 
+            |> removeBackslashZeeWhitespace 
+            )
+
+        Assert.AreEqual (
+            "abc\ndef",
+            "abc
+def"
+            |>  normalizeEndOfLine
+            |> removeBackslashZeeWhitespace
+            )
+
+        Assert.AreEqual (
+            "abc\n            def",
+            "abc
+            def" 
+            |> normalizeEndOfLine
+            |> removeBackslashZeeWhitespace
+            )
+
+
+    [<Test>]
+    let testRemoveImmediateNewline () =
+        Assert.AreEqual (
+            "
+abc
+def"
+            |> normalizeEndOfLine 
+            |> removeImmediateNewline, 
+            "abc\ndef"
+            )
+
+        Assert.AreEqual (
+            "
+            abc\
+            def"
+            |> normalizeEndOfLine 
+            |> removeBackslashNewlineWhitespace
+            |> removeImmediateNewline,
+            "            abcdef"
+            )
+
+        Assert.AreEqual (
+            "
+abc
+def"
+            |> normalizeEndOfLine
+            |> removeBackslashNewlineWhitespace
+            |> removeImmediateNewline,
+            "abc\ndef"
+            )
+        Assert.AreEqual (
+            "
+            abc
+            def" 
+            |> normalizeEndOfLine
+            |> removeBackslashNewlineWhitespace
+            |> removeImmediateNewline, 
+            "            abc\n            def"
+            )
+
+
     let s1 = @"hello \c world"
     let s2 = @"hello \542 world"
     let s3 = @"hello \xAG world"
     let s4 = @"hello \255 world"
-    
-    
+ 
     [<Test>]
     let testInvalidCharacterEscape () =
-        Assert.IsTrue(invalidCharacterEscape.IsMatch s1)
-        Assert.IsFalse(invalidCharacterEscape.IsMatch s2)
-        Assert.IsFalse(invalidCharacterEscape.IsMatch s3)
-        Assert.IsFalse(invalidCharacterEscape.IsMatch s4)
+        Assert.IsNotEmpty (getInvalidCharacterEscapes s1)
+        Assert.IsEmpty (getInvalidCharacterEscapes s2)
+        Assert.IsEmpty (getInvalidCharacterEscapes s3)
+        Assert.IsEmpty (getInvalidCharacterEscapes s4)
+        Assert.IsNotEmpty (
+            // blank ' ' after backslash '\\'
+            "abc\ 
+            def"
+            |> getInvalidCharacterEscapes
+            )
+        Assert.IsEmpty (
+            // end of line after backslash '\\'
+            @"abc\
+            def"
+            |> getInvalidCharacterEscapes
+            )
+
+    [<Test>]
+    let testInvalidDecimalEscape () =
+        Assert.IsEmpty (getInvalidDecimalEscapes s1)
+
+        Assert.IsNotEmpty (getInvalidDecimalEscapes s2)
+        Assert.IsEmpty (getInvalidDecimalEscapes s3)
+
+        Assert.IsEmpty (getInvalidDecimalEscapes s3)
+
+        Assert.IsEmpty(getInvalidDecimalEscapes s4)
     
     [<Test>]
-    let testDecimalEscape () =
-        Assert.IsFalse(decimalEscape.IsMatch s1)
+    let testInvalidHexEscape () =
+        Assert.IsEmpty (getInvalidHexEscapes s1)
+        Assert.IsEmpty (getInvalidHexEscapes s2)
+        Assert.IsNotEmpty (getInvalidHexEscapes s3)
+        Assert.IsEmpty (getInvalidHexEscapes s4)
+    
+    [<Test>]
+    let testNormalizeStringLiteral () =
+        Assert.AreEqual (
+            "abc\ndef", 
+            "abc
+def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral
+            )
 
-        Assert.IsTrue(decimalEscape.IsMatch s2)
-        Assert.IsFalse(isValidDecimalEscape <| decimalEscape.Match(s2).Value)
-
-        Assert.IsFalse(decimalEscape.IsMatch s3)
-
-        Assert.IsTrue(decimalEscape.IsMatch s4)
-        Assert.IsTrue(isValidDecimalEscape <| decimalEscape.Match(s4).Value)
+        Assert.AreEqual (
+            "abcdef", 
+            "abc\
+            def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral
+            )
 
     [<Test>]
-    let testInvalidHexEscape () =
-        Assert.IsFalse(invalidHexEscape.IsMatch s1)
-        Assert.IsFalse(invalidHexEscape.IsMatch s2)
-        Assert.IsTrue(invalidHexEscape.IsMatch s3)
-        Assert.IsFalse(invalidHexEscape.IsMatch s4)
-        
+    let testUnescapeNormalizedStringLiteral () =
+        Assert.AreEqual (
+            "abc\ndef",
+            "abc
+def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral 
+            |> unescapeNormalizedStringLiteral
+            )
+
+        Assert.AreEqual (
+            "abcdef", 
+            "abc\
+            def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral
+            |> unescapeNormalizedStringLiteral
+            )
+
+    [<Test>]
+    let testNormalizeVerbatimStringLiteral () =
+        Assert.AreEqual (
+            "abc\"def",
+            "abc\"\"def"
+            |> normalizeEndOfLine
+            |> normalizeVerbatimStringLiteral
+            )
+
+        Assert.AreEqual (
+            "abc\"\ndef",
+            "abc\"\"
+def"
+            |> normalizeEndOfLine
+            |> normalizeVerbatimStringLiteral
+            )
+

@@ -607,38 +607,35 @@ module LexerUtils =
     
     /// checks escape sequences in string literals
     let checkStringLiteral(str: string, rng: Range.range) = 
-        let escapeRange (m : Match) = 
-            Range.range(rng.FileIndex,  
-                        rng.StartLine, rng.StartColumn + m.Index + 1, 
-                        rng.StartLine, rng.StartColumn + m.Index + m.Length)
+        //let getEscapeRange (m : Match) = 
+        //    Range.range(rng.FileIndex,  
+        //                rng.StartLine, rng.StartColumn + m.Index + 1, 
+        //                rng.StartLine, rng.StartColumn + m.Index + m.Length)
                  
-        let checkEscapeSeqs =
-            let ms = BlechString.invalidCharacterEscape.Matches str
-            if ms.Count > 0 then
-                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, escapeRange m)]
+        let checkCharacterEscapes =
+            let ms = BlechString.getInvalidCharacterEscapes str
+            if Seq.length ms > 0 then
+                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getEscapeRange rng m)]
             else
                 Ok ()
 
         let checkDecimalEscapes =
-            let ms = 
-                BlechString.decimalEscape.Matches str
-                |> Seq.filter (fun (m : Match) -> not (BlechString.isValidDecimalEscape (m.Value)))
+            let ms = BlechString.getInvalidDecimalEscapes str
             if  Seq.length ms > 0 then
-                Error [ for m in ms ->
-                            DecimalEscapeTooLarge (rng, m.Value, escapeRange m)]
+                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getEscapeRange rng m)]
             else
                 Ok ()
          
         let checkHexEscapes =
-            let ms = BlechString.invalidHexEscape.Matches str
-            if ms.Count > 0 then
-                Error [for m in ms -> InvalidHexEscape (rng, m.Value, escapeRange m)]
+            let ms = BlechString.getInvalidHexEscapes str
+            if Seq.length ms > 0 then
+                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getEscapeRange rng m)]
             else
                 Ok ()
  
 
         let res =  
-            Result.combine checkEscapeSeqs  checkDecimalEscapes 
+            Result.combine checkCharacterEscapes  checkDecimalEscapes 
             |> Result.combine <| checkHexEscapes
         match res with
         | Ok _ -> 

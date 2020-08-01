@@ -7,6 +7,8 @@ extern function decimalTooLarge()
 @[CFunction (binding = "hello \x9a world" , header= "bla.h")]
 extern function invalidHex()
 
+
+
 @[EntryPoint]
 activity main()()
     await true

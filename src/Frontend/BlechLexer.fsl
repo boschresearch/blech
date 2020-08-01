@@ -73,14 +73,16 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
 
 // TODO: interpretation of strings, fjg. 24.07.20
 // Multi-line strings a la C# and F#, see https://docs.microsoft.com/de-de/dotnet/fsharp/language-reference/strings
-let stringchar = [^ '\\' '\"']
-let escapeseq = '\\' ['\x00'-'\xFF'] // allow any character after a \, to be checked afterwards
+let anychar = ['\x00'-'\xFF']
+let stringchar = [^ '\\' '\"' '\n' '\r' ]
+let escapeseq = '\\' anychar // allow any character after a \, to be checked afterwards
 let stringitem = (stringchar | escapeseq)
 let doublequotes = "\"\""
 
 let stringliteral = '"' stringitem* '"'
 let verbatimstring = "@\"" (stringitem | doublequotes)* '"'
-let triplequotedstring = "\"\"\"" stringitem* "\"\"\""
+
+let multilinestring = "\"\"\"" anychar* "\"\"\"" // check afterwards
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -339,7 +341,7 @@ rule Token = parse
                               // replaces "" with " in <string>
                               STRING ( l.Substring(2, l.Length - 3).Replace("\"\"", "\""), r ) }
 
-    | triplequotedstring    { let l, r = getLexemeAndRange lexbuf      
+    | multilinestring       { let l, r = getLexemeAndRange lexbuf      
                               // Strip of """<string>""" to get <string>, the range contains """<string>"""
                               STRING ( l.Substring(3, l.Length - 6), r ) }
 
