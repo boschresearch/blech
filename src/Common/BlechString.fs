@@ -26,35 +26,46 @@ module BlechChar =
 
 
 module BlechString = 
-
+    open System
     open System.Text.RegularExpressions
-
-    [<Literal>]
-    let private Whitespace = @"[ \a\b\f\t\v]*"
-
-    [<Literal>]
-    let private EndOfLine = @"(\n\r|\r\n|\r|\n)"
-
-    [<Literal>]
-    let private BackslashZeeWhitespace = @"\\z[ \a\b\f\t\v\n]*"
-
-    [<Literal>]
-    let private BackSlashNewlineWhitespace = @"\\\n" + Whitespace
-
-    [<Literal>]
-    let private ImmediateNewline = @"^\n"
-
-    [<Literal>]
-    let private TwoDoubleQuotes = "\"\""
-
-    [<Literal>]
-    let invalidCharacterEscape = @"\\[^abfnrtvz\\""'0-9x\n\r]"
     
     [<Literal>]
-    let decimalEscape = @"\\[0-9]{1,3}"
+    let private EndOfLine = "(\n\r|\r\n|\r|\n)"
+
+    [<Literal>]
+    let private Newline = "\n"
+
+    [<Literal>]
+    let private Whitespace = "[ \a\b\f\t\v]*"
+
+    [<Literal>]
+    let private Backslash = "\\\\"
+
+    [<Literal>]
+    let private Quotes = "\""
+
+
+    //[<Literal>]
+    //let private BackSlashNewlineWhitespace = "\\\n" + Whitespace
+
+    //[<Literal>]
+    //let private ImmediateNewline = "^\n"
+
+    [<Literal>]
+    let private TwoQuotes = Quotes + Quotes
+
+    [<Literal>]
+    let private BackslashDoubleQuotes = Backslash + Quotes
+
+
+    [<Literal>]
+    let invalidCharacterEscape = "\\\\[^abfnrtvz\\\"'x0-9]"
     
     [<Literal>]
-    let invalidHexEscape = @"\\x([^ 0-9 a-f A-F].|.[^ 0-9 a-f A-F])"
+    let decimalEscape = "\\\\[0-9]{1,3}"
+    
+    [<Literal>]
+    let invalidHexEscape = "\\\\x([^ 0-9 a-f A-F].|.[^ 0-9 a-f A-F])"
     
 
     let private hasNormalizedEndOfLine str = 
@@ -63,19 +74,16 @@ module BlechString =
     let normalizeEndOfLine str =
         Regex.Replace(str, EndOfLine, "\n")
 
-    let removeBackslashNewlineWhitespace str =
-        assert hasNormalizedEndOfLine str
-        Regex.Replace(str, BackSlashNewlineWhitespace, "")
+    //let removeBackslashNewlineWhitespace str =
+    //    assert hasNormalizedEndOfLine str
+    //    Regex.Replace(str, BackSlashNewlineWhitespace, "")
 
-    let removeBackslashZeeWhitespace str =
-        assert hasNormalizedEndOfLine str
-        Regex.Replace(str, BackslashZeeWhitespace, "")
+    //let removeBackslashWhitespace str =
+    //    assert hasNormalizedEndOfLine str
 
-    let removeImmediateNewline str =
-        assert hasNormalizedEndOfLine str
-        Regex.Replace(str, ImmediateNewline, "")
-
-
+    //let removeImmediateNewline str =
+    //    assert hasNormalizedEndOfLine str
+    //    Regex.Replace(str, ImmediateNewline, "")
     
     
     let decimalEscapeToInt (decEsc: string) : int = 
@@ -88,11 +96,11 @@ module BlechString =
 
     let decimalToOctalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        "\\" + sprintf "%03o" decimal  // octal with 3 digits, leading '0's if necessary
+        Backslash + sprintf "%03o" decimal  // octal with 3 digits, leading '0's if necessary
 
     let decimalToUnicodeDecimal (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        "\\" + sprintf "%03d" decimal // decimal with 3 digits, leading '0's if necessary
+        Backslash + sprintf "%03d" decimal // decimal with 3 digits, leading '0's if necessary
 
     let decimalToChar (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
@@ -122,19 +130,18 @@ module BlechString =
     // ---
     
     /// Normalize a string literal from the lexer
-    let normalizeStringLiteral str = 
-        removeBackslashNewlineWhitespace str
 
+    let normalizeStringLiteral str = 
+        Regex.Replace(str, Backslash + Whitespace + Newline, "")
 
     /// Normalize a verbatim string literal from the lexer
     let normalizeVerbatimStringLiteral str =
-        let ns = normalizeStringLiteral str
-        Regex.Replace(ns, "\"\"", "\"")
+        Regex.Replace(str, Quotes + Quotes, Quotes)
 
     /// Normalize a multiline string literal from the lexer
     let normalizeMultiLineStringLiteral str =
         let ns = normalizeStringLiteral str
-        Regex.Replace(ns, "\\\"", "\"")
+        Regex.Replace(ns, Backslash + Quotes, Quotes)
 
     // ---
     // Functions for checking escape sequences
@@ -157,16 +164,19 @@ module BlechString =
     // ---
 
     [<Literal>]
-    let InvalidOpeningQuotes = "^.+\n"  // any character after """
+    let TripleQuotes = Quotes + "{3}"
 
     [<Literal>]
-    let InvalidClosingQuotes = "\n" + Whitespace + ".+$" // any non-whitespace before """
+    let InvalidOpeningQuotes = "^" + TripleQuotes + ".+" + Newline  // any character after """
 
     [<Literal>]
-    let LeadingWhitespace = "\n" + Whitespace // Leading white space 
+    let InvalidClosingQuotes = Whitespace + ".+" + TripleQuotes + "$" // any non-whitespace before """
 
     [<Literal>]
-    let BeforeClosingQuotes = LeadingWhitespace + "$"  // whitespace before """
+    let LeadingWhitespace = Newline + "(" + Whitespace + ")" // Leading white space 
+
+    [<Literal>]
+    let Indentation = Whitespace + TripleQuotes + "$"  // whitespace before """
 
     
     //let splitMultilineStringLiteral (str : string) = 
@@ -179,7 +189,7 @@ module BlechString =
         (Regex InvalidClosingQuotes).Match multilineStr
 
     let getMinimalIndentation multilineStr =
-        let m = (Regex BeforeClosingQuotes).Match multilineStr
+        let m = (Regex Indentation).Match multilineStr
         m.Length
 
     let getInvalidLeadingWhitespace multilineStr =
@@ -189,11 +199,40 @@ module BlechString =
 
     // --
     // Functions for calculating error ranges
+    // expects a raw string with normalized end of line
     // --
 
     // TODO: This is totally wrong: onlyworks for "<str>" without line continuations, fjg. 1.8.2020
-    // Differentiate ranges for "..", @".." and """..""", allow line contunations
-    let getMatchRange (stringRng : Range.range) (m : Match) = 
-        Range.range(stringRng.FileIndex,  
-                    stringRng.StartLine, stringRng.StartColumn + m.Index + 1, 
-                    stringRng.StartLine, stringRng.StartColumn + m.Index + m.Length)
+    // Differentiate ranges for "..", @".." and """.."""
+
+    let getRelativePositions (str: string) index length =
+        // relative positions are zero-based
+        let mutable startPos = (0, 0)
+        let mutable endPos = (0, 0)
+        let mutable line = 0
+        let mutable column = 0
+        for i in 0 .. String.length str - 1 do
+            if str.[i] = '\n' then
+               line <- line + 1
+               column <- 0
+            else
+               column <- column + 1
+            
+            if i = index then
+                startPos <- (line, column)
+            elif i = index + length - 1 then
+                endPos <- (line, column)
+            else 
+                ()
+        (startPos, endPos)
+
+
+    /// calculates 
+
+    let getMatchRange (str: String, rng: Range.range) (m : Match) =
+        let (startLine, startColumn), (endLine, endColumn) = 
+            getRelativePositions str m.Index m.Length
+        
+        Range.range(rng.FileIndex,  
+                    rng.StartLine + startLine, rng.StartColumn + startColumn, 
+                    rng.StartLine + endLine, rng.StartColumn + endColumn)

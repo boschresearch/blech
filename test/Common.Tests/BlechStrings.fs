@@ -50,131 +50,153 @@ def"
             "abc\n            def"
             )
 
+//    [<Test>]
+//    let testRemoveBackslashNewlineWhitespace () =
+//        Assert.AreEqual (
+//            "abc\
+//def"
+//            |> normalizeEndOfLine 
+//            |> removeBackslashNewlineWhitespace, 
+//            "abcdef"
+//            )
+
+//        Assert.AreEqual (
+//            "abc\
+//             def"
+//            |> normalizeEndOfLine 
+//            |> removeBackslashNewlineWhitespace, 
+//            "abcdef"
+//            )
+
+//        Assert.AreNotEqual (
+//            // Invisible chars are the danger of this notation
+//            "abc\   
+//             def"
+//            |> normalizeEndOfLine 
+//            |> removeBackslashNewlineWhitespace, 
+//            "abcdef"
+//            )
+
+
+//        Assert.AreEqual (
+//            "abc
+//def"
+//            |>  normalizeEndOfLine
+//            |> removeBackslashNewlineWhitespace, 
+//            "abc\ndef"
+//            )
+//        Assert.AreEqual (
+//            "abc
+//            def" 
+//            |> normalizeEndOfLine
+//            |> removeBackslashNewlineWhitespace, 
+//            "abc\n            def"
+//            )
+
     [<Test>]
-    let testRemoveBackslashNewlineWhitespace () =
+    let testNormalizeStringLiteral () =
         Assert.AreEqual (
-            "abc\
-def"
+            "abcdef",
+            "abc\092\013\010def"
             |> normalizeEndOfLine 
-            |> removeBackslashNewlineWhitespace, 
-            "abcdef"
+            |> normalizeStringLiteral
             )
 
         Assert.AreEqual (
-            "abc\
-             def"
+            "abc    def",
+            "abc\092\013\010    def"
             |> normalizeEndOfLine 
-            |> removeBackslashNewlineWhitespace, 
-            "abcdef"
+            |> normalizeStringLiteral 
             )
-
-        Assert.AreNotEqual (
-            // Invisible chars are the danger of this notation
-            "abc\   
-             def"
-            |> normalizeEndOfLine 
-            |> removeBackslashNewlineWhitespace, 
-            "abcdef"
-            )
-
 
         Assert.AreEqual (
+            "abc    def",
+            @"abc\
+    def"
+            |> normalizeEndOfLine 
+            |> normalizeStringLiteral 
+            )
+
+    [<Test>]
+    let testNormalizeVerbatimStringLiteral () =
+        Assert.AreEqual (
+            "abc\ndef",
             "abc
 def"
-            |>  normalizeEndOfLine
-            |> removeBackslashNewlineWhitespace, 
-            "abc\ndef"
+            |> normalizeEndOfLine 
+            |> normalizeVerbatimStringLiteral 
             )
+
         Assert.AreEqual (
+            "abc\n    def",
             "abc
-            def" 
+    def"
             |> normalizeEndOfLine
-            |> removeBackslashNewlineWhitespace, 
-            "abc\n            def"
-            )
-
-    [<Test>]
-    let testRemoveBackslashZeeWhitespace () =
-        Assert.AreEqual (
-            "abcdef",
-            "abc\z
-def"
-            |> normalizeEndOfLine 
-            |> removeBackslashZeeWhitespace 
-            )
-
-        Assert.AreEqual (
-            "abcdef",
-            "abc\z    
-             def"
-            |> normalizeEndOfLine 
-            |> removeBackslashZeeWhitespace 
-            )
-
-        Assert.AreEqual (
-            "abc\ndef",
-            "abc\n\z    
-             def"
-            |> normalizeEndOfLine 
-            |> removeBackslashZeeWhitespace 
-            )
-
-        Assert.AreEqual (
-            "abc\ndef",
-            "abc
-def"
-            |>  normalizeEndOfLine
-            |> removeBackslashZeeWhitespace
+            |> normalizeVerbatimStringLiteral
             )
 
         Assert.AreEqual (
             "abc\n            def",
-            "abc
-            def" 
+            "abc\013\010            def" 
             |> normalizeEndOfLine
-            |> removeBackslashZeeWhitespace
+            |> normalizeVerbatimStringLiteral
             )
-
-
-    [<Test>]
-    let testRemoveImmediateNewline () =
+        
         Assert.AreEqual (
-            "
-abc
-def"
-            |> normalizeEndOfLine 
-            |> removeImmediateNewline, 
-            "abc\ndef"
+            "abc\"def",
+            "abc\"\"def"
+            |> normalizeEndOfLine
+            |> normalizeVerbatimStringLiteral
             )
 
         Assert.AreEqual (
-            "
-            abc\
-            def"
-            |> normalizeEndOfLine 
-            |> removeBackslashNewlineWhitespace
-            |> removeImmediateNewline,
-            "            abcdef"
-            )
-
-        Assert.AreEqual (
-            "
-abc
+            "abc\"\ndef",
+            "abc\"\"
 def"
             |> normalizeEndOfLine
-            |> removeBackslashNewlineWhitespace
-            |> removeImmediateNewline,
-            "abc\ndef"
+            |> normalizeVerbatimStringLiteral
             )
-        Assert.AreEqual (
-            "
-            abc
-            def" 
-            |> normalizeEndOfLine
-            |> removeBackslashNewlineWhitespace
-            |> removeImmediateNewline, 
-            "            abc\n            def"
-            )
+
+
+//    [<Test>]
+//    let testRemoveImmediateNewline () =
+//        Assert.AreEqual (
+//            "
+//abc
+//def"
+//            |> normalizeEndOfLine 
+//            |> removeImmediateNewline, 
+//            "abc\ndef"
+//            )
+
+//        Assert.AreEqual (
+//            "
+//            abc\
+//            def"
+//            |> normalizeEndOfLine 
+//            |> removeBackslashNewlineWhitespace
+//            |> removeImmediateNewline,
+//            "            abcdef"
+//            )
+
+//        Assert.AreEqual (
+//            "
+//abc
+//def"
+//            |> normalizeEndOfLine
+//            |> removeBackslashNewlineWhitespace
+//            |> removeImmediateNewline,
+//            "abc\ndef"
+//            )
+//        Assert.AreEqual (
+//            "
+//            abc
+//            def" 
+//            |> normalizeEndOfLine
+//            |> removeBackslashNewlineWhitespace
+//            |> removeImmediateNewline, 
+//            "            abc\n            def"
+//            )
 
 
     let s1 = @"hello \c world"
@@ -188,16 +210,20 @@ def"
         Assert.IsEmpty (getInvalidCharacterEscapes s2)
         Assert.IsEmpty (getInvalidCharacterEscapes s3)
         Assert.IsEmpty (getInvalidCharacterEscapes s4)
-        Assert.IsNotEmpty (
-            // blank ' ' after backslash '\\'
-            "abc\ 
+        Assert.IsEmpty (
+            // blanks '   ' after backslash '\\' 
+            "abc\\   
             def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral
             |> getInvalidCharacterEscapes
             )
         Assert.IsEmpty (
             // end of line after backslash '\\'
-            @"abc\
+            "abc\092
             def"
+            |> normalizeEndOfLine
+            |> normalizeStringLiteral
             |> getInvalidCharacterEscapes
             )
 
@@ -220,24 +246,6 @@ def"
         Assert.IsEmpty (getInvalidHexEscapes s4)
     
     [<Test>]
-    let testNormalizeStringLiteral () =
-        Assert.AreEqual (
-            "abc\ndef", 
-            "abc
-def"
-            |> normalizeEndOfLine
-            |> normalizeStringLiteral
-            )
-
-        Assert.AreEqual (
-            "abcdef", 
-            "abc\
-            def"
-            |> normalizeEndOfLine
-            |> normalizeStringLiteral
-            )
-
-    [<Test>]
     let testUnescapeNormalizedStringLiteral () =
         Assert.AreEqual (
             "abc\ndef",
@@ -255,22 +263,5 @@ def"
             |> normalizeEndOfLine
             |> normalizeStringLiteral
             |> unescapeNormalizedStringLiteral
-            )
-
-    [<Test>]
-    let testNormalizeVerbatimStringLiteral () =
-        Assert.AreEqual (
-            "abc\"def",
-            "abc\"\"def"
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
-            )
-
-        Assert.AreEqual (
-            "abc\"\ndef",
-            "abc\"\"
-def"
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
             )
 

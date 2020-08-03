@@ -606,7 +606,7 @@ module LexerUtils =
 
     
     /// checks escape sequences in string literals
-    let checkStringLiteral(str: string, rng: Range.range) = 
+    let checkStringLiteral (str: string, rng: Range.range) = 
         //let getEscapeRange (m : Match) = 
         //    Range.range(rng.FileIndex,  
         //                rng.StartLine, rng.StartColumn + m.Index + 1, 
