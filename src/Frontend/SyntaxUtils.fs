@@ -35,6 +35,13 @@ module SyntaxErrors =
         | UnexpectedSignatureMember of implementation: Range.range // * signatureHead: Range.range
         | UnexpectedModuleMember of prototype: Range.range // * moduleHead: Range.range
         | UnexpectedExposure of exposing: Range.range // * signatureHead: Range.range
+        
+        // --- errors string literals
+        | InvalidEscapeSequence of strRng: Range.range * value: string * escRng: Range.range
+        | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
+        | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
+        
+
 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -71,6 +78,18 @@ module SyntaxErrors =
                 | UnexpectedExposure exposing ->
                     { range = exposing
                       message = "unexpected exposing in signature file." }
+                
+                // --- errors string literals
+                | InvalidEscapeSequence (range, value, _) ->
+                    { range = range
+                      message =sprintf "invalid escape sequence '%s'." value }    
+                | DecimalEscapeTooLarge (range, value, _) ->
+                    { range = range
+                      message =sprintf "decimal escape '%s' too large." value }    
+                | InvalidHexEscape (range, value, _) ->
+                    { range = range
+                      message =sprintf "invalid hexadecimal escape '%s'." value }    
+
 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
@@ -82,6 +101,13 @@ module SyntaxErrors =
                 | UnexpectedToken (_token, range, _, start) ->
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
+                
+                // --- errors string literals
+                | InvalidEscapeSequence (_, _, escRng)
+                | InvalidHexEscape (_, _, escRng) ->
+                    [ { range = escRng; message = "invalid"; isPrimary = true} ]
+                | DecimalEscapeTooLarge (_, _, escRng) ->
+                    [ { range = escRng; message = "too large"; isPrimary = true} ]
                 
                 | _ ->
                     []
@@ -115,15 +141,28 @@ module SyntaxErrors =
                     [ "source is interface file."
                       "an interface file exposes everything." ]
 
+                // --- errors in string literals
+                | InvalidEscapeSequence _ ->
+                    [ @"A literal string can contain the following C-like escape sequences:"
+                      @"'\a' (bell), '\b' (backspace), '\f' (form feed), '\n' (newline),"
+                      @"'\r' (carriage return), '\t' (horizontal tab), '\v' (vertical tab),"
+                      @"'\\' (backslash), '\""' (quotation mark [double quote]),"
+                      @"and '\'' (apostrophe [single quote])." ]
+                | DecimalEscapeTooLarge _ ->
+                    [ @"A decimal escape sequence '\ddd' specifies a byte in a literal string:"
+                      @"'ddd' specifies the numeric value with up to three decimal digits."
+                      @"Note that if a decimal escape sequence is to be followed by a digit,"
+                      @"it must be expressed using exactly three digits."]
+                | InvalidHexEscape _ ->
+                    [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
+                      @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
+
                 | _  ->
                     []
 
 
     type LexerError =
         | CommentNotClosed of here: Range.range * opened: Range.range
-        | InvalidEscapeSequence of strRng: Range.range * value: string * escRng: Range.range
-        | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
-        | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
         | TabularUsed of here: Range.range
         | UnknownToken of token: string * here: Range.range
         | NotAPath of here: Range.range
@@ -135,15 +174,6 @@ module SyntaxErrors =
                 | CommentNotClosed (here = r) ->
                     { range = r
                       message = "comment '/*' not terminated." } 
-                | InvalidEscapeSequence (range, value, _) ->
-                    { range = range
-                      message =sprintf "invalid escape sequence '%s'." value }    
-                | DecimalEscapeTooLarge (range, value, _) ->
-                    { range = range
-                      message =sprintf "decimal escape '%s' too large." value }    
-                | InvalidHexEscape (range, value, _) ->
-                    { range = range
-                      message =sprintf "invalid hexadecimal escape '%s'." value }    
                 | TabularUsed where ->
                     { range = where
                       message = "illegal character tab ('\\t') found." }
@@ -161,11 +191,6 @@ module SyntaxErrors =
                 match err with
                 | CommentNotClosed (opened = o) ->    
                     [ { range = o; message = "comment opened."; isPrimary = false } ]
-                | InvalidEscapeSequence (_, _, escRng)
-                | InvalidHexEscape (_, _, escRng) ->
-                    [ { range = escRng; message = "invalid"; isPrimary = true} ]
-                | DecimalEscapeTooLarge (_, _, escRng) ->
-                    [ { range = escRng; message = "too large"; isPrimary = true} ]
                 | TabularUsed here ->
                     [ { range = here; message = "tab character."; isPrimary = true } ]
                 | UnknownToken (here = r) ->
@@ -184,20 +209,6 @@ module SyntaxErrors =
                 match err with
                 | TabularUsed _ ->
                     [ "Insert spaces, tabs are not allowed in Blech source code." ]
-                | InvalidEscapeSequence _ ->
-                    [ @"A literal string can contain the following C-like escape sequences:"
-                      @"'\a' (bell), '\b' (backspace), '\f' (form feed), '\n' (newline),"
-                      @"'\r' (carriage return), '\t' (horizontal tab), '\v' (vertical tab),"
-                      @"'\\' (backslash), '\""' (quotation mark [double quote]),"
-                      @"and '\'' (apostrophe [single quote])." ]
-                | DecimalEscapeTooLarge _ ->
-                    [ @"A decimal escape sequence '\ddd' specifies a byte in a literal string:"
-                      @"'ddd' specifies the numeric value with up to three decimal digits."
-                      @"Note that if a decimal escape sequence is to be followed by a digit,"
-                      @"it must be expressed using exactly three digits."]
-                | InvalidHexEscape _ ->
-                    [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
-                      @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
                 | UnknownToken _ ->
                     [ "Non-ASCII characters are not allowed in Blech source code."]
                 | NotAPath _ ->
@@ -426,21 +437,24 @@ module ParserUtils =
         FAny (value, Some repr)
     
     
+    // error reporting functions for parser
+    let private reportError e = 
+        Diagnostics.Logger.logError 
+        <|| ParserContext.getDiagnosticsLogger ()
+        <| e
+
+
     let parseOne (nat: string, r: Range.range) =
         match System.Int32.TryParse(nat) with
         | (true,value) when value = 1 -> 
             ()
         | _ ->
-            Diagnostics.Logger.logError 
-            <|| ParserContext.getDiagnosticsLogger ()
-            <| NotUnitOne (nat, r)
+            reportError <| NotUnitOne (nat, r)
 
     /// Checks the correct module in the package head
     let checkModuleName (name: AST.StaticNamedPath) =
         if not (name.identifiers = ParserContext.getModuleName ()) then
-            Diagnostics.Logger.logError
-            <|| ParserContext.getDiagnosticsLogger ()
-            <| InconsistentModuleName name 
+            reportError <| InconsistentModuleName name 
             
 
     /// Checks if the static member appears in an implementation or interface context
@@ -465,9 +479,45 @@ module ParserUtils =
     let checkExposing (exposing: AST.Exposing option) =
         if ParserContext.isInterface () then
             if Option.isSome exposing then
-                Diagnostics.Logger.logError
-                <|| ParserContext.getDiagnosticsLogger ()
-                <| UnexpectedExposure (Option.get exposing).Range       
+                reportError <| UnexpectedExposure (Option.get exposing).Range       
+
+    /// checks escape sequences in string literals
+    let checkStringLiteral (str: string, rng: Range.range) = 
+        //let getEscapeRange (m : Match) = 
+        //    Range.range(rng.FileIndex,  
+        //                rng.StartLine, rng.StartColumn + m.Index + 1, 
+        //                rng.StartLine, rng.StartColumn + m.Index + m.Length)
+                 
+        let checkCharacterEscapes =
+            let ms = BlechString.getInvalidCharacterEscapes str
+            if Seq.length ms > 0 then
+                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+            else
+                Ok ()
+
+        let checkDecimalEscapes =
+            let ms = BlechString.getInvalidDecimalEscapes str
+            if  Seq.length ms > 0 then
+                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+            else
+                Ok ()
+         
+        let checkHexEscapes =
+            let ms = BlechString.getInvalidHexEscapes str
+            if Seq.length ms > 0 then
+                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+            else
+                Ok ()
+ 
+        let res =
+            Result.combine checkCharacterEscapes  checkDecimalEscapes 
+            |> Result.combine <| checkHexEscapes
+        match res with
+        | Ok _ -> 
+            ()
+        | Error errs ->
+            ignore <| List.map reportError errs
+
     
     /// Logs the last stored parser error
     let logParserError startRange =
@@ -519,27 +569,29 @@ module LexerUtils =
     open SyntaxErrors
     open System.Text
 
-    /// Allows for collecting a doc string and its range
-    type DocStringBuilder() =
-        let mutable doc: StringBuilder = StringBuilder()
+    /// Allows for collecting a doc strings, strings, and triple quoted strings and their range
+    type TokenBuilder() =
+        let mutable text: StringBuilder = StringBuilder()
         let mutable range: Range.range = Range.range0
 
         member this.Init startRange =
-            doc <- StringBuilder()
+            text <- StringBuilder()
             range <- startRange
             this
         
-        member this.Append (text: string, textRange) =
-            doc <- doc.Append(text)
-            range <- Range.unionRanges range textRange
+        member this.Append (str: string, rng: Range.range) =
+            text <- text.Append(str)
+            range <- Range.unionRanges range rng
             this
 
-        member this.DocString = doc.ToString()
+        member this.Text = 
+            text.ToString()
 
-        member this.Range = range
+        member this.Range = 
+            range
 
-        member this.ToDoc = 
-            doc.ToString(), range
+        member this.Token = 
+            text.ToString(), range
 
     /// this mutable number is used to track the nesting of /* .. */ comments in the SkipComment rule
     // TODO: encapsulate as LexerContext
@@ -547,7 +599,7 @@ module LexerUtils =
     let mutable commentStart: Range.range option = None
     let mutable commentDepth = 0
 
-    let mutable docString = DocStringBuilder()
+    let mutable tokenBuilder = TokenBuilder()
    
     
 
@@ -573,7 +625,6 @@ module LexerUtils =
 
 
     // error reporting functions for lexer
-
     let private reportError e = 
         Diagnostics.Logger.logError 
         <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
@@ -605,41 +656,3 @@ module LexerUtils =
         reportError <|  EofInDocComment docRange
 
     
-    /// checks escape sequences in string literals
-    let checkStringLiteral (str: string, rng: Range.range) = 
-        //let getEscapeRange (m : Match) = 
-        //    Range.range(rng.FileIndex,  
-        //                rng.StartLine, rng.StartColumn + m.Index + 1, 
-        //                rng.StartLine, rng.StartColumn + m.Index + m.Length)
-                 
-        let checkCharacterEscapes =
-            let ms = BlechString.getInvalidCharacterEscapes str
-            if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
-
-        let checkDecimalEscapes =
-            let ms = BlechString.getInvalidDecimalEscapes str
-            if  Seq.length ms > 0 then
-                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
-         
-        let checkHexEscapes =
-            let ms = BlechString.getInvalidHexEscapes str
-            if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
- 
-
-        let res =  
-            Result.combine checkCharacterEscapes  checkDecimalEscapes 
-            |> Result.combine <| checkHexEscapes
-        match res with
-        | Ok _ -> 
-            true
-        | Error errs ->
-            ignore <| List.map reportError errs
-            false

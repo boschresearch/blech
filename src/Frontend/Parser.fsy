@@ -104,7 +104,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 /* Literals */
 %token <string * range> WILDCARD
-%token <string * range> STRING VERBATIMSTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
+%token <string * range> STRING TRIPLEQUOTEDSTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
 
 /* Identifiers */
 %token <string * range> ID 
@@ -1494,10 +1494,12 @@ Identifier
     | ID                                        { Key.Ident $1 } 
 
 AttributeLiteral 
-    : STRING                                    { Literal.String $1 }
+    : STRING                                    { checkStringLiteral $1
+                                                  Literal.String $1 }
 
-    | VERBATIMSTRING                            { Literal.String $1 }
-    
+    | TRIPLEQUOTEDSTRING                        { checkStringLiteral $1
+                                                  Literal.String $1 }
+
     | TRUE                                      { Literal.Bool (true, $1) }
     
     | FALSE                                     { Literal.Bool (false, $1) }

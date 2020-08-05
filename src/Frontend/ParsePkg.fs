@@ -191,7 +191,7 @@ let tokenTagToString token =
     | TOKEN_FLOATCONST -> "<floating point number>"
     | TOKEN_HEXFLOATCONST -> "<hexadecimal floating point number>"
     | TOKEN_STRING -> "<string constant>"
-    | TOKEN_VERBATIMSTRING -> "<verbatim string constant>"
+    | TOKEN_TRIPLEQUOTEDSTRING -> "<triple quoted string constant"
     | TOKEN_ID -> "<identifier>"
     | TOKEN_WILDCARD -> "<_>"
     | TOKEN_EOF -> "<EOF>"

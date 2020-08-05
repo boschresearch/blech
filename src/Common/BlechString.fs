@@ -22,7 +22,7 @@ namespace Blech.Common
 // All end of line sequences should be normalized first
 
 module BlechChar = 
-    let private Bla = '\n'
+    let bla = '\n'
 
 
 module BlechString = 
@@ -33,10 +33,10 @@ module BlechString =
     let private EndOfLine = "(\n\r|\r\n|\r|\n)"
 
     [<Literal>]
-    let private Newline = "\n"
+    let private Linefeed = "\n"
 
     [<Literal>]
-    let private Whitespace = "[ \a\b\f\t\v]*"
+    let private Whitespace = "[ \t]*"
 
     [<Literal>]
     let private Backslash = "\\\\"
@@ -59,7 +59,7 @@ module BlechString =
 
 
     [<Literal>]
-    let invalidCharacterEscape = "\\\\[^abfnrtvz\\\"'x0-9]"
+    let invalidCharacterEscape = "\\\\[^abfnrtvz\\\"'x0-9\n]"
     
     [<Literal>]
     let decimalEscape = "\\\\[0-9]{1,3}"
@@ -70,7 +70,9 @@ module BlechString =
 
     let private hasNormalizedEndOfLine str = 
         not (Regex.IsMatch(str, @"\r"))
-        
+      
+    /// This function replaces any end of line sequence by linefeed '\n'.
+    /// Only for test purposes. Blech normalizes eol sequences in the lexer,
     let normalizeEndOfLine str =
         Regex.Replace(str, EndOfLine, "\n")
 
@@ -132,16 +134,8 @@ module BlechString =
     /// Normalize a string literal from the lexer
 
     let normalizeStringLiteral str = 
-        Regex.Replace(str, Backslash + Whitespace + Newline, "")
+        Regex.Replace(str, Backslash + Linefeed, "")
 
-    /// Normalize a verbatim string literal from the lexer
-    let normalizeVerbatimStringLiteral str =
-        Regex.Replace(str, Quotes + Quotes, Quotes)
-
-    /// Normalize a multiline string literal from the lexer
-    let normalizeMultiLineStringLiteral str =
-        let ns = normalizeStringLiteral str
-        Regex.Replace(ns, Backslash + Quotes, Quotes)
 
     // ---
     // Functions for checking escape sequences
@@ -159,80 +153,85 @@ module BlechString =
         |> Seq.filter (fun m -> not (isValidDecimalEscape m.Value))
         
     // ---
-    // Functions for checking multi-line string literals
-    // all expect a string with normalized end of line sequence
+    // Functions for normalizing multi-line string literals
+    // the public functions normalizeTripleQuotedStr expect a raw triple-quoted string with normalized end of line sequence
     // ---
 
-    [<Literal>]
-    let TripleQuotes = Quotes + "{3}"
-
-    [<Literal>]
-    let InvalidOpeningQuotes = "^" + TripleQuotes + ".+" + Newline  // any character after """
-
-    [<Literal>]
-    let InvalidClosingQuotes = Whitespace + ".+" + TripleQuotes + "$" // any non-whitespace before """
-
-    [<Literal>]
-    let LeadingWhitespace = Newline + "(" + Whitespace + ")" // Leading white space 
-
-    [<Literal>]
-    let Indentation = Whitespace + TripleQuotes + "$"  // whitespace before """
-
     
-    //let splitMultilineStringLiteral (str : string) = 
-    //    str.Split '\n'
-        
-    let getInvalidOpeningQuotes multilineStr =
-        (Regex InvalidOpeningQuotes).Match multilineStr
-        
-    let getInvalidClosingQuotes multilineStr=
-        (Regex InvalidClosingQuotes).Match multilineStr
+    [<Literal>]
+    let private TripleQuotes = Quotes + Quotes + Quotes
 
-    let getMinimalIndentation multilineStr =
-        let m = (Regex Indentation).Match multilineStr
-        m.Length
+    [<Literal>]
+    let private LeadingWhitespace = "^" + Whitespace
 
-    let getInvalidLeadingWhitespace multilineStr =
-        let minIndent = getMinimalIndentation multilineStr
-        (Regex LeadingWhitespace).Matches multilineStr
-        |> Seq.filter (fun m ->  m.Length < minIndent)
+    // Asserts that the line following """ must is excluded
+    let private longestCommonStartingSequence (lines: string list) = 
+        match lines with
+        | fst :: tail ->
+            let startingSequence line =
+                (Regex LeadingWhitespace).Match(line).Value
+            let mutable lcss = startingSequence fst
+            for line in tail do
+                let startSeq = startingSequence line 
+                if not (line = startSeq) then // line actually contains text
+                    if lcss.StartsWith startSeq then
+                        lcss <- startSeq
+                    elif line.StartsWith lcss then
+                        ()
+                    else
+                        lcss <- ""
+                else
+                    ()
+            lcss
+        | _ -> 
+            ""
+    
+    let private dedentTripleQuotedString tqstr =
+        let lines = String.split '\n' tqstr 
+        let lcss = longestCommonStartingSequence (List.tail lines)
+        Regex.Replace(tqstr, "\n" + lcss, "\n")
+
+
+    let private stripNewlineAfterTripleQuotes tqstr = 
+        Regex.Replace(tqstr, "^" + TripleQuotes + Linefeed, TripleQuotes)
+
+    /// Normalize a multiline string literal from the lexer
+    /// expects a raw triple-quoted string with normalized end-of-line
+    let normalizeTripleQuotedStringLiteral str =
+        dedentTripleQuotedString str
+        |> stripNewlineAfterTripleQuotes
+
 
     // --
     // Functions for calculating error ranges
     // expects a raw string with normalized end of line
     // --
 
-    // TODO: This is totally wrong: onlyworks for "<str>" without line continuations, fjg. 1.8.2020
-    // Differentiate ranges for "..", @".." and """.."""
 
-    let getRelativePositions (str: string) index length =
-        // relative positions are zero-based
+    let getMatchRange (str: String, rng: Range.range) (m : Match) =
         let mutable startPos = (0, 0)
         let mutable endPos = (0, 0)
-        let mutable line = 0
-        let mutable column = 0
-        for i in 0 .. String.length str - 1 do
-            if str.[i] = '\n' then
-               line <- line + 1
-               column <- 0
-            else
-               column <- column + 1
+        let mutable line = rng.StartLine
+        let mutable column = rng.StartColumn
+        let fstIdx = m.Index
+        let lstIdx = m.Index + m.Length - 1
+        for i in 0 .. lstIdx do
             
-            if i = index then
+            if i = fstIdx then
                 startPos <- (line, column)
-            elif i = index + length - 1 then
+            elif i = lstIdx then
                 endPos <- (line, column)
             else 
                 ()
-        (startPos, endPos)
+            
+            if str.[i] = '\n' then
+                line <- line + 1
+                column <- 1
+            else
+                column <- column + 1
 
+        Range.range(rng.FileIndex, 
+                    fst startPos, snd startPos, 
+                    fst endPos, snd endPos)
 
-    /// calculates 
-
-    let getMatchRange (str: String, rng: Range.range) (m : Match) =
-        let (startLine, startColumn), (endLine, endColumn) = 
-            getRelativePositions str m.Index m.Length
         
-        Range.range(rng.FileIndex,  
-                    rng.StartLine + startLine, rng.StartColumn + startColumn, 
-                    rng.StartLine + endLine, rng.StartColumn + endColumn)

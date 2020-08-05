@@ -117,87 +117,7 @@ def"
             |> normalizeStringLiteral 
             )
 
-    [<Test>]
-    let testNormalizeVerbatimStringLiteral () =
-        Assert.AreEqual (
-            "abc\ndef",
-            "abc
-def"
-            |> normalizeEndOfLine 
-            |> normalizeVerbatimStringLiteral 
-            )
-
-        Assert.AreEqual (
-            "abc\n    def",
-            "abc
-    def"
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
-            )
-
-        Assert.AreEqual (
-            "abc\n            def",
-            "abc\013\010            def" 
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
-            )
-        
-        Assert.AreEqual (
-            "abc\"def",
-            "abc\"\"def"
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
-            )
-
-        Assert.AreEqual (
-            "abc\"\ndef",
-            "abc\"\"
-def"
-            |> normalizeEndOfLine
-            |> normalizeVerbatimStringLiteral
-            )
-
-
-//    [<Test>]
-//    let testRemoveImmediateNewline () =
-//        Assert.AreEqual (
-//            "
-//abc
-//def"
-//            |> normalizeEndOfLine 
-//            |> removeImmediateNewline, 
-//            "abc\ndef"
-//            )
-
-//        Assert.AreEqual (
-//            "
-//            abc\
-//            def"
-//            |> normalizeEndOfLine 
-//            |> removeBackslashNewlineWhitespace
-//            |> removeImmediateNewline,
-//            "            abcdef"
-//            )
-
-//        Assert.AreEqual (
-//            "
-//abc
-//def"
-//            |> normalizeEndOfLine
-//            |> removeBackslashNewlineWhitespace
-//            |> removeImmediateNewline,
-//            "abc\ndef"
-//            )
-//        Assert.AreEqual (
-//            "
-//            abc
-//            def" 
-//            |> normalizeEndOfLine
-//            |> removeBackslashNewlineWhitespace
-//            |> removeImmediateNewline, 
-//            "            abc\n            def"
-//            )
-
+    
 
     let s1 = @"hello \c world"
     let s2 = @"hello \542 world"
@@ -210,20 +130,18 @@ def"
         Assert.IsEmpty (getInvalidCharacterEscapes s2)
         Assert.IsEmpty (getInvalidCharacterEscapes s3)
         Assert.IsEmpty (getInvalidCharacterEscapes s4)
-        Assert.IsEmpty (
-            // blanks '   ' after backslash '\\' 
+        Assert.IsNotEmpty (
+            // blanks ' ' after backslash '\\' 
             "abc\\   
             def"
             |> normalizeEndOfLine
-            |> normalizeStringLiteral
             |> getInvalidCharacterEscapes
             )
         Assert.IsEmpty (
             // end of line after backslash '\\'
-            "abc\092
+            "abc\\
             def"
             |> normalizeEndOfLine
-            |> normalizeStringLiteral
             |> getInvalidCharacterEscapes
             )
 
@@ -237,14 +155,14 @@ def"
         Assert.IsEmpty (getInvalidDecimalEscapes s3)
 
         Assert.IsEmpty(getInvalidDecimalEscapes s4)
-    
+
     [<Test>]
     let testInvalidHexEscape () =
         Assert.IsEmpty (getInvalidHexEscapes s1)
         Assert.IsEmpty (getInvalidHexEscapes s2)
         Assert.IsNotEmpty (getInvalidHexEscapes s3)
         Assert.IsEmpty (getInvalidHexEscapes s4)
-    
+
     [<Test>]
     let testUnescapeNormalizedStringLiteral () =
         Assert.AreEqual (
@@ -258,10 +176,64 @@ def"
 
         Assert.AreEqual (
             "abcdef", 
-            "abc\
-            def"
+            @"abc\
+def"
             |> normalizeEndOfLine
             |> normalizeStringLiteral
             |> unescapeNormalizedStringLiteral
             )
 
+    let removeTripleQuotes (str: string) = 
+        str.Substring(3, str.Length - 6)
+
+    [<Test>]
+    let testNormalizeTripleQuotedStringLiteral () =
+        Assert.AreEqual (
+            "  Hello,\n  world.\n",
+            "\"\"\"
+              Hello,
+              world.
+            \"\"\""
+            |> normalizeEndOfLine
+            |> normalizeTripleQuotedStringLiteral
+            |> removeTripleQuotes
+            )
+        
+        Assert.AreEqual (
+            "    This\nis\n  a test",
+            "\"\"\"    This
+                 is
+                   a test\"\"\""
+            |> normalizeEndOfLine
+            |> normalizeTripleQuotedStringLiteral
+            |> removeTripleQuotes
+            )
+
+        Assert.AreEqual (
+            "hello",
+            "\"\"\"
+            hello\"\"\""
+            |> normalizeEndOfLine
+            |> normalizeTripleQuotedStringLiteral
+            |> removeTripleQuotes
+            )
+
+        Assert.AreEqual (
+            "\nhello",
+            "\"\"\"
+
+            hello\"\"\""
+            |> normalizeEndOfLine
+            |> normalizeTripleQuotedStringLiteral
+            |> removeTripleQuotes
+            )
+
+        Assert.AreEqual (
+            "Hello,\nworld.",
+            "\"\"\"
+              Hello,
+              world.\"\"\""
+            |> normalizeEndOfLine
+            |> normalizeTripleQuotedStringLiteral
+            |> removeTripleQuotes
+            )

@@ -1,13 +1,21 @@
 @[CFunction (binding = "hello \n world", header= "bla.h")]
 extern function invalidEscape()
 
-@[CFunction (binding = "hello \255 world" , header= "bla.h")]
+@[CFunction (binding = "hello \255 
+world" , header= "bla.h")]
 extern function decimalTooLarge()
 
 @[CFunction (binding = "hello \x9a world" , header= "bla.h")]
 extern function invalidHex()
 
+@[CFunction (binding = """
+                       printf("%d", $1);
+                         blafasel;
 
+                       faselbla
+                       """, 
+             header= "blah.h")]
+extern function tripleQuoteBinding (x: nat8)
 
 @[EntryPoint]
 activity main()()

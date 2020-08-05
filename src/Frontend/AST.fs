@@ -589,7 +589,7 @@ and ClockExpr =
 
 // Todo: Keep kind of string in AST, because they are handled differently, fjg. 3,8,2020
 and BlechString = 
-    | Normal | Verbatim | Multiline
+    | SingleQuoted | TripleQuoted
 
 
 and Literal =

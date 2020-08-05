@@ -70,15 +70,14 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
 
 // utf8charpattern = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
 
-let anychar = [^ '\n' '\r']              // allowed char sequences are checked via lexer checks
+let anychar = [^ '\n' '\r']              // linefeed is handled by the token parser
 let stringchar = [^ '\\' '"' '\n' '\r']
 let escapeseq = '\\' anychar             // allow any character after a \, to be checked afterwards
 let stringitem = (stringchar | escapeseq)
-let stringliteral = '"' stringitem* '"'
-
 let stringitems = stringitem*
-let quotes = '"' '"'? '"'?
+
 let triplequotes = "\"\"\""
+let quotes = '"' '"'?
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -104,19 +103,24 @@ rule Token = parse
     
     | [' ']                 { Token lexbuf }
 
-    (* --- strings, can span multiplen lines *)
+    (* --- strings, can span multiple lines --- *)
+
+    | '"'                   { let lxm, rng = getLexemeAndRange lexbuf
+                              tokenBuilder <- tokenBuilder.Init rng
+                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
+                              CollectString lexbuf }
 
     | triplequotes          { let lxm, rng = getLexemeAndRange lexbuf
-                              docString <- docString.Init rng
-                              docString <- docString.Append (lxm, rng)
+                              tokenBuilder <- tokenBuilder.Init rng
+                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
                               CollectTripleQuotedString lexbuf }
 
     (* ---- doc comments ---- *)
 
-    | "///"                 { docString <- docString.Init (getRange lexbuf) 
+    | "///"                 { tokenBuilder <- tokenBuilder.Init (getRange lexbuf) 
                               CollectLineDoc lexbuf } 
     
-    | "/**"                 { docString <- docString.Init (getRange lexbuf) 
+    | "/**"                 { tokenBuilder <- tokenBuilder.Init (getRange lexbuf) 
                               CollectBlockDoc lexbuf } 
 
     (* ---- file system: reserved directory name for blech transpilations ---- *)
@@ -331,6 +335,7 @@ rule Token = parse
 
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
+    (*
     | stringliteral         { let lxm, rng = getLexemeAndRange lexbuf
                               let nlxm = BlechString.normalizeStringLiteral lxm
                               if checkStringLiteral(nlxm, rng) then
@@ -338,6 +343,7 @@ rule Token = parse
                                 STRING ( str, rng ) 
                               else
                                 EOF rng }
+*)
 
     | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
                             { ID (getLexemeAndRange lexbuf) }
@@ -395,53 +401,68 @@ and SkipLineOnError = parse
 
 
 and CollectLineDoc = parse    
-    | chunkwithoutnewline   { docString <- docString.Append(getLexemeAndRange lexbuf)
+    | chunkwithoutnewline   { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectLineDoc lexbuf }
 
     | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
-                              LINEDOC (docString.ToDoc) }
+                              LINEDOC (tokenBuilder.Token) }
                               
-    | eof                   { eofInDocComment (docString.Range) 
+    | eof                   { eofInDocComment (tokenBuilder.Range) 
                               EOF (getRange lexbuf) }
 
     
 and CollectBlockDoc = parse
-    | chunkwithoutstar      { docString <- docString.Append(getLexemeAndRange lexbuf)
+    | chunkwithoutstar      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectBlockDoc lexbuf }
 
-    | "*"                   { docString <- docString.Append(getLexemeAndRange lexbuf)
+    | "*"                   { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectBlockDoc lexbuf }
     
-    | newline               { docString <- docString.Append(getLexemeAndRange lexbuf)
+    | newline               { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectBlockDoc lexbuf }
     
 
-    | "*/"                  { BLOCKDOC (docString.ToDoc) }
+    | "*/"                  { BLOCKDOC (tokenBuilder.Token) }
 
-    | eof                   { eofInDocComment (docString.Range)
+    | eof                   { eofInDocComment (tokenBuilder.Range)
+                              EOF (getRange lexbuf) }
+
+and CollectString = parse
+    | newline               { tokenBuilder <- tokenBuilder.Append("\n", getRange lexbuf)  // normalize newline
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+                              CollectString lexbuf }
+    | stringitems
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectString lexbuf }
+        
+    | '"'                   { let lxm, rng = getLexemeAndRange lexbuf
+                              tokenBuilder <- tokenBuilder.Append(lxm, rng)
+                              STRING (tokenBuilder.Token) }
+
+    | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
 
 and CollectTripleQuotedString = parse
-    
-    | newline               { docString <- docString.Append(getLexemeAndRange lexbuf)
+    | newline               { tokenBuilder <- tokenBuilder.Append("\n", getRange lexbuf) // normalize newline
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectTripleQuotedString lexbuf }
     | stringitems
-                            { docString <- docString.Append(getLexemeAndRange lexbuf)
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectTripleQuotedString lexbuf }
-        
-    | quotes                { let lxm, rng = getLexemeAndRange lexbuf
-                              docString <- docString.Append(lxm, rng)
-                              if lxm = "\"\"\"" then  // Todo: Create a helper function for this, fjg. 5.8.20
-                                  let tqstr = BlechString.normalizeTripleQuotedStringLiteral docString.DocString
+    
+    | triplequotes          { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              TRIPLEQUOTEDSTRING (tokenBuilder.Token) }    
+    
+    | quotes                { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              (* if lxm = "\"\"\"" then  // Todo: Create a helper function for this, fjg. 5.8.20
+                                  let tqstr = BlechString.normalizeTripleQuotedStringLiteral tokenBuilder.Text
                                   printfn "%s" tqstr
                                   // Strip of """<string>""" to get <string>, the range contains """<string>"""
-                                  STRING ( tqstr.Substring(3, tqstr.Length - 6), docString.Range )
-                              else 
-                                  CollectTripleQuotedString lexbuf }
+                                  STRING ( tqstr.Substring(3, tqstr.Length - 6), tokenBuilder.Range ) *)
+                              CollectTripleQuotedString lexbuf }
 
-    | eof                    {eofInDocComment (docString.Range)  // Todo: Create separate error message, fjg. 5.8.20
+    | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
 
 
