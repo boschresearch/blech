@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+open Blech.Common
 open Blech.Common.Range
 
 open Blech.Frontend.CommonTypes 
@@ -1494,11 +1495,23 @@ Identifier
     | ID                                        { Key.Ident $1 } 
 
 AttributeLiteral 
-    : STRING                                    { checkStringLiteral $1
-                                                  Literal.String $1 }
+    : STRING                                    { let str = if checkStringLiteral $1 then 
+                                                                fst $1
+                                                                |> BlechString.normalizeSingleQuotedString
+                                                                |> BlechString.unescapeStringLiteral
+                                                                |> BlechString.removeQuotes
+                                                            else
+                                                                fst $1
+                                                  Literal.String (str, snd $1) }
 
-    | TRIPLEQUOTEDSTRING                        { checkStringLiteral $1
-                                                  Literal.String $1 }
+    | TRIPLEQUOTEDSTRING                        { let str = if checkStringLiteral $1 then 
+                                                                fst $1
+                                                                |> BlechString.normalizeTripleQuotedString
+                                                                |> BlechString.unescapeStringLiteral
+                                                                |> BlechString.removeTripleQuotes
+                                                            else
+                                                                fst $1
+                                                  Literal.String (str, snd $1) }
 
     | TRUE                                      { Literal.Bool (true, $1) }
     

@@ -487,9 +487,9 @@ module ParserUtils =
         //    Range.range(rng.FileIndex,  
         //                rng.StartLine, rng.StartColumn + m.Index + 1, 
         //                rng.StartLine, rng.StartColumn + m.Index + m.Length)
-                 
+        let str = BlechString.normalizeEndOfLine str         
         let checkCharacterEscapes =
-            let ms = BlechString.getInvalidCharacterEscapes str
+            let ms = BlechString.getInvalidEscapeSequences str
             if Seq.length ms > 0 then
                 Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
             else
@@ -512,12 +512,13 @@ module ParserUtils =
         let res =
             Result.combine checkCharacterEscapes  checkDecimalEscapes 
             |> Result.combine <| checkHexEscapes
+        
         match res with
         | Ok _ -> 
-            ()
+            true
         | Error errs ->
             ignore <| List.map reportError errs
-
+            false
     
     /// Logs the last stored parser error
     let logParserError startRange =

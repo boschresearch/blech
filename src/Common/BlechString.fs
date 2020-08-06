@@ -58,36 +58,35 @@ module BlechString =
     let private BackslashDoubleQuotes = Backslash + Quotes
 
 
-    [<Literal>]
-    let invalidCharacterEscape = "\\\\[^abfnrtvz\\\"'x0-9\n]"
+    //[<Literal>]
+    //let invalidCharacterEscape = "\\\\[^abfnrtvz'x0-9\"\\\n\\\\]"
     
     [<Literal>]
-    let decimalEscape = "\\\\[0-9]{1,3}"
+    let EscapeSequence = Backslash + "."  // needs RegexOptions.Singleline
+    let ValidEscapeSequence = Backslash + "[" + Linefeed + Backslash + "abfnrtvz'x0-9\"]" 
+
+    [<Literal>]
+    let DecimalEscape = Backslash + "[0-9]{1,3}"
     
     [<Literal>]
-    let invalidHexEscape = "\\\\x([^ 0-9 a-f A-F].|.[^ 0-9 a-f A-F])"
+    let HexEscape = Backslash + "x[^\"\n]{0,2}"
+    let ValidHexEscape = Backslash + "x[0-9a-fA-F]{2}"
     
 
     let private hasNormalizedEndOfLine str = 
         not (Regex.IsMatch(str, @"\r"))
       
     /// This function replaces any end of line sequence by linefeed '\n'.
-    /// Only for test purposes. Blech normalizes eol sequences in the lexer,
     let normalizeEndOfLine str =
         Regex.Replace(str, EndOfLine, "\n")
 
-    //let removeBackslashNewlineWhitespace str =
-    //    assert hasNormalizedEndOfLine str
-    //    Regex.Replace(str, BackSlashNewlineWhitespace, "")
 
-    //let removeBackslashWhitespace str =
-    //    assert hasNormalizedEndOfLine str
+    let isValidEscapeSequence (escSeq: string) =
+        (Regex ValidEscapeSequence).IsMatch escSeq
 
-    //let removeImmediateNewline str =
-    //    assert hasNormalizedEndOfLine str
-    //    Regex.Replace(str, ImmediateNewline, "")
-    
-    
+    let isValidHexEscape (hexEsc: string) = 
+        (Regex ValidHexEscape).IsMatch hexEsc
+
     let decimalEscapeToInt (decEsc: string) : int = 
         let dec = decEsc.Substring(1)
         System.Int32.Parse dec
@@ -109,7 +108,6 @@ module BlechString =
         string decimal
 
     
-
     let private decimalEscapeToUnicodeDecimal str = 
         decimalEscapeToInt str
         |> decimalToUnicodeDecimal
@@ -117,39 +115,57 @@ module BlechString =
 
     let private decimalEscapesToUnicodeDecimals str =
         let mev = MatchEvaluator (fun m -> decimalEscapeToUnicodeDecimal m.Value) 
-        Regex.Replace(str, decimalEscape, mev)
+        Regex.Replace(str, DecimalEscape, mev)
     
     
-    let unescapeNormalizedStringLiteral str =
+    /// Normalize a string literal from the lexer
+
+    let removeLineContinuations str = 
+        Regex.Replace(str, Backslash + Linefeed, "")
+
+    let normalizeSingleQuotedString str =
+        normalizeEndOfLine str
+    
+    let unescapeStringLiteral str =
         // given a normalized Blech string with valid escapes sequences
-        decimalEscapesToUnicodeDecimals str
-        // Regex.Unescape does the job
+        removeLineContinuations str
+        |> decimalEscapesToUnicodeDecimals
+        // Regex.Unescape does the job to replace escape sequences
         |> Regex.Unescape
+
+    let removeQuotes (str : string) = 
+        str.Substring (1, str.Length - 2)
+        
+    let removeTripleQuotes (str: string) =
+        str.Substring (3, str.Length - 6)
+    
+    
+
 
     // ---
     // Functions for normalizing string literals
     // all functions expect a string with normalized end of line sequences
     // ---
     
-    /// Normalize a string literal from the lexer
-
-    let normalizeStringLiteral str = 
-        Regex.Replace(str, Backslash + Linefeed, "")
-
 
     // ---
     // Functions for checking escape sequences
     // --
 
-    let getInvalidCharacterEscapes str : seq<Match> = 
-        seq <| (Regex invalidCharacterEscape).Matches str
+    //let getInvalidCharacterEscapes str : seq<Match> = 
+    //    seq <| (Regex invalidCharacterEscape).Matches str
+
+    let getInvalidEscapeSequences str : seq<Match> = 
+        Regex.Matches (str, EscapeSequence, RegexOptions.Singleline)
+        |> Seq.filter (fun m -> not (isValidEscapeSequence m.Value))
 
     let getInvalidHexEscapes str: seq<Match> =
-        seq <| (Regex invalidHexEscape).Matches str
+        Regex.Matches (str, HexEscape)
+        |> Seq.filter (fun m -> not (isValidHexEscape m.Value))
 
     let getInvalidDecimalEscapes str : seq<Match> =
         str 
-        |> (Regex decimalEscape).Matches
+        |> (Regex DecimalEscape).Matches
         |> Seq.filter (fun m -> not (isValidDecimalEscape m.Value))
         
     // ---
@@ -164,7 +180,7 @@ module BlechString =
     [<Literal>]
     let private LeadingWhitespace = "^" + Whitespace
 
-    // Asserts that the line following """ must is excluded
+    // Asserts that the line starting with """ must is excluded
     let private longestCommonStartingSequence (lines: string list) = 
         match lines with
         | fst :: tail ->
@@ -196,9 +212,9 @@ module BlechString =
         Regex.Replace(tqstr, "^" + TripleQuotes + Linefeed, TripleQuotes)
 
     /// Normalize a multiline string literal from the lexer
-    /// expects a raw triple-quoted string with normalized end-of-line
-    let normalizeTripleQuotedStringLiteral str =
-        dedentTripleQuotedString str
+    let normalizeTripleQuotedString str =
+        normalizeEndOfLine str
+        |> dedentTripleQuotedString
         |> stripNewlineAfterTripleQuotes
 
 
