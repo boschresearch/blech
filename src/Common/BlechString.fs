@@ -97,15 +97,15 @@ module BlechString =
 
     let decimalToOctalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        Backslash + sprintf "%03o" decimal  // octal with 3 digits, leading '0's if necessary
+        sprintf "\\%03o" decimal  // octal with 3 digits, leading '0's if necessary
 
     let decimalToUnicodeDecimal (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        Backslash + sprintf "%03d" decimal // decimal with 3 digits, leading '0's if necessary
+        sprintf "\\%03d" decimal // decimal with 3 digits, leading '0's if necessary
 
     let decimalToHexEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        Backslash + sprintf "x%02x" decimal // decimal with 3 digits, leading '0's if necessary
+        sprintf "\\x%02X" decimal // decimal with 3 digits, leading '0's if necessary
 
 
     let decimalToChar (decimal : int) =
@@ -149,7 +149,7 @@ module BlechString =
     let unescapeStringLiteral str =
         // given a normalized Blech string with valid escapes sequences
         removeLineContinuations str
-        |> decimalEscapesToHexEscapes
+        |> decimalEscapesToOctalEscapes
         // Regex.Unescape does the job to replace escape sequences
         |> Regex.Unescape
 
