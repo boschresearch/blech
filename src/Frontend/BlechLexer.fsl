@@ -30,7 +30,8 @@ open Blech.Common
 
 (* Lexer regex rules *)
 
-let endofline = ('\r' '\n' | '\n')
+let endofline = ('\r' '\n' | '\n' '\r' | '\n' | '\r' )
+
 
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
 
@@ -65,14 +66,15 @@ let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
 
-(* strings follow https://docs.python.org/2.0/ref/strings.html
-   TODO: add multiline strings, fjg. 16.07.20 *)
+(* strings and triplequotedstrings follow Julia https://docs.julialang.org/en/v1/manual/strings/
+   line continuations are allowed for both
+   escape sequence checking follows Lua https://www.lua.org/manual/5.4/manual.html#3.1 *)
 
 // utf8charpattern = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
 
-let anychar = [^ '\n']              // end of line is handled by the token parser
-let stringchar = [^ '\\' '"' '\n']  
-let escapeseq = '\\' anychar             // allow any character after a \, to be checked afterwards
+let anychar = [^ '\n' '\r']       // end of line is handled by the token parser
+let stringchar = [^ '\\' '"']  
+let escapeseq = '\\' anychar?     // allow any character after a \ but not end of line
 let stringitem = (stringchar | escapeseq)
 let stringitems = stringitem*
 
@@ -353,6 +355,7 @@ rule Token = parse
     (* --------- end of file and unknown tokens --------- *)
 
     | eof                    { EOF (getRange lexbuf) }
+
     | _                      { unknownToken lexbuf; 
                                Token lexbuf }
 
@@ -446,6 +449,9 @@ and CollectString = parse
     | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
 
+    | _                      { unknownToken lexbuf; 
+                               Token lexbuf }
+
 and CollectTripleQuotedString = parse
     | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
@@ -468,6 +474,9 @@ and CollectTripleQuotedString = parse
 
     | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
+
+    | _                      { unknownToken lexbuf; 
+                               Token lexbuf }
 
 
 and FromPath = parse
