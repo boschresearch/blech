@@ -105,7 +105,7 @@ module BlechString =
 
     let decimalToHexEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
-        sprintf "\\x%02X" decimal // decimal with 3 digits, leading '0's if necessary
+        sprintf "\\x%02x" decimal // hex with 2 digits
 
 
     let decimalToChar (decimal : int) =
@@ -149,7 +149,8 @@ module BlechString =
     let unescapeStringLiteral str =
         // given a normalized Blech string with valid escapes sequences
         removeLineContinuations str
-        |> decimalEscapesToOctalEscapes
+        // |> decimalEscapesToOctalEscapes   // both are possible
+        |> decimalEscapesToHexEscapes
         // Regex.Unescape does the job to replace escape sequences
         |> Regex.Unescape
 
