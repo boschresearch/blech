@@ -103,6 +103,11 @@ module BlechString =
         assert (0 <= decimal && decimal <= 255)
         Backslash + sprintf "%03d" decimal // decimal with 3 digits, leading '0's if necessary
 
+    let decimalToHexEscape (decimal : int) =
+        assert (0 <= decimal && decimal <= 255)
+        Backslash + sprintf "x%02x" decimal // decimal with 3 digits, leading '0's if necessary
+
+
     let decimalToChar (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
         string decimal
@@ -112,11 +117,26 @@ module BlechString =
         decimalEscapeToInt str
         |> decimalToUnicodeDecimal
 
+    let private decimalEscapeToOctalEscape str =
+        decimalEscapeToInt str
+        |> decimalToOctalEscape 
+
+    let private decimalEscapeToHexEscape str =
+        decimalEscapeToInt str
+        |> decimalToHexEscape 
+
 
     let private decimalEscapesToUnicodeDecimals str =
         let mev = MatchEvaluator (fun m -> decimalEscapeToUnicodeDecimal m.Value) 
         Regex.Replace(str, DecimalEscape, mev)
     
+    let private decimalEscapesToOctalEscapes str =
+        let mev = MatchEvaluator (fun m -> decimalEscapeToOctalEscape m.Value) 
+        Regex.Replace(str, DecimalEscape, mev)
+    
+    let private decimalEscapesToHexEscapes str =
+        let mev = MatchEvaluator (fun m -> decimalEscapeToHexEscape m.Value) 
+        Regex.Replace(str, DecimalEscape, mev)
     
     /// Normalize a string literal from the lexer
 
@@ -129,7 +149,7 @@ module BlechString =
     let unescapeStringLiteral str =
         // given a normalized Blech string with valid escapes sequences
         removeLineContinuations str
-        |> decimalEscapesToUnicodeDecimals
+        |> decimalEscapesToHexEscapes
         // Regex.Unescape does the job to replace escape sequences
         |> Regex.Unescape
 

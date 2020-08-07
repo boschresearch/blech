@@ -6,7 +6,7 @@ world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
 @[CFunction (binding = "hello \x9a
- world \0
+ world \0 \92
  bla" , header= "bla.h")]
 extern function invalidHex()
 
@@ -14,7 +14,7 @@ extern function invalidHex()
                        printf("%d", $1);
                          blafasel;
 
-                       faselbla
+                       fasel \xAF bla
                        """, 
              header= "blah.h")]
 extern function tripleQuoteBinding (x: nat8)
