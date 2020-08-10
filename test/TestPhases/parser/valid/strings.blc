@@ -1,5 +1,5 @@
 @[CFunction (binding = "hello \n lovely w\"orld", header= "bla.h")]
-extern function invalidEscape()
+extern function invalidEscape(x: bool)
 
 @[CFunction (binding = "hello \255 \\ bla\
 world\2" , header= "bla.h")]
@@ -17,7 +17,14 @@ extern function invalidHex()
                        fasel \xAF bla
                        """, 
              header= "blah.h")]
-extern function tripleQuoteBinding (x: nat8)
+extern function tripleQuoteBinding (x: int32)
+
+@[CFunction (binding = """do {
+                              strcpy($2.buf, $1.buf);
+                              $2.len = $1.len;
+                          } while (0)""" ,
+             header = "string.h")]
+extern function stringCopy (fromString: bool)(toString: bool)
 
 @[EntryPoint]
 activity main()()

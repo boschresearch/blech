@@ -263,7 +263,8 @@ let internal cpDirectCCall (fp: FunctionPrototype) =
     let cbinding = fp.annotation.TryGetCBinding
     let call = 
         let sargs = List.map (fun doc -> render None doc) args
-        txt <| Bindings.replaceParameters (Option.get cbinding) sargs
+        Bindings.replaceParameters (Option.get cbinding) sargs
+        |> Bindings.toDoc
     let macro = 
         (txt "#define"
         <+> ppName fp.name

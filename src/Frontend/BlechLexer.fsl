@@ -73,7 +73,7 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
 // utf8charpattern = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
 
 let anychar = [^ '\n' '\r']       // end of line is handled by the token parser
-let stringchar = [^ '\\' '"']  
+let stringchar = [^ '\\' '"' '\n' '\r']  
 let escapeseq = '\\' anychar?     // allow any character after a \ but not end of line
 let stringitem = (stringchar | escapeseq)
 let stringitems = stringitem*

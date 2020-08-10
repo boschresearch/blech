@@ -18,6 +18,7 @@ namespace Blech.Common
 
 module Bindings = 
     open System.Text.RegularExpressions
+    open PPrint
     
     [<Literal>]
     let private parameterPattern = "\$[1-9][0-9]*"
@@ -40,3 +41,9 @@ module Bindings =
         let evaluator = MatchEvaluator replace
         
         Regex.Replace (binding, parameterPattern, evaluator)
+
+    let toDoc binding = 
+        let lines = String.split '\n' binding
+        Seq.map txt lines
+        |> vsep
+        |> align
