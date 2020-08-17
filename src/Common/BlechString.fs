@@ -29,6 +29,10 @@ module BlechString =
     open System
     open System.Text.RegularExpressions
     
+    // ----
+    // Regular expression patterns
+    // ----
+
     [<Literal>]
     let private EndOfLine = "(\n\r|\r\n|\r|\n)"
 
@@ -44,42 +48,32 @@ module BlechString =
     [<Literal>]
     let private Quotes = "\""
 
-
-    //[<Literal>]
-    //let private BackSlashNewlineWhitespace = "\\\n" + Whitespace
-
-    //[<Literal>]
-    //let private ImmediateNewline = "^\n"
+    [<Literal>]
+    let private EscapeSequence = Backslash + "."  // needs RegexOptions.Singleline
 
     [<Literal>]
-    let private TwoQuotes = Quotes + Quotes
+    let private ValidEscapeSequence = Backslash + "[" + Linefeed + Backslash + "abfnrtvz'x0-9\"]" 
 
     [<Literal>]
-    let private BackslashDoubleQuotes = Backslash + Quotes
-
-
-    //[<Literal>]
-    //let invalidCharacterEscape = "\\\\[^abfnrtvz'x0-9\"\\\n\\\\]"
+    let private DecimalEscape = Backslash + "[0-9]{1,3}"
     
     [<Literal>]
-    let EscapeSequence = Backslash + "."  // needs RegexOptions.Singleline
-    let ValidEscapeSequence = Backslash + "[" + Linefeed + Backslash + "abfnrtvz'x0-9\"]" 
-
-    [<Literal>]
-    let DecimalEscape = Backslash + "[0-9]{1,3}"
+    let private HexEscape = Backslash + "x[^\"\n]{0,2}"
     
     [<Literal>]
-    let HexEscape = Backslash + "x[^\"\n]{0,2}"
-    let ValidHexEscape = Backslash + "x[0-9a-fA-F]{2}"
+    let private ValidHexEscape = Backslash + "x[0-9a-fA-F]{2}"
+
+    [<Literal>]
+    let private UnicodeEscape = Backslash + "u\{[0-9a-fA-F]{1,}\}"
+   
+    [<Literal>]
+    let private MaxUnicodeCodePoint = 1114111
+   
     
 
     let private hasNormalizedEndOfLine str = 
         not (Regex.IsMatch(str, @"\r"))
       
-    /// This function replaces any end of line sequence by linefeed '\n'.
-    let normalizeEndOfLine str =
-        Regex.Replace(str, EndOfLine, "\n")
-
 
     let isValidEscapeSequence (escSeq: string) =
         (Regex ValidEscapeSequence).IsMatch escSeq
@@ -95,11 +89,16 @@ module BlechString =
         let dec = decimalEscapeToInt decEsc
         0 <= dec && dec <= 255
 
+    let private isValidUnicodeEscape (unicodeEscape: string) =
+        let hexdigits = unicodeEscape.Substring(3, unicodeEscape.Length - 4)
+        let codepoint = System.Numerics.BigInteger.Parse(hexdigits, System.Globalization.NumberStyles.HexNumber)
+        0I <= codepoint && codepoint <= System.Numerics.BigInteger MaxUnicodeCodePoint
+
     let decimalToOctalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
         sprintf "\\%03o" decimal  // octal with 3 digits, leading '0's if necessary
 
-    let decimalToUnicodeDecimal (decimal : int) =
+    let decimalTo3DigitDecimalEscape (decimal : int) =
         assert (0 <= decimal && decimal <= 255)
         sprintf "\\%03d" decimal // decimal with 3 digits, leading '0's if necessary
 
@@ -113,9 +112,9 @@ module BlechString =
         string decimal
 
     
-    let private decimalEscapeToUnicodeDecimal str = 
+    let private decimalEscapeTo3DigitDecimalEscape str = 
         decimalEscapeToInt str
-        |> decimalToUnicodeDecimal
+        |> decimalTo3DigitDecimalEscape
 
     let private decimalEscapeToOctalEscape str =
         decimalEscapeToInt str
@@ -127,7 +126,7 @@ module BlechString =
 
 
     let private decimalEscapesToUnicodeDecimals str =
-        let mev = MatchEvaluator (fun m -> decimalEscapeToUnicodeDecimal m.Value) 
+        let mev = MatchEvaluator (fun m -> decimalEscapeTo3DigitDecimalEscape m.Value) 
         Regex.Replace(str, DecimalEscape, mev)
     
     let private decimalEscapesToOctalEscapes str =
@@ -137,15 +136,19 @@ module BlechString =
     let private decimalEscapesToHexEscapes str =
         let mev = MatchEvaluator (fun m -> decimalEscapeToHexEscape m.Value) 
         Regex.Replace(str, DecimalEscape, mev)
+
+
+
     
     /// Normalize a string literal from the lexer
+
+    /// This function replaces any end of line sequence by linefeed '\n'.
+    let normalizeEndOfLine str =
+        Regex.Replace(str, EndOfLine, "\n")
 
     let removeLineContinuations str = 
         Regex.Replace(str, Backslash + Linefeed, "")
 
-    let normalizeSingleQuotedString str =
-        normalizeEndOfLine str
-    
     let unescapeStringLiteral str =
         // given a normalized Blech string with valid escapes sequences
         removeLineContinuations str
@@ -160,8 +163,6 @@ module BlechString =
     let removeTripleQuotes (str: string) =
         str.Substring (3, str.Length - 6)
     
-    
-
 
     // ---
     // Functions for normalizing string literals
@@ -172,9 +173,6 @@ module BlechString =
     // ---
     // Functions for checking escape sequences
     // --
-
-    //let getInvalidCharacterEscapes str : seq<Match> = 
-    //    seq <| (Regex invalidCharacterEscape).Matches str
 
     let getInvalidEscapeSequences str : seq<Match> = 
         Regex.Matches (str, EscapeSequence, RegexOptions.Singleline)
@@ -189,6 +187,11 @@ module BlechString =
         |> (Regex DecimalEscape).Matches
         |> Seq.filter (fun m -> not (isValidDecimalEscape m.Value))
         
+    let getInvalidUnicodeEscapes str : seq<Match> =
+        str 
+        |> (Regex UnicodeEscape).Matches
+        |> Seq.filter (fun m -> not (isValidUnicodeEscape m.Value))
+
     // ---
     // Functions for normalizing multi-line string literals
     // the public functions normalizeTripleQuotedStr expect a raw triple-quoted string with normalized end of line sequence
@@ -232,18 +235,22 @@ module BlechString =
     let private stripNewlineAfterTripleQuotes tqstr = 
         Regex.Replace(tqstr, "^" + TripleQuotes + Linefeed, TripleQuotes)
 
-    /// Normalize a multiline string literal from the lexer
+    /// Normalize a triple-quoted ("""...""") string literal from the lexer
     let normalizeTripleQuotedString str =
         normalizeEndOfLine str
         |> dedentTripleQuotedString
         |> stripNewlineAfterTripleQuotes
 
 
+    /// Normalize a single-quoted ("...") string literal from the lexer
+    let normalizeSingleQuotedString str =
+        normalizeEndOfLine str
+    
+
     // --
     // Functions for calculating error ranges
     // expects a raw string with normalized end of line
     // --
-
 
     let getMatchRange (str: String, rng: Range.range) (m : Match) =
         let mutable startPos = (0, 0)

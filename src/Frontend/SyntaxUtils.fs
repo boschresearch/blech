@@ -482,12 +482,9 @@ module ParserUtils =
                 reportError <| UnexpectedExposure (Option.get exposing).Range       
 
     /// checks escape sequences in string literals
-    let checkStringLiteral (str: string, rng: Range.range) = 
-        //let getEscapeRange (m : Match) = 
-        //    Range.range(rng.FileIndex,  
-        //                rng.StartLine, rng.StartColumn + m.Index + 1, 
-        //                rng.StartLine, rng.StartColumn + m.Index + m.Length)
-        let str = BlechString.normalizeEndOfLine str         
+    let checkStringLiteral (strlit: string, rng: Range.range) = 
+        let str = BlechString.normalizeEndOfLine strlit
+        
         let checkCharacterEscapes =
             let ms = BlechString.getInvalidEscapeSequences str
             if Seq.length ms > 0 then
