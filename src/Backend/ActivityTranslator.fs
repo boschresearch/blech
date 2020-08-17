@@ -621,11 +621,14 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
 
     | Location ->
         // an exit node
-        match Seq.length node.Outgoing with
+        match Seq.length (ProgramGraph.cfSucc node) with
         | 0 -> // dead end, e.g. end of an activity, set pc = 0
             endThread node <+> txt @"/* end */"
         | 1 ->
-            let edge = Seq.head node.Outgoing
+            let edge = 
+                node.Outgoing
+                |> Seq.filter Causality.isControlFlow
+                |> Seq.head 
             match edge.Payload with
             | ControlFlow None -> 
                 let target = edge.Target

@@ -319,6 +319,49 @@ and internal findNameRead wrPair trhs =
         findNameRead wrPair ex1
         |> findNameRead <| ex2
 
+let isWRedge (e: Edge) =
+    match e.Payload with
+    | DataFlow _ -> true
+    | _ -> false
+
+let isControlFlow (e: Edge) =
+    match e.Payload with
+    | ControlFlow _
+    | ReturnFlow _
+    | TerminateThread _ -> true
+    | _ -> false
+
+let private transitiveBackwardClosureWR (pg: ProgramGraph) =
+    let rec fix f x =
+        let res = f x
+        if Seq.length res = Seq.length x then res
+        else fix f res
+    // find all nodes that are the source of a WR edge
+    let relevantNodes = 
+        pg.Graph.Nodes |> Seq.filter (fun n -> n.Outgoing |> Seq.exists isWRedge)
+    // and all their corresponding WR targets
+
+    // for every source walk backwards to immediate control flow predecessors
+    for n in relevantNodes do
+        let allWRedges = n.Outgoing |> Seq.filter isWRedge
+        let immediatePredecessors (x: Node) =
+            x.Incoming
+            |> Seq.filter isControlFlow
+            |> Seq.map (fun e -> e.Source)
+        let instantaneousPredecessors = seq{n} |> fix (Seq.map immediatePredecessors >> Seq.collect id) 
+        // add all WR edges of the source to them
+        instantaneousPredecessors
+        |> Seq.iter (fun p ->
+            allWRedges
+            |> Seq.iter (fun e -> 
+                if areConcurrent p e.Target then
+                    pg.Graph.AddEdge e.Payload p e.Target
+                else
+                    ()
+                )
+            )
+    ()
+
 let private addWRedges context name writtenVar logger =
     try
         let nodesReading = context.subprogReadNodes.[name].[writtenVar]
@@ -361,6 +404,7 @@ let private addWRedges context name writtenVar logger =
                     ()
                 )
             )
+        transitiveBackwardClosureWR pg
     with
         | :? System.Collections.Generic.KeyNotFoundException -> () //Seq.empty // if the name is not found, there is no dependency to add
 

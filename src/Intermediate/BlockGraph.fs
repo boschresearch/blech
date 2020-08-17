@@ -139,7 +139,7 @@ let rec private bfs context (queue: ResizeArray<Node>) (visited: HashSet<Node>) 
 /// False for tick and return edges
 let private filterDataFlowAndImmediate (edge: GenericGraph.Edge<Location,Transition>) =
     match edge.Payload with 
-    | Tick _                // always discard time step edges
+    | Tick _ -> false               // always discard time step edges
     | ReturnFlow _ -> false // remove edges back to loop heads
     | _ -> true
 
