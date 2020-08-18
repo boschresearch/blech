@@ -30,7 +30,7 @@ open Blech.Common
 
 (* Lexer regex rules *)
 
-let endofline = ('\r' '\n' | '\n' '\r' | '\n' | '\r' )
+let endofline = ( '\r' '\n' | '\n' '\r' | '\n' | '\r' )
 
 
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
