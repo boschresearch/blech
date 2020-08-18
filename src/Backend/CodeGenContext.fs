@@ -54,6 +54,13 @@ type PCtree =
     member this.Contains (pc: ParamDecl) =
         this.AsList 
         |> List.exists (fun p -> p.name = pc.name) 
+    member this.SubTreeForThread t =
+        if this.thread = t then Some this
+        else
+            this.subPCs 
+            |> List.map (fun s -> s.SubTreeForThread t) 
+            |> List.tryFind (Option.isSome)
+            |> Option.defaultValue None
 
 
 /// An activity context represents the static data of an activity and

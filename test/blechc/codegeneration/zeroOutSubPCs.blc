@@ -1,0 +1,17 @@
+@[EntryPoint]
+activity A()(c: int32)
+    cobegin
+        await c >= 4
+    with weak
+        repeat
+            cobegin
+                await c >= 3
+            with weak
+                repeat
+                    c = c + 1
+                    await true
+                end
+            end
+        end
+    end
+end

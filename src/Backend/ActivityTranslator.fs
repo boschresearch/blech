@@ -331,7 +331,13 @@ let private endReaction source target =
     // note that for termination in block i, the pc is set to 2i + 1
     assignPc source (2 * newVal + 1)
 
-let private endThread node = assignPc node 0 // TODO end all subthreads, too, fg 29.07.2020
+let private endThread (comp: Compilation) (node: Node) =
+    let subTree = comp.GetActCtx.pcs.SubTreeForThread node.Payload.Thread
+    assert subTree.IsSome
+    subTree.Value.AsList
+    |> List.map (fun pcDecl -> txt "blc_blech_ctx->" <^> txt pcDecl.name.basicId </> txt "=" </> txt "0" <^> semi)
+    |> dpBlock
+
 
 let private areInSameBlock ctx actBeingTranslated n1 n2 =
     ctx.bgs.[actBeingTranslated].node2BlockNode.[n1] = ctx.bgs.[actBeingTranslated].node2BlockNode.[n2]
@@ -437,7 +443,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
         match action with
         | Action.Return _ -> // special case: set main pc to 0 after setting the retvar and ignore successors
             [ cpAction ctx curComp action
-              endThread node ]
+              endThread !curComp node ]
             |> dpBlock
         | _ ->
             let succs = ProgramGraph.cfSucc node
@@ -623,7 +629,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
         // an exit node
         match Seq.length (ProgramGraph.cfSucc node) with
         | 0 -> // dead end, e.g. end of an activity, set pc = 0
-            endThread node <+> txt @"/* end */"
+            endThread !curComp node <+> txt @"/* end */"
         | 1 ->
             let edge = 
                 node.Outgoing
@@ -639,7 +645,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                     // if one unguarded transition, that leaves block, advance pc
                     advancePC ctx (!curComp).name node target
             | TerminateThread _ -> // terminate thread
-                endThread node <+> txt @"/* term */"
+                endThread !curComp node <+> txt @"/* term */"
             | _ -> failwith "expected UNguarded transition" // Dataflow transitions are excluded by construction since they never emanate from nor point to simple Locations.
         | _ ->
             failwith "A simple location must have no more than one transition."
@@ -726,7 +732,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             | Some {lhs = ReturnVar} -> // return run... end this thread
                 // if (0 == retcode) {end thread} else {nextStep}
                 let hasActTerminated = txt "0 ==" <+> renderCName Current ctx.tcc retcodeVar
-                cpIfElse hasActTerminated (endThread node) nextStep
+                cpIfElse hasActTerminated (endThread !curComp node) nextStep
             | _ -> // normal run... proceed to the next block
                 nextStep
 
