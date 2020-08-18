@@ -627,7 +627,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
         | 1 ->
             let edge = 
                 node.Outgoing
-                |> Seq.filter Causality.isControlFlow
+                |> Seq.filter ProgramGraph.isImmediateTransition
                 |> Seq.head 
             match edge.Payload with
             | ControlFlow None -> 

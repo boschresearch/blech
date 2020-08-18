@@ -319,37 +319,24 @@ and internal findNameRead wrPair trhs =
         findNameRead wrPair ex1
         |> findNameRead <| ex2
 
-let isWRedge (e: Edge) =
-    match e.Payload with
-    | DataFlow _ -> true
-    | _ -> false
-
-let isControlFlow (e: Edge) =
-    match e.Payload with
-    | ControlFlow _
-    | ReturnFlow _
-    | TerminateThread _ -> true
-    | _ -> false
-
 let private transitiveBackwardClosureWR (pg: ProgramGraph) =
     let rec fix f x =
-        let res = f x
+        let res = Seq.append x (f x) |> Seq.distinct
         if Seq.length res = Seq.length x then res
         else fix f res
     // find all nodes that are the source of a WR edge
     let relevantNodes = 
-        pg.Graph.Nodes |> Seq.filter (fun n -> n.Outgoing |> Seq.exists isWRedge)
-    // and all their corresponding WR targets
-
+        pg.Graph.Nodes |> Seq.filter (fun n -> n.Outgoing |> Seq.exists isDataFlow)
     // for every source walk backwards to immediate control flow predecessors
     for n in relevantNodes do
-        let allWRedges = n.Outgoing |> Seq.filter isWRedge
+        // collect all their corresponding WR links
+        let allWRedges = n.Outgoing |> Seq.filter isDataFlow
         let immediatePredecessors (x: Node) =
             x.Incoming
-            |> Seq.filter isControlFlow
+            |> Seq.filter isImmediateTransition
             |> Seq.map (fun e -> e.Source)
         let instantaneousPredecessors = seq{n} |> fix (Seq.map immediatePredecessors >> Seq.collect id) 
-        // add all WR edges of the source to them
+        // add all WR edges of original node to resp. predecessor
         instantaneousPredecessors
         |> Seq.iter (fun p ->
             allWRedges
