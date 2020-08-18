@@ -58,8 +58,8 @@ let floatliteral = (pointfloat | exponentfloat)
 (* hexadecimal floating point literals with "_" instead of "'" follow
    C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
    C99 http://en.cppreference.com/w/c/language/floating_constant  *)
-
-let hexdigitpart = ['0'-'9' 'a'-'f' 'A'-'F']('_'?['0'-'9' 'a'-'f' 'A'-'F'])* 
+let hexdigit = ['0'-'9' 'a'-'f' 'A'-'F']
+let hexdigitpart = hexdigit ('_'? hexdigit)* 
 let hexfraction = '.' hexdigitpart
 let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
 let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
@@ -70,13 +70,44 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
    line continuations are allowed for both
    escape sequence checking follows Lua https://www.lua.org/manual/5.4/manual.html#3.1 *)
 
+(* Invalid UTF8 end of line characters *)
+let utf8endofline = 
+      "\xc2\x85"      // next line: U+0085
+    | "\xe2\x80\xa8"  // line separator: U+2028
+    | "\xe2\x80\xa8"  // paragraph: U+2029 
+
+let asciiprintable = ['\x20'-'\x7E']
+let utf8cont = ['\x80'-'\xbf']
+let utf8enc = ['\xc2'-'\xdf'] utf8cont 
+    | ['\xe0'] ['\xa0'-'\xbf'] utf8cont 
+    | ['\xed'] ['\x80'-'\x9f'] utf8cont
+    | ['\xe1'-'\xec''\xee'-'\xef'] utf8cont utf8cont
+    | ['\xf0'] ['\x90'-'\xbf'] utf8cont utf8cont
+    | ['\xf4'] ['\x80'-'\x8f'] utf8cont utf8cont
+    | ['\xf1'-'\xf3'] utf8cont utf8cont utf8cont
+
 // utf8charpattern = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
 
-let anychar = [^ '\n' '\r']       // end of line is handled by the token parser
-let stringchar = [^ '\\' '"' '\n' '\r']  
-let escapeseq = '\\' anychar?     // allow any character after a \ but not end of line
-let stringitem = (stringchar | escapeseq)
+// let anychar = [^ '\n' '\r']       // end of line is handled by the token parser
+
+//let stringchar = [^ '\\' '"' '\n' '\r']  
+
+let stringchar = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  
+
+let escapeseq = '\\' asciiprintable? 
+
+let escape = '\\' ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '\'' '\"']
+let hexescape = '\\' 'x' hexdigit hexdigit
+let decimalescape = '\\' digit digit? digit?
+let unicodeescape = '\\' 'u' '{' hexdigitpart '}'
+let linecontinuation = '\\'    // TODO: make escape checking part of the parser, fjg. 18.08.20
+
+//let stringitem = stringchar | utf8enc | escapeseq
+
+let stringitem = stringchar | utf8enc | escape | hexescape | decimalescape | unicodeescape | linecontinuation
+
 let stringitems = stringitem*
+
 
 let triplequotes = "\"\"\""
 let quotes = '"' '"'?
@@ -431,8 +462,12 @@ and CollectBlockDoc = parse
     | eof                   { eofInDocComment (tokenBuilder.Range)
                               EOF (getRange lexbuf) }
 
-and CollectString = parse
+and CollectString = parse   // TODO: Move token checking - e.g. decimal and unicode escapes, utf8endofline, ascii control chars to lexer, fjg. 18.08.20
     | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+                              CollectString lexbuf }
+
+    | utf8endofline         { unknownToken lexbuf;
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectString lexbuf }
 
