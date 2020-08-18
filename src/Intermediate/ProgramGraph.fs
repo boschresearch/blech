@@ -243,7 +243,7 @@ module ProgramGraph =
     let isDataFlow (e: Edge) =
         match e.Payload with
         | DataFlow _ -> true
-        | ControlFlow _ | ReturnFlow _ | TerminateThread | Tick _ -> false
+        | ControlFlow _ | ReturnFlow _ | TerminateThread _ | Tick _ -> false
 
     /// True iff given Edge is some control flow link (not a tick, not a wr link)
     let isImmediateTransition (e: Edge) =
