@@ -239,6 +239,20 @@ module ProgramGraph =
     open IntermediateContext
 
 
+    /// True iff given Edge is a DataFlow link
+    let isDataFlow (e: Edge) =
+        match e.Payload with
+        | DataFlow _ -> true
+        | ControlFlow _ | ReturnFlow _ | TerminateThread _ | Tick _ -> false
+
+    /// True iff given Edge is some control flow link (not a tick, not a wr link)
+    let isImmediateTransition (e: Edge) =
+        match e.Payload with
+        | ControlFlow _
+        | ReturnFlow _
+        | TerminateThread _ -> true
+        | DataFlow _ | Tick _ -> false
+    
     /// Return all successor nodes reachable via one step of program execution
     /// i.e. we ignore DataFlow transitions in this function
     let cfSucc (node: Node) =
