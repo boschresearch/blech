@@ -64,18 +64,13 @@ let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
 
-(* strings and triplequotedstrings follow Julia https://docs.julialang.org/en/v1/manual/strings/
+(* strings and multi-line strings follow Julia https://docs.julialang.org/en/v1/manual/strings/
    line continuations are allowed for both
    escape sequence checking follows Lua https://www.lua.org/manual/5.4/manual.html#3.1 *)
 
-(* *)
+let linecontinuation = '\\' endofline
 
-let nonascii = [^'\x00'-'\xff']
-let nonasciiunicode = nonascii nonascii?
-//let utf32 = 
-
-(* Invalid unicode end of line characters *)
-let unicodelineending = ['\u0085' '\u2028' '\u2029']
+let unicodelineending = ['\u0085' '\u2028' '\u2029'] // generally invalid
 
 let stringchar = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
 
@@ -83,19 +78,14 @@ let escape = '\\' ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '\'' '\"']
 let hexescape = '\\' 'x' hexdigit hexdigit
 let decimalescape = '\\' digit digit? digit?
 let unicodeescape = '\\' 'u' '{' hexdigit+ '}'
-let linecontinuation = '\\'    // TODO: make escape checking part of the parser, fjg. 18.08.20
 
-//let stringitem = stringchar | utf8enc | escapeseq
-
-let stringitem = stringchar | escape | hexescape | decimalescape | unicodeescape | linecontinuation
-
-//let stringitems = stringitem*
+let stringitem = stringchar | escape | hexescape
 
 let triplequotes = "\"\"\""
 let quotes = '"' '"'?
 
 let characterchar = [^ '\\' '\'' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
-let charitem = characterchar | escape | hexescape | decimalescape | unicodeescape
+let charitem = characterchar | escape | hexescape
 let characterliteral = '\'' charitem '\''
 
 let identifier = '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
@@ -110,11 +100,12 @@ let chunkwithoutstarandslash = [^'*' '/' '\n' '\r']*
 rule Token = parse
 
     (* ---- doc comments, comments and whitespaces ---- *)
-    | ' '                   { Token lexbuf }
 
     | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
                               Token lexbuf }
-    
+
+    | ' '                   { Token lexbuf }
+
     | '\t'+                 { // tabs for identation at the start of a line are allowed
                               if lexbuf.StartPos.Column > 0 then tabularUsed lexbuf else ()
                               Token lexbuf }
@@ -125,17 +116,13 @@ rule Token = parse
     
     | "//"                  { SkipLineComment lexbuf } 
 
-    (* --- strings, can span multiple lines --- *)
+    (* --- strings --- *)
 
-    | '"'                   { let lxm, rng = getLexemeAndRange lexbuf
-                              tokenBuilder <- tokenBuilder.Init rng
-                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
-                              CollectString lexbuf }
+    | '"'                   { tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
+                              CollectSingleLineString lexbuf }
 
-    | triplequotes          { let lxm, rng = getLexemeAndRange lexbuf
-                              tokenBuilder <- tokenBuilder.Init rng
-                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
-                              CollectTripleQuotedString lexbuf }
+    | triplequotes          { tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
+                              CollectMultiLineString lexbuf }
 
     (* ---- doc comments ---- *)
 
@@ -365,9 +352,6 @@ rule Token = parse
 
     | eof                   { EOF (getRange lexbuf) }
 
-//    | nonasciiunicode       { unknownToken lexbuf;  // any other unicode character
-//                              Token lexbuf }
-
     | _                     { unknownToken lexbuf;  // any other unicode character
                               Token lexbuf }
 
@@ -444,55 +428,89 @@ and CollectBlockDoc = parse
     | eof                   { eofInDocComment (tokenBuilder.Range)
                               EOF (getRange lexbuf) }
 
-and CollectString = parse   // TODO: Move token checking - e.g. decimal and unicode escapes, utf8endofline, ascii control chars to lexer, fjg. 18.08.20
-    | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decimal and unicode escapes, utf8endofline, ascii control chars to lexer, fjg. 18.08.20
+
+    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf) // '\'<endofline> removed after indentation handling
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              CollectSingleLineString lexbuf }
+
+    | endofline             { let lxm, rng = getLexemeAndRange lexbuf
+                              eolInSingleLineString rng
+                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
-                              CollectString lexbuf }
+                              CollectSingleLineString lexbuf }
+
+    | '\t'                  { // tabs are not allowed strings
+                              tabularUsed lexbuf
+                              CollectSingleLineString lexbuf }
 
     | unicodelineending     { unknownToken lexbuf;
-                              CollectString lexbuf }
+                              CollectSingleLineString lexbuf }
 
-    | '"'                   { let lxm, rng = getLexemeAndRange lexbuf
-                              tokenBuilder <- tokenBuilder.Append(lxm, rng)
-                              // printf "String:\n%s" tokenBuilder.Text
-                              STRING (tokenBuilder.Token) }
+    | '"'                   { STRING (tokenBuilder.Token) }
 
+    | decimalescape         { let decEsc = getLexemeAndRange lexbuf
+                              checkDecimalEscape decEsc
+                              tokenBuilder <- tokenBuilder.Append decEsc
+                              CollectSingleLineString lexbuf }
+
+    | unicodeescape         { let uniEsc = getLexemeAndRange lexbuf
+                              checkUnicodeEscape uniEsc
+                              tokenBuilder <- tokenBuilder.Append uniEsc
+                              CollectSingleLineString lexbuf }
+        
     | stringitem
                             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              CollectString lexbuf }
+                              CollectSingleLineString lexbuf }
         
 
     | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
 
     | _                     { unknownToken lexbuf; 
-                               Token lexbuf }
+                              CollectSingleLineString lexbuf }
 
-and CollectTripleQuotedString = parse
+and CollectMultiLineString = parse
+
+    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf) // '\'<endofline> removed after indentation handling
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              CollectMultiLineString lexbuf }
+
     | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
-                              CollectTripleQuotedString lexbuf }
-    
-    | unicodelineending     { // printfn "Unicode line ending:>>>%s<<<" (getLexeme lexbuf)
-                              unknownToken lexbuf; 
-                              CollectTripleQuotedString lexbuf }
-    
-    | triplequotes          { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              TRIPLEQUOTEDSTRING (tokenBuilder.Token) }    
+                              CollectMultiLineString lexbuf }
 
+    | '\t'+                 { // tabs for identation at the start of a line are allowed in multi-line strings
+                              if lexbuf.StartPos.Column > 0 then tabularUsed lexbuf else ()
+                              CollectMultiLineString lexbuf }
+
+    | unicodelineending     { unknownToken lexbuf; 
+                              CollectMultiLineString lexbuf }
+    
+    | triplequotes          { MULTILINESTRING (tokenBuilder.Token) }    
+
+    | decimalescape         { let decEsc = getLexemeAndRange lexbuf
+                              checkDecimalEscape decEsc
+                              tokenBuilder <- tokenBuilder.Append decEsc
+                              CollectMultiLineString lexbuf }
+
+    | unicodeescape         { let uniEsc = getLexemeAndRange lexbuf
+                              checkUnicodeEscape uniEsc
+                              tokenBuilder <- tokenBuilder.Append uniEsc
+                              CollectMultiLineString lexbuf }
+        
     | stringitem
-                            { // printf "%s" (getLexeme lexbuf)
-                              tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              CollectTripleQuotedString lexbuf }
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectMultiLineString lexbuf }
     
     | quotes                { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              CollectTripleQuotedString lexbuf }
+                              CollectMultiLineString lexbuf }
 
-    | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
+    | eof                   { eofInDocComment (tokenBuilder.Range)
                               EOF (getRange lexbuf) }
 
-    | _                      { unknownToken lexbuf; 
-                               Token lexbuf }
+    | _                     { unknownToken lexbuf
+                              CollectMultiLineString lexbuf }
 
 
 and FromPath = parse

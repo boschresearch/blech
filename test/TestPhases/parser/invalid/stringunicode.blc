@@ -1,0 +1,16 @@
+@[CFunction (binding ="""do not z allow🔥 this def
+                        	asdf
+                    """, 
+             header = "<c-function>.h")]
+extern function f()
+
+@[EntryPoint]
+activity Main () ()
+    bla()
+	 e()
+    ⛑f()
+	// 🔥g()
+	// await				true
+    // h()
+    await true
+end

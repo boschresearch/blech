@@ -105,7 +105,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 /* Literals */
 %token <string * range> WILDCARD
-%token <string * range> STRING TRIPLEQUOTEDSTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
+%token <string * range> STRING MULTILINESTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
 
 /* Identifiers */
 %token <string * range> ID 
@@ -1498,17 +1498,15 @@ AttributeLiteral
     : STRING                                    { let str = if checkStringLiteral $1 then 
                                                                 fst $1
                                                                 |> BlechString.normalizeSingleQuotedString
-                                                                |> BlechString.unescapeStringLiteral
-                                                                |> BlechString.removeQuotes
+                                                                // |> BlechString.unescapeStringLiteral
                                                             else
                                                                 fst $1
                                                   Literal.String (str, snd $1) }
 
-    | TRIPLEQUOTEDSTRING                        { let str = if checkStringLiteral $1 then 
+    | MULTILINESTRING                           { let str = if checkStringLiteral $1 then 
                                                                 fst $1
-                                                                |> BlechString.normalizeTripleQuotedString
-                                                                |> BlechString.unescapeStringLiteral
-                                                                |> BlechString.removeTripleQuotes
+                                                                |> BlechString.normalizeMultiLineString ""
+                                                                // |> BlechString.unescapeStringLiteral
                                                             else
                                                                 fst $1
                                                   Literal.String (str, snd $1) }

@@ -1,0 +1,22 @@
+
+@@[CInclude (header = "forall.h")]
+
+@[CFunction (binding = "max: \u{10FFFF} \
+fire with leading 0: \u{0001f525} \
+null: \u{0} 3")]
+extern function f()
+
+@[CFunction (binding = """
+        max: \u{10FFFF} 
+        fire with leading 0: \u{0001f525}
+        null: \u{0}
+        """)]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

@@ -85,11 +85,11 @@ module BlechString =
         let dec = decEsc.Substring(1)
         System.Int32.Parse dec
         
-    let private isValidDecimalEscape (decEsc: string) =
+    let isValidDecimalEscape (decEsc: string) =
         let dec = decimalEscapeToInt decEsc
         0 <= dec && dec <= 255
 
-    let private isValidUnicodeEscape (unicodeEscape: string) =
+    let isValidUnicodeEscape (unicodeEscape: string) =
         let hexdigits = unicodeEscape.Substring(3, unicodeEscape.Length - 4)
         let codepoint = System.Numerics.BigInteger.Parse(hexdigits, System.Globalization.NumberStyles.HexNumber)
         0I <= codepoint && codepoint <= System.Numerics.BigInteger MaxUnicodeCodePoint
@@ -174,23 +174,23 @@ module BlechString =
     // Functions for checking escape sequences
     // --
 
-    let getInvalidEscapeSequences str : seq<Match> = 
-        Regex.Matches (str, EscapeSequence, RegexOptions.Singleline)
-        |> Seq.filter (fun m -> not (isValidEscapeSequence m.Value))
+    //let getInvalidEscapeSequences str : seq<Match> = 
+    //    Regex.Matches (str, EscapeSequence, RegexOptions.Singleline)
+    //    |> Seq.filter (fun m -> not (isValidEscapeSequence m.Value))
 
-    let getInvalidHexEscapes str: seq<Match> =
-        Regex.Matches (str, HexEscape)
-        |> Seq.filter (fun m -> not (isValidHexEscape m.Value))
+    //let getInvalidHexEscapes str: seq<Match> =
+    //    Regex.Matches (str, HexEscape)
+    //    |> Seq.filter (fun m -> not (isValidHexEscape m.Value))
 
-    let getInvalidDecimalEscapes str : seq<Match> =
-        str 
-        |> (Regex DecimalEscape).Matches
-        |> Seq.filter (fun m -> not (isValidDecimalEscape m.Value))
+    //let getInvalidDecimalEscapes str : seq<Match> =
+    //    str 
+    //    |> (Regex DecimalEscape).Matches
+    //    |> Seq.filter (fun m -> not (isValidDecimalEscape m.Value))
         
-    let getInvalidUnicodeEscapes str : seq<Match> =
-        str 
-        |> (Regex UnicodeEscape).Matches
-        |> Seq.filter (fun m -> not (isValidUnicodeEscape m.Value))
+    //let getInvalidUnicodeEscapes str : seq<Match> =
+    //    str 
+    //    |> (Regex UnicodeEscape).Matches
+    //    |> Seq.filter (fun m -> not (isValidUnicodeEscape m.Value))
 
     // ---
     // Functions for normalizing multi-line string literals
@@ -201,49 +201,115 @@ module BlechString =
     [<Literal>]
     let private TripleQuotes = Quotes + Quotes + Quotes
 
-    [<Literal>]
-    let private LeadingWhitespace = "^" + Whitespace
-
-    // Asserts that the line starting with """ must is excluded
-    let private longestCommonStartingSequence (lines: string list) = 
-        match lines with
-        | fst :: tail ->
-            let startingSequence line =
-                (Regex LeadingWhitespace).Match(line).Value
-            let mutable lcss = startingSequence fst
-            for line in tail do
-                let startSeq = startingSequence line 
-                if not (line = startSeq) then // line actually contains text
-                    if lcss.StartsWith startSeq then
-                        lcss <- startSeq
-                    elif line.StartsWith lcss then
-                        ()
-                    else
-                        lcss <- ""
-                else
-                    ()
-            lcss
-        | _ -> 
-            ""
     
-    let private dedentTripleQuotedString tqstr =
-        let lines = String.split '\n' tqstr 
-        let lcss = longestCommonStartingSequence (List.tail lines)
-        Regex.Replace(tqstr, "\n" + lcss, "\n")
+    
+    // Asserts that the line starting with """ must is excluded
+    
+    [<Literal>]
+    let private NoIndent = ""
+    [<Literal>]
+    let private Tabs = "[\t]*"
+    [<Literal>]
+    let private Spaces = "[ ]*"
+    [<Literal>]
+    let private TabIndentation = "^" + Tabs
+    [<Literal>]
+    let private Indentation = TabIndentation + Spaces
+    
+    // returns true for unbalanced tab indentation and the common indentation
+    let checkMultiLineStringIndentation (mlstr : string) : bool * string =
+        let tabs line = (Regex TabIndentation).Match(line).Value
+        let indentation line = (Regex Indentation).Match(line).Value
+        let lines = mlstr.Split '\n'
+        // printfn "Lines:%A" lines
+        match lines with
+        | [| _ |] -> // first line does not contribute to indentation
+            (false, NoIndent)
+        
+        | lines ->
+            let mutable tabIndent = None // the first tab indent determines all other tab indents 
+            let mutable commonIndent = None
+            let mutable unbalancedTabIndent = false
+            
+            for line in Array.tail lines do
+                    let indent = indentation line
+                    // printfn ">>%s<<" indent
+                    if (line = Array.last lines) || (line <> indent) then // line contains relevant identation
+                        // printfn "line:%s;" line
+                        // check balanced tab identation
+                        if Option.isNone tabIndent then // init tab indentation 
+                            tabIndent <- Some <| tabs line
+                        elif not (tabs line = Option.get tabIndent) then
+                            unbalancedTabIndent <- true
+                        
+                        // determine common identation
+                        if Option.isNone commonIndent then // init commonIdent
+                            printfn "init ident:>>%s<<" indent
+                            commonIndent <- Some indent
+                        else
+                            let ci = Option.get commonIndent
+                            if ci.StartsWith indent then
+                                commonIndent <- Some indent
+                            elif line.StartsWith ci then
+                                ()
+                            else
+                                commonIndent <- Some ""
+            
+            (unbalancedTabIndent, Option.defaultValue NoIndent commonIndent)
+ 
+ 
+    // Asserts that the line starting with """ must is excluded
+    //let private longestCommonStartingSequence (lines: string list) = 
+    //    match lines with
+    //    | fst :: tail ->
+    //        let startingSequence line =
+    //            (Regex Indentation).Match(line).Value
+    //        let mutable lcss = startingSequence fst
+    //        for line in tail do
+    //            let startSeq = startingSequence line 
+    //            if not (line = startSeq) then // line actually contains text
+    //                if lcss.StartsWith startSeq then
+    //                    lcss <- startSeq
+    //                elif line.StartsWith lcss then
+    //                    ()
+    //                else
+    //                    lcss <- ""
+    //            else
+    //                ()
+    //        lcss
+    //    | _ -> 
+    //        ""
+    
 
+    let private dedentMultiLineString indentation (mlstr : string) =
+        // let lines = String.split '\n' tqstr 
+        // let lcss = longestCommonStartingSequence (List.tail lines)
+        // Regex.Replace(mlstr, "\n" + indentation, "\n")
+        // TODO: handle empty lines correctly, fjg 20.08.20
+        printfn "indentation:>%s<" indentation
+        mlstr.Replace("\n" + indentation, "\n")
 
-    let private stripNewlineAfterTripleQuotes tqstr = 
-        Regex.Replace(tqstr, "^" + TripleQuotes + Linefeed, TripleQuotes)
+    let private removeEmptyFirstLine mlstr = 
+        Regex.Replace(mlstr, "^" + Linefeed, "")
 
     /// Normalize a triple-quoted ("""...""") string literal from the lexer
-    let normalizeTripleQuotedString str =
-        normalizeEndOfLine str
-        |> dedentTripleQuotedString
-        |> stripNewlineAfterTripleQuotes
+    //let normalizeTripleQuotedString str =
+    //    normalizeEndOfLine str
+    //    |> dedentTripleQuotedString
+    //    |> stripNewlineAfterTripleQuotes
 
+    /// Normalize a triple-quoted ("""...""") string literal from the lexer
+    let normalizeMultiLineString indentation str =
+        normalizeEndOfLine str
+        |> dedentMultiLineString indentation
+        |> removeEmptyFirstLine
 
     /// Normalize a single-quoted ("...") string literal from the lexer
     let normalizeSingleQuotedString str =
+        normalizeEndOfLine str
+    
+    /// Normalize a single-line ("...") string literal from the lexer
+    let normalizeSingleLineString str =
         normalizeEndOfLine str
     
 
@@ -252,30 +318,30 @@ module BlechString =
     // expects a raw string with normalized end of line
     // --
 
-    let getMatchRange (str: String, rng: Range.range) (m : Match) =
-        let mutable startPos = (0, 0)
-        let mutable endPos = (0, 0)
-        let mutable line = rng.StartLine
-        let mutable column = rng.StartColumn
-        let fstIdx = m.Index
-        let lstIdx = m.Index + m.Length - 1
-        for i in 0 .. lstIdx do
+    //let getMatchRange (str: String, rng: Range.range) (m : Match) =
+    //    let mutable startPos = (0, 0)
+    //    let mutable endPos = (0, 0)
+    //    let mutable line = rng.StartLine
+    //    let mutable column = rng.StartColumn
+    //    let fstIdx = m.Index
+    //    let lstIdx = m.Index + m.Length - 1
+    //    for i in 0 .. lstIdx do
             
-            if i = fstIdx then
-                startPos <- (line, column)
-            elif i = lstIdx then
-                endPos <- (line, column)
-            else 
-                ()
+    //        if i = fstIdx then
+    //            startPos <- (line, column)
+    //        elif i = lstIdx then
+    //            endPos <- (line, column)
+    //        else 
+    //            ()
             
-            if str.[i] = '\n' then
-                line <- line + 1
-                column <- 1
-            else
-                column <- column + 1
+    //        if str.[i] = '\n' then
+    //            line <- line + 1
+    //            column <- 1
+    //        else
+    //            column <- column + 1
 
-        Range.range(rng.FileIndex, 
-                    fst startPos, snd startPos, 
-                    fst endPos, snd endPos)
+    //    Range.range(rng.FileIndex, 
+    //                fst startPos, snd startPos, 
+    //                fst endPos, snd endPos)
 
         

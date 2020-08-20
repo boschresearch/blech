@@ -167,6 +167,10 @@ module SyntaxErrors =
         | UnknownToken of token: string * here: Range.range
         | NotAPath of here: Range.range
         | EofInDocComment of here: Range.range
+        | DecimalEscapeTooLarge of esc: string * rng: Range.range
+        | UnicodeEscapeTooLarge of esc: string * rng: Range.range
+        | EolInSingleLineString of rng: Range.range
+        
         
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -186,6 +190,15 @@ module SyntaxErrors =
                 | EofInDocComment here ->
                     { range = here
                       message = "end of file in doc comment." }
+                | DecimalEscapeTooLarge (esc, rng) ->
+                    { range = rng
+                      message = sprintf "decimal escape '%s' too large." esc }    
+                | UnicodeEscapeTooLarge (esc, rng) ->
+                    { range = rng
+                      message = sprintf "unicode escape '%s' too large." esc }    
+                | EolInSingleLineString rng ->
+                    { range = rng
+                      message = "end of line in single-line string."}    
                     
             member err.ContextInformation = 
                 match err with
@@ -196,27 +209,42 @@ module SyntaxErrors =
                 | UnknownToken (here = r) ->
                     [ { range = r; message = "wrong character."; isPrimary = true } ]
                 | NotAPath (here = r) ->
-                    [ { range = r 
-                        message = "incorrect path specification" 
-                        isPrimary = true } ]
+                    [ { range = r; message = "incorrect path specification"; isPrimary = true } ]
                 | EofInDocComment here ->
-                    [ { range = here
-                        message = "end of doc comment" 
-                        isPrimary = true } ]
-    
+                    [ { range = here; message = "end of doc comment"; isPrimary = true } ]
+                | DecimalEscapeTooLarge (_, rng)
+                | UnicodeEscapeTooLarge (_, rng) ->
+                    [ { range = rng; message = "too large"; isPrimary = true} ]
 
+                | EolInSingleLineString rng ->
+                    [ { range = rng; message = "eol"; isPrimary = true } ]   
+                
+    
             member err.NoteInformation = 
                 match err with
                 | TabularUsed _ ->
                     [ "Insert spaces, tabs are not allowed in Blech source code." ]
                 | UnknownToken _ ->
-                    [ "Non-ASCII characters are not allowed in Blech source code."]
+                    [ "Non-ASCII characters are not allowed in Blech source code." ]
                 | NotAPath _ ->
                     [ "An import path should be braced in angles: 'import <path>'." ]
                 | CommentNotClosed _ ->
                     [ "Missing '*/'." ]
                 | EofInDocComment _ ->
-                    [ "A doc comment should be placed before a declaration."]
+                    [ "A doc comment should be placed before a declaration." ]
+                | DecimalEscapeTooLarge _ ->
+                    [ "A decimal escape sequence '\ddd' specifies a byte in a literal string:"
+                      "'ddd' specifies the numeric value with up to three decimal digits."
+                      "Note that if a decimal escape sequence is to be followed by a digit,"
+                      "it must be expressed using exactly three digits." ]
+                | UnicodeEscapeTooLarge _ ->
+                    [ "A unicode escape sequence '\u{XXX}' specifies a unicode character."
+                      "'XXX' specifies the code point with hexadecimal digits."
+                      "'\u{0}' is the smallest code point."
+                      "'\u{10FFFF}' is the largest code point." ]
+                | EolInSingleLineString _ ->
+                    [ "A single line string must not contain an end of line."
+                      "Use a line continuation '\<eol>' or a multi-line string." ]
 
 
 module ParserUtils = 
@@ -483,40 +511,47 @@ module ParserUtils =
 
     /// checks escape sequences in string literals
     let checkStringLiteral (strlit: string, rng: Range.range) = 
-        let str = BlechString.normalizeEndOfLine strlit
+        true
+        // let str = BlechString.normalizeEndOfLine strlit
         
-        let checkCharacterEscapes =
-            let ms = BlechString.getInvalidEscapeSequences str
-            if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
+        //let checkCharacterEscapes =
+        //    let ms = BlechString.getInvalidEscapeSequences str
+        //    if Seq.length ms > 0 then
+        //        Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+        //    else
+        //        Ok ()
 
-        let checkDecimalEscapes =
-            let ms = BlechString.getInvalidDecimalEscapes str
-            if  Seq.length ms > 0 then
-                Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
+        //let checkDecimalEscapes =
+        //    let ms = BlechString.getInvalidDecimalEscapes str
+        //    if  Seq.length ms > 0 then
+        //        Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+        //    else
+        //        Ok ()
+                 //let checkDecimalEscapes =
+        //    let ms = BlechString.getInvalidDecimalEscapes str
+        //    if  Seq.length ms > 0 then
+        //        Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+        //    else
+        //        Ok ()
          
-        let checkHexEscapes =
-            let ms = BlechString.getInvalidHexEscapes str
-            if Seq.length ms > 0 then
-                Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-            else
-                Ok ()
+        //let checkHexEscapes =
+        //    let ms = BlechString.getInvalidHexEscapes str
+        //    if Seq.length ms > 0 then
+        //        Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
+        //    else
+        //        Ok ()
  
-        let res =
-            Result.combine checkCharacterEscapes  checkDecimalEscapes 
-            |> Result.combine <| checkHexEscapes
+        //let res =
+        //    Result.combine checkCharacterEscapes  checkHexEscapes
         
-        match res with
-        | Ok _ -> 
-            true
-        | Error errs ->
-            ignore <| List.map reportError errs
-            false
-    
+        //match res with
+        //| Ok _ -> 
+        //    true
+        //| Error errs ->
+        //    ignore <| List.map reportError errs
+        //    false
+        
+
     /// Logs the last stored parser error
     let logParserError startRange =
         // printfn "logParserErrorCall"
@@ -653,4 +688,13 @@ module LexerUtils =
     let eofInDocComment docRange =
         reportError <|  EofInDocComment docRange
 
-    
+    let checkDecimalEscape (esc, rng) =
+        if not <| BlechString.isValidDecimalEscape esc then 
+            reportError <| DecimalEscapeTooLarge (esc, rng)
+
+    let checkUnicodeEscape (esc, rng) =
+        if not <| BlechString.isValidUnicodeEscape esc then 
+            reportError <| UnicodeEscapeTooLarge(esc, rng)
+
+    let eolInSingleLineString rng = 
+        reportError <| EolInSingleLineString rng

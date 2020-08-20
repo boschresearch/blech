@@ -17,6 +17,7 @@
 namespace Blech.Common.Tests
 
 open NUnit.Framework
+open Blech.Common
 open Blech.Common.BlechString // system under test
 
 module Literals =
@@ -124,44 +125,44 @@ def"
     let s3 = @"hello \xAG world"
     let s4 = @"hello \255 world"
  
-    [<Test>]
-    let testInvalidCharacterEscape () =
-        Assert.IsNotEmpty (getInvalidEscapeSequences s1)
-        Assert.IsEmpty (getInvalidEscapeSequences s2)
-        Assert.IsEmpty (getInvalidEscapeSequences s3)
-        Assert.IsEmpty (getInvalidEscapeSequences s4)
-        Assert.IsNotEmpty (
-            // blanks ' ' after backslash '\\' 
-            "abc\\   
-            def"
-            |> normalizeEndOfLine
-            |> getInvalidEscapeSequences
-            )
-        Assert.IsEmpty (
-            // end of line after backslash '\\'
-            "abc\\
-            def"
-            |> normalizeEndOfLine
-            |> getInvalidEscapeSequences
-            )
+    //[<Test>]
+    //let testInvalidCharacterEscape () =
+    //    Assert.IsNotEmpty (getInvalidEscapeSequences s1)
+    //    Assert.IsEmpty (getInvalidEscapeSequences s2)
+    //    Assert.IsEmpty (getInvalidEscapeSequences s3)
+    //    Assert.IsEmpty (getInvalidEscapeSequences s4)
+    //    Assert.IsNotEmpty (
+    //        // blanks ' ' after backslash '\\' 
+    //        "abc\\   
+    //        def"
+    //        |> normalizeEndOfLine
+    //        |> getInvalidEscapeSequences
+    //        )
+    //    Assert.IsEmpty (
+    //        // end of line after backslash '\\'
+    //        "abc\\
+    //        def"
+    //        |> normalizeEndOfLine
+    //        |> getInvalidEscapeSequences
+    //        )
 
-    [<Test>]
-    let testInvalidDecimalEscape () =
-        Assert.IsEmpty (getInvalidDecimalEscapes s1)
+    //[<Test>]
+    //let testInvalidDecimalEscape () =
+    //    Assert.IsEmpty (getInvalidDecimalEscapes s1)
 
-        Assert.IsNotEmpty (getInvalidDecimalEscapes s2)
-        Assert.IsEmpty (getInvalidDecimalEscapes s3)
+    //    Assert.IsNotEmpty (getInvalidDecimalEscapes s2)
+    //    Assert.IsEmpty (getInvalidDecimalEscapes s3)
 
-        Assert.IsEmpty (getInvalidDecimalEscapes s3)
+    //    Assert.IsEmpty (getInvalidDecimalEscapes s3)
 
-        Assert.IsEmpty(getInvalidDecimalEscapes s4)
+    //    Assert.IsEmpty(getInvalidDecimalEscapes s4)
 
-    [<Test>]
-    let testInvalidHexEscape () =
-        Assert.IsEmpty (getInvalidHexEscapes s1)
-        Assert.IsEmpty (getInvalidHexEscapes s2)
-        Assert.IsNotEmpty (getInvalidHexEscapes s3)
-        Assert.IsEmpty (getInvalidHexEscapes s4)
+    //[<Test>]
+    //let testInvalidHexEscape () =
+    //    Assert.IsEmpty (getInvalidHexEscapes s1)
+    //    Assert.IsEmpty (getInvalidHexEscapes s2)
+    //    Assert.IsNotEmpty (getInvalidHexEscapes s3)
+    //    Assert.IsEmpty (getInvalidHexEscapes s4)
 
     [<Test>]
     let testUnescapeNormalizedStringLiteral () =
@@ -188,45 +189,75 @@ def"
     let testNormalizeTripleQuotedString () =
         Assert.AreEqual (
             "  Hello,\n  world.\n",
-            "\"\"\"
+            "
               Hello,
               world.
-            \"\"\""
-            |> normalizeTripleQuotedString
-            |> removeTripleQuotes
+            "
+            |> normalizeEndOfLine
+            |> (fun s -> let _, indent = checkMultiLineStringIndentation s 
+                         normalizeMultiLineString indent s)
             )
         
         Assert.AreEqual (
             "    This\nis\n  a test",
-            "\"\"\"    This
+            "    This
                  is
-                   a test\"\"\""
-            |> normalizeTripleQuotedString
-            |> removeTripleQuotes
+                   a test"
+            |> normalizeEndOfLine
+            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
+                         normalizeMultiLineString indent s)
             )
 
         Assert.AreEqual (
             "hello",
-            "\"\"\"
-            hello\"\"\""
-            |> normalizeTripleQuotedString
-            |> removeTripleQuotes
+            "
+            hello"
+            |> normalizeEndOfLine
+            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
+                         normalizeMultiLineString indent s)
             )
 
         Assert.AreEqual (
             "\nhello",
-            "\"\"\"
+            "
 
-            hello\"\"\""
-            |> normalizeTripleQuotedString
-            |> removeTripleQuotes
+            hello"
+            |> normalizeEndOfLine
+            |> (fun s ->
+                    let _, indent = checkMultiLineStringIndentation s 
+                    normalizeMultiLineString indent s)
             )
 
         Assert.AreEqual (
+            "hello\n\nworld",
+            "
+            hello
+
+            world"
+            |> normalizeEndOfLine
+            |> (fun s ->
+                    let _, indent = checkMultiLineStringIndentation s 
+                    normalizeMultiLineString indent s)
+            )
+
+        Assert.AreEqual (
+             "hello\n\nworld",
+             "
+             hello
+     
+             world"
+             |> normalizeEndOfLine
+             |> (fun s ->
+                     let _, indent = checkMultiLineStringIndentation s 
+                     normalizeMultiLineString indent s)
+             )
+
+        Assert.AreEqual (
             "Hello,\nworld.",
-            "\"\"\"
+            "
               Hello,
-              world.\"\"\""
-            |> normalizeTripleQuotedString
-            |> removeTripleQuotes
+              world."
+            |> normalizeEndOfLine
+            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
+                         normalizeMultiLineString indent s)
             )

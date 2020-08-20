@@ -5,8 +5,8 @@ extern function invalidEscape(x: bool)
 world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
-@[CFunction (binding = "hello \x9a
- worl\xAFd \0 \92
+@[CFunction (binding = "hello \x9a \
+ worl\xAFd \0 \92 \
  bla" , header= "bla.h")]
 extern function invalidHex()
 

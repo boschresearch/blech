@@ -42,8 +42,8 @@ module Bindings =
         
         Regex.Replace (binding, parameterPattern, evaluator)
 
-    let toDoc binding = 
-        let lines = String.split '\n' binding
+    let toDoc (binding : string) = 
+        let lines = binding.Split '\n' 
         Seq.map txt lines
         |> vsep
         |> align

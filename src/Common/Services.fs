@@ -67,9 +67,9 @@ module String =
     let implode chars = System.String (List.toArray chars)
 
     /// splits a string into non-empty substrings that were separated by the given predicate
-    let split (c:char) (s:string) =
-        let r = s.Split ([|c|], StringSplitOptions.RemoveEmptyEntries )
-        Array.toList r
+    //let split (c:char) (s:string) =
+    //    let r = s.Split ([|c|], StringSplitOptions.RemoveEmptyEntries )
+    //    Array.toList r
 
     /// replace single characters in a string by another string
     let translate f s =
