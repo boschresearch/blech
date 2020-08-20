@@ -365,11 +365,11 @@ rule Token = parse
 
     | eof                   { EOF (getRange lexbuf) }
 
-    | nonasciiunicode       { unknownToken lexbuf;  // any other unicode character
-                              Token lexbuf }
-
-//    | _                     { unknownToken lexbuf;  // any other unicode character
+//    | nonasciiunicode       { unknownToken lexbuf;  // any other unicode character
 //                              Token lexbuf }
+
+    | _                     { unknownToken lexbuf;  // any other unicode character
+                              Token lexbuf }
 
 
 (* fjg: returns the next token after the comment, in order to make EOF available in case of unterminated comment *)
@@ -473,7 +473,7 @@ and CollectTripleQuotedString = parse
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectTripleQuotedString lexbuf }
     
-    | unicodelineending     { printfn "Unicode line ending:>>>%s<<<" (getLexeme lexbuf)
+    | unicodelineending     { // printfn "Unicode line ending:>>>%s<<<" (getLexeme lexbuf)
                               unknownToken lexbuf; 
                               CollectTripleQuotedString lexbuf }
     
@@ -481,7 +481,7 @@ and CollectTripleQuotedString = parse
                               TRIPLEQUOTEDSTRING (tokenBuilder.Token) }    
 
     | stringitem
-                            { printf "%s" (getLexeme lexbuf)
+                            { // printf "%s" (getLexeme lexbuf)
                               tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectTripleQuotedString lexbuf }
     
