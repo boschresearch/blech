@@ -30,14 +30,15 @@ open Blech.Common
 
 (* Lexer regex rules *)
 
+(* all combinations of ascii end of line sequences *)
 let endofline = ( '\r' '\n' | '\n' '\r' | '\n' | '\r' )
 
-
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
+let hexdigit = ['0'-'9' 'a'-'f' 'A'-'F']
 
-let binliteral = "0b"('_'?['0'-'1'])+
-let octliteral = "0o"('_'?['0'-'7'])+
-let hexliteral = "0x"('_'?['0'-'9' 'a'-'f' 'A'-'F'])+  
+let binliteral = "0b"('_'? ['0'-'1'])+
+let octliteral = "0o"('_'? ['0'-'7'])+
+let hexliteral = "0x"('_'? hexdigit)+  
 
 let digit = ['0' - '9']
 let nonzerodigit = ['1' - '9']
@@ -45,10 +46,8 @@ let nonzero = nonzerodigit ('_'? digit)*
 let zero = '0' ('_'? '0')*
 let natliteral = (nonzero | zero)
 
-(* float literals have a specified precision
-   this is unlike Swift where literals are assumed to be Double *)
-
-let digitpart = ['0'-'9']('_'?['0'-'9'])*
+(* float literals *)
+let digitpart = digit ('_'? digit)*
 let fraction = '.' digitpart
 let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let pointfloat = digitpart? fraction | digitpart '.'
@@ -58,7 +57,6 @@ let floatliteral = (pointfloat | exponentfloat)
 (* hexadecimal floating point literals with "_" instead of "'" follow
    C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
    C99 http://en.cppreference.com/w/c/language/floating_constant  *)
-let hexdigit = ['0'-'9' 'a'-'f' 'A'-'F']
 let hexdigitpart = hexdigit ('_'? hexdigit)* 
 let hexfraction = '.' hexdigitpart
 let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
@@ -70,47 +68,37 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
    line continuations are allowed for both
    escape sequence checking follows Lua https://www.lua.org/manual/5.4/manual.html#3.1 *)
 
-(* Invalid UTF8 end of line characters *)
-let utf8endofline = 
-      "\xc2\x85"      // next line: U+0085
-    | "\xe2\x80\xa8"  // line separator: U+2028
-    | "\xe2\x80\xa8"  // paragraph: U+2029 
+(* *)
 
-let asciiprintable = ['\x20'-'\x7E']
-let utf8cont = ['\x80'-'\xbf']
-let utf8enc = ['\xc2'-'\xdf'] utf8cont 
-    | ['\xe0'] ['\xa0'-'\xbf'] utf8cont 
-    | ['\xed'] ['\x80'-'\x9f'] utf8cont
-    | ['\xe1'-'\xec''\xee'-'\xef'] utf8cont utf8cont
-    | ['\xf0'] ['\x90'-'\xbf'] utf8cont utf8cont
-    | ['\xf4'] ['\x80'-'\x8f'] utf8cont utf8cont
-    | ['\xf1'-'\xf3'] utf8cont utf8cont utf8cont
+let nonascii = [^'\x00'-'\xff']
+let nonasciiunicode = nonascii nonascii?
+//let utf32 = 
 
-// utf8charpattern = '\\' [\0-\x7F\xC2-\xFD][\x80-\xBF]*   // utf8 char pattern, see https://www.lua.org/manual/5.4/manual.html#6.5
+(* Invalid unicode end of line characters *)
+let unicodelineending = ['\u0085' '\u2028' '\u2029']
 
-// let anychar = [^ '\n' '\r']       // end of line is handled by the token parser
-
-//let stringchar = [^ '\\' '"' '\n' '\r']  
-
-let stringchar = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  
-
-let escapeseq = '\\' asciiprintable? 
+let stringchar = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
 
 let escape = '\\' ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '\'' '\"']
 let hexescape = '\\' 'x' hexdigit hexdigit
 let decimalescape = '\\' digit digit? digit?
-let unicodeescape = '\\' 'u' '{' hexdigitpart '}'
+let unicodeescape = '\\' 'u' '{' hexdigit+ '}'
 let linecontinuation = '\\'    // TODO: make escape checking part of the parser, fjg. 18.08.20
 
 //let stringitem = stringchar | utf8enc | escapeseq
 
-let stringitem = stringchar | utf8enc | escape | hexescape | decimalescape | unicodeescape | linecontinuation
+let stringitem = stringchar | escape | hexescape | decimalescape | unicodeescape | linecontinuation
 
-let stringitems = stringitem*
-
+//let stringitems = stringitem*
 
 let triplequotes = "\"\"\""
 let quotes = '"' '"'?
+
+let characterchar = [^ '\\' '\'' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
+let charitem = characterchar | escape | hexescape | decimalescape | unicodeescape
+let characterliteral = '\'' charitem '\''
+
+let identifier = '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -122,7 +110,13 @@ let chunkwithoutstarandslash = [^'*' '/' '\n' '\r']*
 rule Token = parse
 
     (* ---- doc comments, comments and whitespaces ---- *)
-    | ['\t']                { // tabularUsed lexbuf; 
+    | ' '                   { Token lexbuf }
+
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              Token lexbuf }
+    
+    | '\t'+                 { // tabs for identation at the start of a line are allowed
+                              if lexbuf.StartPos.Column > 0 then tabularUsed lexbuf else ()
                               Token lexbuf }
     
     | "/*"                  { commentDepth <- 1; 
@@ -130,11 +124,6 @@ rule Token = parse
                               SkipBlockComment lexbuf }
     
     | "//"                  { SkipLineComment lexbuf } 
-    
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
-                              Token lexbuf }
-    
-    | [' ']                 { Token lexbuf }
 
     (* --- strings, can span multiple lines --- *)
 
@@ -368,27 +357,20 @@ rule Token = parse
 
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-    (*
-    | stringliteral         { let lxm, rng = getLexemeAndRange lexbuf
-                              let nlxm = BlechString.normalizeStringLiteral lxm
-                              if checkStringLiteral(nlxm, rng) then
-                                let str = nlxm.Substring(1, nlxm.Length - 2)
-                                STRING ( str, rng ) 
-                              else
-                                EOF rng }
-*)
-
-    | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
-                            { ID (getLexemeAndRange lexbuf) }
+    | identifier            { ID (getLexemeAndRange lexbuf) }
 
     | '_'+                  { WILDCARD (getLexemeAndRange lexbuf) }
 
-    (* --------- end of file and unknown tokens --------- *)
+    (* --------- end of file and invalid source code characters  --------- *)
 
-    | eof                    { EOF (getRange lexbuf) }
+    | eof                   { EOF (getRange lexbuf) }
 
-    | _                      { unknownToken lexbuf; 
-                               Token lexbuf }
+    | nonasciiunicode       { unknownToken lexbuf;  // any other unicode character
+                              Token lexbuf }
+
+//    | _                     { unknownToken lexbuf;  // any other unicode character
+//                              Token lexbuf }
+
 
 (* fjg: returns the next token after the comment, in order to make EOF available in case of unterminated comment *)
 and SkipBlockComment = parse     
@@ -424,7 +406,7 @@ and SkipLineComment = parse
 
 and SkipLineOnError = parse
     | endofline             { let eol = EOL (getRange lexbuf) in
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine;
                               ParserContext.setErrorTokenAccepted false; 
                               eol}
 
@@ -467,8 +449,7 @@ and CollectString = parse   // TODO: Move token checking - e.g. decimal and unic
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectString lexbuf }
 
-    | utf8endofline         { unknownToken lexbuf;
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+    | unicodelineending     { unknownToken lexbuf;
                               CollectString lexbuf }
 
     | '"'                   { let lxm, rng = getLexemeAndRange lexbuf
@@ -476,7 +457,7 @@ and CollectString = parse   // TODO: Move token checking - e.g. decimal and unic
                               // printf "String:\n%s" tokenBuilder.Text
                               STRING (tokenBuilder.Token) }
 
-    | stringitems
+    | stringitem
                             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectString lexbuf }
         
@@ -484,7 +465,7 @@ and CollectString = parse   // TODO: Move token checking - e.g. decimal and unic
     | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
                               EOF (getRange lexbuf) }
 
-    | _                      { unknownToken lexbuf; 
+    | _                     { unknownToken lexbuf; 
                                Token lexbuf }
 
 and CollectTripleQuotedString = parse
@@ -492,19 +473,19 @@ and CollectTripleQuotedString = parse
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectTripleQuotedString lexbuf }
     
+    | unicodelineending     { printfn "Unicode line ending:>>>%s<<<" (getLexeme lexbuf)
+                              unknownToken lexbuf; 
+                              CollectTripleQuotedString lexbuf }
+    
     | triplequotes          { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               TRIPLEQUOTEDSTRING (tokenBuilder.Token) }    
 
-    | stringitems
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | stringitem
+                            { printf "%s" (getLexeme lexbuf)
+                              tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectTripleQuotedString lexbuf }
     
     | quotes                { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              (* if lxm = "\"\"\"" then  // Todo: Create a helper function for this, fjg. 5.8.20
-                                  let tqstr = BlechString.normalizeTripleQuotedStringLiteral tokenBuilder.Text
-                                  // printfn "%s" tqstr
-                                  // Strip of """<string>""" to get <string>, the range contains """<string>"""
-                                  STRING ( tqstr.Substring(3, tqstr.Length - 6), tokenBuilder.Range ) *)
                               CollectTripleQuotedString lexbuf }
 
     | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20

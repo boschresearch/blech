@@ -230,7 +230,7 @@ module Diagnostics =
             let mutable lstCol = loc.EndColumn
 
             for i in fstLn .. lstLn do
-                let ln = CodeMap.lineOfFile loc.FileName i
+                let ln = (CodeMap.lineOfFile loc.FileName i).Replace('\t', ' ')  // Correct range counting by replacing '\t' with ' '
                 let len = ln.Length
 
                 Printf.bprintfn os "%d%s | %s" i 
@@ -310,7 +310,9 @@ module Diagnostics =
         let printDiagnostics (dl: Logger) =
             let sb = Text.StringBuilder()
             emitLoggedDiagnostics sb dl
-            Printf.fprintf Console.Out "%s" <| sb.ToString()
+            //Console.OutputEncoding <- System.Text.Encoding.UTF8
+            //Printf.fprintf Console.Out "%s" <| sb.ToString()
+            Console.Out.Write(sb.ToString())
 
         let getDiagnostics (dl: Logger) =
             dl.diagnostics
