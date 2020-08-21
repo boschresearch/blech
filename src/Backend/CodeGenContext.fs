@@ -49,6 +49,8 @@ type PCtree =
         thread: Thread
         subPCs: PCtree list
     }
+    /// Flattens the program counter tree to a list
+    /// starting with this.mainpc first.
     member this.AsList =
         this.mainpc :: (this.subPCs |> List.collect (fun p -> p.AsList))
     member this.Contains (pc: ParamDecl) =

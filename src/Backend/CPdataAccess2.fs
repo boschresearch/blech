@@ -92,6 +92,9 @@ let private ctxName (name: QName) = assembleName (fromContext BLC) [] (name.ToUn
 let private externalPrev (name: QName) = assembleName (fromContext PREV) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
 let private internalPrev name = assembleName PREV [] name.basicId
 
+let cpPcName name = (fromContext "") + name.basicId |> txt
+
+
 [<DefaultAugmentation(false)>] // default Is* is on its way https://github.com/fsharp/fslang-suggestions/issues/222
                                // for the moment we do this as in https://stackoverflow.com/a/23665277/2289899
 /// Represents information on how to render a Blech name to a C name
@@ -884,38 +887,36 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVa
     let actCallStmt = (cpName (Some Current) tcc termRetcodeVarName).Render <+> txt "=" <+> actCall <^> semi
     mkRenderedStmt prereqStmts actCallStmt
 
-/// Sets non array typed prev variables to their types default
-/// TODO: make work with all types
-let cpAssignDefaultPrevInActivity ctx qname =
-    let tml = TypedMemLoc.Loc qname
-    let dty = getDatatypeFromTML ctx tml
-    let prevname = (cpName (Some Previous) ctx qname).Render
-    let {prereqStmts=prereq; cExpr=value} = cpExpr ctx {rhs = RhsCur tml; typ = dty; range = range0} //range0, since this does not exist in the Blech source code
-    prereq
-    @ [prevname <+> txt "=" <+> value.Render <^> semi]
-    |> dpBlock
-           
-let cpAssignPrevInActivity tcc qname =
+
+let private assignPrevInActivity tcc qname =
     let tml = TypedMemLoc.Loc qname
     let dty = getDatatypeFromTML tcc tml
     let prevname = (cpName (Some Previous) tcc qname).Render
     let initvalue = (getValueFromName Current tcc qname).Render
-    
     match dty with
     | ValueTypes (ArrayType _) ->
-        let declare = cpArrayDeclDoc prevname dty <^> semi
-        let memcpy =
-            txt "memcpy"
-            <+> dpCommaSeparatedInParens
-                [ prevname
-                  initvalue
-                  sizeofMacro dty ]
-            <^> semi
-        declare <..> memcpy
+        txt "memcpy"
+        <+> dpCommaSeparatedInParens
+            [ prevname
+              initvalue
+              sizeofMacro dty ]
+        <^> semi
     | _ ->
-        cpType dty 
-        <+> prevname <+> txt "=" 
-        <+> initvalue <^> semi
+        prevname <+> txt "=" <+> initvalue <^> semi
+    
+let cpAssignDefaultPrevInActivity = assignPrevInActivity
+    
+let cpAssignPrevInActivity tcc qname =
+    let tml = TypedMemLoc.Loc qname
+    let dty = getDatatypeFromTML tcc tml
+    let prevname = (cpName (Some Previous) tcc qname).Render
+    let declaration =
+        match dty with
+        | ValueTypes (ArrayType _) ->
+            cpArrayDeclDoc prevname dty <^> semi
+        | _ ->
+            cpType dty
+    declaration <+> assignPrevInActivity tcc qname
         
 //TODO eliminate these
 let internal cpDeref o = txt "*" <^> o
