@@ -66,11 +66,11 @@ module String =
     /// converts a list of chars to a string
     let implode chars = System.String (List.toArray chars)
 
-    /// splits a string into non-empty substrings that were separated by the given predicate
-    //let split (c:char) (s:string) =
-    //    let r = s.Split ([|c|], StringSplitOptions.RemoveEmptyEntries )
-    //    Array.toList r
-
+    /// splits a string into an array of strings that were separated by the given char
+    let split (seperator: string) (s:string) : seq<string> =
+        seq <| s.Split seperator
+    
+    
     /// replace single characters in a string by another string
     let translate f s =
         let rec translateCL cL =

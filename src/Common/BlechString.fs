@@ -144,7 +144,7 @@ module BlechString =
 
     /// This function replaces any end of line sequence by linefeed '\n'.
     let normalizeEndOfLine str =
-        Regex.Replace(str, EndOfLine, "\n")
+        Regex.Replace(str, EndOfLine, Linefeed)
 
     let removeLineContinuations str = 
         Regex.Replace(str, Backslash + Linefeed, "")
@@ -157,11 +157,11 @@ module BlechString =
         // Regex.Unescape does the job to replace escape sequences
         |> Regex.Unescape
 
-    let removeQuotes (str : string) = 
-        str.Substring (1, str.Length - 2)
+    //let removeQuotes (str : string) = 
+    //    str.Substring (1, str.Length - 2)
         
-    let removeTripleQuotes (str: string) =
-        str.Substring (3, str.Length - 6)
+    //let removeTripleQuotes (str: string) =
+    //    str.Substring (3, str.Length - 6)
     
 
     // ---
@@ -192,21 +192,14 @@ module BlechString =
     //    |> (Regex UnicodeEscape).Matches
     //    |> Seq.filter (fun m -> not (isValidUnicodeEscape m.Value))
 
+    
+    
+    
     // ---
     // Functions for normalizing multi-line string literals
     // the public functions normalizeTripleQuotedStr expect a raw triple-quoted string with normalized end of line sequence
     // ---
 
-    
-    [<Literal>]
-    let private TripleQuotes = Quotes + Quotes + Quotes
-
-    
-    
-    // Asserts that the line starting with """ must is excluded
-    
-    [<Literal>]
-    let private NoIndent = ""
     [<Literal>]
     let private Tabs = "[\t]*"
     [<Literal>]
@@ -215,49 +208,116 @@ module BlechString =
     let private TabIndentation = "^" + Tabs
     [<Literal>]
     let private Indentation = TabIndentation + Spaces
+    [<Literal>]
+    let private WhitespaceOnly = "^\s*$" // only whitespace 
     
-    // returns true for unbalanced tab indentation and the common indentation
-    let checkMultiLineStringIndentation (mlstr : string) : bool * string =
-        let tabs line = (Regex TabIndentation).Match(line).Value
-        let indentation line = (Regex Indentation).Match(line).Value
-        let lines = mlstr.Split '\n'
-        // printfn "Lines:%A" lines
-        match lines with
-        | [| _ |] -> // first line does not contribute to indentation
-            (false, NoIndent)
+    //// returns true for unbalanced tab indentation and the common indentation
+    //let checkMultiLineStringIndentation (mlstr : string) : bool * string =
+    //    let tabs line = (Regex TabIndentation).Match(line).Value
+    //    let indentation line = (Regex Indentation).Match(line).Value
+    //    let lines = mlstr.Split '\n'
+    //    // printfn "Lines:%A" lines
+    //    match lines with
+    //    | [| _ |] -> // first line does not contribute to indentation
+    //        (false, NoIndent)
         
-        | lines ->
-            let mutable tabIndent = None // the first tab indent determines all other tab indents 
-            let mutable commonIndent = None
-            let mutable unbalancedTabIndent = false
+    //    | lines ->
+    //        let mutable tabIndent = None // the first tab indent determines all other tab indents 
+    //        let mutable commonIndent = None
+    //        let mutable unbalancedTabIndent = false
             
-            for line in Array.tail lines do
-                    let indent = indentation line
-                    // printfn ">>%s<<" indent
-                    if (line = Array.last lines) || (line <> indent) then // line contains relevant identation
-                        // printfn "line:%s;" line
-                        // check balanced tab identation
-                        if Option.isNone tabIndent then // init tab indentation 
-                            tabIndent <- Some <| tabs line
-                        elif not (tabs line = Option.get tabIndent) then
-                            unbalancedTabIndent <- true
+    //        for line in Array.tail lines do
+    //                let indent = indentation line
+    //                // printfn ">>%s<<" indent
+    //                if (line = Array.last lines) || (line <> indent) then // line contains relevant identation
+    //                    // printfn "line:%s;" line
+    //                    // check balanced tab identation
+    //                    if Option.isNone tabIndent then // init tab indentation 
+    //                        tabIndent <- Some <| tabs line
+    //                    elif not (tabs line = Option.get tabIndent) then
+    //                        unbalancedTabIndent <- true
                         
-                        // determine common identation
-                        if Option.isNone commonIndent then // init commonIdent
-                            printfn "init ident:>>%s<<" indent
-                            commonIndent <- Some indent
-                        else
-                            let ci = Option.get commonIndent
-                            if ci.StartsWith indent then
-                                commonIndent <- Some indent
-                            elif line.StartsWith ci then
-                                ()
-                            else
-                                commonIndent <- Some ""
+    //                    // determine common identation
+    //                    if Option.isNone commonIndent then // init commonIdent
+    //                        printfn "init ident:>>%s<<" indent
+    //                        commonIndent <- Some indent
+    //                    else
+    //                        let ci = Option.get commonIndent
+    //                        if ci.StartsWith indent then
+    //                            commonIndent <- Some indent
+    //                        elif line.StartsWith ci then
+    //                            ()
+    //                        else
+    //                            commonIndent <- Some ""
             
-            (unbalancedTabIndent, Option.defaultValue NoIndent commonIndent)
+    //        (unbalancedTabIndent, Option.defaultValue NoIndent commonIndent)
+
  
- 
+    let isEmptyLine line = 
+        Regex.IsMatch(line, WhitespaceOnly)
+
+    let getExtraWhitespaceLength line =
+        Regex.Match(line, WhitespaceOnly).Length
+
+    let getTabIndentation line = 
+        Regex.Match(line, TabIndentation).Length
+
+    let getIndentation line = 
+        Regex.Match(line, Indentation).Length
+
+    let findUnbalancedTabIndentation (lines: string seq) =
+        let mutable tabIndent = None
+        let unbalancedTabIndents = 
+            seq { for i, line in Seq.indexed lines do
+                    if i = 0 then 
+                        yield None
+                    elif isEmptyLine line then 
+                        yield None 
+                    else 
+                        let lineTabIndent = getTabIndentation line
+                        if Option.isNone tabIndent then
+                            tabIndent <- Some lineTabIndent // the first tab indentation defines the standard 
+                            yield None
+                        elif lineTabIndent = Option.get tabIndent then
+                            yield None
+                        else
+                            yield Some lineTabIndent }
+        (tabIndent, unbalancedTabIndents)
+
+    let findExtraWhitespace (lines : string seq) =
+        seq { for i, line in Seq.indexed lines do
+                if i > 1 && i = Seq.length lines - 1 then 
+                    // the last of 2 or more lines may contain extra whitespace
+                    yield None
+                else
+                    let wsLen = getExtraWhitespaceLength line 
+                    if wsLen = 0 then
+                        yield None
+                    else
+                        yield Some wsLen }
+
+    // assumes balanced tab indentation and no extra whitespace in empty lines
+    let getCommonIndentation (lines: string seq) = 
+        let mutable commonIndent = None
+        for line in Seq.tail lines do    // the first line is not relevant
+            if line <> String.Empty then // an empty line is not relevant
+                let indent = getIndentation line
+                if Option.isNone commonIndent then // first defining indentation
+                    commonIndent <- Some indent
+                elif indent < Option.get commonIndent then
+                    commonIndent <- Some indent
+        
+        Option.defaultValue 0 commonIndent
+
+        
+    let splitMultiLineString (mlstr: string) =
+        mlstr.Split Linefeed
+
+    let checkMultiLineString (mlstr: string) =
+        normalizeEndOfLine mlstr
+        |> splitMultiLineString
+
+
     // Asserts that the line starting with """ must is excluded
     //let private longestCommonStartingSequence (lines: string list) = 
     //    match lines with
@@ -280,17 +340,25 @@ module BlechString =
     //    | _ -> 
     //        ""
     
+    
+    let dedentLines (lines: string seq) = 
+        let n = getCommonIndentation lines
+        printfn "Dendent: %d" n
+        seq { for i, line in Seq.indexed lines do
+                printfn "line %d :%s<<" i line
+                if i = 0 then // first line 
+                    yield line
+                elif line.Length = 0 then // empty line
+                    yield line
+                else yield line.Substring n }
 
-    let private dedentMultiLineString indentation (mlstr : string) =
-        // let lines = String.split '\n' tqstr 
-        // let lcss = longestCommonStartingSequence (List.tail lines)
-        // Regex.Replace(mlstr, "\n" + indentation, "\n")
-        // TODO: handle empty lines correctly, fjg 20.08.20
-        printfn "indentation:>%s<" indentation
-        mlstr.Replace("\n" + indentation, "\n")
+    let private dedentMultiLineString (mlstr : string) =
+        String.split Linefeed mlstr
+        |> dedentLines
+        |> String.concat Linefeed
 
     let private removeEmptyFirstLine mlstr = 
-        Regex.Replace(mlstr, "^" + Linefeed, "")
+        Regex.Replace(mlstr, "^" + Linefeed, String.Empty)
 
     /// Normalize a triple-quoted ("""...""") string literal from the lexer
     //let normalizeTripleQuotedString str =
@@ -299,14 +367,14 @@ module BlechString =
     //    |> stripNewlineAfterTripleQuotes
 
     /// Normalize a triple-quoted ("""...""") string literal from the lexer
-    let normalizeMultiLineString indentation str =
+    let normalizeMultiLineString str =
         normalizeEndOfLine str
-        |> dedentMultiLineString indentation
+        |> dedentMultiLineString
         |> removeEmptyFirstLine
 
-    /// Normalize a single-quoted ("...") string literal from the lexer
-    let normalizeSingleQuotedString str =
-        normalizeEndOfLine str
+    ///// Normalize a single-quoted ("...") string literal from the lexer
+    //let normalizeSingleQuotedString str =
+    //    normalizeEndOfLine str
     
     /// Normalize a single-line ("...") string literal from the lexer
     let normalizeSingleLineString str =

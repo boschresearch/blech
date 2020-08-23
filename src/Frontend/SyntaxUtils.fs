@@ -626,6 +626,7 @@ module LexerUtils =
         member this.Token = 
             text.ToString(), range
 
+
     /// this mutable number is used to track the nesting of /* .. */ comments in the SkipComment rule
     // TODO: encapsulate as LexerContext
     let mutable fromStart: Range.range = Range.range0
@@ -698,3 +699,4 @@ module LexerUtils =
 
     let eolInSingleLineString rng = 
         reportError <| EolInSingleLineString rng
+

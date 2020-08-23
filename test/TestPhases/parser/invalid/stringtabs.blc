@@ -1,0 +1,17 @@
+@@[CInclude (header = "forall.h")]
+
+@[CFunction (binding = "tab in string" )]
+extern function f()
+
+@[CFunction (binding = """
+	    here	wrong 
+        """)]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

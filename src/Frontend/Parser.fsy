@@ -1497,7 +1497,7 @@ Identifier
 AttributeLiteral 
     : STRING                                    { let str = if checkStringLiteral $1 then 
                                                                 fst $1
-                                                                |> BlechString.normalizeSingleQuotedString
+                                                                |> BlechString.normalizeSingleLineString
                                                                 // |> BlechString.unescapeStringLiteral
                                                             else
                                                                 fst $1
@@ -1505,7 +1505,7 @@ AttributeLiteral
 
     | MULTILINESTRING                           { let str = if checkStringLiteral $1 then 
                                                                 fst $1
-                                                                |> BlechString.normalizeMultiLineString ""
+                                                                |> BlechString.normalizeMultiLineString
                                                                 // |> BlechString.unescapeStringLiteral
                                                             else
                                                                 fst $1

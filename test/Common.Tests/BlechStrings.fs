@@ -165,6 +165,14 @@ def"
     //    Assert.IsEmpty (getInvalidHexEscapes s4)
 
     [<Test>]
+    let testGetExtraWhitespaceLength () =
+        Assert.AreEqual ( 4, getExtraWhitespaceLength "\t\t  " )
+        Assert.AreEqual ( 2, getExtraWhitespaceLength "\t\t" )
+        Assert.AreEqual ( 2, getExtraWhitespaceLength "  " )
+        Assert.AreEqual ( 0, getExtraWhitespaceLength "" )
+        Assert.AreEqual ( 0, getExtraWhitespaceLength "\t\t  abc" )
+        
+    [<Test>]
     let testUnescapeNormalizedStringLiteral () =
         Assert.AreEqual (
             "abc\ndef",
@@ -186,16 +194,14 @@ def"
         str.Substring(3, str.Length - 6)
 
     [<Test>]
-    let testNormalizeTripleQuotedString () =
+    let testNormalizeMultiLineString () =
         Assert.AreEqual (
             "  Hello,\n  world.\n",
             "
               Hello,
               world.
             "
-            |> normalizeEndOfLine
-            |> (fun s -> let _, indent = checkMultiLineStringIndentation s 
-                         normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )
         
         Assert.AreEqual (
@@ -203,18 +209,14 @@ def"
             "    This
                  is
                    a test"
-            |> normalizeEndOfLine
-            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
-                         normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )
 
         Assert.AreEqual (
             "hello",
             "
             hello"
-            |> normalizeEndOfLine
-            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
-                         normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )
 
         Assert.AreEqual (
@@ -222,10 +224,7 @@ def"
             "
 
             hello"
-            |> normalizeEndOfLine
-            |> (fun s ->
-                    let _, indent = checkMultiLineStringIndentation s 
-                    normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )
 
         Assert.AreEqual (
@@ -234,22 +233,17 @@ def"
             hello
 
             world"
-            |> normalizeEndOfLine
-            |> (fun s ->
-                    let _, indent = checkMultiLineStringIndentation s 
-                    normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )
 
         Assert.AreEqual (
-             "hello\n\nworld",
+             "  hello\n\n  world\n",
              "
-             hello
-     
-             world"
-             |> normalizeEndOfLine
-             |> (fun s ->
-                     let _, indent = checkMultiLineStringIndentation s 
-                     normalizeMultiLineString indent s)
+               hello
+
+               world
+             "
+             |> normalizeMultiLineString
              )
 
         Assert.AreEqual (
@@ -257,7 +251,5 @@ def"
             "
               Hello,
               world."
-            |> normalizeEndOfLine
-            |> (fun s -> let _, indent = checkMultiLineStringIndentation s
-                         normalizeMultiLineString indent s)
+            |> normalizeMultiLineString
             )

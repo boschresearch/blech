@@ -440,7 +440,7 @@ and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decima
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectSingleLineString lexbuf }
 
-    | '\t'                  { // tabs are not allowed strings
+    | '\t'                  { // tabs are not allowed in strings
                               tabularUsed lexbuf
                               CollectSingleLineString lexbuf }
 
