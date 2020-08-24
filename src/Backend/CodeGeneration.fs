@@ -17,11 +17,9 @@
 module Blech.Backend.CodeGeneration
 
 open Blech.Common
-
 open Blech.Common.PPrint.PPrint
 
 open Blech.Frontend
-open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes
 open Blech.Frontend.PrettyPrint.DocPrint
 

@@ -834,7 +834,6 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
         curComp := Compilation.addPc !curComp node.Payload.Thread pc
         false
     let name = subProgDecl.name
-    //curComp := { !curComp with varsToPrev = collectVarsToPrev subProgDecl.body }
     curComp := { !curComp with varsToPrev = collectVarsToPrev2 ctx.pgs.[name] }
     // build pc tree by traversing the program graph and create a pc per thread
     let progGraph = ctx.pgs.[name]
@@ -935,11 +934,18 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
 
     // insert val declarations and prev updates
     let completeBody = 
+        let hasReturnFlow =
+            ctx.pgs.[name].Graph.Edges
+            |> Seq.exists (fun edge -> match edge.Payload with | ReturnFlow _ -> true | _ -> false)
         match code with
         | []
         | [_] -> failwith "An activity must have a non-empty body with at least one await."
         | initBlock :: rest -> 
-            copyIn :: setPrevVars :: txt "loopHead:" :: initBlock :: rest 
+            copyIn 
+            :: setPrevVars 
+            :: (if hasReturnFlow then txt "loopHead:" else empty) // avoid C compiler warning about unused labels
+            :: initBlock 
+            :: rest 
             |> dpBlock
 
     let completeActivityCode =

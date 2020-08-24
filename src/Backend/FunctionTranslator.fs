@@ -31,7 +31,6 @@ open Blech.Frontend.TyChkExpressions
 
 open Blech.Backend
 
-open Normalisation
 open CPdataAccess2
 open CPrinter
 
@@ -63,67 +62,10 @@ and private translateFunctionStatement ctx curComp stmt =
             [ init
               cpAssign ctx.tcc lhs v.initValue ]
             |> dpBlock
-            //let norm =
-            //    normaliseVarDecl ctx.tcc v
-            //    |> List.map (function 
-            //        | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
-            //            //match lhs.typ with
-            //            //| ValueTypes (ArrayType _) ->
-            //            //    cpMemCpyArr true ctx lhs.lhs rhs
-            //            //| _ ->
-            //            //    cpAssign ctx.tcc lhs rhs
-            //        | _ -> failwith "Must be an assignment here!") // not nice
-            //match v.datatype with
-            //| ValueTypes (ValueTypes.StructType _) 
-            //| ValueTypes (ValueTypes.ArrayType _) ->
-            //    let vname = (cpName (Some Current) ctx.tcc v.name).Render
-            //    let init = cpArrayDeclDoc vname v.datatype <^> semi
-            //    // re-initialise the whole blob and then set the given fields
-            //    let reinit =
-            //        txt "memset"
-            //        <^> dpCommaSeparatedInParens
-            //            [ vname
-            //              txt "0"
-            //              sizeofMacro v.datatype]
-            //        <^> semi
-            //    init :: reinit :: norm |> vsep
-            //| _ ->
-            //    let {prereqStmts=prereqStmts; cExpr=cExpr} = cpExpr ctx.tcc v.initValue
-            //    let vname = (cpName (Some Current) ctx.tcc v.name).Render
-            //    let init = cpArrayDeclDoc vname v.datatype <+> txt "=" <+> cExpr.Render <^> semi
-            //    prereqStmts @ [init] |> vsep
     | Stmt.ExternalVarDecl _ -> failwith "Found an external variable in a function. This should have been detected earlier."            
     // actions
     | Stmt.Assign (r, lhs, rhs) ->
         cpAssign ctx.tcc lhs rhs
-        //let norm =
-        //    normaliseAssign ctx.tcc (r, lhs, rhs)
-        //    |> List.map (function 
-        //        | Stmt.Assign(_, lhs, rhs) -> 
-        //            match lhs.typ with
-        //            | ValueTypes (ArrayType _) ->
-        //                cpMemCpyArr true ctx lhs.lhs rhs
-        //            | _ ->
-        //                cpAssign ctx.tcc lhs rhs
-        //        | _ -> failwith "Must be an assignment here!") // not nice
-        //match rhs.rhs with
-        //| StructConst _
-        //| ArrayConst _ when isLiteral rhs->
-        //    // re-initialise the whole blob and then set the given fields
-        //    let reinit = cpMemSet true ctx lhs
-        //    reinit :: norm |> vsep
-        //| _ ->
-        //    let prereqStmts, transExpr = makeTmpForComplexConst true ctx rhs 
-        //    match transExpr with
-        //    | Orig _ ->
-        //        match lhs.typ with
-        //        | ValueTypes (ArrayType _) -> // a = b; where a, b are arrays
-        //            cpMemCpyArr true ctx lhs.lhs rhs
-        //        | _ ->
-        //            cpAssignInFunction ctx lhs.lhs rhs
-        //    | Done d ->
-        //        let cpy = cpMemCpyDoc true ctx lhs d
-        //        prereqStmts @ [cpy] |> vsep
     | Stmt.Assert _
     | Stmt.Assume _
     | Stmt.Print _ -> failwith "Print, Assert, Assume not implemented yet."

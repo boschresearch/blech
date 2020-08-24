@@ -23,6 +23,8 @@
 
 module Blech.Backend.CPdataAccess2
 
+open System.Collections.Generic
+
 open Blech.Common.Range
 open Blech.Common.PPrint
 
@@ -32,9 +34,7 @@ open Blech.Frontend.PrettyPrint.DocPrint
 open Blech.Frontend.BlechTypes
 open Blech.Frontend.TypeCheckContext
 
-open Blech.Backend
-open Blech.Backend.Normalisation
-open System.Collections.Generic
+open Normalisation
 
 
 module AppName =
@@ -917,7 +917,3 @@ let cpAssignPrevInActivity tcc qname =
         | _ ->
             cpType dty
     declaration <+> assignPrevInActivity tcc qname
-        
-//TODO eliminate these
-let internal cpDeref o = txt "*" <^> o
-let internal cpRefto o = txt "&" <^> o

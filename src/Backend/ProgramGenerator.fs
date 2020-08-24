@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This module contains all functionality which is specific for the
-/// of the Blech program C functions.
+/// This module contains all functionality which generates the main loop
+/// and printState function for testing (tracing) Blech code.
 
 [<RequireQualifiedAccess>]
 module Blech.Backend.ProgramGenerator
@@ -35,8 +35,6 @@ open CPdataAccess2
 open CPrinter
 
 
-let private cpByPointer param = chr '*' <^> param
-
 /// Inputs of the main functions 'tick' and 'init'
 let private cpMainInputParam tcc scalarPassByPointer (input: ParamDecl) =
     let paramName = input.name |> renderCName Current tcc
@@ -48,7 +46,7 @@ let private cpMainInputParam tcc scalarPassByPointer (input: ParamDecl) =
         | ValueTypes typ when typ.IsPrimitive ->
             cpType input.datatype
             <+> if scalarPassByPointer then 
-                    cpByPointer paramName
+                    cpDeref paramName
                 else 
                     paramName
         | _ ->

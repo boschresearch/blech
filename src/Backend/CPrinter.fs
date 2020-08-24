@@ -86,6 +86,9 @@ let internal cpUserType typ =
 // intput/output formal parameters in subprogram definitions.
 //=============================================================================
 
+let internal cpDeref o = txt "*" <^> o
+let internal cpRefto o = txt "&" <^> o
+
 /// Inputs cannot be changed and may be passed in by value
 let private cpInputParam tcc (input: ParamDecl) =
     let iname = (cpName (Some Current) tcc input.name).Render

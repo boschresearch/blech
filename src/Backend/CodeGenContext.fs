@@ -167,8 +167,6 @@ module ActivityContext =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Compilation =
 
-    open Blech.Intermediate.BlockGraph
-
     let mkNew name =
         {
             name = name
