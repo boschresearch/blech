@@ -41,7 +41,7 @@ module SyntaxErrors =
         | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
         | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
         
-
+        | UnbalancedTabIndentation of tabIndent: Range.range * unbalanced: Range.range
 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -90,6 +90,9 @@ module SyntaxErrors =
                     { range = range
                       message =sprintf "invalid hexadecimal escape '%s'." value }    
 
+                | UnbalancedTabIndentation (tabIndent, unbalanced) ->
+                    { range = unbalanced 
+                      message = "unbalanced tab indentation in multi-line string."}
 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
@@ -109,6 +112,10 @@ module SyntaxErrors =
                 | DecimalEscapeTooLarge (_, _, escRng) ->
                     [ { range = escRng; message = "too large"; isPrimary = true} ]
                 
+                | UnbalancedTabIndentation (tabIndent, unbalanced) ->
+                    [ { range = tabIndent; message = "given tabs"; isPrimary = false }
+                      { range = unbalanced; message = "unbalanced tabs"; isPrimary = true } ] 
+
                 | _ ->
                     []
 
@@ -156,6 +163,9 @@ module SyntaxErrors =
                 | InvalidHexEscape _ ->
                     [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
                       @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
+                | UnbalancedTabIndentation _ ->
+                    [ "All lines in a multi-line string must use the same amount of tab '\t' indentation." 
+                      "Tabs can only be used for indentation at the start of a new line." ]
 
                 | _  ->
                     []
@@ -509,11 +519,30 @@ module ParserUtils =
             if Option.isSome exposing then
                 reportError <| UnexpectedExposure (Option.get exposing).Range       
 
-    /// checks escape sequences in string literals
-    let checkStringLiteral (strlit: string, rng: Range.range) = 
-        true
+    //let checkMultiLineString (slstr : string) =
+    //    slstr
+
+    /// checks balanced tab indentation in multi-line string literals
+    let checkTabIndentations (multiLineString: string, rng: Range.range) = 
+        let reportUnbalancedTabIndentations tabindent unbalancedTabIndents =
+            [ for uti in unbalancedTabIndents ->
+                UnbalancedTabIndentation (BlechString.tabIndentationRange rng <| Option.get tabindent, 
+                                          BlechString.tabIndentationRange rng uti) ]
+            |> List.map reportError 
+
+        BlechString.normalizeEndOfLine multiLineString
+        |> BlechString.splitMultiLineString
+        |> BlechString.findUnbalancedTabIndentations
+        |> fun (tabIndent, unbalancedTabIndents) -> 
+                if Seq.isEmpty unbalancedTabIndents then 
+                    true
+                else
+                    ignore <| reportUnbalancedTabIndentations tabIndent unbalancedTabIndents
+                    false
+        
         // let str = BlechString.normalizeEndOfLine strlit
         
+
         //let checkCharacterEscapes =
         //    let ms = BlechString.getInvalidEscapeSequences str
         //    if Seq.length ms > 0 then

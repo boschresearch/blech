@@ -587,11 +587,6 @@ and ClockExpr =
 
 // Expressions ///////////////////////////////////////////////////////////
 
-// Todo: Keep kind of string in AST, because they are handled differently, fjg. 3,8,2020
-and BlechString = 
-    | SingleQuoted | TripleQuoted
-
-
 and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range

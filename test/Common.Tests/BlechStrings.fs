@@ -100,14 +100,21 @@ def"
             "abcdef",
             "abc\092\013\010def"
             |> normalizeEndOfLine 
-            |> removeLineContinuations
+            |> replaceLineContinuations
+            )
+
+        Assert.AreEqual (
+            "abcdef",
+            "abc\\\r\ndef"
+            |> normalizeEndOfLine 
+            |> replaceLineContinuations
             )
 
         Assert.AreEqual (
             "abc    def",
             "abc\092\013\010    def"
             |> normalizeEndOfLine 
-            |> removeLineContinuations
+            |> replaceLineContinuations
             )
 
         Assert.AreEqual (
@@ -115,7 +122,7 @@ def"
             @"abc\
     def"
             |> normalizeEndOfLine 
-            |> removeLineContinuations
+            |> replaceLineContinuations
             )
 
     
@@ -164,13 +171,13 @@ def"
     //    Assert.IsNotEmpty (getInvalidHexEscapes s3)
     //    Assert.IsEmpty (getInvalidHexEscapes s4)
 
-    [<Test>]
-    let testGetExtraWhitespaceLength () =
-        Assert.AreEqual ( 4, getExtraWhitespaceLength "\t\t  " )
-        Assert.AreEqual ( 2, getExtraWhitespaceLength "\t\t" )
-        Assert.AreEqual ( 2, getExtraWhitespaceLength "  " )
-        Assert.AreEqual ( 0, getExtraWhitespaceLength "" )
-        Assert.AreEqual ( 0, getExtraWhitespaceLength "\t\t  abc" )
+    //[<Test>]
+    //let testGetExtraWhitespaceLength () =
+    //    Assert.AreEqual ( 4, getExtraWhitespaceLength "\t\t  " )
+    //    Assert.AreEqual ( 2, getExtraWhitespaceLength "\t\t" )
+    //    Assert.AreEqual ( 2, getExtraWhitespaceLength "  " )
+    //    Assert.AreEqual ( 0, getExtraWhitespaceLength "" )
+    //    Assert.AreEqual ( 0, getExtraWhitespaceLength "\t\t  abc" )
         
     [<Test>]
     let testUnescapeNormalizedStringLiteral () =
@@ -189,9 +196,6 @@ def"
             |> normalizeEndOfLine
             |> unescapeStringLiteral
             )
-
-    let removeTripleQuotes (str: string) = 
-        str.Substring(3, str.Length - 6)
 
     [<Test>]
     let testNormalizeMultiLineString () =
@@ -243,6 +247,25 @@ def"
 
                world
              "
+             |> normalizeMultiLineString
+             )
+
+        Assert.AreEqual (
+             "  hello\n    \n  world\n",
+             "
+               hello
+                 
+               world
+             "
+             |> normalizeMultiLineString
+             )
+
+        Assert.AreEqual (
+             "hello\n  \nworld",
+             "
+               hello
+                 
+               world"
              |> normalizeMultiLineString
              )
 

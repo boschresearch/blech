@@ -18,8 +18,10 @@ namespace Blech.Common
 
 
 // Blech strings follow Lua for escape codes https://www.lua.org/manual/5.4/manual.html#3.1
-// Allow '\z' like in Lua and '\<newline>' like in F#
+// Allow '\<newline>' as a line continuation
 // All end of line sequences should be normalized first
+
+
 
 module BlechChar = 
     let bla = '\n'
@@ -39,29 +41,35 @@ module BlechString =
     [<Literal>]
     let private Linefeed = "\n"
 
-    [<Literal>]
-    let private Whitespace = "[ \t]*"
+    //[<Literal>]
+    //let private Whitespace = "[ \t]*"
 
     [<Literal>]
     let private Backslash = "\\\\"
 
     [<Literal>]
-    let private Quotes = "\""
+    let private LineContinuation = Backslash + Linefeed
+
+    //[<Literal>]
+    //let private Quotes = "\""
 
     [<Literal>]
-    let private EscapeSequence = Backslash + "."  // needs RegexOptions.Singleline
+    let Escape = "\\[abfnrtv\\\'\"]"
 
-    [<Literal>]
-    let private ValidEscapeSequence = Backslash + "[" + Linefeed + Backslash + "abfnrtvz'x0-9\"]" 
+    //[<Literal>]
+    //let private EscapeSequence = Backslash + "."  // needs RegexOptions.Singleline
+
+    //[<Literal>]
+    //let private ValidEscapeSequence = Backslash + "[" + Linefeed + Backslash + "abfnrtvz'x0-9\"]" 
 
     [<Literal>]
     let private DecimalEscape = Backslash + "[0-9]{1,3}"
     
-    [<Literal>]
-    let private HexEscape = Backslash + "x[^\"\n]{0,2}"
+    //[<Literal>]
+    let private HexEscape = Backslash + "x[0-9a-fA-F]{2}"
     
-    [<Literal>]
-    let private ValidHexEscape = Backslash + "x[0-9a-fA-F]{2}"
+    //[<Literal>]
+    //let private ValidHexEscape = Backslash + "x[0-9a-fA-F]{2}"
 
     [<Literal>]
     let private UnicodeEscape = Backslash + "u\{[0-9a-fA-F]{1,}\}"
@@ -71,91 +79,151 @@ module BlechString =
    
     
 
-    let private hasNormalizedEndOfLine str = 
-        not (Regex.IsMatch(str, @"\r"))
+    //let private hasNormalizedEndOfLine str = 
+    //    not (Regex.IsMatch(str, @"\r"))
       
 
-    let isValidEscapeSequence (escSeq: string) =
-        (Regex ValidEscapeSequence).IsMatch escSeq
+    //let isValidEscapeSequence (escSeq: string) =
+    //    (Regex ValidEscapeSequence).IsMatch escSeq
 
-    let isValidHexEscape (hexEsc: string) = 
-        (Regex ValidHexEscape).IsMatch hexEsc
+    //let isValidHexEscape (hexEsc: string) = 
+    //    (Regex ValidHexEscape).IsMatch hexEsc
 
-    let decimalEscapeToInt (decEsc: string) : int = 
+   
+    let decimalEscapeToUtf32 (decEsc: string) : int = 
         let dec = decEsc.Substring(1)
         System.Int32.Parse dec
         
     let isValidDecimalEscape (decEsc: string) =
-        let dec = decimalEscapeToInt decEsc
+        let dec = decimalEscapeToUtf32 decEsc
         0 <= dec && dec <= 255
 
-    let isValidUnicodeEscape (unicodeEscape: string) =
+    let hexEscapeToUtf32 (hexEsc: string) : int =
+        let hexdigits = hexEsc.Substring 2
+        Int32.Parse (hexdigits, System.Globalization.NumberStyles.AllowHexSpecifier)
+
+    /// throws System.OverflowException if hex number is too big
+    let unicodeEscapeToUtf32 (unicodeEscape : string) : int32 =
         let hexdigits = unicodeEscape.Substring(3, unicodeEscape.Length - 4)
-        let codepoint = System.Numerics.BigInteger.Parse(hexdigits, System.Globalization.NumberStyles.HexNumber)
-        0I <= codepoint && codepoint <= System.Numerics.BigInteger MaxUnicodeCodePoint
-
-    let decimalToOctalEscape (decimal : int) =
-        assert (0 <= decimal && decimal <= 255)
-        sprintf "\\%03o" decimal  // octal with 3 digits, leading '0's if necessary
-
-    let decimalTo3DigitDecimalEscape (decimal : int) =
-        assert (0 <= decimal && decimal <= 255)
-        sprintf "\\%03d" decimal // decimal with 3 digits, leading '0's if necessary
-
-    let decimalToHexEscape (decimal : int) =
-        assert (0 <= decimal && decimal <= 255)
-        sprintf "\\x%02x" decimal // hex with 2 digits
-
-
-    let decimalToChar (decimal : int) =
-        assert (0 <= decimal && decimal <= 255)
-        string decimal
+        System.Int32.Parse(hexdigits, System.Globalization.NumberStyles.HexNumber)
+        
+    let isValidUnicodeEscape (unicodeEscape : string) =
+        try 
+            let codepoint = unicodeEscapeToUtf32 unicodeEscape
+            0 <= codepoint && codepoint <= MaxUnicodeCodePoint
+        with
+        | :? System.OverflowException ->
+            false
 
     
-    let private decimalEscapeTo3DigitDecimalEscape str = 
-        decimalEscapeToInt str
-        |> decimalTo3DigitDecimalEscape
-
-    let private decimalEscapeToOctalEscape str =
-        decimalEscapeToInt str
-        |> decimalToOctalEscape 
-
-    let private decimalEscapeToHexEscape str =
-        decimalEscapeToInt str
-        |> decimalToHexEscape 
 
 
-    let private decimalEscapesToUnicodeDecimals str =
-        let mev = MatchEvaluator (fun m -> decimalEscapeTo3DigitDecimalEscape m.Value) 
-        Regex.Replace(str, DecimalEscape, mev)
+    //let unicodeEscapeToUEscape (unicodeEscape: string) =
+    //    let codepoint = unicodeEscapeToUtf32 unicodeEscape
+    //    if codepoint < int32 System.UInt16.MaxValue then
+    //        sprintf "\\u%04x" codepoint // UTF16 representation
+    //    else
+    //        sprintf "\\U%08x" codepoint // UTF32 representation
+            
+    //let decimalToOctalEscape (decimal : int) =
+    //    assert (0 <= decimal && decimal <= 255)
+    //    sprintf "\\%03o" decimal  // octal with 3 digits, leading '0's if necessary
+
+    //let decimalTo3DigitDecimalEscape (decimal : int) =
+    //    assert (0 <= decimal && decimal <= 255)
+    //    sprintf "\\%03d" decimal // decimal with 3 digits, leading '0's if necessary
+
+    //let decimalToHexEscape (decimal : int) =
+    //    assert (0 <= decimal && decimal <= 255)
+    //    sprintf "\\x%02x" decimal // hex with 2 digits
+
+
+    //let decimalToChar (decimal : int) =
+    //    assert (0 <= decimal && decimal <= 255)
+    //    string decimal
+
+    //let private decimalEscapeTo3DigitDecimalEscape str = 
+    //    decimalEscapeToUtf32 str
+    //    |> decimalTo3DigitDecimalEscape
+
+    //let private decimalEscapeToOctalEscape str =
+    //    decimalEscapeToUtf32 str
+    //    |> decimalToOctalEscape 
+
+    //let private decimalEscapeToHexEscape str =
+    //    decimalEscapeToUtf32 str
+    //    |> decimalToHexEscape 
+
+
+    //let private decimalEscapesToUnicodeDecimals str =
+    //    let mev = MatchEvaluator (fun m -> decimalEscapeTo3DigitDecimalEscape m.Value) 
+    //    Regex.Replace(str, DecimalEscape, mev)
     
-    let private decimalEscapesToOctalEscapes str =
-        let mev = MatchEvaluator (fun m -> decimalEscapeToOctalEscape m.Value) 
-        Regex.Replace(str, DecimalEscape, mev)
+    //let private decimalEscapesToOctalEscapes str =
+    //    let mev = MatchEvaluator (fun m -> decimalEscapeToOctalEscape m.Value) 
+    //    Regex.Replace(str, DecimalEscape, mev)
     
-    let private decimalEscapesToHexEscapes str =
-        let mev = MatchEvaluator (fun m -> decimalEscapeToHexEscape m.Value) 
-        Regex.Replace(str, DecimalEscape, mev)
+    //let private decimalEscapesToHexEscapes str =
+    //    let mev = MatchEvaluator (fun m -> decimalEscapeToHexEscape m.Value) 
+    //    Regex.Replace(str, DecimalEscape, mev)
 
-
-
+    //let private unicodeEscapesToUTFEscapes str = 
+    //    let mev = MatchEvaluator (fun m -> unicodeEscapeToUEscape m.Value) 
+    //    Regex.Replace(str, UnicodeEscape, mev)
     
-    /// Normalize a string literal from the lexer
+
+    ///
+
+    let escapeToString (esc: string) : string = 
+           Regex.Unescape esc
+
+    let decimalEscapeToString (decEsc : string) : string = 
+        decimalEscapeToUtf32 decEsc
+        |> Char.ConvertFromUtf32
+
+    let hexEscapeToString (hexEsc : string) : string =
+        hexEscapeToUtf32 hexEsc
+        |> Char.ConvertFromUtf32
+
+    let unicodeEscapeToString (uniEsc : string) : string =
+        unicodeEscapeToUtf32 uniEsc
+        |> Char.ConvertFromUtf32
 
     /// This function replaces any end of line sequence by linefeed '\n'.
     let normalizeEndOfLine str =
         Regex.Replace(str, EndOfLine, Linefeed)
 
-    let removeLineContinuations str = 
-        Regex.Replace(str, Backslash + Linefeed, "")
+    /// This function removes line continuation in strings. 
+    /// It assumes, that end of line is normalized to line feed
+    let replaceLineContinuations blechString = 
+        Regex.Replace(blechString, LineContinuation, "")
 
-    let unescapeStringLiteral str =
+    let replaceEscapes blechString = 
+        let mev = MatchEvaluator (fun m -> escapeToString m.Value) 
+        Regex.Replace(blechString, Escape, mev)
+    
+    let replaceDecimalEscapes blechString = 
+        let mev = MatchEvaluator (fun m -> decimalEscapeToString m.Value) 
+        Regex.Replace(blechString, DecimalEscape, mev)
+        
+    let replaceHexEscapes blechString = 
+        let mev = MatchEvaluator (fun m -> hexEscapeToString m.Value) 
+        Regex.Replace(blechString, HexEscape, mev)
+    
+    let replaceUnicodeEscapes blechString = 
+        let mev = MatchEvaluator (fun m -> unicodeEscapeToString m.Value) 
+        Regex.Replace(blechString, HexEscape, mev)
+    
+    /// Normalize a string literal from the lexer
+
+
+    let unescapeStringLiteral blechString =
         // given a normalized Blech string with valid escapes sequences
-        removeLineContinuations str
-        // |> decimalEscapesToOctalEscapes   // both are possible
-        |> decimalEscapesToHexEscapes
-        // Regex.Unescape does the job to replace escape sequences
-        |> Regex.Unescape
+        replaceLineContinuations blechString
+        |> replaceEscapes
+        |> replaceDecimalEscapes
+        |> replaceHexEscapes
+        |> replaceUnicodeEscapes
 
     //let removeQuotes (str : string) = 
     //    str.Substring (1, str.Length - 2)
@@ -209,7 +277,7 @@ module BlechString =
     [<Literal>]
     let private Indentation = TabIndentation + Spaces
     [<Literal>]
-    let private WhitespaceOnly = "^\s*$" // only whitespace 
+    let private WhitespaceOnly = "^\s*$"
     
     //// returns true for unbalanced tab indentation and the common indentation
     //let checkMultiLineStringIndentation (mlstr : string) : bool * string =
@@ -252,12 +320,14 @@ module BlechString =
             
     //        (unbalancedTabIndent, Option.defaultValue NoIndent commonIndent)
 
+    let isWhitespaceLine line = 
+        Regex.IsMatch(line, WhitespaceOnly)
  
     let isEmptyLine line = 
-        Regex.IsMatch(line, WhitespaceOnly)
+        String.Empty = line
 
-    let getExtraWhitespaceLength line =
-        Regex.Match(line, WhitespaceOnly).Length
+    //let getExtraWhitespaceLength line =
+    //    Regex.Match(line, WhitespaceOnly).Length
 
     let getTabIndentation line = 
         Regex.Match(line, TabIndentation).Length
@@ -265,57 +335,59 @@ module BlechString =
     let getIndentation line = 
         Regex.Match(line, Indentation).Length
 
-    let findUnbalancedTabIndentation (lines: string seq) =
+    let findUnbalancedTabIndentations (lines: string seq) =
         let mutable tabIndent = None
         let unbalancedTabIndents = 
-            seq { for i, line in Seq.indexed lines do
-                    if i = 0 then 
-                        yield None
-                    elif isEmptyLine line then 
-                        yield None 
-                    else 
+            seq { for i, line in Seq.indexed <| Seq.tail lines do  // The first line cannot contain tabs due to the lexer
+                    if not (isEmptyLine line) then // a empty line is always balanced
                         let lineTabIndent = getTabIndentation line
-                        if Option.isNone tabIndent then
-                            tabIndent <- Some lineTabIndent // the first tab indentation defines the standard 
-                            yield None
-                        elif lineTabIndent = Option.get tabIndent then
-                            yield None
-                        else
-                            yield Some lineTabIndent }
+                        if Option.isNone <| tabIndent then
+                            tabIndent <- Some (i, lineTabIndent) // the first tab indentation defines the standard 
+                            // yield i, None
+                        elif lineTabIndent <> snd (Option.get tabIndent) then
+                            // yield i, None
+                        //else
+                            yield i, lineTabIndent }
         (tabIndent, unbalancedTabIndents)
 
-    let findExtraWhitespace (lines : string seq) =
-        seq { for i, line in Seq.indexed lines do
-                if i > 1 && i = Seq.length lines - 1 then 
-                    // the last of 2 or more lines may contain extra whitespace
-                    yield None
-                else
-                    let wsLen = getExtraWhitespaceLength line 
-                    if wsLen = 0 then
-                        yield None
-                    else
-                        yield Some wsLen }
+    //let findExtraWhitespace (lines : string seq) =
+    //    seq { for i, line in Seq.indexed lines do
+    //            if i > 1 && i = Seq.length lines - 1 then 
+    //                // the last of 2 or more lines may contain extra whitespace
+    //                yield None
+    //            else
+    //                let wsLen = getExtraWhitespaceLength line 
+    //                if wsLen = 0 then
+    //                    yield None
+    //                else
+    //                    yield Some wsLen }
 
     // assumes balanced tab indentation and no extra whitespace in empty lines
     let getCommonIndentation (lines: string seq) = 
         let mutable commonIndent = None
-        for line in Seq.tail lines do    // the first line is not relevant
-            if line <> String.Empty then // an empty line is not relevant
-                let indent = getIndentation line
-                if Option.isNone commonIndent then // first defining indentation
-                    commonIndent <- Some indent
-                elif indent < Option.get commonIndent then
-                    commonIndent <- Some indent
+        for i, line in Seq.indexed lines do    
+            if i > 0 then                               // the first line is not relevant
+                if i = Seq.length lines - 1 ||          // the last line is always relevant
+                   not (isWhitespaceLine line)  then    // whitespace lines are not relevant
+                    let indent = getIndentation line
+                    if Option.isNone commonIndent then  // first defining indentation
+                        commonIndent <- Some indent
+                    elif indent < Option.get commonIndent then
+                        commonIndent <- Some indent
         
         Option.defaultValue 0 commonIndent
 
-        
+    let tabIndentationRange (mlsRange : Range.range) (line, tabs) =
+        let l = mlsRange.StartLine + line
+        Range.range (mlsRange.FileIndex, l, 0, l, tabs)
+
     let splitMultiLineString (mlstr: string) =
         mlstr.Split Linefeed
 
     let checkMultiLineString (mlstr: string) =
         normalizeEndOfLine mlstr
         |> splitMultiLineString
+        |> findUnbalancedTabIndentations
 
 
     // Asserts that the line starting with """ must is excluded
@@ -340,17 +412,20 @@ module BlechString =
     //    | _ -> 
     //        ""
     
-    
+    let dedentLine (line : string) n = 
+        try
+            line.Substring n
+        with
+        | :? System.ArgumentOutOfRangeException -> 
+            String.Empty
+
     let dedentLines (lines: string seq) = 
         let n = getCommonIndentation lines
-        printfn "Dendent: %d" n
         seq { for i, line in Seq.indexed lines do
-                printfn "line %d :%s<<" i line
                 if i = 0 then // first line 
                     yield line
-                elif line.Length = 0 then // empty line
-                    yield line
-                else yield line.Substring n }
+                else 
+                    yield dedentLine line n }
 
     let private dedentMultiLineString (mlstr : string) =
         String.split Linefeed mlstr
@@ -366,7 +441,7 @@ module BlechString =
     //    |> dedentTripleQuotedString
     //    |> stripNewlineAfterTripleQuotes
 
-    /// Normalize a triple-quoted ("""...""") string literal from the lexer
+    /// Normalize a multi-line string literal from the lexer
     let normalizeMultiLineString str =
         normalizeEndOfLine str
         |> dedentMultiLineString
