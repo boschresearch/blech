@@ -72,14 +72,16 @@ let linecontinuation = '\\' endofline
 
 let unicodelineending = ['\u0085' '\u2028' '\u2029'] // generally invalid
 
-let stringchar = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
+let stringcharacter = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
+
+let charcharacter = [^ '\\' '\'' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only
 
 let escape = '\\' ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '\'' '\"']
 let hexescape = '\\' 'x' hexdigit hexdigit
 let decimalescape = '\\' digit digit? digit?
 let unicodeescape = '\\' 'u' '{' hexdigit+ '}'
 
-let stringitem = stringchar | escape | hexescape
+// let stringitem = stringcharacter | escape | hexescape
 
 let triplequotes = "\"\"\""
 let quotes = '"' '"'?
@@ -89,6 +91,7 @@ let charitem = characterchar | escape | hexescape
 let characterliteral = '\'' charitem '\''
 
 let identifier = '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
+let wildcard = '_'+
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
@@ -107,7 +110,8 @@ rule Token = parse
     | ' '                   { Token lexbuf }
 
     | '\t'+                 { // tabs for identation at the start of a line are allowed
-                              if lexbuf.StartPos.Column > 0 then tabularUsed lexbuf else ()
+                              if lexbuf.StartPos.Column > 0 then 
+                                tabularUsed lexbuf
                               Token lexbuf }
     
     | "/*"                  { commentDepth <- 1; 
@@ -121,7 +125,7 @@ rule Token = parse
     | '"'                   { tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
                               CollectSingleLineString lexbuf }
 
-    | triplequotes          { tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
+    | triplequotes          { tokenBuilder <- tokenBuilder.Init (openMultiLineString lexbuf)
                               CollectMultiLineString lexbuf }
 
     (* ---- doc comments ---- *)
@@ -346,7 +350,7 @@ rule Token = parse
 
     | identifier            { ID (getLexemeAndRange lexbuf) }
 
-    | '_'+                  { WILDCARD (getLexemeAndRange lexbuf) }
+    | wildcard              { WILDCARD (getLexemeAndRange lexbuf) }
 
     (* --------- end of file and invalid source code characters  --------- *)
 
@@ -387,6 +391,7 @@ and SkipBlockComment = parse
 
 and SkipLineComment = parse
     | chunkwithoutnewline   { Token lexbuf }
+
 
 and SkipLineOnError = parse
     | endofline             { let eol = EOL (getRange lexbuf) in
@@ -430,24 +435,32 @@ and CollectBlockDoc = parse
 
 and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decimal and unicode escapes, utf8endofline, ascii control chars to lexer, fjg. 18.08.20
 
-    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf) // '\'<endofline> removed after indentation handling
+    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(handleLineContinuation lexbuf) // '\'<endofline> removed after indentation handling
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectSingleLineString lexbuf }
 
-    | endofline             { let lxm, rng = getLexemeAndRange lexbuf
-                              eolInSingleLineString rng
-                              tokenBuilder <- tokenBuilder.Append (lxm, rng)
+    | endofline             { // let lxm, rng = getLexemeAndRange lexbuf
+                              // eolInSingleLineString rng
+                              tokenBuilder <- tokenBuilder.Append (handleEolInSingleLineString lexbuf)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectSingleLineString lexbuf }
 
     | '\t'                  { // tabs are not allowed in strings
-                              tabularUsed lexbuf
+                              tokenBuilder <- tokenBuilder.Append (handleTabInSingleLineString lexbuf)
                               CollectSingleLineString lexbuf }
 
     | unicodelineending     { unknownToken lexbuf;
                               CollectSingleLineString lexbuf }
 
     | '"'                   { STRING (tokenBuilder.Token) }
+
+    | escape
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectSingleLineString lexbuf }
+    
+    | hexescape
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectSingleLineString lexbuf }
 
     | decimalescape         { let decEsc = getLexemeAndRange lexbuf
                               checkDecimalEscape decEsc
@@ -459,8 +472,7 @@ and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decima
                               tokenBuilder <- tokenBuilder.Append uniEsc
                               CollectSingleLineString lexbuf }
         
-    | stringitem
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | stringcharacter       { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectSingleLineString lexbuf }
         
 
@@ -470,18 +482,19 @@ and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decima
     | _                     { unknownToken lexbuf; 
                               CollectSingleLineString lexbuf }
 
+
 and CollectMultiLineString = parse
 
     | linecontinuation      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf) // '\'<endofline> removed after indentation handling
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectMultiLineString lexbuf }
 
-    | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | endofline             { tokenBuilder <- tokenBuilder.Append(handleEolInMultiLineString lexbuf)
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
                               CollectMultiLineString lexbuf }
 
     | '\t'+                 { // tabs for identation at the start of a line are allowed in multi-line strings
-                              if lexbuf.StartPos.Column > 0 then tabularUsed lexbuf else ()
+                              tokenBuilder <- tokenBuilder.Append(handleTabInMultiLineString lexbuf)
                               CollectMultiLineString lexbuf }
 
     | unicodelineending     { unknownToken lexbuf; 
@@ -489,6 +502,14 @@ and CollectMultiLineString = parse
     
     | triplequotes          { MULTILINESTRING (tokenBuilder.Token) }    
 
+    | escape
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectMultiLineString lexbuf }
+    
+    | hexescape
+                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+                              CollectMultiLineString lexbuf }
+    
     | decimalescape         { let decEsc = getLexemeAndRange lexbuf
                               checkDecimalEscape decEsc
                               tokenBuilder <- tokenBuilder.Append decEsc
@@ -498,9 +519,8 @@ and CollectMultiLineString = parse
                               checkUnicodeEscape uniEsc
                               tokenBuilder <- tokenBuilder.Append uniEsc
                               CollectMultiLineString lexbuf }
-        
-    | stringitem
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+
+    | stringcharacter       { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
                               CollectMultiLineString lexbuf }
     
     | quotes                { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)

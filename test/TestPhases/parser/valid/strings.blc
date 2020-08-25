@@ -1,21 +1,22 @@
-@[CFunction (binding = "hello \n lovely w\"orld", header= "bla.h")]
-extern function invalidEscape(x: bool)
+// @[CFunction (binding = "hello tab	 \n asdf
+// lovely w\"orld", header= "bla.h")]
+// extern function invalidEscape(x: bool)
 
 @[CFunction (binding = "hello \255 \\ bla\
-world\2" , header= "bla.h")]
+ world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
-@[CFunction (binding = "hello \x9a \
- worl\xAFd \0 \92 \
+@[CFunction (binding = "hello \x9a continuation\
+ worl\xAFd \0 \92 continuation\
  bla" , header= "bla.h")]
 extern function invalidHex()
 
 @[CFunction (binding = """
-                       printf("%d", $1);
-                         blafasel;
-
-                       fasel \xAF bla
-                       """, 
+		               printf("%d", $1);
+		                 blafasel;
+		        
+		               fasel \xAF bla
+		               """, 
              header= "blah.h")]
 extern function tripleQuoteBinding (x: int32)
 

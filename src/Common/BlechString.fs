@@ -39,7 +39,7 @@ module BlechString =
     let private EndOfLine = "(\n\r|\r\n|\r|\n)"
 
     [<Literal>]
-    let private Linefeed = "\n"
+    let Linefeed = "\n"
 
     //[<Literal>]
     //let private Whitespace = "[ \t]*"
@@ -329,25 +329,30 @@ module BlechString =
     //let getExtraWhitespaceLength line =
     //    Regex.Match(line, WhitespaceOnly).Length
 
-    let getTabIndentation line = 
-        Regex.Match(line, TabIndentation).Length
+    //let getTabIndentation line = 
+    //    Regex.Match(line, TabIndentation).Length    //let getTabIndentation line = 
+    //    Regex.Match(line, TabIndentation).Length
 
     let getIndentation line = 
-        Regex.Match(line, Indentation).Length
+        Regex.Match(line, Indentation).Value
 
-    type private TabIndent = int * int // line_number * tabs_count
-
-    let findUnbalancedTabIndentations (lines: string list) : TabIndent option * TabIndent list =
-        let mutable tabIndent = None
-        let unbalancedTabIndents =
+    let findUnbalancedIndentations (lines: string list) =
+        let mutable indent = None
+        let unbalancedIndents =
             [ for i, line in List.indexed lines do  // The first line cannot contain tabs due to the lexer
                 if i > 0 && not (isEmptyLine line) then // an empty line is always balanced
-                    let lineTabIndent = getTabIndentation line
-                    if Option.isNone tabIndent then
-                        tabIndent <- Some (i, lineTabIndent) // the first tab indentation defines the standard 
-                    elif lineTabIndent <> snd (Option.get tabIndent) then
-                        yield i, lineTabIndent ]
-        (tabIndent, unbalancedTabIndents)
+                    let lineIndent = getIndentation line
+                    if Option.isNone indent then
+                        indent <- Some (i, lineIndent) // the first tab indentation defines the standard
+                    else 
+                        let _, tabsAndSpaces = Option.get indent
+                        if lineIndent.StartsWith tabsAndSpaces then
+                            () // Ok
+                        elif tabsAndSpaces.StartsWith lineIndent then
+                            indent <- Some (i, lineIndent)
+                        else
+                            yield i, lineIndent ]  //TabIndent ]
+        (indent, unbalancedIndents)
 
     //let findExtraWhitespace (lines : string seq) =
     //    seq { for i, line in Seq.indexed lines do
@@ -366,19 +371,19 @@ module BlechString =
         let mutable commonIndent = None
         for i, line in List.indexed lines do
             if i > 0 then                               // the first line is not relevant
-                if i = List.length lines - 1 ||          // the last line is always relevant
+                if i = List.length lines - 1 ||         // the last line is always relevant
                    not (isWhitespaceLine line)  then    // whitespace lines are not relevant
                     let indent = getIndentation line
                     if Option.isNone commonIndent then  // first defining indentation
                         commonIndent <- Some indent
-                    elif indent < Option.get commonIndent then
+                    elif (Option.get commonIndent).StartsWith indent then
                         commonIndent <- Some indent
         
-        Option.defaultValue 0 commonIndent
+        Option.defaultValue "" commonIndent
 
-    let tabIndentationRange (mlsRange : Range.range) (line, tabs) =
+    let indentationRange (mlsRange : Range.range) (line, indent) =
         let l = mlsRange.StartLine + line
-        Range.range (mlsRange.FileIndex, l, 1, l, tabs)
+        Range.range (mlsRange.FileIndex, l, 1, l, String.length indent)
 
     let splitMultiLineString (mlstr: string) =
         List.ofArray <| mlstr.Split Linefeed
@@ -387,7 +392,7 @@ module BlechString =
         normalizeEndOfLine mlstr
         |> fun s -> printfn "mlstring:%s" mlstr; s
         |> splitMultiLineString
-        |> findUnbalancedTabIndentations
+        |> findUnbalancedIndentations
 
 
     // Asserts that the line starting with """ must is excluded
@@ -420,7 +425,7 @@ module BlechString =
             String.Empty
 
     let private dedentLines (lines: string list) = 
-        let n = getCommonIndentation lines
+        let n = String.length <| getCommonIndentation lines
         [ for i, line in List.indexed lines do
             if i = 0 then // first line 
                 yield line

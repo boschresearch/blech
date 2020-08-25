@@ -1500,7 +1500,7 @@ AttributeLiteral
                                                                 // |> BlechString.unescapeStringLiteral
                                                   Literal.String (str, snd $1) }
 
-    | MULTILINESTRING                           { let str = if checkTabIndentations $1 then 
+    | MULTILINESTRING                           { let str = if checkIndentations $1 then 
                                                                 fst $1
                                                                 |> BlechString.normalizeMultiLineString
                                                                 // |> BlechString.unescapeStringLiteral

@@ -41,7 +41,7 @@ module SyntaxErrors =
         | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
         | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
         
-        | UnbalancedTabIndentation of tabIndent: Range.range * unbalanced: Range.range
+        | UnbalancedIndentation of indent: Range.range * unbalanced: Range.range
 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -90,9 +90,9 @@ module SyntaxErrors =
                     { range = range
                       message =sprintf "invalid hexadecimal escape '%s'." value }    
 
-                | UnbalancedTabIndentation (tabIndent, unbalanced) ->
+                | UnbalancedIndentation (indent, unbalanced) ->
                     { range = unbalanced 
-                      message = "unbalanced tab indentation in multi-line string."}
+                      message = "unbalanced indentation in multi-line string."}
 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
@@ -112,9 +112,9 @@ module SyntaxErrors =
                 | DecimalEscapeTooLarge (_, _, escRng) ->
                     [ { range = escRng; message = "too large"; isPrimary = true} ]
                 
-                | UnbalancedTabIndentation (tabIndent, unbalanced) ->
-                    [ { range = tabIndent; message = "given tabs"; isPrimary = false }
-                      { range = unbalanced; message = "unbalanced tabs"; isPrimary = true } ] 
+                | UnbalancedIndentation (indent, unbalanced) ->
+                    [ { range = indent; message = "given indent"; isPrimary = false }
+                      { range = unbalanced; message = "unbalanced indent"; isPrimary = true } ] 
 
                 | _ ->
                     []
@@ -163,9 +163,9 @@ module SyntaxErrors =
                 | InvalidHexEscape _ ->
                     [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
                       @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
-                | UnbalancedTabIndentation _ ->
-                    [ "All lines in a multi-line string must use the same amount of tab '\t' indentation." 
-                      "Tabs can only be used for indentation at the start of a new line." ]
+                | UnbalancedIndentation _ ->
+                    [ @"All lines in a multi-line string must start with the same amount of tab '\t' indentation." 
+                      @"Tabs can only be used for indentation at the start of a new line." ]
 
                 | _  ->
                     []
@@ -233,7 +233,9 @@ module SyntaxErrors =
             member err.NoteInformation = 
                 match err with
                 | TabularUsed _ ->
-                    [ "Insert spaces, tabs are not allowed in Blech source code." ]
+                    [ "Tabs are only allowed for indentation. Otherwise:"
+                      "Use spaces in source code."
+                      "Use '\\t' in character and string literals." ]
                 | UnknownToken _ ->
                     [ "Non-ASCII characters are not allowed in Blech source code." ]
                 | NotAPath _ ->
@@ -523,21 +525,21 @@ module ParserUtils =
     //    slstr
 
     /// checks balanced tab indentation in multi-line string literals
-    let checkTabIndentations (multiLineString: string, rng: Range.range) = 
-        let reportUnbalancedTabIndentations tabindent unbalancedTabIndents =
-            [ for uti in unbalancedTabIndents ->
-                UnbalancedTabIndentation (BlechString.tabIndentationRange rng <| Option.get tabindent, 
-                                          BlechString.tabIndentationRange rng uti) ]
+    let checkIndentations (multiLineString: string, rng: Range.range) = 
+        let reportUnbalancedIndentations indent unbalancedIndents =
+            [ for ubi in unbalancedIndents ->
+                UnbalancedIndentation ( BlechString.indentationRange rng <| Option.get indent, 
+                                        BlechString.indentationRange rng ubi )]
             |> List.map reportError 
 
         BlechString.normalizeEndOfLine multiLineString
         |> BlechString.splitMultiLineString
-        |> BlechString.findUnbalancedTabIndentations
-        |> fun (tabIndent, unbalancedTabIndents) -> 
-                if List.isEmpty unbalancedTabIndents then 
+        |> BlechString.findUnbalancedIndentations
+        |> fun (indent, unbalancedIndents) -> 
+                if List.isEmpty unbalancedIndents then 
                     true
                 else
-                    ignore <| reportUnbalancedTabIndentations tabIndent unbalancedTabIndents
+                    ignore <| reportUnbalancedIndentations indent unbalancedIndents
                     false
         
         // let str = BlechString.normalizeEndOfLine strlit
@@ -629,6 +631,7 @@ module LexerUtils =
     open Blech.Common
 
     open SyntaxErrors
+    open System
     open System.Text
 
     /// Allows for collecting a doc strings, strings, and triple quoted strings and their range
@@ -663,7 +666,7 @@ module LexerUtils =
     let mutable commentDepth = 0
 
     let mutable tokenBuilder = TokenBuilder()
-   
+    let mutable tabIndent : (Range.range * int) option = None   // 
     
 
     let getLexeme (lexbuf: LexBuffer<char>) = 
@@ -729,3 +732,42 @@ module LexerUtils =
     let eolInSingleLineString rng = 
         reportError <| EolInSingleLineString rng
 
+    //--- strings
+    
+    let openMultiLineString lexbuf =
+        tabIndent <- None // Reset tab indentation 
+        getRange lexbuf
+        
+
+    let handleLineContinuation (lexbuf : LexBuffer<char>) =
+        (String.Empty, getRange lexbuf)
+
+
+    let handleEolInSingleLineString (lexbuf : LexBuffer<char>) =
+        let lxm, rng = getLexemeAndRange lexbuf
+        reportError <| EolInSingleLineString rng
+        (lxm, rng)
+
+
+    let handleEolInMultiLineString (lexbuf: LexBuffer<char>) =
+        (BlechString.Linefeed, getRange lexbuf)
+
+
+    let handleTabInSingleLineString (lexbuf : LexBuffer<char>) =
+        let lxm, rng = getLexemeAndRange lexbuf
+        reportError <| TabularUsed rng
+        (lxm, rng)
+
+
+    let handleTabInMultiLineString (lexbuf : LexBuffer<char>) =
+        let lxm, rng = getLexemeAndRange lexbuf
+        if lexbuf.StartPos.Column > 0 then
+            reportError <| TabularUsed rng
+        (lxm, rng)
+        //elif Option.isNone tabIndent then            
+        //    tabIndent <- Some (rng, lxm.Length) // define tab indentation
+        //else
+        //    let there, len = Option.get tabIndent
+        //    if len <> lxm.Length then  // check tab indentation
+        //        reportError <| UnbalancedTabIndentation (there, rng)
+        //(lxm, rng)
