@@ -1,4 +1,4 @@
-// Copyright (c) 2019 - for information on the respective copyright owner
+// Copyright (c) 2020 - for information on the respective copyright owner
 // see the NOTICE file and/or the repository 
 // https://github.com/boschresearch/blech.
 //
@@ -335,19 +335,18 @@ module BlechString =
     let getIndentation line = 
         Regex.Match(line, Indentation).Length
 
-    let findUnbalancedTabIndentations (lines: string seq) =
+    type private TabIndent = int * int // line_number * tabs_count
+
+    let findUnbalancedTabIndentations (lines: string list) : TabIndent option * TabIndent list =
         let mutable tabIndent = None
-        let unbalancedTabIndents = 
-            seq { for i, line in Seq.indexed <| Seq.tail lines do  // The first line cannot contain tabs due to the lexer
-                    if not (isEmptyLine line) then // a empty line is always balanced
-                        let lineTabIndent = getTabIndentation line
-                        if Option.isNone <| tabIndent then
-                            tabIndent <- Some (i, lineTabIndent) // the first tab indentation defines the standard 
-                            // yield i, None
-                        elif lineTabIndent <> snd (Option.get tabIndent) then
-                            // yield i, None
-                        //else
-                            yield i, lineTabIndent }
+        let unbalancedTabIndents =
+            [ for i, line in List.indexed lines do  // The first line cannot contain tabs due to the lexer
+                if i > 0 && not (isEmptyLine line) then // an empty line is always balanced
+                    let lineTabIndent = getTabIndentation line
+                    if Option.isNone tabIndent then
+                        tabIndent <- Some (i, lineTabIndent) // the first tab indentation defines the standard 
+                    elif lineTabIndent <> snd (Option.get tabIndent) then
+                        yield i, lineTabIndent ]
         (tabIndent, unbalancedTabIndents)
 
     //let findExtraWhitespace (lines : string seq) =
@@ -363,11 +362,11 @@ module BlechString =
     //                    yield Some wsLen }
 
     // assumes balanced tab indentation and no extra whitespace in empty lines
-    let getCommonIndentation (lines: string seq) = 
+    let getCommonIndentation (lines: string list) = 
         let mutable commonIndent = None
-        for i, line in Seq.indexed lines do    
+        for i, line in List.indexed lines do
             if i > 0 then                               // the first line is not relevant
-                if i = Seq.length lines - 1 ||          // the last line is always relevant
+                if i = List.length lines - 1 ||          // the last line is always relevant
                    not (isWhitespaceLine line)  then    // whitespace lines are not relevant
                     let indent = getIndentation line
                     if Option.isNone commonIndent then  // first defining indentation
@@ -379,13 +378,14 @@ module BlechString =
 
     let tabIndentationRange (mlsRange : Range.range) (line, tabs) =
         let l = mlsRange.StartLine + line
-        Range.range (mlsRange.FileIndex, l, 0, l, tabs)
+        Range.range (mlsRange.FileIndex, l, 1, l, tabs)
 
     let splitMultiLineString (mlstr: string) =
-        mlstr.Split Linefeed
+        List.ofArray <| mlstr.Split Linefeed
 
     let checkMultiLineString (mlstr: string) =
         normalizeEndOfLine mlstr
+        |> fun s -> printfn "mlstring:%s" mlstr; s
         |> splitMultiLineString
         |> findUnbalancedTabIndentations
 
@@ -412,23 +412,23 @@ module BlechString =
     //    | _ -> 
     //        ""
     
-    let dedentLine (line : string) n = 
+    let private dedentLine (line : string) n = 
         try
             line.Substring n
         with
         | :? System.ArgumentOutOfRangeException -> 
             String.Empty
 
-    let dedentLines (lines: string seq) = 
+    let private dedentLines (lines: string list) = 
         let n = getCommonIndentation lines
-        seq { for i, line in Seq.indexed lines do
-                if i = 0 then // first line 
-                    yield line
-                else 
-                    yield dedentLine line n }
+        [ for i, line in List.indexed lines do
+            if i = 0 then // first line 
+                yield line
+            else 
+                yield dedentLine line n ]
 
     let private dedentMultiLineString (mlstr : string) =
-        String.split Linefeed mlstr
+        splitMultiLineString mlstr //  String.split Linefeed mlstr
         |> dedentLines
         |> String.concat Linefeed
 
@@ -442,8 +442,8 @@ module BlechString =
     //    |> stripNewlineAfterTripleQuotes
 
     /// Normalize a multi-line string literal from the lexer
-    let normalizeMultiLineString str =
-        normalizeEndOfLine str
+    let normalizeMultiLineString mlstr =
+        normalizeEndOfLine mlstr
         |> dedentMultiLineString
         |> removeEmptyFirstLine
 

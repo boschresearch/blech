@@ -132,26 +132,41 @@ def"
     let s3 = @"hello \xAG world"
     let s4 = @"hello \255 world"
  
-    //[<Test>]
-    //let testInvalidCharacterEscape () =
-    //    Assert.IsNotEmpty (getInvalidEscapeSequences s1)
-    //    Assert.IsEmpty (getInvalidEscapeSequences s2)
-    //    Assert.IsEmpty (getInvalidEscapeSequences s3)
-    //    Assert.IsEmpty (getInvalidEscapeSequences s4)
-    //    Assert.IsNotEmpty (
-    //        // blanks ' ' after backslash '\\' 
-    //        "abc\\   
-    //        def"
-    //        |> normalizeEndOfLine
-    //        |> getInvalidEscapeSequences
-    //        )
-    //    Assert.IsEmpty (
-    //        // end of line after backslash '\\'
-    //        "abc\\
-    //        def"
-    //        |> normalizeEndOfLine
-    //        |> getInvalidEscapeSequences
-    //        )
+    [<Test>]
+    let testCheckMultiLineString () =
+        Assert.AreEqual(
+            List.Empty,
+            "\nHello\n world"           
+            |> checkMultiLineString
+            |> snd
+            )
+        Assert.AreEqual(
+            List.Empty,
+            "\n\tHello\n\t world"           
+            |> checkMultiLineString
+            |> snd
+            )
+
+        Assert.AreEqual(
+            List.Empty,
+            "\n\tHello\n\n\t world"           
+            |> checkMultiLineString
+            |> snd
+            )
+
+        Assert.AreEqual(
+            [(2, 0)],
+                ("\n\tHello\n \n\t world"    // unbalanced white space line a tab is missing    
+                |> checkMultiLineString
+                |> snd)
+            )
+
+        Assert.AreNotEqual(
+            List.Empty,
+            "\n\tHello\n\t\t world"           
+            |> checkMultiLineString
+            |> snd
+            )
 
     //[<Test>]
     //let testInvalidDecimalEscape () =

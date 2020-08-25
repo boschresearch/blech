@@ -534,7 +534,7 @@ module ParserUtils =
         |> BlechString.splitMultiLineString
         |> BlechString.findUnbalancedTabIndentations
         |> fun (tabIndent, unbalancedTabIndents) -> 
-                if Seq.isEmpty unbalancedTabIndents then 
+                if List.isEmpty unbalancedTabIndents then 
                     true
                 else
                     ignore <| reportUnbalancedTabIndentations tabIndent unbalancedTabIndents

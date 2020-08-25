@@ -66,9 +66,10 @@ module String =
     /// converts a list of chars to a string
     let implode chars = System.String (List.toArray chars)
 
-    /// splits a string into an array of strings that were separated by the given char
-    let split (seperator: string) (s:string) : seq<string> =
-        seq <| s.Split seperator
+
+    /// splits a string into an sequence of strings that were separated by the given separator string
+    //let split (seperator: string) (s:string) : seq<string> =
+    //    seq <| s.Split seperator
     
     
     /// replace single characters in a string by another string
