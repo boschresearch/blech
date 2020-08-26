@@ -17,14 +17,7 @@
 namespace Blech.Common.Tests
 
 open NUnit.Framework
-open Blech.Common
 open Blech.Common.BlechString // system under test
-
-module Literals =
-    [<Literal>]
-    let s = "abc
-def"
-
 
 [<TestFixture>]
 module BlechStringTest=
@@ -51,48 +44,6 @@ def"
             "abc\n            def"
             )
 
-//    [<Test>]
-//    let testRemoveBackslashNewlineWhitespace () =
-//        Assert.AreEqual (
-//            "abc\
-//def"
-//            |> normalizeEndOfLine 
-//            |> removeBackslashNewlineWhitespace, 
-//            "abcdef"
-//            )
-
-//        Assert.AreEqual (
-//            "abc\
-//             def"
-//            |> normalizeEndOfLine 
-//            |> removeBackslashNewlineWhitespace, 
-//            "abcdef"
-//            )
-
-//        Assert.AreNotEqual (
-//            // Invisible chars are the danger of this notation
-//            "abc\   
-//             def"
-//            |> normalizeEndOfLine 
-//            |> removeBackslashNewlineWhitespace, 
-//            "abcdef"
-//            )
-
-
-//        Assert.AreEqual (
-//            "abc
-//def"
-//            |>  normalizeEndOfLine
-//            |> removeBackslashNewlineWhitespace, 
-//            "abc\ndef"
-//            )
-//        Assert.AreEqual (
-//            "abc
-//            def" 
-//            |> normalizeEndOfLine
-//            |> removeBackslashNewlineWhitespace, 
-//            "abc\n            def"
-//            )
 
     [<Test>]
     let testRemoveLineContinuations () =
@@ -100,21 +51,21 @@ def"
             "abcdef",
             "abc\092\013\010def"
             |> normalizeEndOfLine 
-            |> replaceLineContinuations
+            |> removeLineContinuations
             )
 
         Assert.AreEqual (
             "abcdef",
             "abc\\\r\ndef"
             |> normalizeEndOfLine 
-            |> replaceLineContinuations
+            |> removeLineContinuations
             )
 
         Assert.AreEqual (
             "abc    def",
             "abc\092\013\010    def"
             |> normalizeEndOfLine 
-            |> replaceLineContinuations
+            |> removeLineContinuations
             )
 
         Assert.AreEqual (
@@ -122,7 +73,7 @@ def"
             @"abc\
     def"
             |> normalizeEndOfLine 
-            |> replaceLineContinuations
+            |> removeLineContinuations
             )
 
     
@@ -133,94 +84,78 @@ def"
     let s4 = @"hello \255 world"
  
     [<Test>]
-    let testCheckMultiLineString () =
+    let testFindUnbalancedIndentations () =
         Assert.AreEqual(
             List.Empty,
-            "\nHello\n world"           
-            |> checkMultiLineString
+            "\nHello\n world"
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
             |> snd
             )
         Assert.AreEqual(
             List.Empty,
             "\n\tHello\n\t world"           
-            |> checkMultiLineString
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
             |> snd
             )
 
         Assert.AreEqual(
             List.Empty,
             "\n\tHello\n\n\t world"           
-            |> checkMultiLineString
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
             |> snd
             )
 
         Assert.AreEqual(
-            [(2, 0)],
+            [(2, " ")],
                 ("\n\tHello\n \n\t world"    // unbalanced white space line a tab is missing    
-                |> checkMultiLineString
+                |> splitMultiLineString
+                |> findUnbalancedIndentations
                 |> snd)
             )
-
-        Assert.AreNotEqual(
-            List.Empty,
-            "\n\tHello\n\t\t world"           
-            |> checkMultiLineString
+        
+        printfn "Critical"
+        
+        Assert.AreEqual(
+            [(2, "\t ")],
+            "\n\t\tHello\n\t world"
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
             |> snd
             )
 
-    //[<Test>]
-    //let testInvalidDecimalEscape () =
-    //    Assert.IsEmpty (getInvalidDecimalEscapes s1)
+        Assert.AreEqual(
+            [(2, "\t\t ")],
+            "\n\tHello\n\t\t world"
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
+            |> snd
+            )
 
-    //    Assert.IsNotEmpty (getInvalidDecimalEscapes s2)
-    //    Assert.IsEmpty (getInvalidDecimalEscapes s3)
+        Assert.AreEqual(
+            [(2, "\t\t ")],
+            "\nHello\n\t\t world"
+            |> splitMultiLineString
+            |> findUnbalancedIndentations
+            |> snd
+            )
 
-    //    Assert.IsEmpty (getInvalidDecimalEscapes s3)
-
-    //    Assert.IsEmpty(getInvalidDecimalEscapes s4)
-
-    //[<Test>]
-    //let testInvalidHexEscape () =
-    //    Assert.IsEmpty (getInvalidHexEscapes s1)
-    //    Assert.IsEmpty (getInvalidHexEscapes s2)
-    //    Assert.IsNotEmpty (getInvalidHexEscapes s3)
-    //    Assert.IsEmpty (getInvalidHexEscapes s4)
-
-    //[<Test>]
-    //let testGetExtraWhitespaceLength () =
-    //    Assert.AreEqual ( 4, getExtraWhitespaceLength "\t\t  " )
-    //    Assert.AreEqual ( 2, getExtraWhitespaceLength "\t\t" )
-    //    Assert.AreEqual ( 2, getExtraWhitespaceLength "  " )
-    //    Assert.AreEqual ( 0, getExtraWhitespaceLength "" )
-    //    Assert.AreEqual ( 0, getExtraWhitespaceLength "\t\t  abc" )
+    [<Test>]
+    let testFormatMultiLineString () =
         
-    [<Test>]
-    let testUnescapeNormalizedStringLiteral () =
-        Assert.AreEqual (
-            "abc\ndef",
-            "abc
-def"
-            |> normalizeEndOfLine
-            |> unescapeStringLiteral
-            )
+        
 
-        Assert.AreEqual (
-            "abcdef", 
-            @"abc\
-def"
-            |> normalizeEndOfLine
-            |> unescapeStringLiteral
-            )
-
-    [<Test>]
-    let testNormalizeMultiLineString () =
         Assert.AreEqual (
             "  Hello,\n  world.\n",
             "
               Hello,
               world.
             "
-            |> normalizeMultiLineString
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )
         
         Assert.AreEqual (
@@ -228,14 +163,18 @@ def"
             "    This
                  is
                    a test"
-            |> normalizeMultiLineString
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )
 
         Assert.AreEqual (
             "hello",
             "
             hello"
-            |> normalizeMultiLineString
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )
 
         Assert.AreEqual (
@@ -243,7 +182,9 @@ def"
             "
 
             hello"
-            |> normalizeMultiLineString
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )
 
         Assert.AreEqual (
@@ -252,27 +193,33 @@ def"
             hello
 
             world"
-            |> normalizeMultiLineString
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )
 
         Assert.AreEqual (
-             "  hello\n\n  world\n",
-             "
-               hello
+            "  hello\n\n  world\n",
+            "
+              hello
 
-               world
-             "
-             |> normalizeMultiLineString
-             )
+              world
+            "
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
+            )
 
         Assert.AreEqual (
-             "  hello\n    \n  world\n",
-             "
-               hello
-                 
-               world
-             "
-             |> normalizeMultiLineString
+            "  hello\n    \n  world\n",
+            "
+              hello
+                
+              world
+            "
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
              )
 
         Assert.AreEqual (
@@ -281,13 +228,17 @@ def"
                hello
                  
                world"
-             |> normalizeMultiLineString
+             |> normalizeEndOfLine
+             |> splitMultiLineString
+             |> formatMultiLineString
              )
 
         Assert.AreEqual (
             "Hello,\nworld.",
             "
-              Hello,
-              world."
-            |> normalizeMultiLineString
+                Hello,
+                world."
+            |> normalizeEndOfLine
+            |> splitMultiLineString
+            |> formatMultiLineString
             )

@@ -1,0 +1,9 @@
+
+@[EntryPoint]
+activity main()()
+    await true  // next line (NEL)
+    await true   // line separator (LS)
+    await true   // paragraph separator (PS)
+end
+
+

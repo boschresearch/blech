@@ -1495,19 +1495,9 @@ Identifier
     | ID                                        { Key.Ident $1 } 
 
 AttributeLiteral 
-    : STRING                                    { let str = fst $1
-                                                            |> BlechString.normalizeSingleLineString
-                                                                // |> BlechString.unescapeStringLiteral
-                                                  Literal.String (str, snd $1) }
+    : STRING                                    { Literal.String $1 }
 
-    | MULTILINESTRING                           { let str = if checkIndentations $1 then 
-                                                                fst $1
-                                                                |> BlechString.normalizeMultiLineString
-                                                                // |> BlechString.unescapeStringLiteral
-                                                            else
-                                                                fst $1
-
-                                                  Literal.String (str, snd $1) }
+    | MULTILINESTRING                           { Literal.String $1 }
 
     | TRUE                                      { Literal.Bool (true, $1) }
     

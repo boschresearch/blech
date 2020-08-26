@@ -6,18 +6,20 @@
  world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
-@[CFunction (binding = "hello \x9a continuation\
+@[CFunction (binding = "hello \x9g continuation\
  worl\xAFd \0 \92 continuation\
  bla" , header= "bla.h")]
 extern function invalidHex()
 
 @[CFunction (binding = """
 		               printf("%d", $1);
-		                 blafasel;
-		        
+		                 blafasel🔥;
 		               fasel \xAF bla
+
+		                  
 		               """, 
-             header= "blah.h")]
+
+                       header= "blah.h")]
 extern function tripleQuoteBinding (x: int32)
 
 @[CFunction (binding = """do {

@@ -70,7 +70,7 @@ let hexfloatliteral = "0x"'_'? hexexponentfloat
 
 let linecontinuation = '\\' endofline
 
-let unicodelineending = ['\u0085' '\u2028' '\u2029'] // generally invalid
+let unicodelineterminator = ['\u0085' '\u2028' '\u2029'] // NEL, LS and PS are invalid
 
 let stringcharacter = [^ '\\' '"' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
 
@@ -103,29 +103,32 @@ let chunkwithoutstarandslash = [^'*' '/' '\n' '\r']*
 rule Token = parse
 
     (* ---- doc comments, comments and whitespaces ---- *)
+    
 
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              Token lexbuf }
+    
+    | unicodelineterminator { unicodeLineTerminator lexbuf
                               Token lexbuf }
 
     | ' '                   { Token lexbuf }
 
     | '\t'+                 { // tabs for identation at the start of a line are allowed
-                              if lexbuf.StartPos.Column > 0 then 
-                                tabularUsed lexbuf
+                              tabInCode lexbuf
                               Token lexbuf }
     
-    | "/*"                  { commentDepth <- 1; 
-                              commentStart <- Some (getRange lexbuf);
+    | "/*"                  { commentDepth <- 1 
+                              commentStart <- Some (getRange lexbuf)
                               SkipBlockComment lexbuf }
     
     | "//"                  { SkipLineComment lexbuf } 
 
     (* --- strings --- *)
 
-    | '"'                   { tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
+    | '"'                   { startString lexbuf
                               CollectSingleLineString lexbuf }
 
-    | triplequotes          { tokenBuilder <- tokenBuilder.Init (openMultiLineString lexbuf)
+    | triplequotes          { startString lexbuf
                               CollectMultiLineString lexbuf }
 
     (* ---- doc comments ---- *)
@@ -433,103 +436,93 @@ and CollectBlockDoc = parse
     | eof                   { eofInDocComment (tokenBuilder.Range)
                               EOF (getRange lexbuf) }
 
-and CollectSingleLineString = parse   // TODO: Move token checking - e.g. decimal and unicode escapes, utf8endofline, ascii control chars to lexer, fjg. 18.08.20
+and CollectSingleLineString = parse
 
-    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(handleLineContinuation lexbuf) // '\'<endofline> removed after indentation handling
+    | linecontinuation      { lineContinuationInSingleLineString lexbuf
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectSingleLineString lexbuf }
 
-    | endofline             { // let lxm, rng = getLexemeAndRange lexbuf
-                              // eolInSingleLineString rng
-                              tokenBuilder <- tokenBuilder.Append (handleEolInSingleLineString lexbuf)
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+    | endofline             { eolInSingleLineString lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine 
                               CollectSingleLineString lexbuf }
 
-    | '\t'                  { // tabs are not allowed in strings
-                              tokenBuilder <- tokenBuilder.Append (handleTabInSingleLineString lexbuf)
+    | '\t'                  { tabInSingleLineString lexbuf
                               CollectSingleLineString lexbuf }
 
-    | unicodelineending     { unknownToken lexbuf;
+    | unicodelineterminator { unicodeLineTerminatorInString lexbuf
                               CollectSingleLineString lexbuf }
 
-    | '"'                   { STRING (tokenBuilder.Token) }
+    | '"'                   { STRING (finishSingleLineString lexbuf) }
 
-    | escape
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | escape                { escapeInString lexbuf
                               CollectSingleLineString lexbuf }
     
-    | hexescape
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | hexescape             { hexEscapeInString lexbuf
                               CollectSingleLineString lexbuf }
 
-    | decimalescape         { let decEsc = getLexemeAndRange lexbuf
-                              checkDecimalEscape decEsc
-                              tokenBuilder <- tokenBuilder.Append decEsc
+    | decimalescape         { decimalEscapeInString lexbuf
                               CollectSingleLineString lexbuf }
 
-    | unicodeescape         { let uniEsc = getLexemeAndRange lexbuf
-                              checkUnicodeEscape uniEsc
-                              tokenBuilder <- tokenBuilder.Append uniEsc
+    | unicodeescape         { unicodeEscapeInString lexbuf
                               CollectSingleLineString lexbuf }
         
-    | stringcharacter       { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | stringcharacter       { validTokenInString lexbuf
                               CollectSingleLineString lexbuf }
         
 
-    | eof                   { eofInDocComment (tokenBuilder.Range)  // Todo: Create separate error message, fjg. 5.8.20
+    | eof                   { eofInString lexbuf
                               EOF (getRange lexbuf) }
 
-    | _                     { unknownToken lexbuf; 
+    | '\\'                  { backslashInString lexbuf
+                              CollectSingleLineString lexbuf }
+    
+    | _                     { unknownTokenInString lexbuf; 
                               CollectSingleLineString lexbuf }
 
 
 and CollectMultiLineString = parse
 
-    | linecontinuation      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf) // '\'<endofline> removed after indentation handling
+    | linecontinuation      { lineContinuationInMultiLineString lexbuf // '\<linefeed> removed after indentation handling
                               lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectMultiLineString lexbuf }
 
-    | endofline             { tokenBuilder <- tokenBuilder.Append(handleEolInMultiLineString lexbuf)
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+    | endofline             { eolInMultiLineString lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectMultiLineString lexbuf }
 
-    | '\t'+                 { // tabs for identation at the start of a line are allowed in multi-line strings
-                              tokenBuilder <- tokenBuilder.Append(handleTabInMultiLineString lexbuf)
+    | '\t'+                 { tabInMultiLineString lexbuf
                               CollectMultiLineString lexbuf }
 
-    | unicodelineending     { unknownToken lexbuf; 
+    | unicodelineterminator { unicodeLineTerminatorInString lexbuf
                               CollectMultiLineString lexbuf }
     
-    | triplequotes          { MULTILINESTRING (tokenBuilder.Token) }    
+    | triplequotes          { MULTILINESTRING (finishMultiLineString lexbuf) }    
 
-    | escape
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | escape                { escapeInString lexbuf
                               CollectMultiLineString lexbuf }
     
-    | hexescape
-                            { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | hexescape             { hexEscapeInString lexbuf
                               CollectMultiLineString lexbuf }
     
-    | decimalescape         { let decEsc = getLexemeAndRange lexbuf
-                              checkDecimalEscape decEsc
-                              tokenBuilder <- tokenBuilder.Append decEsc
+    | decimalescape         { decimalEscapeInString lexbuf
                               CollectMultiLineString lexbuf }
 
-    | unicodeescape         { let uniEsc = getLexemeAndRange lexbuf
-                              checkUnicodeEscape uniEsc
-                              tokenBuilder <- tokenBuilder.Append uniEsc
+    | unicodeescape         { unicodeEscapeInString lexbuf
                               CollectMultiLineString lexbuf }
 
-    | stringcharacter       { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | stringcharacter       { validTokenInString lexbuf
                               CollectMultiLineString lexbuf }
     
-    | quotes                { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | quotes                { validTokenInString lexbuf
                               CollectMultiLineString lexbuf }
 
-    | eof                   { eofInDocComment (tokenBuilder.Range)
+    | eof                   { eofInString lexbuf
                               EOF (getRange lexbuf) }
 
-    | _                     { unknownToken lexbuf
+    | '\\'                  { backslashInString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | _                     { unknownTokenInString lexbuf
                               CollectMultiLineString lexbuf }
 
 

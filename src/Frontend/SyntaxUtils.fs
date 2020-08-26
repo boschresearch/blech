@@ -35,14 +35,7 @@ module SyntaxErrors =
         | UnexpectedSignatureMember of implementation: Range.range // * signatureHead: Range.range
         | UnexpectedModuleMember of prototype: Range.range // * moduleHead: Range.range
         | UnexpectedExposure of exposing: Range.range // * signatureHead: Range.range
-        
-        // --- errors string literals
-        | InvalidEscapeSequence of strRng: Range.range * value: string * escRng: Range.range
-        | DecimalEscapeTooLarge of strRng: Range.range * value: string * escRng: Range.range
-        | InvalidHexEscape of strRng: Range.range * value: string * escRng: Range.range
-        
-        | UnbalancedIndentation of indent: Range.range * unbalanced: Range.range
-
+                
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
                 match err with
@@ -79,21 +72,7 @@ module SyntaxErrors =
                     { range = exposing
                       message = "unexpected exposing in signature file." }
                 
-                // --- errors string literals
-                | InvalidEscapeSequence (range, value, _) ->
-                    { range = range
-                      message =sprintf "invalid escape sequence '%s'." value }    
-                | DecimalEscapeTooLarge (range, value, _) ->
-                    { range = range
-                      message =sprintf "decimal escape '%s' too large." value }    
-                | InvalidHexEscape (range, value, _) ->
-                    { range = range
-                      message =sprintf "invalid hexadecimal escape '%s'." value }    
-
-                | UnbalancedIndentation (indent, unbalanced) ->
-                    { range = unbalanced 
-                      message = "unbalanced indentation in multi-line string."}
-
+                
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
                 | InconsistentModuleName moduleName ->
@@ -105,17 +84,6 @@ module SyntaxErrors =
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
                 
-                // --- errors string literals
-                | InvalidEscapeSequence (_, _, escRng)
-                | InvalidHexEscape (_, _, escRng) ->
-                    [ { range = escRng; message = "invalid"; isPrimary = true} ]
-                | DecimalEscapeTooLarge (_, _, escRng) ->
-                    [ { range = escRng; message = "too large"; isPrimary = true} ]
-                
-                | UnbalancedIndentation (indent, unbalanced) ->
-                    [ { range = indent; message = "given indent"; isPrimary = false }
-                      { range = unbalanced; message = "unbalanced indent"; isPrimary = true } ] 
-
                 | _ ->
                     []
 
@@ -148,25 +116,6 @@ module SyntaxErrors =
                     [ "source is interface file."
                       "an interface file exposes everything." ]
 
-                // --- errors in string literals
-                | InvalidEscapeSequence _ ->
-                    [ @"A literal string can contain the following C-like escape sequences:"
-                      @"'\a' (bell), '\b' (backspace), '\f' (form feed), '\n' (newline),"
-                      @"'\r' (carriage return), '\t' (horizontal tab), '\v' (vertical tab),"
-                      @"'\\' (backslash), '\""' (quotation mark [double quote]),"
-                      @"and '\'' (apostrophe [single quote])." ]
-                | DecimalEscapeTooLarge _ ->
-                    [ @"A decimal escape sequence '\ddd' specifies a byte in a literal string:"
-                      @"'ddd' specifies the numeric value with up to three decimal digits."
-                      @"Note that if a decimal escape sequence is to be followed by a digit,"
-                      @"it must be expressed using exactly three digits."]
-                | InvalidHexEscape _ ->
-                    [ @"A hexadecimal escape sequence '\xXX' specifies a byte in a literal string:"
-                      @"'XX' specifies the numeric value with exactly two hexadecimal digits."]
-                | UnbalancedIndentation _ ->
-                    [ @"All lines in a multi-line string must start with the same amount of tab '\t' indentation." 
-                      @"Tabs can only be used for indentation at the start of a new line." ]
-
                 | _  ->
                     []
 
@@ -180,7 +129,8 @@ module SyntaxErrors =
         | DecimalEscapeTooLarge of esc: string * rng: Range.range
         | UnicodeEscapeTooLarge of esc: string * rng: Range.range
         | EolInSingleLineString of rng: Range.range
-        
+        | InvalidLineTerminator of lt: string * rng: Range.range
+        | UnbalancedIndentation of indent: Range.range * unbalanced: Range.range
         
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -208,8 +158,14 @@ module SyntaxErrors =
                       message = sprintf "unicode escape '%s' too large." esc }    
                 | EolInSingleLineString rng ->
                     { range = rng
-                      message = "end of line in single-line string."}    
-                    
+                      message = "end of line in single-line string."}
+                | InvalidLineTerminator (lt, rng) ->
+                    { range = rng
+                      message = sprintf "invalid line terminator '%s'." lt } 
+                | UnbalancedIndentation (indent, unbalanced) ->
+                    { range = unbalanced 
+                      message = "unbalanced indentation in multi-line string."}
+    
             member err.ContextInformation = 
                 match err with
                 | CommentNotClosed (opened = o) ->    
@@ -225,10 +181,14 @@ module SyntaxErrors =
                 | DecimalEscapeTooLarge (_, rng)
                 | UnicodeEscapeTooLarge (_, rng) ->
                     [ { range = rng; message = "too large"; isPrimary = true} ]
-
                 | EolInSingleLineString rng ->
                     [ { range = rng; message = "eol"; isPrimary = true } ]   
-                
+                | InvalidLineTerminator (_, rng) ->
+                    [ { range = rng; message = "line terminator"; isPrimary = true } ]   
+                | UnbalancedIndentation (indent, unbalanced) ->
+                    [ { range = indent; message = "given indent"; isPrimary = false }
+                      { range = unbalanced; message = "unbalanced indent"; isPrimary = true } ] 
+    
     
             member err.NoteInformation = 
                 match err with
@@ -255,8 +215,14 @@ module SyntaxErrors =
                       "'\u{0}' is the smallest code point."
                       "'\u{10FFFF}' is the largest code point." ]
                 | EolInSingleLineString _ ->
-                    [ "A single line string must not contain an end of line."
+                    [ "A single-line string must not contain an end of line."
                       "Use a line continuation '\<eol>' or a multi-line string." ]
+                | InvalidLineTerminator _ ->
+                    [ "Unicode line terminators are not a allowed in Blech source code."
+                      "Line Separator (LS), Paragraph Separator (PS) or Next Line (NEL) must be removed."]
+                | UnbalancedIndentation _ ->
+                    [ @"All lines in a multi-line string must start with the same amount of tab '\t' indentation." 
+                      @"Tabs can only be used for indentation at the start of a new line." ]
 
 
 module ParserUtils = 
@@ -521,68 +487,7 @@ module ParserUtils =
             if Option.isSome exposing then
                 reportError <| UnexpectedExposure (Option.get exposing).Range       
 
-    //let checkMultiLineString (slstr : string) =
-    //    slstr
-
-    /// checks balanced tab indentation in multi-line string literals
-    let checkIndentations (multiLineString: string, rng: Range.range) = 
-        let reportUnbalancedIndentations indent unbalancedIndents =
-            [ for ubi in unbalancedIndents ->
-                UnbalancedIndentation ( BlechString.indentationRange rng <| Option.get indent, 
-                                        BlechString.indentationRange rng ubi )]
-            |> List.map reportError 
-
-        BlechString.normalizeEndOfLine multiLineString
-        |> BlechString.splitMultiLineString
-        |> BlechString.findUnbalancedIndentations
-        |> fun (indent, unbalancedIndents) -> 
-                if List.isEmpty unbalancedIndents then 
-                    true
-                else
-                    ignore <| reportUnbalancedIndentations indent unbalancedIndents
-                    false
-        
-        // let str = BlechString.normalizeEndOfLine strlit
-        
-
-        //let checkCharacterEscapes =
-        //    let ms = BlechString.getInvalidEscapeSequences str
-        //    if Seq.length ms > 0 then
-        //        Error [for m in ms -> InvalidEscapeSequence (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-        //    else
-        //        Ok ()
-
-        //let checkDecimalEscapes =
-        //    let ms = BlechString.getInvalidDecimalEscapes str
-        //    if  Seq.length ms > 0 then
-        //        Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-        //    else
-        //        Ok ()
-                 //let checkDecimalEscapes =
-        //    let ms = BlechString.getInvalidDecimalEscapes str
-        //    if  Seq.length ms > 0 then
-        //        Error [ for m in ms -> DecimalEscapeTooLarge (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-        //    else
-        //        Ok ()
-         
-        //let checkHexEscapes =
-        //    let ms = BlechString.getInvalidHexEscapes str
-        //    if Seq.length ms > 0 then
-        //        Error [for m in ms -> InvalidHexEscape (rng, m.Value, BlechString.getMatchRange (str, rng) m)]
-        //    else
-        //        Ok ()
- 
-        //let res =
-        //    Result.combine checkCharacterEscapes  checkHexEscapes
-        
-        //match res with
-        //| Ok _ -> 
-        //    true
-        //| Error errs ->
-        //    ignore <| List.map reportError errs
-        //    false
-        
-
+       
     /// Logs the last stored parser error
     let logParserError startRange =
         // printfn "logParserErrorCall"
@@ -625,6 +530,7 @@ module ParserUtils =
     let lineDocToAnnotation = docToAnnotation Attribute.Key.linedoc
     let blockDocToAnnotation = docToAnnotation Attribute.Key.blockdoc
 
+
 module LexerUtils =
 
     open FSharp.Text.Lexing
@@ -666,7 +572,7 @@ module LexerUtils =
     let mutable commentDepth = 0
 
     let mutable tokenBuilder = TokenBuilder()
-    let mutable tabIndent : (Range.range * int) option = None   // 
+    // let mutable tabIndent : (Range.range * int) option = None   // 
     
 
     let getLexeme (lexbuf: LexBuffer<char>) = 
@@ -696,6 +602,10 @@ module LexerUtils =
         <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
         <| e
 
+    let unicodeLineTerminator lexbuf =
+        reportError <| InvalidLineTerminator (getLexemeAndRange lexbuf)
+        
+
     /// reports error: comment not terminated
     let commentNotClosed (lexbuf : LexBuffer<char>) =
         assert Option.isSome commentStart
@@ -721,53 +631,116 @@ module LexerUtils =
     let eofInDocComment docRange =
         reportError <|  EofInDocComment docRange
 
-    let checkDecimalEscape (esc, rng) =
-        if not <| BlechString.isValidDecimalEscape esc then 
-            reportError <| DecimalEscapeTooLarge (esc, rng)
+    let tabInCode lexbuf =
+        let lxm, rng = getLexemeAndRange lexbuf
+        // tabs '\t' are only allowed for line indentation
+        if lexbuf.StartPos.Column > 0 then 
+            reportError <| TabularUsed rng
 
-    let checkUnicodeEscape (esc, rng) =
-        if not <| BlechString.isValidUnicodeEscape esc then 
-            reportError <| UnicodeEscapeTooLarge(esc, rng)
-
-    let eolInSingleLineString rng = 
-        reportError <| EolInSingleLineString rng
-
-    //--- strings
     
-    let openMultiLineString lexbuf =
-        tabIndent <- None // Reset tab indentation 
-        getRange lexbuf
+    //--- Single-line and multi-line string parsing ---
+
+    let startString lexbuf =
+        tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
         
+    let validTokenInString lexbuf =
+        tokenBuilder <- tokenBuilder.Append (getLexemeAndRange lexbuf)
 
-    let handleLineContinuation (lexbuf : LexBuffer<char>) =
-        (String.Empty, getRange lexbuf)
+    let lineContinuationInSingleLineString lexbuf =
+        tokenBuilder <- tokenBuilder.Append (String.Empty, getRange lexbuf)
 
+    let lineContinuationInMultiLineString lexbuf =
+        let lncont, rng = getLexemeAndRange lexbuf
+        let normlncont = BlechString.normalizeEndOfLine lncont
+        tokenBuilder <- tokenBuilder.Append (normlncont, rng)
 
-    let handleEolInSingleLineString (lexbuf : LexBuffer<char>) =
+    let eolInSingleLineString lexbuf = 
         let lxm, rng = getLexemeAndRange lexbuf
         reportError <| EolInSingleLineString rng
-        (lxm, rng)
+        tokenBuilder <- tokenBuilder.Append (lxm, rng)
 
+    let eolInMultiLineString lexbuf =
+        // replace eol by line feed '\n'
+        tokenBuilder <- tokenBuilder.Append (BlechString.Linefeed, getRange lexbuf)
 
-    let handleEolInMultiLineString (lexbuf: LexBuffer<char>) =
-        (BlechString.Linefeed, getRange lexbuf)
-
-
-    let handleTabInSingleLineString (lexbuf : LexBuffer<char>) =
+    let tabInSingleLineString lexbuf =
         let lxm, rng = getLexemeAndRange lexbuf
         reportError <| TabularUsed rng
-        (lxm, rng)
+        tokenBuilder <- tokenBuilder.Append (lxm, rng)
 
+    let unicodeLineTerminatorInString lexbuf=
+        let lr = getLexemeAndRange lexbuf
+        reportError <| InvalidLineTerminator lr
+        tokenBuilder <- tokenBuilder.Append lr
 
-    let handleTabInMultiLineString (lexbuf : LexBuffer<char>) =
+    let tabInMultiLineString lexbuf =
         let lxm, rng = getLexemeAndRange lexbuf
-        if lexbuf.StartPos.Column > 0 then
+        // tabs '\t' are only allowed for line indentation
+        if lexbuf.StartPos.Column > 0 then 
             reportError <| TabularUsed rng
-        (lxm, rng)
-        //elif Option.isNone tabIndent then            
-        //    tabIndent <- Some (rng, lxm.Length) // define tab indentation
-        //else
-        //    let there, len = Option.get tabIndent
-        //    if len <> lxm.Length then  // check tab indentation
-        //        reportError <| UnbalancedTabIndentation (there, rng)
-        //(lxm, rng)
+        tokenBuilder <- tokenBuilder.Append (lxm, rng)
+            
+    let unicodeEscapeInString lexbuf =
+        let esc, rng = getLexemeAndRange lexbuf
+        let mutable unesc = esc
+        if not <| BlechString.isValidUnicodeEscape esc then 
+            reportError <| UnicodeEscapeTooLarge(esc, rng)
+        else
+            unesc <- BlechString.unicodeEscapeToString esc
+        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+
+    let decimalEscapeInString lexbuf =
+        let esc, rng = getLexemeAndRange lexbuf
+        let mutable unesc = esc
+        if not <| BlechString.isValidDecimalEscape esc then 
+            reportError <| DecimalEscapeTooLarge (esc, rng)
+        else
+            unesc <- BlechString.decimalEscapeToString esc
+        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+
+    let hexEscapeInString lexbuf =
+        let esc, rng = getLexemeAndRange lexbuf
+        let unesc =  BlechString.hexEscapeToString esc
+        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+
+    let backslashInString lexbuf = 
+        let bs, rng = getLexemeAndRange lexbuf
+        reportError <| UnknownToken (bs, rng)     // TODO: separate error message for lonely '\'
+        tokenBuilder <- tokenBuilder.Append (bs, rng)
+
+    let escapeInString lexbuf =
+        let esc, rng = getLexemeAndRange lexbuf
+        let unesc = BlechString.escapeToString esc
+        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+
+    let private checkIndentations (lines: string list) rng = 
+        let reportUnbalancedIndentations (indent, unbalancedIndents) =
+            [ for ubi in unbalancedIndents do
+                UnbalancedIndentation ( BlechString.indentationRange rng <| Option.get indent, 
+                                        BlechString.indentationRange rng ubi ) ]
+            |> List.map reportError 
+
+        let unbalinds = BlechString.findUnbalancedIndentations lines
+        if  List.isEmpty <| snd unbalinds then 
+            true
+        else 
+            ignore <| reportUnbalancedIndentations unbalinds
+            false
+
+    let finishMultiLineString lexbuf = 
+        let mls, rng = tokenBuilder.Token
+        let lines = BlechString.splitMultiLineString mls
+        if checkIndentations lines rng then
+            BlechString.formatMultiLineString lines, rng
+        else
+            mls, rng
+
+    let finishSingleLineString lexbuf =
+        tokenBuilder.Token
+
+    let eofInString lexbuf =
+        reportError <| EofInDocComment (tokenBuilder.Range) // TODO: separate error message
+
+    let unknownTokenInString lexbuf =
+        unknownToken lexbuf  // TODO: separate error message
+        tokenBuilder <- tokenBuilder.Append (getLexemeAndRange lexbuf)

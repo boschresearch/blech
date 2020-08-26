@@ -1,0 +1,16 @@
+
+@[CFunction (binding = """
+                       line separator (LS) 
+                       paragraph separator(PS) 
+                       next line (NEL)
+                       """, 
+             header= "bla.h")]
+extern function f (x: int32)
+
+
+@[EntryPoint]
+activity main()()
+    await true
+end
+
+
