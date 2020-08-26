@@ -6,7 +6,7 @@
  world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
-@[CFunction (binding = "hello \x9g continuation\
+@[CFunction (binding = "hello \x9f continuation\
  worl\xAFd \0 \92 continuation\
  bla" , header= "bla.h")]
 extern function invalidHex()
