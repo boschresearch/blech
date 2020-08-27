@@ -1,0 +1,8 @@
+
+@[CFunction (binding = """eof in multi-line string
+             header = "bla.h") ]
+
+@[EntryPoint]
+activity Main () ()
+    await true
+end

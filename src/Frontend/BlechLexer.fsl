@@ -95,6 +95,7 @@ let wildcard = '_'+
 
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
 
+
 let chunkwithoutnewline = [^'\n' '\r']*
 let chunkwithoutstar = [^'*' '\n' '\r']*
 
@@ -107,6 +108,8 @@ rule Token = parse
 
     | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               Token lexbuf }
+
+
     
     | unicodelineterminator { unicodeLineTerminator lexbuf
                               Token lexbuf }
@@ -133,10 +136,10 @@ rule Token = parse
 
     (* ---- doc comments ---- *)
 
-    | "///"                 { tokenBuilder <- tokenBuilder.Init (getRange lexbuf) 
+    | "///"                 { tokenBuilder.Init (getRange lexbuf) 
                               CollectLineDoc lexbuf } 
     
-    | "/**"                 { tokenBuilder <- tokenBuilder.Init (getRange lexbuf) 
+    | "/**"                 { tokenBuilder.Init (getRange lexbuf) 
                               CollectBlockDoc lexbuf } 
 
     (* ---- file system: reserved directory name for blech transpilations ---- *)
@@ -359,28 +362,26 @@ rule Token = parse
 
     | eof                   { EOF (getRange lexbuf) }
 
-    | _                     { unknownToken lexbuf;  // any other unicode character
+    | _                     { unknownToken lexbuf;
                               Token lexbuf }
 
 
-(* fjg: returns the next token after the comment, in order to make EOF available in case of unterminated comment *)
 and SkipBlockComment = parse     
+    // returns the next token after the comment, 
+    // in order to make EOF available in case of unterminated comment
 
-    | "*/"                  { commentDepth <- commentDepth - 1;
+    | "*/"                  { commentDepth <- commentDepth - 1
                               if commentDepth = 0 then
                                   commentStart <- None;
-                                  Token lexbuf
+                                  Token lexbuf // this tail recursen should not grow the stack
                               else 
                                   SkipBlockComment lexbuf }
        
-    | "/*"                  { commentDepth <- commentDepth + 1;
+    | "/*"                  { commentDepth <- commentDepth + 1
                               SkipBlockComment lexbuf }
 
     | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
                               SkipBlockComment lexbuf }
-
-    | eof                   { commentNotClosed lexbuf; 
-                              EOF (getRange lexbuf) }
 
 
     | chunkwithoutstarandslash
@@ -390,51 +391,76 @@ and SkipBlockComment = parse
 
     | "*"                   { SkipBlockComment lexbuf }
 
+    | eof                   { eofInBlockComment lexbuf
+                              EOF (getRange lexbuf) }
 
 
 and SkipLineComment = parse
-    | chunkwithoutnewline   { Token lexbuf }
+    // returns the next token after the comment, 
+    // in order to make EOF available in case of a line comment in the last line
+
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+                              Token lexbuf } // this tail recursion should not grow the stack
+
+    | unicodelineterminator { unicodeLineTerminator lexbuf
+                              SkipLineComment lexbuf }
+
+    | chunkwithoutnewline   { SkipLineComment lexbuf }
+
+    | eof                   { // line comment in last line is ok
+                              EOF (getRange lexbuf) }  
 
 
 and SkipLineOnError = parse
-    | endofline             { let eol = EOL (getRange lexbuf) in
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine;
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine;
                               ParserContext.setErrorTokenAccepted false; 
-                              eol}
+                              EOL (getRange lexbuf) }
+
+    | unicodelineterminator { unicodeLineTerminator lexbuf
+                              SkipLineOnError lexbuf }
+
+    | chunkwithoutnewline   { SkipLineOnError lexbuf }
 
     | eof                   { ParserContext.setErrorTokenAccepted false; 
                               EOF (getRange lexbuf)}
 
-    | chunkwithoutnewline   { SkipLineOnError lexbuf }
-
 
 and CollectLineDoc = parse    
-    | chunkwithoutnewline   { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              CollectLineDoc lexbuf }
 
     | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
                               LINEDOC (tokenBuilder.Token) }
-                              
-    | eof                   { eofInDocComment (tokenBuilder.Range) 
+
+    | unicodelineterminator { unicodeLineTerminatorInDocComment lexbuf
+                              CollectLineDoc lexbuf }
+
+    | eof                   { eofInDocComment lexbuf
                               EOF (getRange lexbuf) }
 
+    | chunkwithoutnewline   { validTokenInDocComment lexbuf
+                              CollectLineDoc lexbuf }
+                              
     
 and CollectBlockDoc = parse
-    | chunkwithoutstar      { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    
+    | endofline             { validTokenInDocComment lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectBlockDoc lexbuf }
 
-    | "*"                   { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
+    | unicodelineterminator { unicodeLineTerminatorInDocComment lexbuf
                               CollectBlockDoc lexbuf }
-    
-    | endofline             { tokenBuilder <- tokenBuilder.Append(getLexemeAndRange lexbuf)
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
-                              CollectBlockDoc lexbuf }
-    
+
+    | eof                   { eofInDocComment lexbuf
+                              EOF (getRange lexbuf) }
 
     | "*/"                  { BLOCKDOC (tokenBuilder.Token) }
+    
+    | chunkwithoutstar      { validTokenInDocComment lexbuf
+                              CollectBlockDoc lexbuf }
 
-    | eof                   { eofInDocComment (tokenBuilder.Range)
-                              EOF (getRange lexbuf) }
+    | "*"                   { validTokenInDocComment lexbuf
+                              CollectBlockDoc lexbuf }
+
+
 
 and CollectSingleLineString = parse
 

@@ -1,8 +1,8 @@
-// @[CFunction (binding = "hello tab	 \n asdf
+// @[CFunction (binding = "hello  tab	 \n asdf
 // lovely w\"orld", header= "bla.h")]
 // extern function invalidEscape(x: bool)
 
-@[CFunction (binding = "hello \255 \\ bla\
+@[CFunction (binding = "hello \255 bla\
  world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 
@@ -13,7 +13,7 @@ extern function invalidHex()
 
 @[CFunction (binding = """
 		               printf("%d", $1);
-		                 blafasel🔥;
+		                 bla😬fasel🔥;
 		               fasel \xAF bla
 
 		                  

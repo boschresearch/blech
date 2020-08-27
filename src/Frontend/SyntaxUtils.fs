@@ -125,13 +125,15 @@ module SyntaxErrors =
         | TabularUsed of here: Range.range
         | UnknownToken of token: string * here: Range.range
         | NotAPath of here: Range.range
-        | EofInDocComment of here: Range.range
+        | EofInDocComment of linedoc: Range.range
+        | EofInString of string: Range.range
         | DecimalEscapeTooLarge of esc: string * rng: Range.range
         | UnicodeEscapeTooLarge of esc: string * rng: Range.range
         | EolInSingleLineString of rng: Range.range
         | InvalidLineTerminator of lt: string * rng: Range.range
         | UnbalancedIndentation of indent: Range.range * unbalanced: Range.range
-        
+        | BackslashWithoutEscape of here: Range.range
+
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
                 match err with
@@ -147,9 +149,12 @@ module SyntaxErrors =
                 | NotAPath (here = r) ->
                     { range = r
                       message = "incorrect path specification." }
-                | EofInDocComment here ->
-                    { range = here
+                | EofInDocComment rng ->
+                    { range = rng 
                       message = "end of file in doc comment." }
+                | EofInString rng->
+                    { range = rng
+                      message = sprintf "end of file in string."}
                 | DecimalEscapeTooLarge (esc, rng) ->
                     { range = rng
                       message = sprintf "decimal escape '%s' too large." esc }    
@@ -165,7 +170,11 @@ module SyntaxErrors =
                 | UnbalancedIndentation (indent, unbalanced) ->
                     { range = unbalanced 
                       message = "unbalanced indentation in multi-line string."}
-    
+                | BackslashWithoutEscape rng ->
+                    { range = rng
+                      message = "backslash '\\' does not start a valid escape sequence." }
+
+
             member err.ContextInformation = 
                 match err with
                 | CommentNotClosed (opened = o) ->    
@@ -176,8 +185,10 @@ module SyntaxErrors =
                     [ { range = r; message = "wrong character."; isPrimary = true } ]
                 | NotAPath (here = r) ->
                     [ { range = r; message = "incorrect path specification"; isPrimary = true } ]
-                | EofInDocComment here ->
-                    [ { range = here; message = "end of doc comment"; isPrimary = true } ]
+                | EofInDocComment rng ->
+                    [ { range = rng; message = "doc commment"; isPrimary = true}]    
+                | EofInString rng->
+                    [ { range = rng; message = "string"; isPrimary = true } ]
                 | DecimalEscapeTooLarge (_, rng)
                 | UnicodeEscapeTooLarge (_, rng) ->
                     [ { range = rng; message = "too large"; isPrimary = true} ]
@@ -188,7 +199,9 @@ module SyntaxErrors =
                 | UnbalancedIndentation (indent, unbalanced) ->
                     [ { range = indent; message = "given indent"; isPrimary = false }
                       { range = unbalanced; message = "unbalanced indent"; isPrimary = true } ] 
-    
+                | BackslashWithoutEscape rng ->
+                    [ { range = rng; message = "no escape"; isPrimary = true } ]   
+                
     
             member err.NoteInformation = 
                 match err with
@@ -203,7 +216,12 @@ module SyntaxErrors =
                 | CommentNotClosed _ ->
                     [ "Missing '*/'." ]
                 | EofInDocComment _ ->
-                    [ "A doc comment should be placed before a declaration." ]
+                    [ "A doc-comment must not appear at the end of a file." 
+                      "Close a block doc-comment with '*/'." ]
+                | EofInString _ ->
+                    [ "The string is not closed." 
+                      "Close a single-line string with '\"'." 
+                      "Close a multi-line string with '\"\"\"'." ]
                 | DecimalEscapeTooLarge _ ->
                     [ "A decimal escape sequence '\ddd' specifies a byte in a literal string:"
                       "'ddd' specifies the numeric value with up to three decimal digits."
@@ -221,9 +239,16 @@ module SyntaxErrors =
                     [ "Unicode line terminators are not a allowed in Blech source code."
                       "Line Separator (LS), Paragraph Separator (PS) or Next Line (NEL) must be removed."]
                 | UnbalancedIndentation _ ->
-                    [ @"All lines in a multi-line string must start with the same amount of tab '\t' indentation." 
-                      @"Tabs can only be used for indentation at the start of a new line." ]
-
+                    [ "All lines in a multi-line string must start with the same amount of tab '\\t' indentation." 
+                      "Tabs can only be used for indentation at the start of a new line." ]
+                | BackslashWithoutEscape _ ->
+                    [ "A backslash '\\' always starts an escape sequence."
+                      "To introduce a single '\\' character use '\\\\'."
+                      "Valid escapes are: '\\a', '\\b', '\\f', '\\n', '\\r', '\\t', '\\v', '\\'', '\\\"'."
+                      "Use '\\ddd' with up to 3 decimal digits for decimal escapes."
+                      "Use '\\xXX' with exactly 2 hexadecimal digits for hex escapes."
+                      "Use '\\u{XXX}' with at least 1 hexadecimal digit for unicode escapes."]
+                
 
 module ParserUtils = 
     open System.Numerics
@@ -548,12 +573,10 @@ module LexerUtils =
         member this.Init startRange =
             text <- StringBuilder()
             range <- startRange
-            this
         
         member this.Append (str: string, rng: Range.range) =
             text <- text.Append(str)
             range <- Range.unionRanges range rng
-            this
 
         member this.Text = 
             text.ToString()
@@ -602,17 +625,11 @@ module LexerUtils =
         <|| ParserUtils.ParserContext.getDiagnosticsLogger ()
         <| e
 
+    /// reports usage of unusual unicode line terminator
     let unicodeLineTerminator lexbuf =
         reportError <| InvalidLineTerminator (getLexemeAndRange lexbuf)
         
-
-    /// reports error: comment not terminated
-    let commentNotClosed (lexbuf : LexBuffer<char>) =
-        assert Option.isSome commentStart
-        reportError <| CommentNotClosed (getRange lexbuf, Option.get commentStart)
-
-
-    /// reports error: usage of TABULATOR
+    /// reports error: usage of tab '\t'
     let tabularUsed (lexbuf : LexBuffer<char>) =
         reportError <| TabularUsed (getRange lexbuf)
 
@@ -627,58 +644,78 @@ module LexerUtils =
         reportError <| NotAPath (getRange lexbuf)
     
 
-    /// reports error: doc comment before EOF
-    let eofInDocComment docRange =
-        reportError <|  EofInDocComment docRange
-
     let tabInCode lexbuf =
         let lxm, rng = getLexemeAndRange lexbuf
         // tabs '\t' are only allowed for line indentation
         if lexbuf.StartPos.Column > 0 then 
             reportError <| TabularUsed rng
 
-    
+    // --- end of file (eof) handling
+
+
+    let eofInBlockComment lexbuf = 
+        reportError <| CommentNotClosed (getRange lexbuf, Option.get commentStart)
+
+    let eofInString lexbuf =
+        reportError <| EofInString tokenBuilder.Range
+
+    // doc comments 
+
+    let eofInDocComment lexbuf =
+        reportError <| EofInDocComment tokenBuilder.Range
+
+    let unicodeLineTerminatorInDocComment lexbuf=
+        let lr = getLexemeAndRange lexbuf
+        reportError <| InvalidLineTerminator lr
+        tokenBuilder.Append lr
+
+    let validTokenInDocComment lexbuf =
+        tokenBuilder.Append (getLexemeAndRange lexbuf)
+
+
+    // let eofInCharacter lexbuf = eofInLexerContext "character"
+
     //--- Single-line and multi-line string parsing ---
 
     let startString lexbuf =
-        tokenBuilder <- tokenBuilder.Init (getRange lexbuf)
+        tokenBuilder.Init (getRange lexbuf)
         
     let validTokenInString lexbuf =
-        tokenBuilder <- tokenBuilder.Append (getLexemeAndRange lexbuf)
+        tokenBuilder.Append (getLexemeAndRange lexbuf)
 
     let lineContinuationInSingleLineString lexbuf =
-        tokenBuilder <- tokenBuilder.Append (String.Empty, getRange lexbuf)
+        tokenBuilder.Append (String.Empty, getRange lexbuf)
 
     let lineContinuationInMultiLineString lexbuf =
         let lncont, rng = getLexemeAndRange lexbuf
         let normlncont = BlechString.normalizeEndOfLine lncont
-        tokenBuilder <- tokenBuilder.Append (normlncont, rng)
+        tokenBuilder.Append (normlncont, rng)
 
     let eolInSingleLineString lexbuf = 
         let lxm, rng = getLexemeAndRange lexbuf
         reportError <| EolInSingleLineString rng
-        tokenBuilder <- tokenBuilder.Append (lxm, rng)
+        tokenBuilder.Append (lxm, rng)
 
     let eolInMultiLineString lexbuf =
         // replace eol by line feed '\n'
-        tokenBuilder <- tokenBuilder.Append (BlechString.Linefeed, getRange lexbuf)
+        tokenBuilder.Append (BlechString.Linefeed, getRange lexbuf)
 
     let tabInSingleLineString lexbuf =
         let lxm, rng = getLexemeAndRange lexbuf
         reportError <| TabularUsed rng
-        tokenBuilder <- tokenBuilder.Append (lxm, rng)
+        tokenBuilder.Append (lxm, rng)
 
     let unicodeLineTerminatorInString lexbuf=
         let lr = getLexemeAndRange lexbuf
         reportError <| InvalidLineTerminator lr
-        tokenBuilder <- tokenBuilder.Append lr
+        tokenBuilder.Append lr
 
     let tabInMultiLineString lexbuf =
         let lxm, rng = getLexemeAndRange lexbuf
         // tabs '\t' are only allowed for line indentation
         if lexbuf.StartPos.Column > 0 then 
             reportError <| TabularUsed rng
-        tokenBuilder <- tokenBuilder.Append (lxm, rng)
+        tokenBuilder.Append (lxm, rng)
             
     let unicodeEscapeInString lexbuf =
         let esc, rng = getLexemeAndRange lexbuf
@@ -687,7 +724,7 @@ module LexerUtils =
             reportError <| UnicodeEscapeTooLarge(esc, rng)
         else
             unesc <- BlechString.unicodeEscapeToString esc
-        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+        tokenBuilder.Append (unesc, rng)
 
     let decimalEscapeInString lexbuf =
         let esc, rng = getLexemeAndRange lexbuf
@@ -696,22 +733,22 @@ module LexerUtils =
             reportError <| DecimalEscapeTooLarge (esc, rng)
         else
             unesc <- BlechString.decimalEscapeToString esc
-        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+        tokenBuilder.Append (unesc, rng)
 
     let hexEscapeInString lexbuf =
         let esc, rng = getLexemeAndRange lexbuf
         let unesc =  BlechString.hexEscapeToString esc
-        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+        tokenBuilder.Append (unesc, rng)
 
     let backslashInString lexbuf = 
         let bs, rng = getLexemeAndRange lexbuf
-        reportError <| UnknownToken (bs, rng)     // TODO: separate error message for lonely '\'
-        tokenBuilder <- tokenBuilder.Append (bs, rng)
+        reportError <| BackslashWithoutEscape rng
+        tokenBuilder.Append (bs, rng)
 
     let escapeInString lexbuf =
         let esc, rng = getLexemeAndRange lexbuf
         let unesc = BlechString.escapeToString esc
-        tokenBuilder <- tokenBuilder.Append (unesc, rng)
+        tokenBuilder.Append (unesc, rng)
 
     let private checkIndentations (lines: string list) rng = 
         let reportUnbalancedIndentations (indent, unbalancedIndents) =
@@ -738,9 +775,6 @@ module LexerUtils =
     let finishSingleLineString lexbuf =
         tokenBuilder.Token
 
-    let eofInString lexbuf =
-        reportError <| EofInDocComment (tokenBuilder.Range) // TODO: separate error message
-
     let unknownTokenInString lexbuf =
         unknownToken lexbuf  // TODO: separate error message
-        tokenBuilder <- tokenBuilder.Append (getLexemeAndRange lexbuf)
+        tokenBuilder.Append (getLexemeAndRange lexbuf)
