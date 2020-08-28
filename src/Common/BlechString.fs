@@ -21,15 +21,18 @@ namespace Blech.Common
 // Allow '\<newline>' as a line continuation
 // All end of line sequences should be normalized first
 
+type BlechString = byte [] // a blech string is an array of bytes
 
 module BlechString = 
     open System
     open System.Text.RegularExpressions
     
+
     // ----
     // Regular expression patterns
     // ----
     
+
     [<Literal>]
     let EndOfLine = "(\n\r|\r\n|\r|\n)"
     
@@ -49,6 +52,7 @@ module BlechString =
     let private decimalEscapeToByte (decEsc: string) : byte = 
         let dec = decEsc.Substring(1)
         Byte.Parse dec
+
         
     let isValidDecimalEscape (decEsc: string) =
         try 
@@ -57,6 +61,9 @@ module BlechString =
         with 
         | :? System.OverflowException -> 
             false
+
+    let normalizeDecimalEscape (decEsc: string) : string =
+        sprintf "\\%03d" <| decimalEscapeToByte decEsc
 
     let private hexEscapeToByte (hexEsc: string) : byte =
         let hexdigits = hexEsc.Substring 2
@@ -75,18 +82,21 @@ module BlechString =
         | :? System.OverflowException ->
             false
 
-    // --- Unescaping ---
+    // --- Unescaping to BlechString ---
+
+    let decimalEscapeToString (decEsc : string) : BlechString = 
+        [| decimalEscapeToByte decEsc |]
+
+    let hexEscapeToString (hexEsc : string) : BlechString =
+        [| hexEscapeToByte hexEsc |]
+
+    
+
+
+    // --- Unescaping to string, which is not a BlechString 
 
     let escapeToString (esc: string) : string = 
            Regex.Unescape esc // does the job for all defined Blech escapes sequences
-
-    let decimalEscapeToString (decEsc : string) : string = 
-        let b = decimalEscapeToByte decEsc
-        Text.Encoding.UTF8.GetString [| b |]
-
-    let hexEscapeToString (hexEsc : string) : string =
-        let b = hexEscapeToByte hexEsc
-        Text.Encoding.UTF8.GetString [| b |]
 
     let unicodeEscapeToString (uniEsc : string) : string =
         unicodeEscapeToUtf32 uniEsc
@@ -201,5 +211,3 @@ module BlechString =
         |> removeEmptyFirstLine 
         |> String.concat Linefeed
         |> removeLineContinuations
-
-        

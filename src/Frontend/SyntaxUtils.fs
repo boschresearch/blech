@@ -133,6 +133,7 @@ module SyntaxErrors =
         | InvalidLineTerminator of lt: string * rng: Range.range
         | UnbalancedIndentation of indent: Range.range * unbalanced: Range.range
         | BackslashWithoutEscape of here: Range.range
+        | EscapeCurrentlyNotSupported of esc: string * rng: Range.range
 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -173,7 +174,9 @@ module SyntaxErrors =
                 | BackslashWithoutEscape rng ->
                     { range = rng
                       message = "backslash '\\' does not start a valid escape sequence." }
-
+                | EscapeCurrentlyNotSupported (esc, rng) ->
+                    { range = rng
+                      message = sprintf "Escape sequence '%s' is currently not supported." esc }
 
             member err.ContextInformation = 
                 match err with
@@ -201,7 +204,8 @@ module SyntaxErrors =
                       { range = unbalanced; message = "unbalanced indent"; isPrimary = true } ] 
                 | BackslashWithoutEscape rng ->
                     [ { range = rng; message = "no escape"; isPrimary = true } ]   
-                
+                | _ -> 
+                    []
     
             member err.NoteInformation = 
                 match err with
@@ -248,7 +252,9 @@ module SyntaxErrors =
                       "Use '\\ddd' with up to 3 decimal digits for decimal escapes."
                       "Use '\\xXX' with exactly 2 hexadecimal digits for hex escapes."
                       "Use '\\u{XXX}' with at least 1 hexadecimal digit for unicode escapes."]
-                
+                | _ -> 
+                    []
+    
 
 module ParserUtils = 
     open System.Numerics
@@ -727,18 +733,23 @@ module LexerUtils =
         tokenBuilder.Append (unesc, rng)
 
     let decimalEscapeInString lexbuf =
+        // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
-        let mutable unesc = esc
+        let mutable nesc = esc
+        // let mutable unesc = esc
         if not <| BlechString.isValidDecimalEscape esc then 
             reportError <| DecimalEscapeTooLarge (esc, rng)
         else
-            unesc <- BlechString.decimalEscapeToString esc
-        tokenBuilder.Append (unesc, rng)
+        //    unesc <- BlechString.decimalEscapeToString esc
+            reportError <| EscapeCurrentlyNotSupported (esc, rng)
+        tokenBuilder.Append (nesc, rng)
 
     let hexEscapeInString lexbuf =
+        // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
-        let unesc =  BlechString.hexEscapeToString esc
-        tokenBuilder.Append (unesc, rng)
+        // let unesc =  BlechString.hexEscapeToString esc
+        reportError <| EscapeCurrentlyNotSupported (esc, rng)
+        tokenBuilder.Append (esc, rng)
 
     let backslashInString lexbuf = 
         let bs, rng = getLexemeAndRange lexbuf

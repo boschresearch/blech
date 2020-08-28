@@ -2,19 +2,19 @@
 // lovely w\"orld", header= "bla.h")]
 // extern function invalidEscape(x: bool)
 
-@[CFunction (binding = "hello \169 bla\
- world\2" , header= "bla.h")]
-extern function decimalTooLarge()
+// @[CFunction (binding = "hello \169 bla\
+//  world\2" , header= "bla.h")]
+// extern function decimalTooLarge()
 
-@[CFunction (binding = "hello \x9f continuation\
- worl\xAFd \0 \92 continuation\
- bla" , header= "bla.h")]
-extern function invalidHex()
+// @[CFunction (binding = "hello \x9f continuation\
+//  worl\xAFd \0 \92 continuation\
+//  bla" , header= "bla.h")]
+// extern function invalidHex()
 
 @[CFunction (binding = """
 		               printf("%d", $1);
 		                 bla😬fasel🔥;
-		               fasel \xAF bla
+		               fasel bla
 
 		                  
 		               """, 
