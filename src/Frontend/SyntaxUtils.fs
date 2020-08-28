@@ -778,3 +778,4 @@ module LexerUtils =
     let unknownTokenInString lexbuf =
         unknownToken lexbuf  // TODO: separate error message
         tokenBuilder.Append (getLexemeAndRange lexbuf)
+

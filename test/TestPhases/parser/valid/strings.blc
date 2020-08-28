@@ -2,7 +2,7 @@
 // lovely w\"orld", header= "bla.h")]
 // extern function invalidEscape(x: bool)
 
-@[CFunction (binding = "hello \255 bla\
+@[CFunction (binding = "hello \169 bla\
  world\2" , header= "bla.h")]
 extern function decimalTooLarge()
 

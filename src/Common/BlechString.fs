@@ -46,17 +46,21 @@ module BlechString =
     let private MaxUnicodeCodePoint = 1114111 // U+10ffff
    
     
-    let private decimalEscapeToUtf32 (decEsc: string) : int = 
+    let private decimalEscapeToByte (decEsc: string) : byte = 
         let dec = decEsc.Substring(1)
-        System.Int32.Parse dec
+        Byte.Parse dec
         
     let isValidDecimalEscape (decEsc: string) =
-        let dec = decimalEscapeToUtf32 decEsc
-        0 <= dec && dec <= 255
+        try 
+            ignore <| decimalEscapeToByte decEsc
+            true
+        with 
+        | :? System.OverflowException -> 
+            false
 
-    let private hexEscapeToUtf32 (hexEsc: string) : int =
+    let private hexEscapeToByte (hexEsc: string) : byte =
         let hexdigits = hexEsc.Substring 2
-        Int32.Parse (hexdigits, System.Globalization.NumberStyles.AllowHexSpecifier)
+        Byte.Parse (hexdigits, System.Globalization.NumberStyles.AllowHexSpecifier)
 
     // throws System.OverflowException if hex number is too big
     let private unicodeEscapeToUtf32 (unicodeEscape : string) : int =
@@ -74,15 +78,15 @@ module BlechString =
     // --- Unescaping ---
 
     let escapeToString (esc: string) : string = 
-           Regex.Unescape esc
+           Regex.Unescape esc // does the job for all defined Blech escapes sequences
 
     let decimalEscapeToString (decEsc : string) : string = 
-        decimalEscapeToUtf32 decEsc
-        |> Char.ConvertFromUtf32
+        let b = decimalEscapeToByte decEsc
+        Text.Encoding.UTF8.GetString [| b |]
 
     let hexEscapeToString (hexEsc : string) : string =
-        hexEscapeToUtf32 hexEsc
-        |> Char.ConvertFromUtf32
+        let b = hexEscapeToByte hexEsc
+        Text.Encoding.UTF8.GetString [| b |]
 
     let unicodeEscapeToString (uniEsc : string) : string =
         unicodeEscapeToUtf32 uniEsc
