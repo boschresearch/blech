@@ -196,6 +196,7 @@ type TyCheckError =
     | MissingEntryPoint of range
     | MultipleEntryPoints of first: range * second: range
     | IllegalEntryPoint of range * AST.Package
+    | BindingIndexOutOfBounds of range * string list
     // pragmas
     | UnknownPragma of range
     
@@ -409,6 +410,8 @@ type TyCheckError =
             | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation."
             | MultipleEntryPoints (second = p) -> p, "'@[EntryPoint]' activity already defined."
             | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
+            | BindingIndexOutOfBounds (p, indices) -> p, sprintf "Parameter index: %s, out-of bounds." <| String.concat ", " indices
+            
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
 
@@ -562,7 +565,10 @@ type TyCheckError =
                   { range = second; message = "redefinition"; isPrimary = true } ]
             | UnknownPragma range -> 
                 [ { range = range; message = "not known"; isPrimary = true} ]
-            
+            | BindingIndexOutOfBounds (range, _) ->
+                [ { range = range; message = "wrong indexing"; isPrimary = true} ]
+
+
             // --- result receivers ---
             | ReceiverForVoidReturn (receiver, decl) -> 
                 [ { range = receiver; message = "wrong receiver"; isPrimary = true} 
@@ -658,12 +664,15 @@ type TyCheckError =
             
             // annotations
             | UnsupportedAnnotation _ ->
-                ["This Blech attribute is not supported here, check the spelling."]
+                [ "This Blech attribute is not supported here, check the spelling." ]
             | MultipleEntryPoints _ -> 
-                ["Delete one of the annotations."]
+                [ "Delete one of the annotations." ]
             | UnknownPragma _ ->
-                ["This is not a defined Blech pragma attribute, check the spelling."]
-            
+                [ "This is not a defined Blech pragma attribute, check the spelling." ]
+            | BindingIndexOutOfBounds (range, _) ->
+                [ "$1 is the first input parameter."
+                  "$<max> is the last output parameter." ]
+
             // --- result receivers ---
             | ReceiverForVoidReturn _ ->
                 ["Remove the receiver."]

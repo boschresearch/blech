@@ -4,7 +4,7 @@
 @[CFunction(binding = """
                       do {
                         *$2 = $1; /* first line äöüß */
-                        *$2 = *$2 + 2; 
+                        *$2 = *$3 + 2 + $0; 
                       } while (0)
                       """ )]
 extern function plus2 (x: nat16)(xplus2: nat16)
