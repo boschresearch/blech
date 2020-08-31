@@ -140,7 +140,7 @@ module BlechString =
     let private getTabCount line = 
         Regex.Match(line, TabIndentation).Length
 
-    let private getIndentation line = 
+    let private getIndentationPrefix line = 
         Regex.Match(line, Indentation).Value
 
     let findUnbalancedIndentations (lines: string list) =
@@ -149,7 +149,7 @@ module BlechString =
             let mutable tabs = 0
             [ for i, line in List.indexed lines do  // The first line cannot contain tabs due to the lexer
                 if i > 0 && not (isEmptyLine line) then // an empty line is always balanced
-                    let lineIndent = getIndentation line
+                    let lineIndent = getIndentationPrefix line
                     let tabCount = getTabCount line
                     if Option.isNone indent then
                         indent <- Some (i, lineIndent) // init indent
@@ -165,18 +165,20 @@ module BlechString =
 
     // assumes balanced tab indentation
     let getCommonIndentation (lines: string list) = 
-        let mutable commonIndent = None
-        for i, line in List.indexed lines do
-            if i > 0 then                               // the first line is not relevant
-                if i = List.length lines - 1 ||         // the last line is always relevant
-                   not (isWhitespaceLine line)  then    // whitespace lines are not relevant
-                    let indent = getIndentation line
-                    if Option.isNone commonIndent then  // first defining indentation
-                        commonIndent <- Some indent
-                    elif (Option.get commonIndent).StartsWith indent then
-                        commonIndent <- Some indent
-        
-        Option.defaultValue "" commonIndent
+        let processLine comIndentPrefOpt (i, line) =
+            if i > 0 && not (isWhitespaceLine line) // discard first and empty lines
+               || i = lines.Length - 1 then    // but always consider the last line
+                    let prefix = getIndentationPrefix line
+                    match comIndentPrefOpt with
+                    | None -> Some prefix    // first defining indentation
+                    | Some (cip: string) ->
+                        if cip.StartsWith prefix then Some prefix
+                        else comIndentPrefOpt
+            else comIndentPrefOpt
+
+        List.indexed lines
+        |> List.fold processLine None
+        |> Option.defaultValue ""
 
     let indentationRange (mlsRange : Range.range) (line : int, indent : string) =
         let l = mlsRange.StartLine + line
