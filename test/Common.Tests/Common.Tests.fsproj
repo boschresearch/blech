@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="BlechStrings.fs" />
     <Compile Include="Bindings.fs" />
     <Compile Include="SearchPath.fs" />
     <Compile Include="CodeMap.fs" />

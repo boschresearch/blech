@@ -1,0 +1,26 @@
+
+@@[CInclude (header = "forall.h")]
+
+// Tab ('\t') only allow for identation in multi-line strings
+@[CFunction (binding ="abc\
+	def")]
+extern function f()
+
+// Backslash space ("\ ") is not a valid line continuation 
+@[CFunction (binding ="abc\ 
+    def")]
+extern function g()
+
+// Tab in non-indentation position
+@[CFunction (binding = """abc\
+	tab:	; 
+	""")]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

@@ -1,0 +1,23 @@
+
+@@[CInclude (header = "forall.h")]
+
+// @[CFunction (binding ="max: \255 leadingzeros: \001 \
+// null: \0 3 digits max: \1234 keep 4 in: \0004")]
+// extern function f()
+
+// @[CFunction (binding = """
+//         max: \255 
+//         leadingzeros: \001 
+//         null: \0
+//         3 digits max: \1234
+//         keep 4 in: \0004
+//         """)]
+// extern function h()
+
+function f() end
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

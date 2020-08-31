@@ -22,6 +22,8 @@
 ///============================================================================
 module Blech.Frontend.TyChkAmendment
 
+open Blech.Common
+
 open Constants
 open CommonTypes
 open BlechTypes
@@ -453,8 +455,7 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
 /// Poor man's type deduction for variable initialisation.
 /// If either type or initial value is given, infer the other one if possible.
 /// If both are given, check that the types agree.
-let internal alignOptionalTypeAndValue pos name dtyOpt (initValOpt: TyChecked<TypedRhs> option) =
-
+let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt = 
     let inferFromRhs (expr: TypedRhs) =
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)

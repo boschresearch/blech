@@ -1,0 +1,25 @@
+@@[CInclude (header = "forall.h")]
+
+// backslash newline gets removed
+@[CFunction (binding ="abc \
+def")]
+extern function f()
+
+// Backslash space ("\ ") is not a valid line continuation 
+@[CFunction (binding ="abc \
+    def")]
+extern function g()
+
+// backslash newline gets removed after identation normalization
+@[CFunction (binding = """abc \
+    def \
+    hij""")]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

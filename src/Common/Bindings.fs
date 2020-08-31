@@ -18,9 +18,10 @@ namespace Blech.Common
 
 module Bindings = 
     open System.Text.RegularExpressions
+    open PPrint
     
     [<Literal>]
-    let private parameterPattern = "\$[1-9][0-9]*"
+    let private parameterPattern = "\$[0-9]+"
 
     let private getIndex (m: Match) = 
         int <| m.Value.Substring 1
@@ -40,3 +41,12 @@ module Bindings =
         let evaluator = MatchEvaluator replace
         
         Regex.Replace (binding, parameterPattern, evaluator)
+
+    let parameterIndexToString i = 
+        sprintf "$%d" i
+
+    let toDoc (binding : string) = 
+        let lines = binding.Split '\n' 
+        Seq.map txt lines
+        |> vsep
+        |> align

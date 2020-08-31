@@ -1422,7 +1422,7 @@ and private combineExprAndType lut (expr: AST.Expr) (typ: AST.DataType) reTypeFu
 /// We guarantee that compile time expressions are evaluated to a literal
 /// BoolConst, IntConst, FloatConst, ResetConst, StructConst, ArrayConst
 /// where the latter two may only contain const literals in their fields recursively.
-and internal checkExpr (lut: TypeCheckContext) expr: TyChecked<TypedRhs> =
+and internal checkExpr (lut: TypeCheckContext) expr = 
     match expr with
     | AST.Expr.Const literal -> checkSimpleLiteral literal
     | AST.Expr.AggregateConst (ac, r) -> checkAggregateLiteral lut ac r

@@ -1,0 +1,15 @@
+// @[CFunction (binding = "hello \c world", header= "bla.h")]
+// extern function invalidEscape()
+
+// @[CFunction (binding = "hello \542 world" , header= "bla.h")]
+// extern function decimalTooLarge()
+
+@[CFunction (binding = "hello bla \xag world" , header= "bla.h")]
+extern function invalidHex()
+
+@[EntryPoint]
+activity main()()
+    await true
+end
+
+

@@ -30,24 +30,15 @@ open Blech.Common
 
 (* Lexer regex rules *)
 
-let newline = ('\n' | '\r' '\n')
-
-(* strings follow https://docs.python.org/2.0/ref/strings.html
-   verbatim strings follow f# and c#
-   TODO: add triplequoted and multiline strings, fjg. 16.07.20 *)
-
-let shortstringchar = [^ '\\' '\"' '\n']
-let escapeseq = '\\' ['\x00' - '\x7F']
-let shortstringitem = (shortstringchar | escapeseq)
-let stringliteral = '"' shortstringitem* '"'
-let doublequotes = "\"\""
-let verbatimstringliteral = "@\"" (shortstringitem | doublequotes)* '"'
+(* all combinations of ascii end of line sequences *)
+let endofline = ( '\r' '\n' | '\n' '\r' | '\n' | '\r' )
 
 (* numbers and bitvecs follow https://www.python.org/dev/peps/pep-0515/ *)
+let hexdigit = ['0'-'9' 'a'-'f' 'A'-'F']
 
-let binliteral = "0b"('_'?['0'-'1'])+
-let octliteral = "0o"('_'?['0'-'7'])+
-let hexliteral = "0x"('_'?['0'-'9' 'a'-'f' 'A'-'F'])+  
+let binliteral = "0b"('_'? ['0'-'1'])+
+let octliteral = "0o"('_'? ['0'-'7'])+
+let hexliteral = "0x"('_'? hexdigit)+  
 
 let digit = ['0' - '9']
 let nonzerodigit = ['1' - '9']
@@ -55,10 +46,8 @@ let nonzero = nonzerodigit ('_'? digit)*
 let zero = '0' ('_'? '0')*
 let natliteral = (nonzero | zero)
 
-(* float literals have a specified precision
-   this is unlike Swift where literals are assumed to be Double *)
-
-let digitpart = ['0'-'9']('_'?['0'-'9'])*
+(* float literals *)
+let digitpart = digit ('_'? digit)*
 let fraction = '.' digitpart
 let exponent = ('e' | 'E') ('+' | '-')? digitpart
 let pointfloat = digitpart? fraction | digitpart '.'
@@ -68,15 +57,44 @@ let floatliteral = (pointfloat | exponentfloat)
 (* hexadecimal floating point literals with "_" instead of "'" follow
    C++17 http://en.cppreference.com/w/cpp/language/floating_literal and 
    C99 http://en.cppreference.com/w/c/language/floating_constant  *)
-
-let hexdigitpart = ['0'-'9' 'a'-'f' 'A'-'F']('_'?['0'-'9' 'a'-'f' 'A'-'F'])* 
+let hexdigitpart = hexdigit ('_'? hexdigit)* 
 let hexfraction = '.' hexdigitpart
 let hexexponent = ('p' | 'P') ('+' | '-')? digitpart
 let hexpointfloat = hexdigitpart? hexfraction | hexdigitpart '.'
 let hexexponentfloat = (hexdigitpart | hexpointfloat) hexexponent
 let hexfloatliteral = "0x"'_'? hexexponentfloat
 
+(* strings and multi-line strings follow Julia https://docs.julialang.org/en/v1/manual/strings/
+   line continuations are allowed for both
+   escape sequence checking follows Lua https://www.lua.org/manual/5.4/manual.html#3.1 *)
+
+let linecontinuation = '\\' endofline
+
+let unicodelineterminator = ['\u0085' '\u2028' '\u2029'] // NEL, LS and PS are invalid
+
+let stringcharacter = [^ '\\' '"'] 
+
+let charcharacter = [^ '\\' '\''] 
+
+let escape = '\\' ['a' 'b' 'f' 'n' 'r' 't' 'v' '\\' '\'' '\"']
+let hexescape = '\\' 'x' hexdigit hexdigit
+let decimalescape = '\\' digit digit? digit?
+let unicodeescape = '\\' 'u' '{' hexdigit+ '}'
+
+// let stringitem = stringcharacter | escape | hexescape
+
+let triplequotes = "\"\"\""
+let quotes = '"' '"'?
+
+let characterchar = [^ '\\' '\'' '\x00'-'\x1f' '\x7f'-'\xff']  // printable unicode only  
+let charitem = charcharacter | escape | hexescape
+let characterliteral = '\'' charitem '\''
+
+let identifier = '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
+let wildcard = '_'+
+
 let path = '<' [^ '>''.''/''\\'] [^'>''\\']* '>' 
+
 
 let chunkwithoutnewline = [^'\n' '\r']*
 let chunkwithoutstar = [^'*' '\n' '\r']*
@@ -86,26 +104,42 @@ let chunkwithoutstarandslash = [^'*' '/' '\n' '\r']*
 rule Token = parse
 
     (* ---- doc comments, comments and whitespaces ---- *)
-    | ['\t']                { // tabularUsed lexbuf; 
+    
+
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              Token lexbuf }
+
+
+    
+    | unicodelineterminator { unicodeLineTerminator lexbuf
+                              Token lexbuf }
+
+    | ' '                   { Token lexbuf }
+
+    | '\t'+                 { // tabs for identation at the start of a line are allowed
+                              tabInCode lexbuf
                               Token lexbuf }
     
-    | "/*"                  { commentDepth <- 1; 
-                              commentStart <- Some (getRange lexbuf);
+    | "/*"                  { commentDepth <- 1 
+                              commentStart <- Some (getRange lexbuf)
                               SkipBlockComment lexbuf }
     
     | "//"                  { SkipLineComment lexbuf } 
-    
-    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
-                              Token lexbuf }
-    
-    | [' ']                 { Token lexbuf }
+
+    (* --- strings --- *)
+
+    | '"'                   { startString lexbuf
+                              CollectSingleLineString lexbuf }
+
+    | triplequotes          { startString lexbuf
+                              CollectMultiLineString lexbuf }
 
     (* ---- doc comments ---- *)
 
-    | "///"                 { docString <- docString.Init (getRange lexbuf) 
+    | "///"                 { tokenBuilder.Init (getRange lexbuf) 
                               CollectLineDoc lexbuf } 
     
-    | "/**"                 { docString <- docString.Init (getRange lexbuf) 
+    | "/**"                 { tokenBuilder.Init (getRange lexbuf) 
                               CollectBlockDoc lexbuf } 
 
     (* ---- file system: reserved directory name for blech transpilations ---- *)
@@ -320,44 +354,34 @@ rule Token = parse
 
     | hexfloatliteral       { HEXFLOATCONST (getLexemeAndRange lexbuf) }
 
-    | stringliteral         { let l, r = getLexemeAndRange lexbuf in      
-                              // The string value strips of " ", the range contains " "
-                              // escape sequences get replaced by their respective char
-                              STRING ( sprintf "%s" <| l.Substring(1, l.Length - 2), r ) }   
-    | verbatimstringliteral { let l, r = getLexemeAndRange lexbuf in      
-                              // The string value strips of @" ", the range contains @" "
-                              // replaces "" with "
-                              STRING ( l.Substring(2, l.Length - 3).Replace("\"\"", "\""), r ) }
+    | identifier            { ID (getLexemeAndRange lexbuf) }
 
-    | '_'*['a'-'z' 'A'-'Z']+['_' 'a'-'z' 'A'-'Z' '0'-'9']* 
-                            { ID (getLexemeAndRange lexbuf) }
+    | wildcard              { WILDCARD (getLexemeAndRange lexbuf) }
 
-    | '_'+                  { WILDCARD (getLexemeAndRange lexbuf) }
+    (* --------- end of file and invalid source code characters  --------- *)
 
-    (* --------- end of file and unknown tokens --------- *)
+    | eof                   { EOF (getRange lexbuf) }
 
-    | eof                    { EOF (getRange lexbuf) }
-    | _                      { unknownToken lexbuf; 
-                               Token lexbuf }
+    | _                     { unknownToken lexbuf;
+                              Token lexbuf }
 
-(* fjg: returns the next token after the comment, in order to make EOF available in case of unterminated comment *)
+
 and SkipBlockComment = parse     
+    // returns the next token after the comment, 
+    // in order to make EOF available in case of unterminated comment
 
-    | "*/"                  { commentDepth <- commentDepth - 1;
+    | "*/"                  { commentDepth <- commentDepth - 1
                               if commentDepth = 0 then
                                   commentStart <- None;
-                                  Token lexbuf
+                                  Token lexbuf // this tail recursen should not grow the stack
                               else 
                                   SkipBlockComment lexbuf }
        
-    | "/*"                  { commentDepth <- commentDepth + 1;
+    | "/*"                  { commentDepth <- commentDepth + 1
                               SkipBlockComment lexbuf }
 
-    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
                               SkipBlockComment lexbuf }
-
-    | eof                   { commentNotClosed lexbuf; 
-                              EOF (getRange lexbuf) }
 
 
     | chunkwithoutstarandslash
@@ -367,50 +391,165 @@ and SkipBlockComment = parse
 
     | "*"                   { SkipBlockComment lexbuf }
 
+    | eof                   { eofInBlockComment lexbuf
+                              EOF (getRange lexbuf) }
 
 
 and SkipLineComment = parse
-    | chunkwithoutnewline   { Token lexbuf }
+    // returns the next token after the comment, 
+    // in order to make EOF available in case of a line comment in the last line
+
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+                              Token lexbuf } // this tail recursion should not grow the stack
+
+    | unicodelineterminator { unicodeLineTerminator lexbuf
+                              SkipLineComment lexbuf }
+
+    | chunkwithoutnewline   { SkipLineComment lexbuf }
+
+    | eof                   { // line comment in last line is ok
+                              EOF (getRange lexbuf) }  
+
 
 and SkipLineOnError = parse
-    | newline               { let eol = EOL (getRange lexbuf) in
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine;
                               ParserContext.setErrorTokenAccepted false; 
-                              eol}
+                              EOL (getRange lexbuf) }
+
+    | unicodelineterminator { unicodeLineTerminator lexbuf
+                              SkipLineOnError lexbuf }
+
+    | chunkwithoutnewline   { SkipLineOnError lexbuf }
 
     | eof                   { ParserContext.setErrorTokenAccepted false; 
                               EOF (getRange lexbuf)}
 
-    | chunkwithoutnewline   { SkipLineOnError lexbuf }
-
 
 and CollectLineDoc = parse    
-    | chunkwithoutnewline   { docString <- docString.Append(getLexemeAndRange lexbuf)
+
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+                              LINEDOC (tokenBuilder.Token) }
+
+    | unicodelineterminator { unicodeLineTerminatorInDocComment lexbuf
                               CollectLineDoc lexbuf }
 
-    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
-                              LINEDOC (docString.ToDoc) }
-                              
-    | eof                   { eofInDocComment (docString.Range) 
+    | eof                   { eofInDocComment lexbuf
                               EOF (getRange lexbuf) }
 
+    | chunkwithoutnewline   { validTokenInDocComment lexbuf
+                              CollectLineDoc lexbuf }
+                              
     
 and CollectBlockDoc = parse
-    | chunkwithoutstar      { docString <- docString.Append(getLexemeAndRange lexbuf)
-                              CollectBlockDoc lexbuf }
-
-    | "*"                   { docString <- docString.Append(getLexemeAndRange lexbuf)
-                              CollectBlockDoc lexbuf }
     
-    | newline               { docString <- docString.Append(getLexemeAndRange lexbuf)
-                              lexbuf.EndPos <- lexbuf.EndPos.NextLine // necessary for correct ranges
+    | endofline             { validTokenInDocComment lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
                               CollectBlockDoc lexbuf }
-    
 
-    | "*/"                  { BLOCKDOC (docString.ToDoc) }
+    | unicodelineterminator { unicodeLineTerminatorInDocComment lexbuf
+                              CollectBlockDoc lexbuf }
 
-    | eof                   { eofInDocComment (docString.Range)
+    | eof                   { eofInDocComment lexbuf
                               EOF (getRange lexbuf) }
+
+    | "*/"                  { BLOCKDOC (tokenBuilder.Token) }
+    
+    | chunkwithoutstar      { validTokenInDocComment lexbuf
+                              CollectBlockDoc lexbuf }
+
+    | "*"                   { validTokenInDocComment lexbuf
+                              CollectBlockDoc lexbuf }
+
+
+
+and CollectSingleLineString = parse
+
+    | linecontinuation      { lineContinuationInSingleLineString lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              CollectSingleLineString lexbuf }
+
+    | endofline             { eolInSingleLineString lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+                              CollectSingleLineString lexbuf }
+
+    | '\t'                  { tabInSingleLineString lexbuf
+                              CollectSingleLineString lexbuf }
+
+    | unicodelineterminator { unicodeLineTerminatorInString lexbuf
+                              CollectSingleLineString lexbuf }
+
+    | '"'                   { STRING (finishSingleLineString lexbuf) }
+
+    | escape                { escapeInString lexbuf
+                              CollectSingleLineString lexbuf }
+    
+    | hexescape             { hexEscapeInString lexbuf
+                              CollectSingleLineString lexbuf }
+
+    | decimalescape         { decimalEscapeInString lexbuf
+                              CollectSingleLineString lexbuf }
+
+    | unicodeescape         { unicodeEscapeInString lexbuf
+                              CollectSingleLineString lexbuf }
+        
+    | stringcharacter       { validTokenInString lexbuf
+                              CollectSingleLineString lexbuf }
+        
+
+    | eof                   { eofInString lexbuf
+                              EOF (getRange lexbuf) }
+
+    | '\\'                  { backslashInString lexbuf
+                              CollectSingleLineString lexbuf }
+    
+    | _                     { unknownTokenInString lexbuf; 
+                              CollectSingleLineString lexbuf }
+
+
+and CollectMultiLineString = parse
+
+    | linecontinuation      { lineContinuationInMultiLineString lexbuf // '\<linefeed> removed after indentation handling
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              CollectMultiLineString lexbuf }
+
+    | endofline             { eolInMultiLineString lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                              CollectMultiLineString lexbuf }
+
+    | '\t'+                 { tabInMultiLineString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | unicodelineterminator { unicodeLineTerminatorInString lexbuf
+                              CollectMultiLineString lexbuf }
+    
+    | triplequotes          { MULTILINESTRING (finishMultiLineString lexbuf) }    
+
+    | escape                { escapeInString lexbuf
+                              CollectMultiLineString lexbuf }
+    
+    | hexescape             { hexEscapeInString lexbuf
+                              CollectMultiLineString lexbuf }
+    
+    | decimalescape         { decimalEscapeInString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | unicodeescape         { unicodeEscapeInString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | stringcharacter       { validTokenInString lexbuf
+                              CollectMultiLineString lexbuf }
+    
+    | quotes                { validTokenInString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | eof                   { eofInString lexbuf
+                              EOF (getRange lexbuf) }
+
+    | '\\'                  { backslashInString lexbuf
+                              CollectMultiLineString lexbuf }
+
+    | _                     { unknownTokenInString lexbuf
+                              CollectMultiLineString lexbuf }
 
 
 and FromPath = parse
@@ -418,7 +557,7 @@ and FromPath = parse
                               FROMPATH {Blech.Frontend.AST.FromPath.path = path
                                         range = Range.unionRanges fromStart rng } }
 
-    | newline               { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
                               FromPath lexbuf }
     
     | [' ']                 { FromPath lexbuf }

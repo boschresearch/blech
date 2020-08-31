@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+open Blech.Common
 open Blech.Common.Range
 
 open Blech.Frontend.CommonTypes 
@@ -104,7 +105,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 /* Literals */
 %token <string * range> WILDCARD
-%token <string * range> STRING VERBATIMSTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
+%token <string * range> STRING MULTILINESTRING BINCONST OCTCONST HEXCONST NATCONST FLOATCONST HEXFLOATCONST
 
 /* Identifiers */
 %token <string * range> ID 
@@ -1494,8 +1495,8 @@ Identifier
 AttributeLiteral 
     : STRING                                    { Literal.String $1 }
 
-    | VERBATIMSTRING                            { Literal.String $1 }
-    
+    | MULTILINESTRING                           { Literal.String $1 }
+
     | TRUE                                      { Literal.Bool (true, $1) }
     
     | FALSE                                     { Literal.Bool (false, $1) }

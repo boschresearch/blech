@@ -207,7 +207,7 @@ let getModuleName searchPath package file : Result<ModuleName, string list> =
 //    Path.Combine (searchDir, package, filePath)
 
 let moduleNameToIdentifiers (moduleName: string) =
-    String.split dot moduleName
+    moduleName.Split dot
 
 let isImplementation (file: string) = 
     (Path.GetExtension file) = implementationFileExtension

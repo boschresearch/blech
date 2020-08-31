@@ -22,7 +22,7 @@ module Annotation =
     open Attribute
     open TypeCheckContext
     open TyChecked
-    
+
     let private unsupportedAnnotation (anno : AST.Annotation)  = 
         Error [UnsupportedAnnotation anno.Range ]
 
@@ -36,7 +36,8 @@ module Annotation =
         Error [MissingNamedArgument (range, key) ]
 
     let private bindingParameterOutOfBounds range indexes = 
-        Error [Dummy (range, "some indexes out of bounds")]
+        let indices = List.map (fun i -> Bindings.parameterIndexToString i) indexes
+        Error [ BindingIndexOutOfBounds (range, indices)]
 
     /// Creates a typed annotation from an admissible untyped annotation
     // recursive decent is currently not neccessary
@@ -167,7 +168,7 @@ module Annotation =
             match fpattr.TryGetCBinding with
             | Some cbinding -> 
                 let maxIndex = List.length fp.inputs + List.length fp.outputs
-                let idcsOutOfBounds = List.filter (fun i -> i > maxIndex) (Bindings.getParameterIndices cbinding)
+                let idcsOutOfBounds = List.filter (fun i -> i < 1 || i > maxIndex) (Bindings.getParameterIndices cbinding)
                 if List.isEmpty idcsOutOfBounds then
                     Ok fpattr
                 else

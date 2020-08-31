@@ -1,0 +1,20 @@
+
+@@[CInclude (header = "forall.h")]
+
+@[CFunction (binding = "too large: \u{11FFFF} \
+too large with leading 0: \u{0020abcd}" )]
+extern function f()
+
+@[CFunction (binding = """
+        too large: \u{11FFFF} 
+        too large with leading 0: \u{0020abcd}
+        """)]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end
