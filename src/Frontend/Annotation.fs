@@ -21,6 +21,7 @@ module Annotation =
     open Blech.Common
     open Attribute
     open TypeCheckContext
+    open TyChecked
 
     let private unsupportedAnnotation (anno : AST.Annotation)  = 
         Error [UnsupportedAnnotation anno.Range ]
@@ -125,7 +126,7 @@ module Annotation =
                 | _ ->
                     unsupportedAnnotation anno
 
-            Result.combine spattr (checkAnnotation anno)
+            combine spattr (checkAnnotation anno)
             |> Result.bind checkAttribute
         List.fold checkSpAnno (Ok Attribute.SubProgram.Empty) sp.annotations
      
@@ -152,7 +153,7 @@ module Annotation =
                 | _ ->
                     unsupportedAnnotation anno
         
-            Result.combine fpattr (checkAnnotation anno)
+            combine fpattr (checkAnnotation anno)
             |> Result.bind checkAttribute
         
         let checkCFunction fpattr =
@@ -212,7 +213,7 @@ module Annotation =
                 | _ ->
                     unsupportedAnnotation anno
 
-            Result.combine vdattr (checkAnnotation anno)
+            combine vdattr (checkAnnotation anno)
             |> Result.bind checkAttribute
 
         let checkExternVarDecl vdattr =
@@ -240,7 +241,7 @@ module Annotation =
                 | _ ->
                     unsupportedAnnotation anno
 
-            Result.combine odattr (checkAnnotation anno)
+            combine odattr (checkAnnotation anno)
             |> Result.bind checkAttribute
          
         List.fold checkOdAnnotation (Ok Attribute.OtherDecl.Empty) annotations   

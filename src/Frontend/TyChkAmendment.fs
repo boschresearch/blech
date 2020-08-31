@@ -27,6 +27,7 @@ open Blech.Common
 open Constants
 open CommonTypes
 open BlechTypes
+open TyChecked
 open Evaluation
 
 module Range = Blech.Common.Range
@@ -348,7 +349,7 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
     
     kvps                   // type checked key value pairs as given by the programmer
     |> List.map processKvp // check that each kvp belongs to this struct
-    |> Result.contract
+    |> contract
     |> Result.map(
         merge // fill up all non-0 values that were not specified by the programmer
         >> (fun (literal) -> { rhs = StructConst literal; typ = lTyp; range = pos })
@@ -380,7 +381,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
                      
             values 
             |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
-            |> Result.contract
+            |> contract
             |> Result.map (
                 List.zip indices
                 >> merge // fill up array initialisers if necessary
@@ -478,9 +479,9 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
     | Some dtyRes, None ->
         dtyRes 
         |> Result.map (getInitValueWithoutZeros pos name)
-        |> Result.bind (Result.combine dtyRes)
+        |> Result.bind (combine dtyRes)
     | Some dtyRes, Some vRes ->
-        Result.combine dtyRes vRes
+        combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
             amendRhsExpr true dty v
             |> Result.map (fun amendedV -> (dty, amendedV))

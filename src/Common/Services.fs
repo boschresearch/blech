@@ -65,12 +65,6 @@ module String =
 
     /// converts a list of chars to a string
     let implode chars = System.String (List.toArray chars)
-
-
-    /// splits a string into an sequence of strings that were separated by the given separator string
-    //let split (seperator: string) (s:string) : seq<string> =
-    //    seq <| s.Split seperator
-    
     
     /// replace single characters in a string by another string
     let translate f s =
@@ -109,36 +103,6 @@ module Result =
         match result with
         | Ok _ -> true
         | Error _ -> false
-
-    /// Zips a pair of Oks into an Ok of pairs
-    /// In case at least one of the argument contains the Error case,
-    /// simply concatenates the errors.
-    let combine result1 result2 =
-        match result1, result2 with
-        | Error e1, Error e2 -> Error (e1 @ e2)
-        | Error e1, _ -> Error e1
-        | _, Error e2 -> Error e2
-        | Ok o1, Ok o2 -> Ok (o1, o2)
-
-    /// Similar to combine, except that it works on a list
-    /// and returns an Ok of a list in the good case.
-    let contract resultList =
-        let rec recContract ress res =
-            match ress with
-            | [] -> res
-            | x::xs ->
-                match x, res with
-                | Error e1, Error errs -> recContract xs <| Error (errs @ e1)
-                | _, Error errs -> recContract xs <| Error errs
-                | Error e1, _ -> recContract xs <| Error e1
-                | Ok sth, Ok someList -> recContract xs (Ok (someList @ [sth])) // respect the order!
-        recContract resultList (Ok [])
-
-    /// Similar to contract, except that it works on an optional
-    /// and returns an Ok of an optional in the good case
-    let ofOption = function
-        | None -> Ok None
-        | Some res -> res |> Result.map Some
 
 
 //-------------------------------------------------------------------------

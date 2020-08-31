@@ -22,7 +22,7 @@ open Blech.Common
 
 open CommonTypes
 open BlechTypes
-// open TyChecked
+open TyChecked
 open TypeCheckContext
 open TyChkAmendment
 open TyChkExpressions
@@ -100,11 +100,11 @@ let rec private stmtType stmt =
             )
         stmts
         |> List.map stmtType
-        |> Result.contract
+        |> contract
         |> Result.bind (List.fold folder (Ok NoReturn))
     | ITE (pos, _, ifBranch, elseBranch) ->
         stmtType (StmtSequence ifBranch)
-        |> Result.combine <| stmtType (StmtSequence elseBranch)
+        |> combine <| stmtType (StmtSequence elseBranch)
         |> Result.bind ( fun (ifType, elseType) ->
             match ifType, elseType with
             | NoReturn, NoReturn -> NoReturn |> Ok
@@ -145,7 +145,7 @@ let rec private stmtType stmt =
 
         blocks
         |> List.map (fun (strength, stmts) -> stmtType (StmtSequence stmts) |> Result.map (fun x -> strength, x))
-        |> Result.contract
+        |> contract
         |> Result.bind (List.fold folder (Ok NoReturn))
     
     
@@ -170,7 +170,7 @@ let private checkStmtsMatchReturn pos body retType =
 let rec private checkAbsenceOfSyncStmts stmts = 
     let applyToList f =
         List.map f
-        >> Result.contract
+        >> contract
         >> Result.bind (fun _ -> Ok ()) // in case we succeeded on every 
                                         // statement, simply indicate success
     let rec checkLhsRhs lhss rhss =
@@ -549,8 +549,8 @@ let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno
         |> Result.bind checkMutabilityCompliance
         
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.combine <| dtyAndInit
-    |> Result.combine <| vDeclAnno
+    |> combine <| dtyAndInit
+    |> combine <| vDeclAnno
     |> Result.map createVarDecl
 
 
@@ -589,10 +589,10 @@ let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt v
         v
 
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.combine <| dtyGiven
-    |> Result.combine <| checkMutability
-    |> Result.combine <| vDeclAnno
-    |> Result.combine <| checkNoInit
+    |> combine <| dtyGiven
+    |> combine <| checkMutability
+    |> combine <| vDeclAnno
+    |> combine <| checkNoInit
     |> Result.map createExternalVarDecl
 
 let private recVarDecl lut (v: AST.VarDecl) =
@@ -624,7 +624,7 @@ let private fParamDecl lut pos name mutableFlag dtyRes =
 
     (Ok (lut.ncEnv.nameToQname name),
         dtyRes)
-    ||> Result.combine
+    ||> combine
     |> Result.map createArgDecl
 
 
@@ -658,10 +658,10 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
                 )
 
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.combine <| Result.contract inputs
-    |> Result.combine <| Result.contract outputs
-    |> Result.combine <| checkReturn retType
-    |> Result.combine <| annotation
+    |> combine <| contract inputs
+    |> combine <| contract outputs
+    |> combine <| checkReturn retType
+    |> combine <| annotation
     |> Result.map createFunPrototype
 
 
@@ -702,7 +702,7 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
             | _ -> typedRet |> Ok
             )
     let contractedBody =
-        let cb = Result.contract body 
+        let cb = contract body 
         if isFunction then
             cb
             |> Result.bind checkAbsenceOfSyncStmts // also excludes external variables
@@ -719,11 +719,11 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
         @ determineCalledSingletons lut contractedBody
 
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.combine <| Result.contract inputs
-    |> Result.combine <| Result.contract outputs
-    |> Result.combine <| checkReturn retType contractedBody
-    |> Result.combine <| contractedBody
-    |> Result.combine <| annotation
+    |> combine <| contract inputs
+    |> combine <| contract outputs
+    |> combine <| checkReturn retType contractedBody
+    |> combine <| contractedBody
+    |> combine <| annotation
     |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons))
 
 
@@ -740,7 +740,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         |> List.map (recVarDecl lut) // type check field declarations as variable declarations
         // make sure they are of value type
         |> List.map (Result.bind (fun v -> if v.datatype.IsValueType() then Ok v else Error[ValueStructContainsRef (std.name, v)]))
-        |> Result.contract
+        |> contract
 
     let checkAllFields fields =
         fields
@@ -748,7 +748,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         |> List.choose (function | AST.Member.Var v -> Some v | _ -> None) 
         // typify struct fields
         |> List.map (recVarDecl lut) // type check field declarations as variable declarations
-        |> Result.contract // here we do not care, if the datatype is value or reference type
+        |> contract // here we do not care, if the datatype is value or reference type
         
         // note, that QNames for the fields are added when checking the individual vardecls
 
@@ -759,14 +759,14 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         if std.isReference then
             // create reference type
             Ok qname
-            |> Result.combine <| checkAllFields std.fields
+            |> combine <| checkAllFields std.fields
             |> Result.map (
                 fun (q, f) -> (std.name.Range, q, f)
                 >> ReferenceTypes.StructType >> ReferenceTypes )
         else
             // create value type
             Ok qname
-            |> Result.combine <| checkValueFields std.fields
+            |> combine <| checkValueFields std.fields
             |> Result.map (
                 fun (q, f) -> (std.name.Range, q, f)
                 >> ValueTypes.StructType >> ValueTypes )
@@ -817,12 +817,12 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | Some lhsTypRes -> lhsTypRes    
         dtyRes
         |> Result.map (getInitValueWithoutZeros Range.range0 "")
-        |> Result.bind (Result.combine dtyRes)
+        |> Result.bind (combine dtyRes)
         
 
     Ok (lut.ncEnv.nameToQname name)
-    |> Result.combine <| dtyAndInit
-    |> Result.combine <| vDeclAnno
+    |> combine <| dtyAndInit
+    |> combine <| vDeclAnno
     |> Result.map createVarDecl
 
 let private checkFreshLocation lut (v: AST.VarDecl) (rhsTyp: Types) =
@@ -924,10 +924,10 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
         |> Result.bind (getSubProgDeclAsPrototype lut pos)
         |> Result.bind (fun decl ->
             checkIsActivity decl
-            |> Result.combine <| checkInputs pos inputs decl.name decl.inputs
-            |> Result.combine <| checkOutputs lut pos outputs decl.name decl.outputs
+            |> combine <| checkInputs pos inputs decl.name decl.inputs
+            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
             //|> combine <| checkReturnType resStorage decl.name decl.returns
-            |> Result.combine <| checkAssignReceiver pos lut rcv decl
+            |> combine <| checkAssignReceiver pos lut rcv decl
             |> Result.map (createCall decl.name)
             )
 
@@ -944,7 +944,7 @@ let private fAssign lut pos lhs rhs =
         |> Result.map (fun amendedRight -> Assign (pos, myleft, amendedRight))
     
     lhs
-    |> Result.combine <| rhs
+    |> combine <| rhs
     |> Result.bind (fun (l, r) -> 
         if isLhsMutable lut l.lhs then
             if l.typ.IsAssignable then
@@ -973,7 +973,7 @@ let private generateVC isAssertion pos conditions msgOpt =
             Assume(pos, guard, msg)
     
     conditions
-    |> Result.contract
+    |> contract
     |> Result.map (createAssume)
 
 
@@ -982,32 +982,32 @@ let private fAssume = generateVC false
        
        
 let private fAwait pos conditions =
-    Result.contract conditions // conditions are ensured to be without side-effects
+    contract conditions // conditions are ensured to be without side-effects
     |> Result.bind mkGuard
     |> Result.map (fun gg -> Await (pos, gg))
     
 
 let private fITE pos conditions ifStmts elseStmts _ =
-    let ifBranch = Result.contract ifStmts
-    let elseBranch = Result.contract elseStmts
+    let ifBranch = contract ifStmts
+    let elseBranch = contract elseStmts
         
-    Result.contract conditions
+    contract conditions
     |> Result.bind mkGuard 
-    |> Result.combine <| Result.combine ifBranch elseBranch
+    |> combine <| combine ifBranch elseBranch
     |> Result.map (fun (g,(i,e)) -> ITE(pos, g, i, e))
 
 
 let private fCobegin pos blocks =
     blocks
-    |> List.map (fun (str,body) -> Result.contract body |> Result.map (fun stmts -> str, stmts))
-    |>Result. contract
+    |> List.map (fun (str,body) -> contract body |> Result.map (fun stmts -> str, stmts))
+    |> contract
     |> Result.map (fun x -> Cobegin (pos, x))
     
 
 let private fWhile pos conditions stmts =
-    Result.contract conditions
+    contract conditions
     |> Result.bind mkGuard
-    |> Result.combine <| Result.contract stmts
+    |> combine <| contract stmts
     |> Result.bind (fun (g, s) -> makeWhile pos s g)
 
 
@@ -1018,10 +1018,10 @@ let private fRepeat pos stmts conditions endlessFlag =
         if endlessFlag then
             {rhs = BoolConst false; typ = ValueTypes BoolType; range = pos} |> Ok
         else
-            Result.contract conditions
+            contract conditions
             |> Result.bind mkGuard
-    Result.contract stmts
-    |> Result.combine guard
+    contract stmts
+    |> combine guard
     |> Result.map createRepeatUntil
 
 
@@ -1038,15 +1038,15 @@ let private fPreempt range preemption moment conds body =
     | Moment.OnNext -> unsupported1 "Next step preemptions are not yet supported." range 
     | _ -> 
         conds 
-        |> Result.contract 
+        |> contract 
         |> Result.bind mkGuard
-        |> Result.combine <| Result.contract body
+        |> combine <| contract body
         |> Result.map createPreemption
         
 
 /// collect errors, if there are none, return Ok of StmtSequence
 let private fSubScope _ stmts =
-    Result.contract stmts
+    contract stmts
     |> Result.map StmtSequence
 
 
@@ -1120,7 +1120,7 @@ let private fReturn retTypOpt pos exprOpt =
     match retTypOpt, exprOpt with
     | None, None -> Return (pos, None) |> Ok
     | Some retTyp, Some expr ->
-        Result.combine retTyp expr 
+        combine retTyp expr 
         |> Result.bind (fun (r, e) -> amendRhsExpr true r e)
         |> Result.bind (fun (e: TypedRhs) -> match e.typ with | ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
         |> Result.map (fun e -> Return (pos, Some e))
@@ -1391,13 +1391,13 @@ let public fPackage lut (pack: AST.Package) =
 
     let typedPack = 
         Ok moduleName
-        |> Result.combine <| Result.contract funPrototypes
-        |> Result.combine <| Result.contract funacts
-        |> Result.combine <| Result.contract variables
-        |> Result.combine <| Result.contract externalVariables
-        |> Result.combine <| Result.contract types
-        |> Result.combine <| Result.contract memberPragmas
-        |> Result.combine <| Result.ofOption entryPoint
+        |> combine <| contract funPrototypes
+        |> combine <| contract funacts
+        |> combine <| contract variables
+        |> combine <| contract externalVariables
+        |> combine <| contract types
+        |> combine <| contract memberPragmas
+        |> combine <| ofOption entryPoint
         |> Result.map createPackage
     
     let checkEntryPoint (blechModule: BlechModule) =
