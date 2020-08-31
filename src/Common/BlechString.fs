@@ -127,15 +127,7 @@ module BlechString =
     let private TabIndentation = "^" + Tabs
     [<Literal>]
     let private Indentation = TabIndentation + Spaces
-    [<Literal>]
-    let private WhitespaceOnly = "^\s*$"
-    
-
-    let private isWhitespaceLine line = 
-        Regex.IsMatch(line, WhitespaceOnly)
- 
-    let private isEmptyLine line = 
-        String.Empty = line
+        
 
     let private getTabCount line = 
         Regex.Match(line, TabIndentation).Length
@@ -148,7 +140,7 @@ module BlechString =
         let unbalancedIndents =
             let mutable tabs = 0
             [ for i, line in List.indexed lines do  // The first line cannot contain tabs due to the lexer
-                if i > 0 && not (isEmptyLine line) then // an empty line is always balanced
+                if i > 0 && not (String.IsNullOrEmpty line) then // an empty line is always balanced
                     let lineIndent = getIndentationPrefix line
                     let tabCount = getTabCount line
                     if Option.isNone indent then
@@ -166,7 +158,7 @@ module BlechString =
     // assumes balanced tab indentation
     let getCommonIndentation (lines: string list) = 
         let processLine comIndentPrefOpt (i, line) =
-            if i > 0 && not (isWhitespaceLine line) // discard first and empty lines
+            if i > 0 && not (String.IsNullOrWhiteSpace line) // discard first and blank lines
                || i = lines.Length - 1 then    // but always consider the last line
                     let prefix = getIndentationPrefix line
                     match comIndentPrefOpt with
