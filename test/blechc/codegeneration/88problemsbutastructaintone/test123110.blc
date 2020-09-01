@@ -19,7 +19,7 @@ activity A()(x: T)
     x = {x=71.23}
     if true then
         var y: bool
-        y = run B(x.s)() // output inarg struct fieldaccess cur
+        run y = B(x.s)() // output inarg struct fieldaccess cur
     end
     await true
     

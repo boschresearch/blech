@@ -79,7 +79,7 @@ type Test() =
         | Error _ ->
             Assert.True false 
         | Ok (ast, env) ->
-            let lut = TypeCheckContext.Empty blechcOptions env
+            let lut = TypeCheckContext.Init blechcOptions env
             let typedResult = Blech.Frontend.TypeChecking.fPackage lut ast
             match typedResult with
             | Ok _ ->

@@ -129,7 +129,7 @@ type TyCheckError =
     | ArgTypeMismatchL of range * ParamDecl * TypedLhs
     | MustReturnFirstClassType of range * Identifier
     | NonFirstClassReturnStmt of range
-    | ValueMustBeOfValueType of TypedLhs
+    | ValueMustBeOfValueType of Receiver
     | ExpectedBoolConds of TypedRhs * TypedRhs
     | MustBeNumeric of TypedRhs * TypedRhs
     | SameTypeRequired of TypedRhs * TypedRhs
@@ -139,7 +139,7 @@ type TyCheckError =
     | VoidSubprogCannotReturnValues of range // is actually just a ReturnTypeMismatch with a "void" built in
     | VoidReturnStmtMustReturn of range * Types // is actually just a ReturnTypeMismatch with a "void" built in
     | MustReturnSomething of range * ValueTypes
-    | ReturnTypeMismatch of range * ValueTypes * Types
+    | ReturnTypeMismatch of range * Types * Types
     | ActCallMustExplicitlyIgnoreResult of range * Identifier
     | MayOrMayNotReturn of range * ValueTypes * ValueTypes
     | ValueStructContainsRef of Name * VarDecl
@@ -196,10 +196,16 @@ type TyCheckError =
     | MissingEntryPoint of range
     | MultipleEntryPoints of first: range * second: range
     | IllegalEntryPoint of range * AST.Package
+    | BindingIndexOutOfBounds of range * string list
     // pragmas
     | UnknownPragma of range
-    // Dummy error used during development
-    // | Dummy of range * string
+    
+    // --- result receivers ---
+    | ReceiverForVoidReturn of range * FunctionPrototype
+    | MissingReceiver of range * FunctionPrototype
+
+    // --- Dummy error, just for development purposes ---
+    | Dummy of range * string
 
     interface Diagnostics.IDiagnosable with
         member err.MainInformation =
@@ -329,7 +335,7 @@ type TyCheckError =
             | VoidSubprogCannotReturnValues p -> p, sprintf "The return statement may not have a value payload since the subprogram is declared as void. (It does not have a \"returns\" declaration.)"
             | VoidReturnStmtMustReturn (p, t) -> p, sprintf "The return statement must have a payload of type %s according to the declaration of the subprogram." (t.ToString())
             | MustReturnSomething (p, f) -> p, sprintf "The subprogram declares the return type %s. However no return statements were found." ((ValueTypes f).ToString())
-            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) ((ValueTypes f1).ToString())
+            | ReturnTypeMismatch (p, f1, f2) -> p, sprintf "The subprogram returns a %s which does not match the declared return type %s." (f2.ToString()) (f1.ToString())
             | ActCallMustExplicitlyIgnoreResult (p, n) -> p, sprintf "The call of %s must explicitly ignore the non-void return value." (string n)
             | MayOrMayNotReturn (p, f1, f2) -> p, sprintf "The subprogram possibly returns a %s on some execution paths (but not on all). However it must always return a %s." ((ValueTypes f2).ToString()) ((ValueTypes f1).ToString())
             | ValueStructContainsRef (name, refField) -> name.range, sprintf "The structure %s is value typed but contains the reference typed element %s." name.idToString refField.name.basicId
@@ -404,10 +410,18 @@ type TyCheckError =
             | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation."
             | MultipleEntryPoints (second = p) -> p, "'@[EntryPoint]' activity already defined."
             | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
+            | BindingIndexOutOfBounds (p, indices) -> p, sprintf "Parameter index: %s, out-of bounds." <| String.concat ", " indices
+            
             // pragmas
             | UnknownPragma p -> p, "Unknown pragma."
-            
-            // | Dummy (p, msg) -> p, msg
+
+
+            // --- result receivers ---
+            | ReceiverForVoidReturn (p, activity) -> p, "No receiver for void return allowed."
+            | MissingReceiver (p, activity) -> p, sprintf "The returned value of '%s' must be ignored explicitly." (activity.name.ToString())
+
+            // --- Dummy error, just for development purposes ---
+            | Dummy (p, msg) -> p, msg
  
             |> (fun (srcPos, msg) -> 
                 { range = srcPos
@@ -551,8 +565,25 @@ type TyCheckError =
                   { range = second; message = "redefinition"; isPrimary = true } ]
             | UnknownPragma range -> 
                 [ { range = range; message = "not known"; isPrimary = true} ]
+            | BindingIndexOutOfBounds (range, _) ->
+                [ { range = range; message = "wrong indexing"; isPrimary = true} ]
+
+
+            // --- result receivers ---
+            | ReceiverForVoidReturn (receiver, decl) -> 
+                [ { range = receiver; message = "wrong receiver"; isPrimary = true} 
+                  { range =  decl.pos ; message = "declaration"; isPrimary = false} ]
+            | MissingReceiver (call, decl) -> 
+                [ { range = call; message = "activity call"; isPrimary = true} 
+                  { range =  decl.pos ; message = "declaration"; isPrimary = false } ]
+                    
+            
+            // --- Dummy error, just for development purposes ---
+            
+
             | _ ->
                 []
+
 
         member err.NoteInformation = 
             match err with
@@ -633,13 +664,28 @@ type TyCheckError =
             
             // annotations
             | UnsupportedAnnotation _ ->
-                ["This Blech attribute is not supported here, check the spelling."]
+                [ "This Blech attribute is not supported here, check the spelling." ]
             | MultipleEntryPoints _ -> 
-                ["Delete one of the annotations."]
+                [ "Delete one of the annotations." ]
             | UnknownPragma _ ->
-                ["This is not a defined Blech pragma attribute, check the spelling."]
+                [ "This is not a defined Blech pragma attribute, check the spelling." ]
+            | BindingIndexOutOfBounds (range, _) ->
+                [ "$1 is the first input parameter."
+                  "$<max> is the last output parameter." ]
+
+            // --- result receivers ---
+            | ReceiverForVoidReturn _ ->
+                ["Remove the receiver."]
+            | MissingReceiver _-> 
+                [ "Use a wildcard '_' to ignore the return value." ]
+            
+            // --- Dummy error, just for development purposes ---
+            | Dummy _ ->
+                [ "Development message. Replace by a specific error message"]            
+            
             | _ ->
                 []
+
 
 //=============================================================================
 // Result type
@@ -679,11 +725,3 @@ module TyChecked =
     let internal ofOption = function
         | None -> Ok None
         | Some res -> res |> Result.map Some
-
-//=========================================================================
-// Some debug helpers
-//=========================================================================
-
-    let internal debugShow msg v =
-        printfn "%s: %A" msg v
-        v

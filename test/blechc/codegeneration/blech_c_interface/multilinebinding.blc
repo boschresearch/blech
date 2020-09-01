@@ -1,0 +1,21 @@
+
+@@[CInclude(header = "stdio.h")]
+
+@[CFunction(binding = """
+                      do {
+                        *$2 = $1; /* first line äöüß */
+                        *$2 = *$2 + 2; 
+                      } while (0)
+                      """ )]
+extern function plus2 (x: nat16)(xplus2: nat16)
+
+@[EntryPoint]
+activity Main()
+    var n: nat8
+    repeat
+        n = n + 1
+        var nPlus2: nat16 = 0
+        plus2(n)(nPlus2)
+        await true
+    end
+end

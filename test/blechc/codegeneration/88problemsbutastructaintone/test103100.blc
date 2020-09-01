@@ -20,7 +20,7 @@ activity A()
     var x: T = {x=71.23}
     if true then
         var y: bool
-        y = run B(x)() // local inarg struct direct cur
+        run y = B(x)() // local inarg struct direct cur
     end
     await true
     

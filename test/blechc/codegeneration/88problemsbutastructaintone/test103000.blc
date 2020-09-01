@@ -18,6 +18,6 @@ activity A()
     var x: float64 = 1.23
     await true
     var y: bool
-    y = run B(x)() // local inarg simple direct cur
+    run y = B(x)() // local inarg simple direct cur
     await true
 end

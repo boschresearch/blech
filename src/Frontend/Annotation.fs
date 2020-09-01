@@ -18,10 +18,11 @@ namespace Blech.Frontend
 
 [<RequireQualifiedAccess>]
 module Annotation =
+    open Blech.Common
     open Attribute
     open TypeCheckContext
     open TyChecked
-    
+
     let private unsupportedAnnotation (anno : AST.Annotation)  = 
         Error [UnsupportedAnnotation anno.Range ]
 
@@ -33,6 +34,10 @@ module Annotation =
 
     let private missingNamedArgument range key =
         Error [MissingNamedArgument (range, key) ]
+
+    let private bindingParameterOutOfBounds range indexes = 
+        let indices = List.map (fun i -> Bindings.parameterIndexToString i) indexes
+        Error [ BindingIndexOutOfBounds (range, indices)]
 
     /// Creates a typed annotation from an admissible untyped annotation
     // recursive decent is currently not neccessary
@@ -159,8 +164,22 @@ module Annotation =
             | _ ->
                 Ok fpattr
         
+        let checkParameterIndex (fpattr : FunctionPrototype)  =
+            match fpattr.TryGetCBinding with
+            | Some cbinding -> 
+                let maxIndex = List.length fp.inputs + List.length fp.outputs
+                let idcsOutOfBounds = List.filter (fun i -> i < 1 || i > maxIndex) (Bindings.getParameterIndices cbinding)
+                if List.isEmpty idcsOutOfBounds then
+                    Ok fpattr
+                else
+                    bindingParameterOutOfBounds fp.range idcsOutOfBounds
+            | None ->
+                Ok fpattr
+            
+
         List.fold checkFpAnno (Ok Attribute.FunctionPrototype.Empty) fp.annotations
         |> Result.bind checkCFunction
+        |> Result.bind checkParameterIndex 
 
     
     let checkVarDecl lut (v: AST.VarDecl) =

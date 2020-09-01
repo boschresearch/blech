@@ -20,7 +20,7 @@ end
 activity A()
     var foo: [30]nat8
     cobegin
-        foo[h()] = run B(7)()
+        run foo[h()] = B(7)()
     with
         await true
         f()

@@ -27,7 +27,7 @@
     <Compile Include="SymbolTable.fs" />
     <Compile Include="NameChecking.fs" />
     <Compile Include="SignaturePrinter.fs" />
-    <Compile Include="ErrorsAndCombinators.fs" />
+    <Compile Include="TyChkErrors.fs" />
     <Compile Include="TypeCheckContext.fs" />
     <Compile Include="Evaluation.fs" />
     <Compile Include="TyChkAmendment.fs" />

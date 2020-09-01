@@ -27,5 +27,5 @@ activity U ()()
     var u8: nat8 = 129
     let u16: nat16 = u8 + 255
     var retcode: nat32
-    retcode = run R (u16-8)(u8)
+    run retcode = R (u16-8)(u8)
 end

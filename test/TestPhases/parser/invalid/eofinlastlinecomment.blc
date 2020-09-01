@@ -1,0 +1,5 @@
+
+@[EntryPoint]
+activity Main () // bla
+    await true
+end /* blabla

@@ -58,26 +58,10 @@ module Pair =
 module String =
 
     /// converts a string to a list of chars
-    let explode (str : string) =
-        if str = null
-        then raise <| System.ArgumentException ("explode: argument cannot be null")
-        else [ for c in str -> c ] 
+    let explode (str : string) = str.ToCharArray() |> List.ofArray
 
     /// converts a list of chars to a string
     let implode chars = System.String (List.toArray chars)
-
-    /// splits a string into non-empty substrings that were separated by the given predicate
-    let split (c:char) (s:string) =
-        let r = s.Split ([|c|], StringSplitOptions.RemoveEmptyEntries )
-        Array.toList r
-
-    /// replace single characters in a string by another string
-    let translate f s =
-        let rec translateCL cL =
-            match cL with
-            | [] -> ""
-            | c::cL -> (f c)+(translateCL cL)
-        translateCL (explode s)
 
     let order = LanguagePrimitives.FastGenericComparer<String>
 
@@ -85,12 +69,7 @@ module String =
     let MaxLength = Int32.MaxValue
 
     /// returns a fresh string of length n, filled with the character c. 
-    let make n (c: char) = 
-        if n < 0 || n > MaxLength then
-            Operators.invalidArg "n" (sprintf "Invalid string length: %s" (string n))
-        else
-            let cs = seq {for i in 1 .. n -> c}
-            new System.String(Array.ofSeq cs)
+    let fill n (c: char) = "".PadLeft(n,c)
 
 
 // --------------------------------------------------------------------------

@@ -12,6 +12,8 @@
     <Compile Include="PPrint.fs" />
     <Compile Include="Range.fs" />
     <Compile Include="CodeMap.fs" />
+    <Compile Include="BlechString.fs" />
+    <Compile Include="Bindings.fs" />
     <Compile Include="Diagnostics.fs" />
     <Compile Include="SearchPath.fs" />
     <Compile Include="Package.fs" />

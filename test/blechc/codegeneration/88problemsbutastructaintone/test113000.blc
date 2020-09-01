@@ -15,7 +15,7 @@ end
 
 activity A(x: float64)()
     var r: bool
-    r = run B(x) // input inarg simple direct cur
+    run r = B(x) // input inarg simple direct cur
     await true
 end
 

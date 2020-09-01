@@ -1,0 +1,10 @@
+
+@[CFunction (binding = "no escape sequence \hello" , header= "bla.h")]
+extern function noEscape()
+
+@[EntryPoint]
+activity main()()
+    await true
+end
+
+

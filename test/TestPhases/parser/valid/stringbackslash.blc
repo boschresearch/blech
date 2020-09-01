@@ -1,0 +1,10 @@
+
+@[CFunction (binding = """single backslash \\ hello""" , header= "bla.h")]
+extern function singleBackslash()
+
+@[EntryPoint]
+activity main()()
+    await true
+end
+
+

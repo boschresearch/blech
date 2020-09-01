@@ -210,7 +210,7 @@ module Diagnostics =
         open Blech.Common
 
         let digitCount number = (int) (log10 ((float)number)) + 1
-        let mutable indent = 0   
+        let mutable fillWidth = 0   
 
         let private emitAsciiContext os prevLn (info: ContextInformation) =
             let loc = info.range
@@ -219,22 +219,22 @@ module Diagnostics =
                 
             if prevLn > fstLn then  // jump back in source
                 Printf.bprintfn os "%s%s"
-                <| String.make indent ' '
+                <| String.fill fillWidth ' '
                 <| "<<<"
             else if prevLn + 1 < fstLn then // skip lines in source 
                 Printf.bprintfn os "%s%s"
-                <| String.make indent ' ' 
+                <| String.fill fillWidth ' ' 
                 <| "..."
             
             let mutable fstCol = loc.StartColumn
             let mutable lstCol = loc.EndColumn
 
             for i in fstLn .. lstLn do
-                let ln = CodeMap.lineOfFile loc.FileName i
+                let ln = (CodeMap.lineOfFile loc.FileName i).Replace('\t', ' ')  // Correct range counting by replacing '\t' with ' '
                 let len = ln.Length
 
                 Printf.bprintfn os "%d%s | %s" i 
-                <| String.make (indent - digitCount i) ' ' 
+                <| String.fill (fillWidth - digitCount i) ' ' 
                 <| ln 
                                     
                 if fstLn = lstLn then  
@@ -261,16 +261,16 @@ module Diagnostics =
             if  lstCol >= fstCol then
                 let len = lstCol - fstCol + 1 
                 Printf.bprintfn os "%s | %s%s %s"
-                <| String.make indent ' '
-                <| String.make (fstCol-1) ' '
-                <| (String.make len <| if info.isPrimary then '^' else '-') 
+                <| String.fill fillWidth ' '
+                <| String.fill (fstCol-1) ' '
+                <| (String.fill len <| if info.isPrimary then '^' else '-') 
                 <| info.message
             
             lstLn
 
         let private emitAsciiHelp (os: Text.StringBuilder) help =
             Printf.bprintfn os "%s%s" 
-            <| String.make indent ' '
+            <| String.fill fillWidth ' '
             <| help
 
         let private emitAsciiDiagnostic (os: Text.StringBuilder) (d: Diagnostic) =
@@ -280,14 +280,14 @@ module Diagnostics =
             let phs = d.phase
             
             if not (List.isEmpty d.context) then
-                indent <- digitCount (CodeMap.lineCountOfFile (List.head d.context).range.FileName)
+                fillWidth <- digitCount (CodeMap.lineCountOfFile (List.head d.context).range.FileName)
             else 
-                indent <- 1
+                fillWidth <- 1
 
             Printf.bprintfn os "%s: %s" lvl msg
             
             Printf.bprintfn os "%s--> %s:%d:%d [%s]" 
-            <| (String.make indent ' ') 
+            <| (String.fill fillWidth ' ') 
             <| rng.FileName 
             <| rng.StartLine 
             <| rng.StartColumn
@@ -310,7 +310,9 @@ module Diagnostics =
         let printDiagnostics (dl: Logger) =
             let sb = Text.StringBuilder()
             emitLoggedDiagnostics sb dl
-            Printf.fprintf Console.Out "%s" <| sb.ToString()
+            //Console.OutputEncoding <- System.Text.Encoding.UTF8
+            //Printf.fprintf Console.Out "%s" <| sb.ToString()
+            Console.Out.Write(sb.ToString())
 
         let getDiagnostics (dl: Logger) =
             dl.diagnostics

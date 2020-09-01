@@ -17,7 +17,7 @@ end
 activity entry()()
     var x: [5][3]S
     var asdf: int64
-    asdf = run f(x)()
+    run asdf = f(x)()
     
     await false
 end

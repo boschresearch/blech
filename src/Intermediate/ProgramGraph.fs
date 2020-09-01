@@ -53,7 +53,7 @@ module Thread =
 
     /// Returns all ancestors starting with this thread itself and
     /// ascending to root
-    let rec internal allAncestors thread =
+    let rec allAncestors thread =
         match thread.Ancestor with
         | None -> [thread]
         | Some ancestor -> thread :: allAncestors ancestor
@@ -157,6 +157,7 @@ module IntermediateContext =
             do appendAllWritten context tlhs.Range memLabel node
         match tlhs.lhs with
         | Wildcard -> ()
+        | ReturnVar -> ()
         | LhsCur tml ->
             tml.FindAllIndexExpr |> Seq.iter (addNameRead context node)
             do addWrittenLabel (AccessLabel.Cur tml)
@@ -238,6 +239,20 @@ module ProgramGraph =
     open IntermediateContext
 
 
+    /// True iff given Edge is a DataFlow link
+    let isDataFlow (e: Edge) =
+        match e.Payload with
+        | DataFlow _ -> true
+        | ControlFlow _ | ReturnFlow _ | TerminateThread _ | Tick _ -> false
+
+    /// True iff given Edge is some control flow link (not a tick, not a wr link)
+    let isImmediateTransition (e: Edge) =
+        match e.Payload with
+        | ControlFlow _
+        | ReturnFlow _
+        | TerminateThread _ -> true
+        | DataFlow _ | Tick _ -> false
+    
     /// Return all successor nodes reachable via one step of program execution
     /// i.e. we ignore DataFlow transitions in this function
     let cfSucc (node: Node) =
@@ -319,8 +334,38 @@ module ProgramGraph =
         do addNameRead context startawait cond
         pg
 
-    /// Generate a program graph for an activity call        
-    let private createActCall context line thread (pos, name, retvar, inputs, outputs) termVar =
+    /// Generate a program graph for the sequential composition of the
+    /// given program graphs
+    let private sequentialise pg pgs =
+        match pgs with
+        | [] -> pg
+        | _ ->
+            let glue lastGraph nextGraph =
+                do replaceExitBy lastGraph nextGraph.Entry
+                nextGraph
+            let lastGraph = List.fold glue pg pgs
+            let allGraphs =
+                pg :: pgs 
+                |> List.map (fun pg -> pg.Graph)
+                |> Graph.JoinAll
+            { Entry = pg.Entry
+              Exit = lastGraph.Exit
+              Graph = allGraphs }
+
+    /// Generate a program graph for an activity call
+    /// Creates a separate Action.VarDecl for a fresh location receiver
+    let private createActCall context line thread (pos, name, optReceiver: Receiver option, inputs, outputs) termVar =
+        let retvar = 
+            match optReceiver with
+            | Some (FreshLoc varDecl) ->
+                Some { lhs = LhsCur (Loc varDecl.name); typ = varDecl.datatype; range = varDecl.pos }
+            | Some (UsedLoc tlhs) -> 
+                Some tlhs
+            | Some (ReturnLoc tlhs) ->
+                Some tlhs
+            | None -> 
+                None
+
         let pgAwait = createAwait context line thread "ticker" {rhs = BoolConst true; typ = ValueTypes BoolType; range = line}
 
         let pg = createEmpty line thread (CallInit (pos, name, retvar, inputs, outputs, termVar))
@@ -361,9 +406,17 @@ module ProgramGraph =
         | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         
         
-        { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
+        let pgActCall = { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 
+        match optReceiver with
+        | Some (FreshLoc vdecl) -> 
+            let pgVarDecl = createAction context vdecl.pos thread (Action.VarDecl vdecl) 
+            sequentialise pgVarDecl [pgActCall]
+        | Some _
+        | None ->
+            pgActCall
     
+
     /// This function is here temporarily. It solves the following problem:
     /// Since the abort conditions are pushed into the body of the abort statement
     /// conditions may become concurrent in the context of a cobegin in the body.
@@ -501,23 +554,7 @@ module ProgramGraph =
 
         { pg with Graph = Graph.JoinAll [pg.Graph; subPg.Graph] }
 
-    /// Generate a program graph for the sequential composition of the
-    /// given program graphs
-    let private sequentialise pg pgs =
-        match pgs with
-        | [] -> pg
-        | _ ->
-            let glue lastGraph nextGraph =
-                do replaceExitBy lastGraph nextGraph.Entry
-                nextGraph
-            let lastGraph = List.fold glue pg pgs
-            let allGraphs =
-                pg :: pgs 
-                |> List.map (fun pg -> pg.Graph)
-                |> Graph.JoinAll
-            { Entry = pg.Entry
-              Exit = lastGraph.Exit
-              Graph = allGraphs }
+    
 
     /// Returns program graph for if cond then pg1 else pg2
     let private createIf context line thread cond pg1 pg2  =
@@ -637,28 +674,18 @@ module ProgramGraph =
                 match moment with
                 // abort after was stripped from the syntax but still exists as a data structure
                 | Moment.After -> 
-                    let branches =
-                        [ Weak, body
-                          Weak, [Await(pos, cond)] ]
-                    createPGofStmt context thread (Cobegin (pos, branches))
+                    //let branches =
+                    //    [ Weak, body
+                    //      Weak, [Await(pos, cond)] ]
+                    //createPGofStmt context thread (Cobegin (pos, branches))
+                    failwith "Abort after does not exist. It was replaced by explicit cobegin weak."
                 | Moment.Before ->
                     // this is the only alive code path for the Abort case
                     createPGofBody context pos thread body
                     |> createAbortBefore context pos thread cond
                 | Moment.OnNext -> failwith "Cannot handle OnNext"
             | Reset ->
-                // transform into loop abort
-                let v = createHelperVariable context Range.range0 "abortFinished" (ValueTypes BoolType)
-                let tmpLhs = {lhs = LhsCur (Loc v.name); typ = v.datatype; range = v.pos}
-                let assignNotYetFinished = Stmt.Assign(pos, tmpLhs, {rhs = BoolConst false; typ = ValueTypes BoolType; range = Range.range0})
-                let assignFinished = Stmt.Assign(pos, tmpLhs, {rhs = BoolConst true; typ = ValueTypes BoolType; range = Range.range0})
-                let untilCond = {rhs = RhsCur(Loc v.name); typ = v.datatype; range = v.pos}
-                    
-                let rewrittenStmts =
-                    [ Stmt.VarDecl v
-                      Stmt.RepeatUntil(pos, [Stmt.Preempt(pos, Abort, cond, moment, assignNotYetFinished :: body @ [assignFinished])],untilCond, false) ]
-                    |> Stmt.StmtSequence 
-                createPGofStmt context thread rewrittenStmts
+                failwith "Reset should be transformed away before."
             | Suspend -> // does not exists in the current syntax but still lives as a data structure
                 failwith "Suspending is a bad idea."
         // scoping

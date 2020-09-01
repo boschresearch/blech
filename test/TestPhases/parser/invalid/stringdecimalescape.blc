@@ -1,0 +1,18 @@
+
+@@[CInclude (header = "forall.h")]
+
+@[CFunction (binding ="too big: \256")]
+extern function f()
+
+@[CFunction (binding = """
+        too big: \256 
+        """)]
+extern function h()
+
+
+
+@[EntryPoint]
+activity Main () ()
+    f()
+    await true
+end

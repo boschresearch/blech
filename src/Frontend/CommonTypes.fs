@@ -69,7 +69,7 @@ type QName =
 
     /// Creates a QName for program names: tick, init, printState
     static member CreateProgramName moduleName id =
-        QName.Create moduleName [] id (IdLabel.Auxiliary) // Program identifiers are always top-level and do not need a path
+        QName.Create moduleName [] id (IdLabel.Static) // Program identifiers are always top-level and do not need a path
          
     member qn.IsAuxiliary = 
         qn.label = Auxiliary
@@ -82,8 +82,12 @@ type QName =
 
     // TODO: This is currently only used for acitivity states, which does not take imports into account,
     // therefore it does not take qn.moduleName into account. Change this with code generation for imports, fjg 26.01.19
-    member qn.toPrefix = 
-        qn.prefix @ [qn.basicId]
+    // unused
+    //member qn.toPrefix = 
+    //    qn.prefix @ [qn.basicId]
+
+    member this.ToUnderscoreString() =
+        List.foldBack (fun n s -> n + "_" + s) this.prefix this.basicId
    
     override qn.ToString() =
         List.foldBack (fun n s -> n + "." + s) qn.prefix qn.basicId
@@ -140,6 +144,11 @@ let mkAuxQNameFrom s =
 
 let mkIndexedAuxQNameFrom s = 
     QName.CreateAuxiliary [] <| mkAuxIdentifierFrom s
+
+let mkPrefixIndexedNameFrom s =
+    let cur = !auxVarIndex
+    auxVarIndex := 1 + !auxVarIndex
+    sprintf "%s_%s" (string cur) s
 
     
 /// Strength is required for cobegin blocks

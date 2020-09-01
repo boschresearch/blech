@@ -27,9 +27,9 @@ activity B (myS: S)
     extern const extActVarArr: [8]int32
     var res: int32
 
-    if myS.s < 0.0 then _ = run A(extConstI8)
+    if myS.s < 0.0 then run _ =  A(extConstI8)
     else 
-        res = run A(2 * extConstI8)
+        run res = A(2 * extConstI8)
         let foo2 = extActVarArr // activity level declared
         let foo3 = extVarArr[0] + 7 // top level
     end
