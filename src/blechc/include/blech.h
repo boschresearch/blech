@@ -95,4 +95,9 @@ typedef BLC_PC_T blc_pc_t;
 #define BLC_F32(f) (blc_float32)f
 #define BLC_F64(f) (blc_float64)f
 
+/*
+ * Using a void cast, explicitly mark a variable as unused
+ */
+#define BLC_UNUSED(v) ((void) v)
+
 #endif

@@ -245,7 +245,7 @@ let private getUniqueSuccNode node =
     else
         failwith "FAIL: expected exactly one successor"
 
-let private makeActCall ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs tempVarName =
+let private makeActCall ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
     let callee = compilations |> List.find (fun c -> c.name = whoToCall)
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
@@ -285,7 +285,7 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
             // ruled out by type checker: calle returns nothing but caller provides a receiver
             failwith "Caller provides a receiver but there is nothing to be returned."
 
-    let translatedCall = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver tempVarName
+    let translatedCall = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver retcodeVar
     receiverDecl @ [translatedCall] |> dpBlock
 
 
@@ -568,18 +568,25 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 |> dpBlock
             | _ -> failwith "A called activity needs to have at least one PC in its interface."
 
+        let retcodeVarDoc =
+            renderCName Current ctx.tcc retcodeVar
         let declRetcodeVar =
             let lhsTyp = ValueTypes(IntType Int32)
-            cpType lhsTyp <+> renderCName Current ctx.tcc retcodeVar <^> semi
+            cpType lhsTyp <+> retcodeVarDoc <^> semi
             
         // in case the return value is ignored with _
         // create a temporary variable to receive the value
         let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
+
+        // suppress warning about set but unused value using a void cast with no effect
+        let unused =
+            txt "BLC_UNUSED" <^> parens retcodeVarDoc <^> semi
         
         dpBlock
         <| [ initCalleesPCs
              declRetcodeVar
              translatedCall
+             unused
              nextNodeStep ]
         
     // Here we re-enter the run statement and continue execution of the subprogram
