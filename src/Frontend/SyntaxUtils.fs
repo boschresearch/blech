@@ -284,7 +284,7 @@ module ParserUtils =
     type ParserContext = 
         {
             mutable currentModuleName: LongIdentifier
-            mutable currentLoadWhat: Package.LoadWhat
+            mutable currentLoadWhat: Package.ImplOrIface
             //mutable packageHead: PackageHead
             mutable errorTokenAccepted: bool
             mutable errorInfo : ParserErrorInfo option

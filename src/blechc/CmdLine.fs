@@ -53,22 +53,22 @@ module CmdLine =
         | Compile
 
 
-    let handleCommandLine (options: Arguments.BlechCOptions) : Result<Action, Diagnostics.Logger> =
+    let processCmdParameters (options: Arguments.BlechCOptions) : Result<Action, Diagnostics.Logger> =
         
         Logging.setLogLevel options.verbosity
         if options.showVersion then 
             Ok ShowVersion
         else
             let logger = Diagnostics.Logger.create()  
+
             if options.inputFile = "" then 
-                (logger, Diagnostics.Phase.Compiling) ||> Diagnostics.Logger.logFatalError <|  NoInputModule
+                Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling NoInputModule
         
             if not (Directory.Exists options.outDir || options.isDryRun ) then
-                (logger, Diagnostics.Phase.Compiling) ||> Diagnostics.Logger.logFatalError <| NoOutDir options.outDir
+                Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling (NoOutDir options.outDir)
     
             if Diagnostics.Logger.hasErrors logger then
                 Error logger
-            
             else
                 Ok Compile
  

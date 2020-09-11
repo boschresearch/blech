@@ -25,7 +25,6 @@ module Main =
     open Blech.Backend
     open Blech.Backend.CodeGeneration
 
-    exception FatalError // Temporary. Remove this.
 
     type BlechCError = 
             | ModuleNotFound of moduleName: string * triedFiles: string list
@@ -46,13 +45,13 @@ module Main =
                         List.map (fun f -> sprintf "no file '%s'" f) fs
                 
 
-    let blechcVersion =
+    let private blechcVersion =
         let assembly = System.Reflection.Assembly.GetExecutingAssembly()
         let assemName = assembly.GetName();
         let version = assemName.Version
         sprintf "%d.%d.%d+%d" version.Major version.Minor version.Build version.Revision
 
-    let blechcCopyright = 
+    let private blechcCopyright = 
         let assembly = System.Reflection.Assembly.GetExecutingAssembly()
         let attrs = assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyCopyrightAttribute>, true)
         string (attrs.[0] :?> System.Reflection.AssemblyCopyrightAttribute).Copyright
@@ -85,14 +84,13 @@ module Main =
     let compileInterface (cliContext: Arguments.BlechCOptions) 
                          (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
                          diagnosticLogger 
-                         (loadWhat: Package.LoadWhat) 
                          (moduleName: SearchPath.ModuleName)
                          (inputFile: string) =
 
         // parse
         Logging.log2 "Main" ("processing source file " + inputFile)
         let astRes = 
-            ParsePkg.parseModule diagnosticLogger loadWhat moduleName inputFile
+            ParsePkg.parseModule diagnosticLogger Package.Interface moduleName inputFile
         
         // name resolution 
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
@@ -130,15 +128,14 @@ module Main =
 
     let compileImplementation (cliContext: Arguments.BlechCOptions) 
                               (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
-                              diagnosticLogger 
-                              (loadWhat: Package.LoadWhat) 
+                              diagnosticLogger  
                               (moduleName: SearchPath.ModuleName)
                               (inputFile: string) =
 
         // parse
         Logging.log2 "Main" ("processing source file " + inputFile)
         let astRes = 
-            ParsePkg.parseModule diagnosticLogger loadWhat moduleName inputFile
+            ParsePkg.parseModule diagnosticLogger Package.Implementation moduleName inputFile
         
         // name resolution 
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
@@ -255,13 +252,13 @@ module Main =
     //        File.WriteAllText(appFile, app)
     //    Ok ()
 
-    let loader options logger packageContext what moduleName infile : Result<Package.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface moduleName infile : Result<Package.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
         let compilationRes = 
-            match what with
+            match implOrIface with
             | Package.Implementation ->
-                compileImplementation options packageContext logger what moduleName infile
+                compileImplementation options packageContext logger moduleName infile
             | Package.Interface ->
-                compileInterface options packageContext logger what moduleName infile
+                compileInterface options packageContext logger moduleName infile
                 
         Result.bind (Package.Module<TypeCheckContext * BlechTypes.BlechModule>.Make moduleName infile) compilationRes 
 
@@ -292,7 +289,7 @@ module Main =
             -3
         | Ok options ->
             try
-                let cl = CmdLine.handleCommandLine options
+                let cl = CmdLine.processCmdParameters options
                 let rw = Result.bind (handleAction options) cl 
                 match rw with
                 | Ok _ ->

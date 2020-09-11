@@ -235,7 +235,7 @@ let private myBlechParser lexer lexbuf : AST.Package =
 /// Parses a Blech module from a file given by its last argument.
 /// The result is an untyped blech package, which could then be handed over to the
 /// static analysis part.
-let parseModule diagnosticLogger (loadWhat: Package.LoadWhat) (moduleName: SearchPath.ModuleName) (fileName: string) =
+let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: SearchPath.ModuleName) (fileName: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (loadWhat.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 

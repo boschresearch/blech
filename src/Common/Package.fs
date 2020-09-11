@@ -67,7 +67,7 @@ module Package =
                       sprintf "use '%s' for implementation files." <| SearchPath.implementationFileExtension
                       sprintf "use '%s' for interface files." <| SearchPath.interfaceFileExtension ]
 
-    type LoadWhat =
+    type ImplOrIface =
         | Implementation
         | Interface
 
@@ -101,7 +101,7 @@ module Package =
             packageDir: string  // fjg: reserved for future use 
             outDir: string
             logger: Diagnostics.Logger
-            loader: Context<'info> -> LoadWhat -> SearchPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
+            loader: Context<'info> -> ImplOrIface -> SearchPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
                     // package context -> LoadWhat -> module name -> file name -> Package or logged errors
             loaded: Dictionary<SearchPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> Package
@@ -150,7 +150,7 @@ module Package =
                 <| IllegalModuleFileName (fileName, wrongIds)
                 Error lgr
             | Ok moduleName ->
-                // TDOD: check if file is already compiled
+                // TODO: check if file is already compiled
                 ctx.loader ctx loadWhat moduleName fileName
 
 
@@ -177,10 +177,11 @@ module Package =
             let blhFile = SearchPath.searchInterface ctx.outDir moduleName
             match blhFile, blcFile with
             | Ok blh, Ok blc ->
-                // compare blh and blc, if valid blh exists compile the blh as 'Interface' else
+                // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
                 let compiled = ctx.loader ctx Implementation moduleName blc
                 ctx.loaded.Add (moduleName, compiled)
                 compiled
+                // TODO: here we need to call the complete compilation procedure
                 
             | Error _, Ok blc ->
                 ctx.loader ctx Implementation moduleName blc

@@ -528,7 +528,7 @@ and Package =
     {
         range: range
         moduleName: SearchPath.ModuleName
-        loadWhat: Package.LoadWhat
+        loadWhat: Package.ImplOrIface
         imports: Member list
         spec: ModuleSpec option
         members: Member list 
