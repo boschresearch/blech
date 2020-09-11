@@ -1,4 +1,4 @@
-module hangingActivity
+module
 
 activity empty ()()
     await false;

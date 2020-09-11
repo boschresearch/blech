@@ -1,4 +1,4 @@
-module references
+module
 
 function f ()
     var cd: CompoundDatatype = {}

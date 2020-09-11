@@ -1,4 +1,4 @@
-module inputOutputAliasing
+module
 
 activity A(x: bool)(y: bool)
     var z: bool

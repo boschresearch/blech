@@ -1,4 +1,4 @@
-module OutputSupertype
+module
 
 activity A(a: int64, b: float64)(x: int16, y: float32) returns bool
     repeat

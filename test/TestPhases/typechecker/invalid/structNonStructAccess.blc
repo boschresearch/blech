@@ -1,4 +1,4 @@
-module structNonStructAccess
+module
 
 activity main ()()
   var s: int8 = 7

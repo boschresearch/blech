@@ -271,7 +271,7 @@ module PrettyPrint =
                 let docs = 
                     match optSpec with
                     | Some spec ->
-                        (txt "module" <+> ppStaticNamedPath spec.path) :: members
+                        txt "module" :: members
                     | None ->
                         members 
                 docs

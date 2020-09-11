@@ -1,4 +1,4 @@
-module NoMagicCasting1
+module
 
 function noMagicCasting()
 

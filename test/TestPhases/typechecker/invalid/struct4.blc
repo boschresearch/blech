@@ -1,4 +1,4 @@
-module struct4
+module
 
 struct MyS
   var f1: int8

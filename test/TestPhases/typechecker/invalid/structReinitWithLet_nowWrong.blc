@@ -1,4 +1,4 @@
-module structReinitWithLet_nowWrong
+module
 
 struct MyS
   var f1: int8

@@ -1,4 +1,4 @@
-module implementationprototype
+module
 
 typealias blabla = int32 exposing method
 with

@@ -1,4 +1,4 @@
-module invertSign
+module
 
 function someNumber() returns int8
     return -128

@@ -505,7 +505,7 @@ module SignaturePrinter =
         // ----------------------------------------------
 
         let psSpec lut (spec : AST.ModuleSpec) =
-            txt "signature" <+> bpStaticNamedPath spec.path
+            txt "signature"
         
         let psSubProgram (sp: AST.SubProgram) =
             let subprog =

@@ -1,4 +1,4 @@
-module WeakActivityReturn
+module
 
 activity calc() returns int64
     cobegin weak

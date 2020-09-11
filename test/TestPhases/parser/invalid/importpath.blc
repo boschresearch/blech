@@ -1,6 +1,6 @@
 import <>a_director/my mod>
 
-module importpath
+module
 
 activity main()
 end

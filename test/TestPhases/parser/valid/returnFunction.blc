@@ -1,4 +1,4 @@
-module returnFunction
+module
 
 function foobar ()
     return;

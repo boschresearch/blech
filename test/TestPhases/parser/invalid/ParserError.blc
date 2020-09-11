@@ -1,4 +1,4 @@
-module ParserError
+module
 
 
 // !! Error: parsing failed - 10 errors / 0 warnings

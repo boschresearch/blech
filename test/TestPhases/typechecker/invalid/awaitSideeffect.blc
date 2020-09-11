@@ -1,4 +1,4 @@
-module awaitSideeffect
+module
 
 
 function other (x: int8)(z: int8) returns bool

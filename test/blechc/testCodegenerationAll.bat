@@ -39,7 +39,7 @@ del /Q /S tmp\*
 
 rem finally run the code generation test
 
-echo *** Run tests for Blech-C interace
+echo *** Run tests for Blech-C interface
 dotnet run -- codegeneration/blech_c_interface tmp/blech_c_interface
 
 echo *** Run tests for general code generation

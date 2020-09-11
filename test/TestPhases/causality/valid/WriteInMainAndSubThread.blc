@@ -1,4 +1,4 @@
-module WriteInMainAndSubThread
+module
 
 activity main () ()
     var x: int32 = 0

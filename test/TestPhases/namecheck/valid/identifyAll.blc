@@ -1,4 +1,4 @@
-module identifyAll
+module
 
 struct SomeRecord
     var field: int8

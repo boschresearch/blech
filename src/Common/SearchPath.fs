@@ -71,7 +71,7 @@ let mkTemplate dir suffix =
 
     
 /// Calculates a filename from a partial filename and a file path template 'template'.
-/// For example: patrial filename = "a/b" template = "./?.blc" -> filename = "./a/b.blc" 
+/// For example: partial filename = "a/b" template = "./?.blc" -> filename = "./a/b.blc" 
 let fileName partialFileName template =
     let globToPartialFileName char =
         if char = glob then

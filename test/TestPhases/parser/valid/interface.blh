@@ -1,4 +1,4 @@
-signature interface
+signature
 
 type MyInt = int32 // exposing method
 // with

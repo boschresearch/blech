@@ -512,14 +512,14 @@ and Member =
 and ModuleSpec = 
     {
         range: range
-        path: Name list
+        // path: Name list
         exposing: Exposing option
     }
     member modspec.Range = modspec.range
 
     static member Nothing = 
         { range = range.Zero
-          path = []
+          // path = []
           exposing = Option.None }
 
 /// package = Blech implementation or interface file
@@ -1063,11 +1063,15 @@ let returnRange range (optExpr: Expr option) =
     | Some expr -> unionRanges range expr.Range
 
 
-let moduleHeadRange range (path: StaticNamedPath) (optExposing: Exposing option) =
-    match optExposing with
-    | None -> unionRanges range path.Range
-    | Some exp -> unionRanges range exp.Range
+//let moduleHeadRange range (path: StaticNamedPath) (optExposing: Exposing option) =
+//    match optExposing with
+//    | None -> unionRanges range path.Range
+//    | Some exp -> unionRanges range exp.Range
 
+let moduleHeadRange range (optExposing: Exposing option) =
+    match optExposing with
+    | None -> range
+    | Some exp -> unionRanges range exp.Range
 
 let importAsRange leftRng rightRng (optExp: Exposing option) =
     match optExp with

@@ -1,4 +1,4 @@
-module SubActivityGlob
+module
 
 
 function calc1() returns int8

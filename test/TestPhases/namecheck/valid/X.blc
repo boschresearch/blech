@@ -1,4 +1,4 @@
-module X
+module
 ref struct X
     var x: int8 = 0
 extension

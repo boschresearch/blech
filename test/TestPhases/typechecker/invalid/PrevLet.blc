@@ -1,4 +1,4 @@
-module PrevLet
+module
 
 activity main ()()
     let p: int64 = 7

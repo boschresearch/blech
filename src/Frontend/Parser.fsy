@@ -1314,11 +1314,10 @@ Extension
    ---------------------------------------------------------------------------- */
 
 ModuleHead 
-    : MODULE PointedName Exposing               { checkModuleName $2  // TODO: Check module import from .blc
-                                                  let rng = moduleHeadRange $1 $2 $3
+    : MODULE Exposing                           { // TODO: Check module import from .blc
+                                                  let rng = moduleHeadRange $1 $2
                                                   { ModuleSpec.range = rng  
-                                                    path = $2.names
-                                                    exposing = $3 } }
+                                                    exposing = $2 } }
 
     | MODULE ErrorBeforeEOL EOL                 { logParserError $1
                                                   ModuleSpec.Nothing }
@@ -1395,16 +1394,9 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : SIGNATURE PointedName                     { checkModuleName $2  // TODO: Check signature import from .blh
-                                                  let rng = unionRanges $1 $2.Range
-                                                  { ModuleSpec.range = rng 
-                                                    path = $2.names
+    : SIGNATURE                                 { // TODO: Check signature import from .blh
+                                                  { ModuleSpec.range = $1 
                                                     exposing = Option.None } }
-
-
-    | SIGNATURE ErrorBeforeEOL EOL              { logParserError $1
-                                                  ModuleSpec.Nothing }
-
 
 SignatureMember
     : Clock                                     { $1 }

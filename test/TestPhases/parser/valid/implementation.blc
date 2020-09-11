@@ -1,4 +1,4 @@
-module implementation
+module
 
 
 type blabla = int32 // exposes method

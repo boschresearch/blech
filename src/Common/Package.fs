@@ -85,7 +85,7 @@ module Package =
         {
             moduleName: SearchPath.ModuleName
             file: string
-            info: 'info            
+            info: 'info
         }
         static member Make moduleName file info =
             Ok { moduleName = moduleName 

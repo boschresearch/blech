@@ -1,4 +1,4 @@
-module booleanCallX3
+module
 
 
 activity other (i: bool)()

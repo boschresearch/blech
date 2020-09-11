@@ -1,4 +1,4 @@
-module arrays
+module
 
 activity A(a: [2]int8)(b: [3]float64, d: int32)
   repeat

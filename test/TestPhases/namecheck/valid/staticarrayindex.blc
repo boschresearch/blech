@@ -1,4 +1,4 @@
-module staticarrayindex
+module
 
 type MyArray = [4]int32
 

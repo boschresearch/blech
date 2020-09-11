@@ -1,4 +1,4 @@
-module VoidFuninExpr
+module
 
 function calc()
     

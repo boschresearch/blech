@@ -1,4 +1,4 @@
-module structuredData2
+module
 
 enum MyNum
     EINS = 1

@@ -1,4 +1,4 @@
-module secondclasstypes
+module
 
 type Emitted = int32 signal                              // event type
 // typealias Writer = fun () (MyStruct) -> (int32, bool) // function type

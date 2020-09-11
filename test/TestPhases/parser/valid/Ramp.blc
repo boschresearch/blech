@@ -2,7 +2,7 @@
 import Float32 from <Float32> exposes min, max 
 import Clock from <Clock> exposes dt
 
-module Ramp
+module
 
 /* ----------------------------------------------------------------------- *
  *  Ramp.blc

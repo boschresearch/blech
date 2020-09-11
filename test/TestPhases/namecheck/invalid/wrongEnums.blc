@@ -1,4 +1,4 @@
-module wrongEnums
+module
 
 enum Color: Color  // rawtype Color is not declared
     Red

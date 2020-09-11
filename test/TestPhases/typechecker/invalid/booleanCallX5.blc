@@ -1,4 +1,4 @@
-module booleanCallX5
+module
 
 
 activity other (i: int32)()

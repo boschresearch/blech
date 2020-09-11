@@ -1,4 +1,4 @@
-module returnFromLoop
+module
 
 function calc() returns int64
     var x: int32

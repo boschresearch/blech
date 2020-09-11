@@ -1,4 +1,4 @@
-module addingNonNum
+module
 
 function bla()
     var a: bool = true + true

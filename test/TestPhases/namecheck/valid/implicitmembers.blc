@@ -1,4 +1,4 @@
-module implicitmembers
+module
 
 enum ABEnum
     A

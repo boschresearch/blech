@@ -1,4 +1,4 @@
-module structuredData
+module
 
 enum MyNum: nat8
     EINS = 1

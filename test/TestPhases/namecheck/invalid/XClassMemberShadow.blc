@@ -1,4 +1,4 @@
-module XClassMemberShadow
+module
 
 ref struct x 
     var x: int8

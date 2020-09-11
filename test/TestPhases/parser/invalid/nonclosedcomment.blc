@@ -1,4 +1,4 @@
-module nonclosedcomment
+module
 
 function f()
     var x: int32

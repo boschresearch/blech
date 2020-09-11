@@ -1,4 +1,4 @@
-module automatonCoord
+module
 
 enum Xs: int8
     X1 = 1 default

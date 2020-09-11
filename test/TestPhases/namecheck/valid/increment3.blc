@@ -1,4 +1,4 @@
-module increment3
+module
 
 activity empty ()()
     do
