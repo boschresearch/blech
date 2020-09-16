@@ -429,7 +429,8 @@ and FromPath =
     
     member fp.Range = fp.range
 
-    member fp.ModuleName : SearchPath.ModuleName = SearchPath.ModuleName.Empty // TODO: Implement this
+    member fp.ModuleName : SearchPath.ModuleName = 
+        List.ofArray <| fp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
