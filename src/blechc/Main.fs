@@ -205,7 +205,7 @@ module Main =
                     // translate module, i.e. compilations
                     // TODO: Additionally take package into account, fjg 10.01.19
                     let codeFile = Path.Combine(cliContext.outDir, SearchPath.moduleToCFile moduleName)
-                    let code = CodeGeneration.emitCode translationContext package compilations ep.name
+                    let code = CodeGeneration.emitMainCode translationContext package compilations ep.name
                     FileInfo(codeFile).Directory.Create()
                     File.WriteAllText(codeFile, code)
                 
@@ -213,7 +213,7 @@ module Main =
                     // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
                     // TODO: Take package into account, fjg 10.01.19
                     let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
-                    let header = CodeGeneration.emitHeader translationContext package compilations ep.name
+                    let header = CodeGeneration.emitMainHeader translationContext package compilations ep.name
                     FileInfo(headerFile).Directory.Create()
                     File.WriteAllText(headerFile, header)
 
@@ -229,12 +229,35 @@ module Main =
 
                 else 
                     match astAndEnvRes with
-                    | Ok (package, lut) ->
+                    | Ok (ast, _) ->
                         // Currently we do not compile modules, just create suitable signatures
                         let signatureFile = Path.Combine(cliContext.outDir, SearchPath.moduleToInterfaceFile moduleName)
-                        let blechSignature = SignaturePrinter.printSignature lut package
+                        let blechSignature = SignaturePrinter.printSignature lut.ncEnv ast
                         FileInfo(signatureFile).Directory.Create()
                         File.WriteAllText(signatureFile, blechSignature)
+
+                        Logging.log6 "Main" ("source code\n")
+                        for c in compilations do
+                            let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                            let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                            Logging.log6 "Main" msg
+
+                        Logging.log2 "Main" ("writing C code for " + inputFile)
+                
+                        // translate module, i.e. compilations
+                        // TODO: Additionally take package into account, fjg 10.01.19
+                        let codeFile = Path.Combine(cliContext.outDir, SearchPath.moduleToCFile moduleName)
+                        let code = CodeGeneration.emitCode translationContext package compilations
+                        FileInfo(codeFile).Directory.Create()
+                        File.WriteAllText(codeFile, code)
+                
+                        // put all types and function prototypes in .h file
+                        // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
+                        // TODO: Take package into account, fjg 10.01.19
+                        let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
+                        let header = CodeGeneration.emitHeader translationContext package compilations
+                        FileInfo(headerFile).Directory.Create()
+                        File.WriteAllText(headerFile, header)
                     | Error _ ->
                         failwith "this cannot happen"
 
