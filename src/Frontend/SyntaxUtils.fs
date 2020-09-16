@@ -492,7 +492,8 @@ module ParserUtils =
     let checkModuleName (name: AST.StaticNamedPath) =
         if not (name.identifiers = ParserContext.getModuleName ()) then
             reportError <| InconsistentModuleName name 
-            
+      
+    /// Checks the 
 
     /// Checks if the static member appears in an implementation or interface context
     // no longer needed, fjg 11.12.19
