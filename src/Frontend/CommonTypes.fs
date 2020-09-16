@@ -103,6 +103,10 @@ type Name =
     static member FromFileOrDirectoryId (identifier: string) =
         { id = identifier
           range = Range.rangeStartup }
+
+    static member Empty =
+        { id = ""
+          range = Range.range0}
         
     member name.Range = name.range
     

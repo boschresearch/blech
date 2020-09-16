@@ -541,7 +541,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | Member.Import i ->
-            Package.require pkgCtx i.name.identifiers
+            Package.require pkgCtx i.fromPath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
         | _ ->
             failwith "This should never happen"
 

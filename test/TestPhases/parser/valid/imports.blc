@@ -1,8 +1,7 @@
 // external imports
-import service from <service/directory>
+import service "service/directory"
 
-import otherservice 
-    from <bla bla/fasel> as os exposes f
+import os "bla bla/fasel/otherservice" exposes f
 
 
 module

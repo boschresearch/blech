@@ -425,15 +425,18 @@ and FromPath =
         range: range
         path: string
     }
-    member ip.Range = ip.range
+    static member Empty = { range = Range.range0; path = "" }
+    
+    member fp.Range = fp.range
+
+    member fp.ModuleName : SearchPath.ModuleName = SearchPath.ModuleName.Empty // TODO: Implement this
 
 
 and Import = 
     {
         range: range
-        name: StaticNamedPath
-        from: FromPath option
-        localName: Name option
+        localName: Name
+        fromPath: FromPath
         exposing: Exposing option
     }
     member import.Range = import.range
@@ -512,14 +515,12 @@ and Member =
 and ModuleSpec = 
     {
         range: range
-        // path: Name list
         exposing: Exposing option
     }
     member modspec.Range = modspec.range
 
     static member Nothing = 
         { range = range.Zero
-          // path = []
           exposing = Option.None }
 
 /// package = Blech implementation or interface file
@@ -1003,6 +1004,7 @@ let unionRangesPlusOpt leftRng rightRng optRng =
     | Some rng -> unionRanges leftRng rng
 
 
+
 let numberTypeRange range (optUnitExpr: UnitExpr option) =
     match optUnitExpr with
     | None -> range
@@ -1063,15 +1065,11 @@ let returnRange range (optExpr: Expr option) =
     | Some expr -> unionRanges range expr.Range
 
 
-//let moduleHeadRange range (path: StaticNamedPath) (optExposing: Exposing option) =
-//    match optExposing with
-//    | None -> unionRanges range path.Range
-//    | Some exp -> unionRanges range exp.Range
-
 let moduleHeadRange range (optExposing: Exposing option) =
     match optExposing with
     | None -> range
     | Some exp -> unionRanges range exp.Range
+
 
 let importAsRange leftRng rightRng (optExp: Exposing option) =
     match optExp with
@@ -1079,10 +1077,10 @@ let importAsRange leftRng rightRng (optExp: Exposing option) =
     | Some exp -> unionRanges leftRng exp.Range
 
 
-let importRange rng (optExp: Exposing option) =
-    match optExp with
-    | None -> rng
-    | Some exp -> unionRanges rng exp.Range
+let importRange importRng pathRng (optExposing : Exposing option) =
+    match optExposing with
+    | None -> unionRanges importRng pathRng
+    | Some exp -> unionRanges importRng exp.Range 
 
 
 let packageRange (imports: Member list) defaultRange (members: Member list) =
