@@ -15,6 +15,7 @@
     <Compile Include="BlechString.fs" />
     <Compile Include="Bindings.fs" />
     <Compile Include="Diagnostics.fs" />
+    <Compile Include="FromPath.fs" />
     <Compile Include="SearchPath.fs" />
     <Compile Include="Package.fs" />
     <Compile Include="GenericGraph.fs" />
