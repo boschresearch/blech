@@ -46,6 +46,12 @@ module FromPath =
     let directory = sprintf "(?<%s>%s)/" Dir Id
     let moduleFile = sprintf "(?<%s>%s)" File Id
     
+    // import paths have the following form
+    // bl:package/a/b/file  - external package import
+    // /a/b/file            - absolute in-package import with '/' under package dir
+    // b/file               - relative in-package import from current directory
+    // ./b/file             - relative in-package import with ./ indicating current directory
+    // ../../b/file         - relative in-package import with ../ up from current directory
     let pathRegex = 
         Regex <| sprintf "^(%s|%s|%s|%s)?(%s)*(%s)$" 
                          package rootDir upDirs hereDir directory moduleFile 
@@ -100,14 +106,18 @@ module FromPath =
             Some { package = current.package 
                    dirs = dirs
                    file = file }
-        elif isHere then // relative in-package import from current directory
+        elif upCount > 0 then
+            if upCount <= current.dirs.Length then // in-package import up from current directory
+                Some { package = current.package
+                       dirs = List.take (current.dirs.Length - upCount) current.dirs @ dirs
+                       file = file }
+            else // to many up steps from current directory
+                None
+        elif isHere then // relative in-package import from current directory  with ./
             Some { package = current.package 
                    dirs = current.dirs @ dirs
                    file = file }
-        elif upCount <= current.dirs.Length then // in-package import up from current directory
-            Some { package = current.package
-                   dirs = List.take (current.dirs.Length - upCount) current.dirs @ dirs
+        else // relative in-package import from current directory
+            Some { package = current.package 
+                   dirs = current.dirs @ dirs
                    file = file }
-        else // to many up steps from current directory
-            None
-
