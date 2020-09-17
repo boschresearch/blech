@@ -232,6 +232,45 @@ let private myBlechParser lexer lexbuf : AST.Package =
     // Todo: Catch exception from parser, in case error token cannot be accepted (which should not happen)
 
 
+/// Parses a Blech module from a file given by a string
+/// The result is an untyped blech package
+let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: SearchPath.ModuleName) (contents: string) fileName =
+    Logging.log8 "ParsePkg.parseModule" 
+    <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
+                                                   (CommonTypes.idsToString moduleName) 
+                                                   fileName 
+                                                   (Range.fileIndexOfFile fileName)
+
+    // Initialise global ParserContext
+    ParserContext.initialise diagnosticLogger moduleName implOrIface
+        
+    // create a file index for current module's file in the global file index table
+    ignore <| Range.fileIndexOfFile fileName
+
+    let stream = new IO.StringReader(contents)
+    
+    // intialise lexing buffer
+    let lexbuf = FSharp.Text.Lexing.LexBuffer<char>.FromTextReader stream
+    lexbuf.EndPos <- { pos_bol = 0
+                       pos_fname = fileName // use module instead of file name 
+                       pos_cnum = 0
+                       pos_lnum = 1 }
+    
+    // parse the file
+    let utyPkg = myBlechParser myBlechLexer lexbuf
+
+    // close the stream
+    stream.Close()
+
+    // handle errors
+    let logger,_ = ParserContext.getDiagnosticsLogger()
+    if Diagnostics.Logger.hasErrors logger then
+        Error logger
+    else
+        Ok utyPkg
+
+
+
 /// Parses a Blech module from a file given by its last argument.
 /// The result is an untyped blech package, which could then be handed over to the
 /// static analysis part.

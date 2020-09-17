@@ -56,29 +56,113 @@ module Main =
         let attrs = assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyCopyrightAttribute>, true)
         string (attrs.[0] :?> System.Reflection.AssemblyCopyrightAttribute).Copyright
         
-    //let private compileFrontend (cliContext: Arguments.BlechCOptions) 
-    //                            (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
-    //                            diagnosticLogger 
-    //                            (loadWhat: Package.LoadWhat) 
-    //                            (moduleName: SearchPath.ModuleName)
-    //                            (inputFile: string) =
-    //    // parse
-    //    Logging.log2 "Main" ("processing source file " + inputFile)
-    //    let astRes = 
-    //        ParsePkg.parseModule diagnosticLogger loadWhat moduleName inputFile
-        
-    //    // name resolution 
-    //    Logging.log2 "Main" ("performing name resolution on " + inputFile)
-    //    let astAndEnvRes = 
-    //        let ncContext = NameChecking.initialise diagnosticLogger moduleName
-    //        Result.bind (NameChecking.checkDeclaredness pkgContext ncContext) astRes
-        
-    //    // type check
-    //    Logging.log2 "Main" ("performing type checking on " + inputFile)
-    //    let tyAstAndLutRes = 
-    //        Result.bind TypeChecking.typeCheck astAndEnvRes
-        
-    //    tyAstAndLutRes
+    let private runParser logger implOrIface moduleName contents fileName =
+        Logging.log2 "Main" ("processing file " + fileName)
+        ParsePkg.parseModuleFromStr logger implOrIface moduleName contents fileName
+
+    let private runNameResolution logger pkgCtx moduleName inputFile ast =
+        Logging.log2 "Main" ("performing name resolution on " + inputFile)
+        NameChecking.initialise logger moduleName
+        |> NameChecking.checkDeclaredness pkgCtx <| ast
+
+    let private runTypeChecking cliArgs inputFile astAndEnv =
+        Logging.log2 "Main" ("performing type checking on " + inputFile)
+        TypeChecking.typeCheck cliArgs astAndEnv
+
+    let private runCausalityCheck inputFile tyAstAndLut =
+        Logging.log2 "Main" ("checking causality in " + inputFile) 
+        Causality.checkPackCausality tyAstAndLut
+
+    
+    /// Runs compilation steps given input as a string
+    /// which exactly depends on options such as --dry-run
+    /// returns a Result type of
+    /// TypeCheckContext and typed AST (BlechModule)
+    /// or Diagnostic.Logger
+    let compile2 cliArgs pkgCtx logger moduleName fileContents fileName =
+        // always run lexer, parser, name resolution, type check and causality checks
+        let astRes = runParser logger Package.Implementation moduleName fileContents fileName
+        let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName fileName)
+        let lutAndPackRes = astAndSymTableRes |> Result.bind (runTypeChecking cliArgs fileName)
+        let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
+        match astAndSymTableRes, lutAndPackRes, pgsRes with
+        | _, _, Error logger
+        | _, Error logger, _                  // the last two cases just
+        | Error logger, _, _ -> Error logger  // satisfy the F# compiler
+        | Ok (ast, symTable), Ok (lut, package), Ok pgs ->
+            // generate block graphs for all activities
+            // this is only needed for code generation but is left here for debugging purposes
+            let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
+            let translationContext: TranslationContext =
+                { tcc = lut
+                  pgs = pgs
+                  bgs = blockGraphContext 
+                  cliContext = cliArgs }
+                        
+            let compilations = translate translationContext package
+
+            let isMainProgram = Option.isSome package.entryPoint
+                        
+            // if not entry point, create signature
+            if not isMainProgram then
+                let signatureFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToInterfaceFile moduleName)
+                let blechSignature = SignaturePrinter.printSignature lut.ncEnv ast
+                FileInfo(signatureFile).Directory.Create()
+                File.WriteAllText(signatureFile, blechSignature)
+
+
+            // if not dry run, write it to file
+            // create code depending on entry point
+            if not cliArgs.isDryRun then
+                Logging.log6 "Main" ("source code\n")
+                for c in compilations do
+                    let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                    let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                    Logging.log6 "Main" msg
+
+                Logging.log2 "Main" ("writing C code for " + fileName)
+
+                let codeFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToCFile moduleName)
+                let code = 
+                    if isMainProgram then
+                        let ep = package.entryPoint |> Option.get
+                        CodeGeneration.emitMainCode translationContext package compilations ep.name
+                    else
+                        CodeGeneration.emitCode translationContext package compilations
+                FileInfo(codeFile).Directory.Create()
+                File.WriteAllText(codeFile, code)
+
+                // create header depending on entry point
+                let headerFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToHFile moduleName)
+                let header = 
+                    if isMainProgram then
+                        let ep = package.entryPoint |> Option.get
+                        CodeGeneration.emitMainHeader translationContext package compilations ep.name
+                    else
+                        CodeGeneration.emitHeader translationContext package compilations
+                FileInfo(headerFile).Directory.Create()
+                File.WriteAllText(headerFile, header)
+
+                // generated test app
+                match cliArgs.appName, package.entryPoint with
+                | Some an, Some ep ->
+                    let appFile = Path.Combine(cliArgs.outDir, SearchPath.appNameToCFile an)
+                    let app = CodeGeneration.emitApp translationContext package compilations ep.name
+                    FileInfo(appFile).Directory.Create()
+                    File.WriteAllText(appFile, app)
+                | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
+                | None, _ -> 
+                    ()
+
+            // return interface information for module
+            Ok (lut, package)
+                        
+                
+    /// Runs compilation starting with a filename
+    let compileFromFile cliArgs pkgCtx logger moduleName inputFile =
+        // open stream from file
+        let contents = File.ReadAllText (Path.GetFullPath(inputFile))
+        compile2 cliArgs pkgCtx logger moduleName contents inputFile
     
 
     let compileInterface (cliContext: Arguments.BlechCOptions) 
@@ -279,7 +363,7 @@ module Main =
         let compilationRes = 
             match implOrIface with
             | Package.Implementation ->
-                compileImplementation options packageContext logger moduleName infile
+                compileFromFile options packageContext logger moduleName infile
             | Package.Interface ->
                 compileInterface options packageContext logger moduleName infile
                 
