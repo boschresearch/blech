@@ -699,7 +699,7 @@ module TyChecked =
     /// Zips a pair of Oks into an Ok of pairs
     /// In case at least one of the argument contains the Error case,
     /// simply concatenates the errors.
-    let internal combine tyc1 tyc2 =
+    let combine tyc1 tyc2 =
         match tyc1, tyc2 with
         | Error e1, Error e2 -> Error (e1 @ e2)
         | Error e1, _ -> Error e1
@@ -708,7 +708,7 @@ module TyChecked =
 
     /// Similar to combine, except that it works on a list
     /// and returns an Ok of a list in the good case.
-    let internal contract tycList =
+    let contract tycList =
         let rec recContract tycs res =
             match tycs with
             | [] -> res
@@ -722,6 +722,6 @@ module TyChecked =
 
     /// Similar to contract, except that it works on an optional
     /// and returns an Ok of an optional in the good case
-    let internal ofOption = function
+    let ofOption = function
         | None -> Ok None
         | Some res -> res |> Result.map Some
