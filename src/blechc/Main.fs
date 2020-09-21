@@ -73,6 +73,45 @@ module Main =
         Logging.log2 "Main" ("checking causality in " + inputFile) 
         Causality.checkPackCausality tyAstAndLut
 
+    let private writeFile outFileName txt =
+        FileInfo(outFileName).Directory.Create()
+        File.WriteAllText(outFileName, txt)
+
+    let private writeSignature outDir moduleName ncEnv ast =
+        let signatureFile = Path.Combine(outDir, SearchPath.moduleToInterfaceFile moduleName)
+        let blechSignature = SignaturePrinter.printSignature ncEnv ast
+        writeFile signatureFile blechSignature
+
+    let private writeImplementation outDir moduleName (blechModule: BlechTypes.BlechModule) translationContext compilations =
+        let codeFile = Path.Combine(outDir, SearchPath.moduleToCFile moduleName)
+        let code = 
+            match blechModule.entryPoint with
+            | Some ep ->
+                CodeGeneration.emitMainCode translationContext blechModule compilations ep.name
+            | None ->
+                CodeGeneration.emitCode translationContext blechModule compilations
+        writeFile codeFile code
+
+    let private writeHeader outDir moduleName (blechModule: BlechTypes.BlechModule) translationContext compilations =
+        let headerFile = Path.Combine(outDir, SearchPath.moduleToHFile moduleName)
+        let header = 
+            match blechModule.entryPoint with
+            | Some ep ->
+                CodeGeneration.emitMainHeader translationContext blechModule compilations ep.name
+            | None ->
+                CodeGeneration.emitHeader translationContext blechModule compilations
+        writeFile headerFile header
+
+    let private possiblyWriteTestApp (cliArgs: Arguments.BlechCOptions) (blechModule: BlechTypes.BlechModule) translationContext compilations =
+        match cliArgs.appName, blechModule.entryPoint with
+        | Some an, Some ep ->
+            let appFile = Path.Combine(cliArgs.outDir, SearchPath.appNameToCFile an)
+            let app = CodeGeneration.emitApp translationContext blechModule compilations ep.name
+            FileInfo(appFile).Directory.Create()
+            File.WriteAllText(appFile, app)
+        | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
+        | None, _ -> 
+            ()
     
     /// Runs compilation steps given input as a string
     /// which exactly depends on options such as --dry-run
@@ -89,7 +128,7 @@ module Main =
         | _, _, Error logger
         | _, Error logger, _                  // the last two cases just
         | Error logger, _, _ -> Error logger  // satisfy the F# compiler
-        | Ok (ast, symTable), Ok (lut, package), Ok pgs ->
+        | Ok (ast, symTable), Ok (lut, blechModule), Ok pgs ->
             // generate block graphs for all activities
             // this is only needed for code generation but is left here for debugging purposes
             let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
@@ -99,63 +138,34 @@ module Main =
                   bgs = blockGraphContext 
                   cliContext = cliArgs }
                         
-            let compilations = translate translationContext package
+            let compilations = translate translationContext blechModule
 
-            let isMainProgram = Option.isSome package.entryPoint
-                        
-            // if not entry point, create signature
-            if not isMainProgram then
-                let signatureFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToInterfaceFile moduleName)
-                let blechSignature = SignaturePrinter.printSignature lut.ncEnv ast
-                FileInfo(signatureFile).Directory.Create()
-                File.WriteAllText(signatureFile, blechSignature)
-
+            Logging.log6 "Main" ("source code\n")
+            for c in compilations do
+                let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                Logging.log6 "Main" msg
 
             // if not dry run, write it to file
             // create code depending on entry point
             if not cliArgs.isDryRun then
-                Logging.log6 "Main" ("source code\n")
-                for c in compilations do
-                    let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                    let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                    Logging.log6 "Main" msg
+                let isMainProgram = Option.isSome blechModule.entryPoint
+                
+                // if not entry point, create signature
+                if not isMainProgram then
+                    Logging.log2 "Main" ("writing signature for " + fileName)
+                    writeSignature cliArgs.outDir moduleName lut.ncEnv ast
 
                 Logging.log2 "Main" ("writing C code for " + fileName)
+                writeImplementation cliArgs.outDir moduleName blechModule translationContext compilations
 
-                let codeFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToCFile moduleName)
-                let code = 
-                    if isMainProgram then
-                        let ep = package.entryPoint |> Option.get
-                        CodeGeneration.emitMainCode translationContext package compilations ep.name
-                    else
-                        CodeGeneration.emitCode translationContext package compilations
-                FileInfo(codeFile).Directory.Create()
-                File.WriteAllText(codeFile, code)
+                writeHeader cliArgs.outDir moduleName blechModule translationContext compilations
 
-                // create header depending on entry point
-                let headerFile = Path.Combine(cliArgs.outDir, SearchPath.moduleToHFile moduleName)
-                let header = 
-                    if isMainProgram then
-                        let ep = package.entryPoint |> Option.get
-                        CodeGeneration.emitMainHeader translationContext package compilations ep.name
-                    else
-                        CodeGeneration.emitHeader translationContext package compilations
-                FileInfo(headerFile).Directory.Create()
-                File.WriteAllText(headerFile, header)
-
-                // generated test app
-                match cliArgs.appName, package.entryPoint with
-                | Some an, Some ep ->
-                    let appFile = Path.Combine(cliArgs.outDir, SearchPath.appNameToCFile an)
-                    let app = CodeGeneration.emitApp translationContext package compilations ep.name
-                    FileInfo(appFile).Directory.Create()
-                    File.WriteAllText(appFile, app)
-                | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
-                | None, _ -> 
-                    ()
+                // generated test app if required by cliArgs
+                possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
             // return interface information for module
-            Ok (lut, package)
+            Ok (lut, blechModule)
                         
                 
     /// Runs compilation starting with a filename
