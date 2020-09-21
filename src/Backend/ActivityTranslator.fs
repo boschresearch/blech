@@ -840,11 +840,21 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
               allReferences = HashSet() }
         curComp := Compilation.addPc !curComp node.Payload.Thread pc
         false
+    // this fixes an issue in which the thread discovery follows data edges and therefore discovers
+    // child threads before their parents
+    // TODO: make this more elegant in the future, instead of re-implementing depthFirstForward
+    let depthsFirstForward nodes onNodeVisit onNodeFinish onCycleDetect onRevisit =
+        let selectNeighbours (n: Node) = 
+            n.Outgoing
+            |> Seq.filter (fun edge -> match edge.Payload with DataFlow _ -> false | _ -> true)
+            |> Seq.map (fun edge -> edge. Target)
+        GenericGraph.depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit
+    
     let name = subProgDecl.name
     curComp := { !curComp with varsToPrev = collectVarsToPrev2 ctx.pgs.[name] }
     // build pc tree by traversing the program graph and create a pc per thread
     let progGraph = ctx.pgs.[name]
-    let aborted = GenericGraph.depthsFirstForward [progGraph.Entry] addPc GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
+    let aborted = depthsFirstForward [progGraph.Entry] addPc GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
     assert not aborted
     let blockGraph = ctx.bgs.[name].blockGraph
     // perform scheduling (i.e. compute block priorities)
