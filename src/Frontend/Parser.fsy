@@ -143,8 +143,8 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 
 
-%start Package
-%type <Package> Package
+%start Compilation
+%type <CompilationUnit> Compilation
 
 %%
 
@@ -1359,7 +1359,7 @@ ImportList
 
 
 Module
-    : ImportList ModuleHead ModuleMembers       { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
@@ -1372,7 +1372,7 @@ Module
    ---------------------------------------------------------------------------- */
 
 Program    
-    : ImportList ModuleMember ModuleMembers     { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers 
@@ -1421,7 +1421,7 @@ ExtensionMemberDecls
 
 Signature
     : ImportList SignatureHead SignatureMembers 
-                                                { { Package.range = packageRange $1 $2.Range $3
+                                                { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
@@ -1432,12 +1432,12 @@ Signature
    --- Parser Entry Point --- 
    -------------------------- */
 
-Package 
+Compilation 
     : Module EOF                                { $1 }    
     | Signature EOF                             { $1 }
     | Program EOF                               { $1 }
     | error EOF                                 { logParserError (getStartOfFile $2);
-                                                  { Package.range = $2
+                                                  { CompilationUnit.range = $2
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = []

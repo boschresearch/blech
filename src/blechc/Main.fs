@@ -168,7 +168,7 @@ module Main =
     let compileInterface (cliContext: Arguments.BlechCOptions) 
                          (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
                          diagnosticLogger 
-                         (moduleName: SearchPath.ModuleName)
+                         (moduleName: FromPath.ModuleName)
                          (inputFile: string) =
 
         // parse

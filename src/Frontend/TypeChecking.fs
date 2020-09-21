@@ -1251,7 +1251,7 @@ type private ProcessedMembers =
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
     // TODO: Simplify this, fjg 19.01.19
-    member this.UpdateEntryPoint (pack: AST.Package) (act: Result<SubProgramDecl, _>) =
+    member this.UpdateEntryPoint (pack: AST.CompilationUnit) (act: Result<SubProgramDecl, _>) =
         let optEp = 
             match act with
             | Ok subprog ->
@@ -1296,7 +1296,7 @@ type private ProcessedMembers =
 
 
 // this is also an entry point for testing, hence public
-let public fPackage lut (pack: AST.Package) =
+let public fPackage lut (pack: AST.CompilationUnit) =
     let pos = pack.Range
     //let spec = pack.spec
 
@@ -1413,7 +1413,7 @@ let public fPackage lut (pack: AST.Package) =
 
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
-let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
+let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.CompilationUnit, ncEnv: SymbolTable.LookupTable) =
     let lut = TypeCheckContext.Init cliContext ncEnv
     fPackage lut pack
     |> function

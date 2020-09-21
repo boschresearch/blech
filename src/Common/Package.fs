@@ -25,7 +25,7 @@ module Package =
     type ModuleError = 
         | FileNotFound of fileName: string
         | ModuleNotFound of moduleName: FromPath.ModuleName * triedFiles: string list
-        | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list
+        | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20
         | IllegalModuleFileName of moduleFileName: string * wrongIds: string list
         | InvalidFileExtension of fileName: string
         
@@ -98,7 +98,7 @@ module Package =
         {
             sourcePath: string
             blechPath: string
-            packageDir: string  // fjg: reserved for future use 
+            packageName: string  // fjg: reserved for future use 
             outDir: string
             logger: Diagnostics.Logger
             loader: Context<'info> -> ImplOrIface -> FromPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
@@ -109,7 +109,7 @@ module Package =
         static member Make (arguments: Arguments.BlechCOptions) logger loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
-              packageDir = ""  
+              packageName = SearchPath.blech  // default for non-packages
               outDir = arguments.outDir
               logger = logger
               loader = loader
@@ -141,7 +141,7 @@ module Package =
                 Diagnostics.Logger.logFatalError 
                 <| lgr
                 <| Diagnostics.Phase.Compiling
-                <| InputNotInSourcePath (fileName, ctx.packageDir, SearchPath.searchPath2Dirs ctx.sourcePath)
+                <| InputNotInSourcePath (fileName, ctx.packageName, SearchPath.searchPath2Dirs ctx.sourcePath)
                 Error lgr
             | Error wrongIds ->
                 Diagnostics.Logger.logFatalError 
