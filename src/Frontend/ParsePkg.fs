@@ -232,7 +232,7 @@ let private myBlechParser lexer lexbuf : AST.CompilationUnit =
 
 /// Parses a Blech module from a file given by a string
 /// The result is an untyped blech package
-let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (contents: string) fileName =
+let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: FromPath.ModuleName) fileName (contents: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 
@@ -268,74 +268,8 @@ let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (modu
         Ok utyPkg
 
 
-
-/// Parses a Blech module from a file given by its last argument.
-/// The result is an untyped blech package, which could then be handed over to the
-/// static analysis part.
-let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (fileName: string) =
-    Logging.log8 "ParsePkg.parseModule" 
-    <| sprintf "%s: %s | file: %s | fileIndex: %d" (loadWhat.ToString()) 
-                                                   (CommonTypes.idsToString moduleName) 
-                                                   fileName 
-                                                   (Range.fileIndexOfFile fileName)
-
-    // Initialise global ParserContext
-    ParserContext.initialise diagnosticLogger moduleName loadWhat
-        
-    // create a file index for current module's file in the global file index table
-    ignore <| Range.fileIndexOfFile fileName
-
-    // open stream from file
-    let stream = new IO.StreamReader( IO.Path.GetFullPath(fileName) )
-    
-    // initialise lexing buffer
-    let lexbuf = FSharp.Text.Lexing.LexBuffer<char>.FromTextReader stream
-    lexbuf.EndPos <- { pos_bol = 0
-                       pos_fname = fileName 
-                       pos_cnum = 0
-                       pos_lnum = 1 }
-    
-    // parse the file
-    let utyPkg = myBlechParser myBlechLexer lexbuf
-
-    // close the stream
-    stream.Close()
-    
-    // handle errors
-    let logger,_ = ParserContext.getDiagnosticsLogger()
-    if Diagnostics.Logger.hasErrors logger then
-        Error logger
-    else
-        Ok utyPkg
-
-/// Parses a Blech module from a string given by its last argument.
-/// The result is an either untyped blech package, 
-/// or a Diagnostic
-let parseModuleFromStrNoConsole diagnosticLogger fileName moduleName fileContents =
-    // Initialise global ParserContext
-
-    ParserContext.initialise diagnosticLogger moduleName Blech.Common.Package.Implementation 
-    // TODO: change this, determine loadWhat from file extension for language server
-        
-    let stream = new IO.StringReader(fileContents)
-    
-    // intialise lexing buffer
-    let lexbuf = FSharp.Text.Lexing.LexBuffer<char>.FromTextReader stream
-    lexbuf.EndPos <- { pos_bol = 0
-                       pos_fname = fileName // use module instead of file name 
-                       pos_cnum = 0
-                       pos_lnum = 1 }
-    
-    // parse the file
-    let utyPkg = myBlechParser myBlechLexer lexbuf
-
-    // close the stream
-    stream.Close()
-    
-    // handle errors
-    let logger,_ = ParserContext.getDiagnosticsLogger ()
-    if Diagnostics.Logger.hasErrors logger then
-        Error logger
-    else
-        Ok utyPkg
-    
+/// Shorthand wrapper for parsing from files
+/// useful in unit tests, for example
+let parseModuleFromFile logger implOrIface moduleName filePath =
+    System.IO.File.ReadAllText (System.IO.Path.GetFullPath(filePath))
+    |> parseModuleFromStr logger implOrIface moduleName filePath

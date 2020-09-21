@@ -31,12 +31,12 @@ type Test() =
     /// run typeCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.typeCheckValidFiles (loadWhat, moduleName, filePath) =
+    member x.typeCheckValidFiles (implOrIface, moduleName, filePath) =
         let cliContext = Arguments.BlechCOptions.Default
 
         let logger = Diagnostics.Logger.create ()
         
-        let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
+        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
@@ -62,12 +62,12 @@ type Test() =
     /// run typeCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.typeCheckInvalidInputs (loadWhat, moduleName, filePath) =
+    member x.typeCheckInvalidInputs (implOrIface, moduleName, filePath) =
         let blechcOptions = Arguments.BlechCOptions.Default
         
         let logger = Diagnostics.Logger.create ()
         
-        let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
+        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 

@@ -58,7 +58,7 @@ module Main =
         
     let private runParser logger implOrIface moduleName contents fileName =
         Logging.log2 "Main" ("processing file " + fileName)
-        ParsePkg.parseModuleFromStr logger implOrIface moduleName contents fileName
+        ParsePkg.parseModuleFromStr logger implOrIface moduleName fileName contents
 
     let private runNameResolution logger pkgCtx moduleName inputFile ast =
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
@@ -184,7 +184,7 @@ module Main =
         // parse
         Logging.log2 "Main" ("processing source file " + inputFile)
         let astRes = 
-            ParsePkg.parseModule diagnosticLogger Package.Interface moduleName inputFile
+            ParsePkg.parseModuleFromFile diagnosticLogger Package.Interface moduleName inputFile
         
         // name resolution 
         Logging.log2 "Main" ("performing name resolution on " + inputFile)

@@ -31,13 +31,12 @@ type Test() =
     /// run causalityCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.causalityCheckValidFiles (loadWhat, moduleName, filePath) =
+    member x.causalityCheckValidFiles (implOrIface, moduleName, filePath) =
         let cliContext = Arguments.BlechCOptions.Default
 
         let logger = Diagnostics.Logger.create ()
         
-        let ast = 
-            Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
+        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
 
         let astAndEnv = 
@@ -75,12 +74,11 @@ type Test() =
     /// run causalityCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.causalityCheckInvalidInputs (loadWhat, moduleName, filePath) =
+    member x.causalityCheckInvalidInputs (implOrIface, moduleName, filePath) =
         let cliContext = Arguments.BlechCOptions.Default
         
         let logger = Diagnostics.Logger.create ()
-        let ast = 
-            Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
+        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
