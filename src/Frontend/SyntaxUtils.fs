@@ -597,12 +597,10 @@ module LexerUtils =
 
     /// this mutable number is used to track the nesting of /* .. */ comments in the SkipComment rule
     // TODO: encapsulate as LexerContext
-    let mutable fromStart: Range.range = Range.range0
     let mutable commentStart: Range.range option = None
     let mutable commentDepth = 0
 
     let mutable tokenBuilder = TokenBuilder()
-    // let mutable tabIndent : (Range.range * int) option = None   // 
     
 
     let getLexeme (lexbuf: LexBuffer<char>) = 

@@ -35,7 +35,7 @@ let blech = "blech"  // reserved name and keyword for code generation purposes
 
 let blechIdRegex = RegularExpressions.Regex @"^_*[a-zA-Z]+[_a-zA-Z0-9]*$"
 
-type ModuleName = string list
+// type ModuleName = string list
 
 /// Checks if a directory or file name - without extension - can be used as a Blech identifier
 let isValidFileOrDirectoryName name = 
@@ -113,15 +113,15 @@ let search searchPath name extension =
 
 /// Returns the resulting name of the first implementation file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open    
-let searchImplementation searchPath (name: ModuleName) = 
+let searchImplementation searchPath (name: FromPath.ModuleName) = 
     search searchPath name implementationFileExtension
 
 /// Returns the resulting name of the first interface file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open   
-let searchInterface searchPath (name: ModuleName) = 
+let searchInterface searchPath (name: FromPath.ModuleName) = 
     search searchPath name interfaceFileExtension
       
-let private separateAndExtend sep (moduleName: ModuleName) extension =
+let private separateAndExtend sep (moduleName: FromPath.ModuleName) extension =
     sprintf "%s%s" (String.concat sep (blech::moduleName)) extension 
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
@@ -152,10 +152,19 @@ let moduleToInterfaceFile moduleName =
 let appNameToCFile appName = 
     sprintf "%s%s" appName cFileExtension
 
-/// Returns all candidates for source directories, combined from all search directories and a package name
-let private sourceDirs searchPath package =
+/// Returns all candidates for source directories, combined from all search directories in source path 
+//let private sourceDirs searchPath =
+//    searchPath2Dirs searchPath
+
+/// Returns all candidates for source directories
+/// Search path is either the source path with out a package name
+/// or the blech path with a package name
+let private sourceDirs searchPath (packageName : string option) =
     let searchDirs = searchPath2Dirs searchPath
-    List.map (fun sd -> Path.Combine(sd, package)) searchDirs
+    match packageName with
+    | None -> searchDirs
+    | Some pkgName -> 
+        List.map (fun sd -> Path.Combine(sd, pkgName)) searchDirs
 
 
 let private tryGetFullPath path = 
@@ -186,13 +195,17 @@ let private fileToModuleName file srcDir =
                                          .Split(Path.DirectorySeparatorChar)
     let wrongIds = List.filter (fun id -> not <| isValidFileOrDirectoryName id) ids
     if List.isEmpty wrongIds then
+        //for id in ids do
+        //    printfn "Segment: %s" id
         Ok ids        
     else
         Error wrongIds
 
 
-let getModuleName searchPath package file : Result<ModuleName, string list> =
+let getModuleName searchPath package file : Result<FromPath.ModuleName, string list> =
     let srcDirs = sourceDirs searchPath package
+    //for dir in srcDirs do
+    //    printfn "Sourcedirectory: %s" dir
     let srcDir = 
         match List.tryFind (fun sd -> fileIsInSrcDir file sd) srcDirs with
         | None ->

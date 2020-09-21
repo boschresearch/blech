@@ -93,7 +93,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx     
 
-    let private addModule (ctx: NameCheckContext) (moduleName: SearchPath.ModuleName) = 
+    let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
         let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
         {ctx with env = env}
         
@@ -541,7 +541,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | Member.Import i ->
-            Package.require pkgCtx i.fromPath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
+            Package.require pkgCtx i.modulePath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
         | _ ->
             failwith "This should never happen"
 

@@ -420,24 +420,24 @@ and Prototype =
 
     
 
-and FromPath = 
+and ModulePath = 
     {
         range: range
         path: string
     }
     static member Empty = { range = Range.range0; path = "" }
     
-    member fp.Range = fp.range
+    member mp.Range = mp.range
 
-    member fp.ModuleName : SearchPath.ModuleName = 
-        List.ofArray <| fp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
+    member mp.ModuleName : FromPath.ModuleName = 
+        List.ofArray <| mp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
     {
         range: range
         localName: Name
-        fromPath: FromPath
+        modulePath: ModulePath
         exposing: Exposing option
     }
     member import.Range = import.range
@@ -529,7 +529,7 @@ and ModuleSpec =
 and Package = 
     {
         range: range
-        moduleName: SearchPath.ModuleName
+        moduleName: FromPath.ModuleName
         loadWhat: Package.ImplOrIface
         imports: Member list
         spec: ModuleSpec option

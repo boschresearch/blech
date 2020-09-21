@@ -18,7 +18,8 @@ namespace Blech.Common.Tests
 
 open NUnit.Framework
 open System.IO
-open Blech.Common.SearchPath // system under test
+open Blech.Common
+open SearchPath // system under test
 
 [<TestFixture>]
 module SearchPathTest =
@@ -85,10 +86,10 @@ module SearchPathTest =
     let testFileToModuleName() =
         
         let getModName searchPath package file =
-            getModuleName (replace searchPath) (replace package) (replace file)
+            getModuleName (replace searchPath) (Some <| replace package) (replace file)
         
         let error err : Result<string list, string list> = Error err
-        let okay ok: Result<ModuleName, string list> = Ok ok
+        let okay ok: Result<FromPath.ModuleName, string list> = Ok ok
         
         Assert.AreEqual( okay ["dir";"file"], getModName "." "" "dir/file.blc" ) 
         Assert.AreEqual( okay ["file"], getModName  "./dir" "" "dir/file.blc" )

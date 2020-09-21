@@ -184,7 +184,7 @@ module SymbolTable =
             
     type Environment = 
         {
-            moduleName: SearchPath.ModuleName
+            moduleName: FromPath.ModuleName
             path: Scope list
             lookupTable: LookupTable
         }

@@ -105,7 +105,7 @@ let public translate ctx (pack: BlechModule) =
 
 
 /// Emit C code for module as Doc
-let private cpModuleCode ctx (moduleName: SearchPath.ModuleName) 
+let private cpModuleCode ctx (moduleName: FromPath.ModuleName) 
                              (pragmas: Attribute.MemberPragma list) 
                              (compilations: Compilation list) =
     // C header
@@ -233,7 +233,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
 // end of cpModuleCode
 
 /// Emit C code for module as Doc
-let private cpMainModuleCode ctx (moduleName: SearchPath.ModuleName) 
+let private cpMainModuleCode ctx (moduleName: FromPath.ModuleName) 
                              (pragmas: Attribute.MemberPragma list) 
                              (compilations: Compilation list) 
                              entryPoint =
@@ -407,7 +407,7 @@ let private cpMainModuleCode ctx (moduleName: SearchPath.ModuleName)
 // end of cpMainModuleCode
 
 /// Emit C header for module as Doc
-let private cpMainModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPoint =
+let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) entryPoint =
     // C header
     let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
         
@@ -526,7 +526,7 @@ let private cpMainModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilat
 // end of cpMainModuleHeader
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) =
+let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) =
     // C header
     let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
         
@@ -617,7 +617,7 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
 
 /// Emit C code for main app as Doc
 /// compilations is required to find the entry point name
-let private cpApp ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPointName =
+let private cpApp ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) entryPointName =
     // C header
     let cHeaders = txt "#include <stdio.h>"
 
