@@ -284,7 +284,7 @@ module ParserUtils =
     type ParserContext = 
         {
             mutable currentModuleName: LongIdentifier
-            mutable currentLoadWhat: Package.ImplOrIface
+            mutable currentLoadWhat: CompilationUnit.ImplOrIface
             //mutable packageHead: PackageHead
             mutable errorTokenAccepted: bool
             mutable errorInfo : ParserErrorInfo option
@@ -293,7 +293,7 @@ module ParserUtils =
 
         static member Default = {
                 currentModuleName = []
-                currentLoadWhat = Package.Implementation
+                currentLoadWhat = CompilationUnit.Implementation
                 // packageHead = PackageHead.Default 
                 errorTokenAccepted = false
                 errorInfo = None
@@ -327,8 +327,8 @@ module ParserUtils =
         let getModuleName () = parserContext.currentModuleName
         let getLoadWhat () = parserContext.currentLoadWhat
         //let isSignature () = parserContext.packageHead.isSignature
-        let isInterface () = parserContext.currentLoadWhat = Package.Interface
-        let isImplementation () = parserContext.currentLoadWhat = Package.Implementation
+        let isInterface () = parserContext.currentLoadWhat = CompilationUnit.Interface
+        let isImplementation () = parserContext.currentLoadWhat = CompilationUnit.Implementation
         //let getHeadRange () = parserContext.packageHead.range
         //let setPackageHead isSignature range = 
         //    parserContext.packageHead <- { parserContext.packageHead with isSignature = isSignature; range = range }

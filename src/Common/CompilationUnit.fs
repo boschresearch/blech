@@ -17,12 +17,12 @@
 namespace Blech.Common
 
 [<RequireQualifiedAccess>]
-module Package =
+module CompilationUnit =
     
     open System.Collections.Generic
     open System.IO
 
-    type ModuleError = 
+    type CompilationUnitError = 
         | FileNotFound of fileName: string
         | ModuleNotFound of moduleName: FromPath.ModuleName * triedFiles: string list
         | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20

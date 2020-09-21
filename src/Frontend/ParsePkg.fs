@@ -232,7 +232,7 @@ let private myBlechParser lexer lexbuf : AST.CompilationUnit =
 
 /// Parses a Blech module from a file given by a string
 /// The result is an untyped blech package
-let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (contents: string) fileName =
+let parseModuleFromStr diagnosticLogger (implOrIface: CompilationUnit.ImplOrIface) (moduleName: FromPath.ModuleName) (contents: string) fileName =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 
@@ -272,7 +272,7 @@ let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (modu
 /// Parses a Blech module from a file given by its last argument.
 /// The result is an untyped blech package, which could then be handed over to the
 /// static analysis part.
-let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (fileName: string) =
+let parseModule diagnosticLogger (loadWhat: CompilationUnit.ImplOrIface) (moduleName: FromPath.ModuleName) (fileName: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (loadWhat.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 
@@ -314,7 +314,7 @@ let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: Fr
 let parseModuleFromStrNoConsole diagnosticLogger fileName moduleName fileContents =
     // Initialise global ParserContext
 
-    ParserContext.initialise diagnosticLogger moduleName Blech.Common.Package.Implementation 
+    ParserContext.initialise diagnosticLogger moduleName Blech.Common.CompilationUnit.Implementation 
     // TODO: change this, determine loadWhat from file extension for language server
         
     let stream = new IO.StringReader(fileContents)

@@ -120,7 +120,7 @@ module Main =
     /// or Diagnostic.Logger
     let compileFromStr cliArgs pkgCtx logger moduleName fileName fileContents =
         // always run lexer, parser, name resolution, type check and causality checks
-        let astRes = runParser logger Package.Implementation moduleName fileContents fileName
+        let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
         let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName fileName)
         let lutAndPackRes = astAndSymTableRes |> Result.bind (runTypeChecking cliArgs fileName)
         let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
@@ -176,7 +176,7 @@ module Main =
     
 
     let compileInterface (cliContext: Arguments.BlechCOptions) 
-                         (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
+                         (pkgContext: CompilationUnit.Context<TypeCheckContext * BlechTypes.BlechModule>) 
                          diagnosticLogger 
                          (moduleName: FromPath.ModuleName)
                          (inputFile: string) =
@@ -184,7 +184,7 @@ module Main =
         // parse
         Logging.log2 "Main" ("processing source file " + inputFile)
         let astRes = 
-            ParsePkg.parseModule diagnosticLogger Package.Interface moduleName inputFile
+            ParsePkg.parseModule diagnosticLogger CompilationUnit.Interface moduleName inputFile
         
         // name resolution 
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
@@ -220,20 +220,20 @@ module Main =
         tyAstAndLutRes
         
 
-    let loader options logger packageContext implOrIface moduleName infile : Result<Package.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface moduleName infile : Result<CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
-            | Package.Implementation ->
+            | CompilationUnit.Implementation ->
                 compileFromFile options packageContext logger moduleName infile
-            | Package.Interface ->
+            | CompilationUnit.Interface ->
                 compileInterface options packageContext logger moduleName infile
                 
-        Result.bind (Package.Module<TypeCheckContext * BlechTypes.BlechModule>.Make moduleName infile) compilationRes 
+        Result.bind (CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>.Make moduleName infile) compilationRes 
 
     let compile (options: Arguments.BlechCOptions) logger =
         let inputFile = options.inputFile
-        let pkgCtx = Package.Context.Make options logger (loader options logger)
-        Package.load pkgCtx inputFile
+        let pkgCtx = CompilationUnit.Context.Make options logger (loader options logger)
+        CompilationUnit.load pkgCtx inputFile
         // Module.require pkgCtx moduleName
             
         

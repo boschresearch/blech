@@ -53,7 +53,7 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
             | Error wrongIds -> wrongIds //failwith (sprintf "illegal filename '%A'" wrongIds)
         printfn "module name: '%s'" <| SearchPath.moduleNameToString modName
         let testName = testCaseNameFrom modName
-        let loadWhat = Option.get (Package.loadWhat file) 
+        let loadWhat = Option.get (CompilationUnit.loadWhat file) 
         TestCaseData(loadWhat, modName, file).SetName(testName)    
     let files = 
         Directory.EnumerateFiles where

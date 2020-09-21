@@ -17,7 +17,7 @@
     <Compile Include="Diagnostics.fs" />
     <Compile Include="FromPath.fs" />
     <Compile Include="SearchPath.fs" />
-    <Compile Include="Package.fs" />
+    <Compile Include="CompilationUnit.fs" />
     <Compile Include="GenericGraph.fs" />
   </ItemGroup>
 
