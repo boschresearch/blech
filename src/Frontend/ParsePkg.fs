@@ -232,7 +232,7 @@ let private myBlechParser lexer lexbuf : AST.CompilationUnit =
 
 /// Parses a Blech module from a file given by a string
 /// The result is an untyped blech package
-let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: FromPath.ModuleName) fileName (contents: string) =
+let parseModuleFromStr diagnosticLogger (implOrIface: CompilationUnit.ImplOrIface) (moduleName: FromPath.ModuleName) fileName (contents: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 

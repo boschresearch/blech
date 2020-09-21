@@ -529,7 +529,7 @@ and CompilationUnit =
     {
         range: range
         moduleName: FromPath.ModuleName
-        loadWhat: Package.ImplOrIface
+        loadWhat: CompilationUnit.ImplOrIface
         imports: Member list
         spec: ModuleSpec option
         members: Member list 

@@ -537,11 +537,11 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx // Handled separately, maybe we should fail here
 
 
-    let checkImport (packageContext: Package.Context<'info>) (import: AST.Member) = 
+    let checkImport (packageContext: CompilationUnit.Context<'info>) (import: AST.Member) = 
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | Member.Import i ->
-            Package.require pkgCtx i.modulePath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
+            CompilationUnit.require pkgCtx i.modulePath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
         | _ ->
             failwith "This should never happen"
 
