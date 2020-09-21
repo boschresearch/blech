@@ -38,8 +38,6 @@ let tokenTagToString token =
     | TOKEN_SIGNATURE -> "signature"
     (* ---- name spaces ---- *)
     | TOKEN_EXTENSION -> "extension"
-    (* --- paths -----*)
-    | TOKEN_FROMPATH -> "from <path>"
     (* --- doc comments --- *)
     | TOKEN_LINEDOC -> "/// <line doc comment>"
     | TOKEN_BLOCKDOC -> "/** <block doc comment> */"
@@ -226,7 +224,7 @@ let private myErrorHandler (lexbuf: FSharp.Text.Lexing.LexBuffer<char>)
     ParserContext.storeParserErrorInfo errInfo
 
     
-let private myBlechParser lexer lexbuf : AST.Package =
+let private myBlechParser lexer lexbuf : AST.CompilationUnit =
     let myTables = { BlechParser.tables() with parseError = myErrorHandler lexbuf }
     Operators.unbox <| myTables.Interpret(lexer, lexbuf, 0)
     // Todo: Catch exception from parser, in case error token cannot be accepted (which should not happen)
@@ -234,7 +232,7 @@ let private myBlechParser lexer lexbuf : AST.Package =
 
 /// Parses a Blech module from a file given by a string
 /// The result is an untyped blech package
-let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: SearchPath.ModuleName) (contents: string) fileName =
+let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (contents: string) fileName =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 
@@ -274,7 +272,7 @@ let parseModuleFromStr diagnosticLogger (implOrIface: Package.ImplOrIface) (modu
 /// Parses a Blech module from a file given by its last argument.
 /// The result is an untyped blech package, which could then be handed over to the
 /// static analysis part.
-let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: SearchPath.ModuleName) (fileName: string) =
+let parseModule diagnosticLogger (loadWhat: Package.ImplOrIface) (moduleName: FromPath.ModuleName) (fileName: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (loadWhat.ToString()) 
                                                    (CommonTypes.idsToString moduleName) 

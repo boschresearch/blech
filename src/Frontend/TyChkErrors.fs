@@ -195,7 +195,7 @@ type TyCheckError =
     | MissingNamedArgument of range * string
     | MissingEntryPoint of range
     | MultipleEntryPoints of first: range * second: range
-    | IllegalEntryPoint of range * AST.Package
+    | IllegalEntryPoint of range * AST.CompilationUnit
     | BindingIndexOutOfBounds of range * string list
     // pragmas
     | UnknownPragma of range

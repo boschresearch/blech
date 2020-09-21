@@ -47,7 +47,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> EXTENSION
 
 /* ---- paths ---- */
-%token <FromPath> FROMPATH
+/* %token <ModulePath> FROMPATH */
 
 /* ---- predefined types ---- */
 %token <range> BOOL
@@ -143,8 +143,8 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 
 
-%start Package
-%type <Package> Package
+%start Compilation
+%type <CompilationUnit> Compilation
 
 %%
 
@@ -1329,31 +1329,20 @@ Exposing
     | EXPOSES ErrorBeforeEOL EOL                { logParserError $1;
                                                   Option.None }
 
-/*
-RenameExpose
-    : Exposing                                  { (None, $1) }
-    | AS Name Exposing                          { (Some $2, $3) }
-
-
-FromRenameExpose            
-    : RenameExpose                              { (None, $1) }
-    | FROMPATH RenameExpose                     { (Some $1, $2) }
-*/
-
-FromPath
+ModulePath
     : STRING                                    { // Todo: Check the path
-                                                  { FromPath.range = snd $1
+                                                  { ModulePath.range = snd $1
                                                     path = fst $1 } }
 Import
-    : IMPORT Name FromPath Exposing             { Member.Import  { Import.range = importRange $1 $3.Range $4
+    : IMPORT Name ModulePath Exposing           { Member.Import  { Import.range = importRange $1 $3.Range $4
                                                                    localName = $2
-                                                                   fromPath = $3
+                                                                   modulePath = $3
                                                                    exposing = $4 } } 
     | IMPORT ErrorBeforeEOL EOL                          
                                                 { logParserError $1
                                                   Member.Import  { Import.range = unionRanges $1 $3
                                                                    localName = Name.Empty
-                                                                   fromPath = FromPath.Empty
+                                                                   modulePath = ModulePath.Empty
                                                                    exposing = None } }
 
 
@@ -1370,7 +1359,7 @@ ImportList
 
 
 Module
-    : ImportList ModuleHead ModuleMembers       { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
@@ -1383,7 +1372,7 @@ Module
    ---------------------------------------------------------------------------- */
 
 Program    
-    : ImportList ModuleMember ModuleMembers     { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers 
@@ -1432,7 +1421,7 @@ ExtensionMemberDecls
 
 Signature
     : ImportList SignatureHead SignatureMembers 
-                                                { { Package.range = packageRange $1 $2.Range $3
+                                                { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
@@ -1443,12 +1432,12 @@ Signature
    --- Parser Entry Point --- 
    -------------------------- */
 
-Package 
+Compilation 
     : Module EOF                                { $1 }    
     | Signature EOF                             { $1 }
     | Program EOF                               { $1 }
     | error EOF                                 { logParserError (getStartOfFile $2);
-                                                  { Package.range = $2
+                                                  { CompilationUnit.range = $2
                                                     moduleName = ParserContext.getModuleName ()
                                                     loadWhat = ParserContext.getLoadWhat ()
                                                     imports = []

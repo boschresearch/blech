@@ -24,8 +24,8 @@ module Package =
 
     type ModuleError = 
         | FileNotFound of fileName: string
-        | ModuleNotFound of moduleName: SearchPath.ModuleName * triedFiles: string list
-        | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list
+        | ModuleNotFound of moduleName: FromPath.ModuleName * triedFiles: string list
+        | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20
         | IllegalModuleFileName of moduleFileName: string * wrongIds: string list
         | InvalidFileExtension of fileName: string
         
@@ -83,7 +83,7 @@ module Package =
 
     type Module<'info> = 
         {
-            moduleName: SearchPath.ModuleName
+            moduleName: FromPath.ModuleName
             file: string
             info: 'info
         }
@@ -98,22 +98,22 @@ module Package =
         {
             sourcePath: string
             blechPath: string
-            packageDir: string  // fjg: reserved for future use 
+            packageName: string  // fjg: reserved for future use 
             outDir: string
             logger: Diagnostics.Logger
-            loader: Context<'info> -> ImplOrIface -> SearchPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
+            loader: Context<'info> -> ImplOrIface -> FromPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
                     // package context -> LoadWhat -> module name -> file name -> Package or logged errors
-            loaded: Dictionary<SearchPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>              
+            loaded: Dictionary<FromPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> Package
         }
         static member Make (arguments: Arguments.BlechCOptions) logger loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
-              packageDir = ""  
+              packageName = SearchPath.blech  // default for non-packages
               outDir = arguments.outDir
               logger = logger
               loader = loader
-              loaded = Dictionary<SearchPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>() }
+              loaded = Dictionary<FromPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>() }
 
     
     /// loads a program or or a module for compilation
@@ -136,12 +136,12 @@ module Package =
             Error lgr
         else 
             let loadWhat = Option.get optLw 
-            match SearchPath.getModuleName ctx.sourcePath ctx.packageDir fileName with
+            match SearchPath.getModuleName ctx.sourcePath None fileName with
             | Error [] ->
                 Diagnostics.Logger.logFatalError 
                 <| lgr
                 <| Diagnostics.Phase.Compiling
-                <| InputNotInSourcePath (fileName, ctx.packageDir, SearchPath.searchPath2Dirs ctx.sourcePath)
+                <| InputNotInSourcePath (fileName, ctx.packageName, SearchPath.searchPath2Dirs ctx.sourcePath)
                 Error lgr
             | Error wrongIds ->
                 Diagnostics.Logger.logFatalError 
@@ -155,7 +155,7 @@ module Package =
 
 
     /// requires an imported module for compilation
-    let require (ctx: Context<'info>) (moduleName: SearchPath.ModuleName): Result<Module<'info>, Diagnostics.Logger> =
+    let require (ctx: Context<'info>) (moduleName: FromPath.ModuleName): Result<Module<'info>, Diagnostics.Logger> =
         
         let tryBlechPath triedBlcs =
             let sigFile = SearchPath.searchInterface ctx.blechPath moduleName 

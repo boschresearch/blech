@@ -93,7 +93,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx     
 
-    let private addModule (ctx: NameCheckContext) (moduleName: SearchPath.ModuleName) = 
+    let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
         let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
         {ctx with env = env}
         
@@ -541,12 +541,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | Member.Import i ->
-            Package.require pkgCtx i.fromPath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
+            Package.require pkgCtx i.modulePath.ModuleName  // TODO: it should be enough to use the from path, fjg. 16:09.20
         | _ ->
             failwith "This should never happen"
 
 
-    let checkPackage packageContext (ctx: NameCheckContext) (p: AST.Package) : NameCheckContext =
+    let checkPackage packageContext (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
         // addModule ctx p.moduleName  // TODO: use this just for imports
         // TODO: checkModuleName for shadowing of imports
         let imports = List.filter (fun (m: Member) -> not m.IsAPragma) p.imports
@@ -557,7 +557,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
-    let checkDeclaredness packageContext (ctx: NameCheckContext) (ast: AST.Package) = 
+    let checkDeclaredness packageContext (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
         let ncc = checkPackage packageContext ctx ast
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
@@ -567,7 +567,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     /// This function ist just for testing compiler phases. It ignores imports
     /// It does not need a package context
-    let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.Package) =
+    let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) =
         let ncc = List.fold checkMember ctx ast.members
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger

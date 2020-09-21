@@ -44,7 +44,7 @@ type IdLabel =
 /// qualified names
 type QName = 
     {
-        moduleName: SearchPath.ModuleName
+        moduleName: FromPath.ModuleName
         prefix: LongIdentifier // TODO: what exactly is the meaning of prefix? 
                                // Is the following invariant true:
                                // prefix is empty <=> QName is on top level <=> IsStatic, or equivalently

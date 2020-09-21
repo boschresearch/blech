@@ -148,8 +148,6 @@ rule Token = parse
     (* ---- module system ---- *)
     | "module"              { MODULE (getRange lexbuf) }
     | "import"              { IMPORT (getRange lexbuf) }
-    | "from"                { fromStart <- getRange lexbuf
-                              FromPath lexbuf } 
     | "exposes"             { EXPOSES (getRange lexbuf) }
     | "signature"           { SIGNATURE (getRange lexbuf) }
 
@@ -551,19 +549,3 @@ and CollectMultiLineString = parse
     | _                     { unknownTokenInString lexbuf
                               CollectMultiLineString lexbuf }
 
-
-and FromPath = parse
-    | path                  { let path, rng = getLexemeAndRange lexbuf in
-                              FROMPATH {Blech.Frontend.AST.FromPath.path = path
-                                        range = Range.unionRanges fromStart rng } }
-
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
-                              FromPath lexbuf }
-    
-    | [' ']                 { FromPath lexbuf }
-
-    | ['\t']                { tabularUsed lexbuf; 
-                              FromPath lexbuf }
-
-    | _                     { notAPath lexbuf;
-                              Token lexbuf }

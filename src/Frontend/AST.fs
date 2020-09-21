@@ -420,24 +420,24 @@ and Prototype =
 
     
 
-and FromPath = 
+and ModulePath = 
     {
         range: range
         path: string
     }
     static member Empty = { range = Range.range0; path = "" }
     
-    member fp.Range = fp.range
+    member mp.Range = mp.range
 
-    member fp.ModuleName : SearchPath.ModuleName = 
-        List.ofArray <| fp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
+    member mp.ModuleName : FromPath.ModuleName = 
+        List.ofArray <| mp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
     {
         range: range
         localName: Name
-        fromPath: FromPath
+        modulePath: ModulePath
         exposing: Exposing option
     }
     member import.Range = import.range
@@ -524,20 +524,19 @@ and ModuleSpec =
         { range = range.Zero
           exposing = Option.None }
 
-/// package = Blech implementation or interface file
-
-and Package = 
+/// Blech implementation or interface file
+and CompilationUnit = 
     {
         range: range
-        moduleName: SearchPath.ModuleName
+        moduleName: FromPath.ModuleName
         loadWhat: Package.ImplOrIface
         imports: Member list
         spec: ModuleSpec option
         members: Member list 
     }
-    member pkg.Range = pkg.range
-    member pkg.IsLibrary = Option.isSome pkg.spec
-    member pkg.IsProgram = Option.isNone pkg.spec
+    member this.Range = this.range
+    member this.IsLibrary = Option.isSome this.spec
+    member this.IsProgram = Option.isNone this.spec
         
 
 // Unit expressions //////////////////////////////////////////////////////
@@ -1084,7 +1083,7 @@ let importRange importRng pathRng (optExposing : Exposing option) =
     | Some exp -> unionRanges importRng exp.Range 
 
 
-let packageRange (imports: Member list) defaultRange (members: Member list) =
+let compilationUnitRange (imports: Member list) defaultRange (members: Member list) =
 
     let membersRange (members: Member list) =
         assert not (List.isEmpty members)
@@ -1162,7 +1161,7 @@ let DummyRange = range.Zero
 //////////////////////////////////////////////////////////////////////////
 
 type ASTNode = 
-    | Package of Package
+    | Package of CompilationUnit
     //| Import of Import
     | Member' of Member
     | Subprogram of SubProgram
