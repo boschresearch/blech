@@ -79,7 +79,7 @@ module Main =
     /// returns a Result type of
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
-    let compile2 cliArgs pkgCtx logger moduleName fileContents fileName =
+    let compileFromStr cliArgs pkgCtx logger moduleName fileName fileContents =
         // always run lexer, parser, name resolution, type check and causality checks
         let astRes = runParser logger Package.Implementation moduleName fileContents fileName
         let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName fileName)
@@ -161,8 +161,8 @@ module Main =
     /// Runs compilation starting with a filename
     let compileFromFile cliArgs pkgCtx logger moduleName inputFile =
         // open stream from file
-        let contents = File.ReadAllText (Path.GetFullPath(inputFile))
-        compile2 cliArgs pkgCtx logger moduleName contents inputFile
+        File.ReadAllText (Path.GetFullPath(inputFile))
+        |> compileFromStr cliArgs pkgCtx logger moduleName inputFile
     
 
     let compileInterface (cliContext: Arguments.BlechCOptions) 
@@ -209,155 +209,6 @@ module Main =
     
         tyAstAndLutRes
         
-
-    let compileImplementation (cliContext: Arguments.BlechCOptions) 
-                              (pkgContext: Package.Context<TypeCheckContext * BlechTypes.BlechModule>) 
-                              diagnosticLogger  
-                              (moduleName: SearchPath.ModuleName)
-                              (inputFile: string) =
-
-        // parse
-        Logging.log2 "Main" ("processing source file " + inputFile)
-        let astRes = 
-            ParsePkg.parseModule diagnosticLogger Package.Implementation moduleName inputFile
-        
-        // name resolution 
-        Logging.log2 "Main" ("performing name resolution on " + inputFile)
-        let astAndEnvRes =
-            let ncCtx = NameChecking.initialise diagnosticLogger moduleName
-            Result.bind (NameChecking.checkDeclaredness pkgContext ncCtx) astRes
-        
-        // type check
-        Logging.log2 "Main" ("performing type checking on " + inputFile)
-        let tyAstAndLutRes = 
-            Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
-
-        // check there is an entry point
-        //match package.entryPoint with
-        //| None -> // TODO, adapt causality analysis to run regardless of the entry point, fg 20.11.18
-        //    failwith "No entry point given. Please annotate one activity with @[EntryPoint]"
-        //| Some _ -> ()
-    
-        // create program graphs and check their causality
-        Logging.log2 "Main" ("checking causality in " + inputFile) 
-        let causalityCheckRes =
-            Result.bind Causality.checkPackCausality tyAstAndLutRes
-        
-        match causalityCheckRes with
-        | Error logger ->
-            Error logger 
-        | Ok pgs -> 
-            let lut, package = 
-                match tyAstAndLutRes with
-                | Ok (l, p) ->
-                    l, p
-                | Error _ ->
-                    failwith "this cannot happen"
-            
-            // generate block graphs for all activities
-            // this is only needed for code generation but is left here for debugging purposes
-            let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
-            
-            // instead of printing the unscheduled block graph,
-            // we print the scheduled one from the activity translator
-            //for g in blockGraphContext do
-            //    Logging.log4 "Main" ("block graph\n" + g.Value.blockGraph.ToString())
-            
-            let translationContext: TranslationContext =
-                { tcc = lut
-                  pgs = pgs
-                  bgs = blockGraphContext 
-                  cliContext = cliContext }
-            let compilations = translate translationContext package
-            
-            
-            // this ensures side-effects (files written) are prevented in a dry run
-            if not cliContext.isDryRun then
-                // TODO: Compile module different to Program, fjg 22.01.19
-                let isProgram = Option.isSome package.entryPoint
-                
-                if isProgram then
-                    Logging.log6 "Main" ("source code\n")
-                    for c in compilations do
-                        let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                        let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                        Logging.log6 "Main" msg
-
-                    Logging.log2 "Main" ("writing C code for " + inputFile)
-                    let ep = package.entryPoint |> Option.get
-                
-                    // translate module, i.e. compilations
-                    // TODO: Additionally take package into account, fjg 10.01.19
-                    let codeFile = Path.Combine(cliContext.outDir, SearchPath.moduleToCFile moduleName)
-                    let code = CodeGeneration.emitMainCode translationContext package compilations ep.name
-                    FileInfo(codeFile).Directory.Create()
-                    File.WriteAllText(codeFile, code)
-                
-                    // put all types and function prototypes in .h file
-                    // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
-                    // TODO: Take package into account, fjg 10.01.19
-                    let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
-                    let header = CodeGeneration.emitMainHeader translationContext package compilations ep.name
-                    FileInfo(headerFile).Directory.Create()
-                    File.WriteAllText(headerFile, header)
-
-                    // generated test app
-                    match cliContext.appName with
-                    | Some an ->
-                        let appFile = Path.Combine(cliContext.outDir, SearchPath.appNameToCFile an)
-                        let app = CodeGeneration.emitApp translationContext package compilations ep.name
-                        FileInfo(appFile).Directory.Create()
-                        File.WriteAllText(appFile, app)
-                    | None -> 
-                        ()
-
-                else 
-                    match astAndEnvRes with
-                    | Ok (ast, _) ->
-                        // Currently we do not compile modules, just create suitable signatures
-                        let signatureFile = Path.Combine(cliContext.outDir, SearchPath.moduleToInterfaceFile moduleName)
-                        let blechSignature = SignaturePrinter.printSignature lut.ncEnv ast
-                        FileInfo(signatureFile).Directory.Create()
-                        File.WriteAllText(signatureFile, blechSignature)
-
-                        Logging.log6 "Main" ("source code\n")
-                        for c in compilations do
-                            let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                            let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                            Logging.log6 "Main" msg
-
-                        Logging.log2 "Main" ("writing C code for " + inputFile)
-                
-                        // translate module, i.e. compilations
-                        // TODO: Additionally take package into account, fjg 10.01.19
-                        let codeFile = Path.Combine(cliContext.outDir, SearchPath.moduleToCFile moduleName)
-                        let code = CodeGeneration.emitCode translationContext package compilations
-                        FileInfo(codeFile).Directory.Create()
-                        File.WriteAllText(codeFile, code)
-                
-                        // put all types and function prototypes in .h file
-                        // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
-                        // TODO: Take package into account, fjg 10.01.19
-                        let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
-                        let header = CodeGeneration.emitHeader translationContext package compilations
-                        FileInfo(headerFile).Directory.Create()
-                        File.WriteAllText(headerFile, header)
-                    | Error _ ->
-                        failwith "this cannot happen"
-
-
-            // return interface information for module
-            tyAstAndLutRes
-
-    // compiledModule is needed for finding the entry point
-    //let generateApp (cliContext: Arguments.BlechCOptions) (compiledModule: Package.Module<TypeChecking.TypeCheckContext * BlechTypes.BlechModule>) =  
-    //    if not cliContext.isDryRun then
-    //        let appFile = Path.Combine(cliContext.outDir, SearchPath.appNameToCFile cliContext.appName)
-    //        let dummyPkg = snd compiledModule.info
-    //        let app = CodeGeneration.emitApp cliContext dummyPkg
-    //        FileInfo(appFile).Directory.Create()
-    //        File.WriteAllText(appFile, app)
-    //    Ok ()
 
     let loader options logger packageContext implOrIface moduleName infile : Result<Package.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
         let compilationRes = 
