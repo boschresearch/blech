@@ -884,7 +884,7 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVa
             renderedRetvarOpt |> Option.toList |> List.collect getPrereq 
         ]
         |> List.concat
-    let actCallStmt = (cpName (Some Current) tcc termRetcodeVarName).Render <+> txt "=" <+> actCall <^> semi
+    let actCallStmt = (renderCName Current tcc termRetcodeVarName) <+> txt "=" <+> actCall <^> semi
     mkRenderedStmt prereqStmts actCallStmt
 
 

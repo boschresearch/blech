@@ -1,0 +1,10 @@
+
+@[CFunction (binding = "\\    \a    \b    \f    \n    \r    \t    \v    \\    \'    \" " , header= "bla.h")]
+extern function singleBackslash()
+
+@[EntryPoint]
+activity main()()
+    await true
+end
+
+
