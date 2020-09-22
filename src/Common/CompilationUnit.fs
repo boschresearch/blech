@@ -25,7 +25,7 @@ module CompilationUnit =
     type CompilationUnitError = 
         | FileNotFound of fileName: string
         | ModuleNotFound of moduleName: FromPath.ModuleName * triedFiles: string list
-        | InputNotInSourcePath of inputFileName: string * packagePath: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20
+        | InputNotInSourcePath of inputFileName: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20
         | IllegalModuleFileName of moduleFileName: string * wrongIds: string list
         | InvalidFileExtension of fileName: string
         
@@ -58,8 +58,8 @@ module CompilationUnit =
                     []
                 | ModuleNotFound (triedFiles = fs) ->
                     List.map (fun f -> sprintf "no file '%s'" f) fs
-                | InputNotInSourcePath (_, pkgPath, searchDirs) ->
-                    List.map (fun sd -> sprintf "not in '%s'" <| Path.Combine(sd, pkgPath)) searchDirs
+                | InputNotInSourcePath (_, searchDirs) ->
+                    List.map (fun sd -> sprintf "not in '%s'" sd) searchDirs
                 | IllegalModuleFileName (wrongIds = wids) ->
                     List.map (fun id -> sprintf "wrong id '%s'" id) wids
                 | InvalidFileExtension fn ->
@@ -98,7 +98,7 @@ module CompilationUnit =
         {
             sourcePath: string
             blechPath: string
-            packageName: string  // fjg: reserved for future use 
+            package: string  // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
             logger: Diagnostics.Logger
             loader: Context<'info> -> ImplOrIface -> FromPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
@@ -109,7 +109,7 @@ module CompilationUnit =
         static member Make (arguments: Arguments.BlechCOptions) logger loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
-              packageName = SearchPath.blech  // default for non-packages
+              package = SearchPath.blech // the default package name is "blech", when nothing is given
               outDir = arguments.outDir
               logger = logger
               loader = loader
@@ -141,7 +141,7 @@ module CompilationUnit =
                 Diagnostics.Logger.logFatalError 
                 <| lgr
                 <| Diagnostics.Phase.Compiling
-                <| InputNotInSourcePath (fileName, ctx.packageName, SearchPath.searchPath2Dirs ctx.sourcePath)
+                <| InputNotInSourcePath (fileName, SearchPath.searchPath2Dirs ctx.sourcePath)
                 Error lgr
             | Error wrongIds ->
                 Diagnostics.Logger.logFatalError 
