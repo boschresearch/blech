@@ -34,7 +34,7 @@ module FromPath =
     let File = "file"
 
     [<Literal>]
-    let ReservedId = "blech"  // reserved name and keyword for code generation purposes
+    let ReservedPkg = "blech"  // reserved name for unnamed packages
     [<Literal>]
     let Id = "[_a-zA-Z0-9]+"  // can be used as part of a C identifier for code generation
 
@@ -69,7 +69,7 @@ module FromPath =
     /// Checks if a directory or file name - without extension - can be used as a Blech identifier
     let isValidFileOrDirectoryName name =
         let isId = (Regex Id).IsMatch
-        not (ReservedId.Equals name) && isId name
+        not (ReservedPkg.Equals name) && isId name
 
     
     type ModuleName = string list
@@ -121,3 +121,6 @@ module FromPath =
             Some { package = current.package 
                    dirs = current.dirs @ dirs
                    file = file }
+
+
+                   

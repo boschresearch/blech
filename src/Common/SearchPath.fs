@@ -23,6 +23,7 @@ open System.Text
 let dot = '.'     // module name separator
 let slash = '/'   // directory separator in includes and frompaths
 let underscore = '_' //directory separator in include guards
+
 let glob = '?'
 let dirSep = ';'  // directory separator for searchpaths
 
@@ -33,13 +34,7 @@ let cFileExtension = ".c"
 let hGuardExtension = "_H_INCLUDED"
 let blech = "blech"  // reserved name and keyword for code generation purposes
 
-let blechIdRegex = RegularExpressions.Regex @"^_*[a-zA-Z]+[_a-zA-Z0-9]*$"
-
-// type ModuleName = string list
-
-/// Checks if a directory or file name - without extension - can be used as a Blech identifier
-let isValidFileOrDirectoryName name = 
-    not (name.Equals blech) && (blechIdRegex.IsMatch name) 
+//let blechIdRegex = RegularExpressions.Regex @"^_*[a-zA-Z]+[_a-zA-Z0-9]*$"
 
 
 /// Returns the list of source directories in a search path.
@@ -54,13 +49,13 @@ let moduleNameToString ids =
 
 /// Replaces '.' in a module name by another separator.
 /// For example a.b.c -> a/b/c if seperator = '/'
-let replaceSeparator oldSep newSep moduleName =
-    let sep2Rep char = 
-        if char = oldSep then 
-            newSep
-        else 
-            char 
-    String.map sep2Rep moduleName
+//let replaceSeparator oldSep newSep moduleName =
+//    let sep2Rep char = 
+//        if char = oldSep then 
+//            newSep
+//        else 
+//            char 
+//    String.map sep2Rep moduleName
 
  
 /// creates a search path template from a directory
@@ -122,7 +117,7 @@ let searchInterface searchPath (name: FromPath.ModuleName) =
     search searchPath name interfaceFileExtension
       
 let private separateAndExtend sep (moduleName: FromPath.ModuleName) extension =
-    sprintf "%s%s" (String.concat sep (blech::moduleName)) extension 
+    sprintf "%s%s" (String.concat sep (blech :: moduleName)) extension 
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
 let moduleToHFile moduleName =
@@ -152,19 +147,16 @@ let moduleToInterfaceFile moduleName =
 let appNameToCFile appName = 
     sprintf "%s%s" appName cFileExtension
 
-/// Returns all candidates for source directories, combined from all search directories in source path 
-//let private sourceDirs searchPath =
-//    searchPath2Dirs searchPath
 
 /// Returns all candidates for source directories
 /// Search path is either the source path with out a package name
 /// or the blech path with a package name
-let private sourceDirs searchPath (packageName : string option) =
+let private sourceDirs searchPath (optPackage : string option) =
     let searchDirs = searchPath2Dirs searchPath
-    match packageName with
+    match optPackage with
     | None -> searchDirs
-    | Some pkgName -> 
-        List.map (fun sd -> Path.Combine(sd, pkgName)) searchDirs
+    | Some pkg -> 
+        List.map (fun sd -> Path.Combine(sd, pkg)) searchDirs
 
 
 let private tryGetFullPath path = 
@@ -193,7 +185,7 @@ let private fileToModuleName file srcDir =
     let extLen = implementationFileExtension.Length
     let ids = List.ofArray <| modFileName.Remove(modFileName.Length - extLen, extLen)   
                                          .Split(Path.DirectorySeparatorChar)
-    let wrongIds = List.filter (fun id -> not <| isValidFileOrDirectoryName id) ids
+    let wrongIds = List.filter (fun id -> not <| FromPath.isValidFileOrDirectoryName id) ids
     if List.isEmpty wrongIds then
         //for id in ids do
         //    printfn "Segment: %s" id
@@ -202,8 +194,8 @@ let private fileToModuleName file srcDir =
         Error wrongIds
 
 
-let getModuleName searchPath package file : Result<FromPath.ModuleName, string list> =
-    let srcDirs = sourceDirs searchPath package
+let getModuleName searchPath optPackage file : Result<FromPath.ModuleName, string list> =
+    let srcDirs = sourceDirs searchPath optPackage
     //for dir in srcDirs do
     //    printfn "Sourcedirectory: %s" dir
     let srcDir = 
@@ -215,15 +207,9 @@ let getModuleName searchPath package file : Result<FromPath.ModuleName, string l
     Result.bind (fileToModuleName file) srcDir    
 
 
-//let getFileName searchDir package moduleName extension : string = 
-//    let filePath = separateAndExtend (string Path.DirectorySeparatorChar) moduleName extension
-//    Path.Combine (searchDir, package, filePath)
-
-let moduleNameToIdentifiers (moduleName: string) =
-    moduleName.Split dot
-
 let isImplementation (file: string) = 
     (Path.GetExtension file) = implementationFileExtension
+
 
 let isInterface (file: string) =
     (Path.GetExtension file) = interfaceFileExtension
