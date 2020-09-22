@@ -117,7 +117,7 @@ let searchInterface searchPath (name: FromPath.ModuleName) =
     search searchPath name interfaceFileExtension
       
 let private separateAndExtend sep (moduleName: FromPath.ModuleName) extension =
-    sprintf "%s%s" (String.concat sep (blech :: moduleName)) extension 
+    sprintf "%s%s" (String.concat sep moduleName) extension 
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
 let moduleToHFile moduleName =
@@ -151,12 +151,12 @@ let appNameToCFile appName =
 /// Returns all candidates for source directories
 /// Search path is either the source path with out a package name
 /// or the blech path with a package name
-let private sourceDirs searchPath (optPackage : string option) =
-    let searchDirs = searchPath2Dirs searchPath
-    match optPackage with
-    | None -> searchDirs
-    | Some pkg -> 
-        List.map (fun sd -> Path.Combine(sd, pkg)) searchDirs
+//let private sourceDirs searchPath =
+//    let searchDirs = searchPath2Dirs searchPath
+//    match optPackage with
+//    | None -> searchDirs
+//    | Some pkg -> 
+//        List.map (fun sd -> Path.Combine(sd, pkg)) searchDirs
 
 
 let private tryGetFullPath path = 
@@ -177,7 +177,7 @@ let private fileIsInSrcDir file srcDir =
         false
 
 
-let private fileToModuleName file srcDir =
+let private fileToModuleName file package srcDir =
     let ff = Path.GetFullPath file
     let fsd = Path.GetFullPath srcDir
     let modFileName = ff.Remove(0, fsd.Length)
@@ -187,24 +187,20 @@ let private fileToModuleName file srcDir =
                                          .Split(Path.DirectorySeparatorChar)
     let wrongIds = List.filter (fun id -> not <| FromPath.isValidFileOrDirectoryName id) ids
     if List.isEmpty wrongIds then
-        //for id in ids do
-        //    printfn "Segment: %s" id
-        Ok ids        
+        Ok (package :: ids)        
     else
         Error wrongIds
 
 
-let getModuleName searchPath optPackage file : Result<FromPath.ModuleName, string list> =
-    let srcDirs = sourceDirs searchPath optPackage
-    //for dir in srcDirs do
-    //    printfn "Sourcedirectory: %s" dir
+let getModuleName searchPath package file : Result<FromPath.ModuleName, string list> =
+    let srcDirs = searchPath2Dirs searchPath
     let srcDir = 
         match List.tryFind (fun sd -> fileIsInSrcDir file sd) srcDirs with
         | None ->
             Error []
         | Some srcDir -> 
             Ok srcDir
-    Result.bind (fileToModuleName file) srcDir    
+    Result.bind (fileToModuleName file package) srcDir    
 
 
 let isImplementation (file: string) = 

@@ -136,7 +136,7 @@ module CompilationUnit =
             Error lgr
         else 
             let loadWhat = Option.get optLw 
-            match SearchPath.getModuleName ctx.sourcePath None fileName with
+            match SearchPath.getModuleName ctx.sourcePath ctx.package fileName with
             | Error [] ->
                 Diagnostics.Logger.logFatalError 
                 <| lgr

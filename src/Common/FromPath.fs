@@ -36,7 +36,7 @@ module FromPath =
     [<Literal>]
     let ReservedPkg = "blech"  // reserved name for unnamed packages
     [<Literal>]
-    let Id = "[_a-zA-Z0-9]+"  // can be used as part of a C identifier for code generation
+    let Id = "^[_a-zA-Z0-9]+$"  // can be used as part of a C identifier for code generation
 
     // relevant capturing groups are named: (?<name>pattern)
     let package = sprintf "bl:(?<%s>%s)/" Pkg Id
