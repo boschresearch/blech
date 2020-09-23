@@ -77,10 +77,10 @@ module SearchPathTest =
     let testFileNames() = 
         Assert.AreEqual( replace "a/b.blh", moduleToInterfaceFile ["a";"b"])
         Assert.AreEqual( replace "a.blh", moduleToInterfaceFile ["a"])
-        Assert.AreEqual( replace "blech/a/b.c", moduleToCFile ["a";"b"])
-        Assert.AreEqual( replace "blech/a.c", moduleToCFile ["a"])
-        Assert.AreEqual( replace "blech/a/b.h", moduleToHFile ["a";"b"])
-        Assert.AreEqual( replace "blech/a.h", moduleToHFile ["a"])
+        Assert.AreEqual( replace "a/b.c", moduleToCFile ["a";"b"])
+        Assert.AreEqual( replace "blech/a.c", moduleToCFile ["blech";"a"])
+        Assert.AreEqual( replace "a/b.h", moduleToHFile ["a";"b"])
+        Assert.AreEqual( replace "blech/a.h", moduleToHFile ["blech";"a"])
         
     [<Test>]
     let testFileToModuleName() =
@@ -107,9 +107,9 @@ module SearchPathTest =
         // ' ' NOT allowed in Blech identifiers and module path components
         let msg = "' ' in module path"
         Assert.AreEqual( error ["my file"], getModName "." "blech" "my file.blc", msg )
-        //Assert.AreEqual( error ["my dir"; "my file"], getModName "." "blech" "my dir/my file.blc", msg )
-        //Assert.AreEqual( error ["file "], getModName "." "blech" "file .blc", "' ' in module path", msg )
-        //Assert.AreEqual( error [" dir"], getModName "." "blech" " dir/file.blc", "' ' in module path", msg )
+        Assert.AreEqual( error ["my dir"; "my file"], getModName "." "blech" "my dir/my file.blc", msg )
+        Assert.AreEqual( error ["file "], getModName "." "blech" "file .blc", "' ' in module path", msg )
+        Assert.AreEqual( error [" dir"], getModName "." "blech" " dir/file.blc", "' ' in module path", msg )
         
         
         // '_' allowed in Blech identifiers and module path components
@@ -117,6 +117,6 @@ module SearchPathTest =
         Assert.AreEqual( okay ["blech"; "my_dir"; "my_file"], getModName "." "blech" "my_dir/my_file.blc" )
         
         // '-' NOT allowed in Blech identifiers and module path components
-        //Assert.AreEqual( error ["my-file"], getModName "." "blech" "my-file.blc" )
-        //Assert.AreEqual( error ["my-dir"], getModName "." "blech" "my-dir/my_file.blc" )
+        Assert.AreEqual( error ["my-file"], getModName "." "blech" "my-file.blc" )
+        Assert.AreEqual( error ["my-dir"], getModName "." "blech" "my-dir/my_file.blc" )
         
