@@ -201,7 +201,6 @@ let getModuleName file srcDir package =
             { package = package
               dirs = dirs
               file = file }
-        printfn "%A" fp
         Ok fp.ToModuleName
         // Ok (package :: dirs @ [file])
     else
