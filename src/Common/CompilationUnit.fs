@@ -134,24 +134,26 @@ module CompilationUnit =
             <| Diagnostics.Phase.Compiling
             <| FileNotFound fileName 
             Error lgr
-        else 
-            let loadWhat = Option.get optLw 
-            match SearchPath.getModuleName ctx.sourcePath ctx.package fileName with
-            | Error [] ->
+        else
+            match SearchPath.tryFindSourceDir fileName ctx.sourcePath with
+            | None ->
                 Diagnostics.Logger.logFatalError 
                 <| lgr
                 <| Diagnostics.Phase.Compiling
                 <| FileNotInSourcePath (fileName, SearchPath.searchPath2Dirs ctx.sourcePath)
                 Error lgr
-            | Error wrongIds ->
-                Diagnostics.Logger.logFatalError 
-                <| lgr
-                <| Diagnostics.Phase.Compiling
-                <| IllegalModuleFileName (fileName, wrongIds)
-                Error lgr
-            | Ok moduleName ->
-                // TODO: check if file is already compiled
-                ctx.loader ctx loadWhat moduleName fileName
+            | Some srcDir -> 
+                let loadWhat = Option.get optLw 
+                match SearchPath.getModuleName fileName srcDir ctx.package  with
+                | Error wrongIds ->
+                    Diagnostics.Logger.logFatalError 
+                    <| lgr
+                    <| Diagnostics.Phase.Compiling
+                    <| IllegalModuleFileName (fileName, wrongIds)
+                    Error lgr
+                | Ok moduleName ->
+                    // TODO: check if file is already compiled
+                    ctx.loader ctx loadWhat moduleName fileName
 
 
     /// requires an imported module for compilation

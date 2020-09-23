@@ -82,45 +82,45 @@ module FromPath =
             file: string 
         } 
         member fp.ToModuleName : ModuleName = 
-            fp.dirs @ [fp.file]
+            fp.package :: fp.dirs @ [fp.file]
         member fp.ToPackageName : PackageName =
             fp.package
 
     let isValid path = 
         pathRegex.IsMatch path
 
-    let makeFromPath (current: FromPath) path : FromPath option = 
+    let makeFromPath (current: FromPath) path : Result<FromPath, string list> = 
         let m = pathRegex.Match path
         assert m.Success // assert that fromPath is valid
         let pkg = m.Groups.[Pkg].Captures
         let isRoot = m.Groups.[Root].Captures.Count = 1
-        let upCount = m.Groups.[Up].Captures.Count
+        let ups = m.Groups.[Up].Captures
         let isHere = m.Groups.[Here].Captures.Count = 1
         let dirs = [ for d in m.Groups.[Dir].Captures do yield d.Value ]
         let file = m.Groups.[File].Captures.Item(0).Value // there is always 1 file
         if pkg.Count = 1 then // external package import
-            Some { package = pkg.Item(0).Value 
-                   dirs = dirs
-                   file = file } 
+            Ok { package = pkg.Item(0).Value 
+                 dirs = dirs
+                 file = file } 
         elif isRoot then // absolute in-package import
-            Some { package = current.package 
-                   dirs = dirs
-                   file = file }
-        elif upCount > 0 then
-            if upCount <= current.dirs.Length then // in-package import up from current directory
-                Some { package = current.package
-                       dirs = List.take (current.dirs.Length - upCount) current.dirs @ dirs
-                       file = file }
+            Ok { package = current.package 
+                 dirs = dirs
+                 file = file }
+        elif ups.Count > 0 then
+            if ups.Count <= current.dirs.Length then // in-package import up from current directory
+                Ok { package = current.package
+                     dirs = List.take (current.dirs.Length - ups.Count) current.dirs @ dirs
+                     file = file }
             else // to many up steps from current directory
-                None
+                Error [ for up in ups do yield up.Value ]
         elif isHere then // relative in-package import from current directory  with ./
-            Some { package = current.package 
-                   dirs = current.dirs @ dirs
-                   file = file }
+            Ok { package = current.package 
+                 dirs = current.dirs @ dirs
+                 file = file }
         else // relative in-package import from current directory
-            Some { package = current.package 
-                   dirs = current.dirs @ dirs
-                   file = file }
+            Ok { package = current.package 
+                 dirs = current.dirs @ dirs
+                 file = file }
 
 
                    

@@ -85,38 +85,35 @@ module SearchPathTest =
     [<Test>]
     let testFileToModuleName() =
         
-        let getModName searchPath package file =
-            //getModuleName (replace searchPath) (Some <| replace package) (replace file)
-            getModuleName (replace searchPath) package (replace file)
         
         let error err : Result<string list, string list> = Error err
         let okay ok: Result<FromPath.ModuleName, string list> = Ok ok
         
-        Assert.AreEqual( okay ["blech"; "dir"; "file"], getModName "." "blech" "dir/file.blc" ) 
-        Assert.AreEqual( okay ["blech"; "file"], getModName  "./dir" "blech" "dir/file.blc" )
+        Assert.AreEqual( okay ["blech"; "dir"; "file"], getModuleName "dir/file.blc" "." "blech") 
+        Assert.AreEqual( okay ["blech"; "file"], getModuleName "dir/file.blc" "./dir" "blech"  )
 
         // Trailing '/' in searchpath
         let msg = "trailing '/'"
-        Assert.AreEqual( okay ["blech"; "dir"; "file"], getModName "./" "blech" "./dir/file.blc", msg )
-        Assert.AreEqual( okay ["blech"; "file"], getModName  "./dir/" "blech" "./dir/file.blc", msg )
+        Assert.AreEqual( okay ["blech"; "dir"; "file"], getModuleName "./dir/file.blc" "./" "blech", msg )
+        Assert.AreEqual( okay ["blech"; "file"], getModuleName  "./dir/file.blc" "./dir/" "blech", msg )
         
         // outside of searchpath 
-        Assert.AreEqual( error [], getModName "../somewhere" "blech" "a/b.blc", "not in searchpath" ) 
-        Assert.AreEqual( okay ["blech"; "a"; "b"], getModName  "../somewhere/;." "blech" "a/b.blc", "in 2nd patch component")
+        // Assert.AreEqual( error [], getModuleName "a/b.blc" "../somewhere" "blech", "not in searchpath" ) 
+        //Assert.AreEqual( okay ["blech"; "a"; "b"], getModName  "../somewhere/;." "blech" "a/b.blc", "in 2nd patch component")
         
         // ' ' NOT allowed in Blech identifiers and module path components
         let msg = "' ' in module path"
-        Assert.AreEqual( error ["my file"], getModName "." "blech" "my file.blc", msg )
-        Assert.AreEqual( error ["my dir"; "my file"], getModName "." "blech" "my dir/my file.blc", msg )
-        Assert.AreEqual( error ["file "], getModName "." "blech" "file .blc", "' ' in module path", msg )
-        Assert.AreEqual( error [" dir"], getModName "." "blech" " dir/file.blc", "' ' in module path", msg )
+        Assert.AreEqual( error ["my file"], getModuleName "my file.blc" "." "blech", msg )
+        Assert.AreEqual( error ["my dir"; "my file"], getModuleName "my dir/my file.blc" "." "blech" , msg )
+        Assert.AreEqual( error ["file "], getModuleName "file .blc" "." "blech", msg )
+        Assert.AreEqual( error [" dir"], getModuleName " dir/file.blc" "." "blech", msg )
         
         
         // '_' allowed in Blech identifiers and module path components
-        Assert.AreEqual( okay ["blech"; "my_file"], getModName "." "blech" "my_file.blc" )
-        Assert.AreEqual( okay ["blech"; "my_dir"; "my_file"], getModName "." "blech" "my_dir/my_file.blc" )
+        Assert.AreEqual( okay ["blech"; "my_file"], getModuleName "my_file.blc" "." "blech" )
+        Assert.AreEqual( okay ["blech"; "my_dir"; "my_file"], getModuleName "my_dir/my_file.blc" "." "blech" )
         
         // '-' NOT allowed in Blech identifiers and module path components
-        Assert.AreEqual( error ["my-file"], getModName "." "blech" "my-file.blc" )
-        Assert.AreEqual( error ["my-dir"], getModName "." "blech" "my-dir/my_file.blc" )
+        Assert.AreEqual( error ["my-file"], getModuleName "my-file.blc" "." "blech" )
+        Assert.AreEqual( error ["my-dir"], getModuleName "my-dir/my_file.blc" "." "blech" )
         

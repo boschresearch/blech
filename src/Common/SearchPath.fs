@@ -167,7 +167,7 @@ let private tryGetFullPath path =
         None
 
 
-let private fileIsInSrcDir file srcDir =
+let private isFileInSourceDir file srcDir =
     let fsd = tryGetFullPath srcDir
     let ff = tryGetFullPath file
     match ff, fsd with
@@ -177,30 +177,36 @@ let private fileIsInSrcDir file srcDir =
         false
 
 
-let private fileToModuleName file package srcDir =
+let tryFindSourceDir file sourcePath =
+    let srcDirs = searchPath2Dirs sourcePath
+    List.tryFind (fun sd -> isFileInSourceDir file sd) srcDirs
+
+
+let getModuleName file srcDir package =
+    assert isFileInSourceDir file srcDir
     let ff = Path.GetFullPath file
     let fsd = Path.GetFullPath srcDir
-    let modFileName = ff.Remove(0, fsd.Length)
-                        .TrimStart([|Path.DirectorySeparatorChar|])
-    let extLen = implementationFileExtension.Length
-    let ids = List.ofArray <| modFileName.Remove(modFileName.Length - extLen, extLen)   
-                                         .Split(Path.DirectorySeparatorChar)
-    let wrongIds = List.filter (fun id -> not <| FromPath.isValidFileOrDirectoryName id) ids
+
+    let relPath = Path.GetRelativePath(fsd, ff).TrimStart([|Path.DirectorySeparatorChar|])
+    let dirName= Path.GetDirectoryName relPath
+    
+    let dirs = if String.IsNullOrEmpty dirName then [] 
+               else List.ofSeq <| dirName.Split (Path.DirectorySeparatorChar)
+    let file = Path.GetFileNameWithoutExtension ff
+    
+    let wrongIds = List.filter (fun id -> not <| FromPath.isValidFileOrDirectoryName id) (dirs @ [file])
+
     if List.isEmpty wrongIds then
-        Ok (package :: ids)        
+        let fp : FromPath.FromPath = 
+            { package = package
+              dirs = dirs
+              file = file }
+        printfn "%A" fp
+        Ok fp.ToModuleName
+        // Ok (package :: dirs @ [file])
     else
+        printfn "wrong: %A" wrongIds
         Error wrongIds
-
-
-let getModuleName searchPath package file : Result<FromPath.ModuleName, string list> =
-    let srcDirs = searchPath2Dirs searchPath
-    let srcDir = 
-        match List.tryFind (fun sd -> fileIsInSrcDir file sd) srcDirs with
-        | None ->
-            Error []
-        | Some srcDir -> 
-            Ok srcDir
-    Result.bind (fileToModuleName file package) srcDir    
 
 
 let isImplementation (file: string) = 
