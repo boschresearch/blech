@@ -48,8 +48,8 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let mkTestCaseData file = 
         let modName = 
             printfn "file name: '%s'" file
-            match SearchPath.getModuleName file where "blech" with
-            | Ok ids -> ids
+            match SearchPath.getFromPath file where "blech" with
+            | Ok fp -> fp.ToModuleName
             | Error wrongIds -> wrongIds //failwith (sprintf "illegal filename '%A'" wrongIds)
         printfn "module name: '%s'" <| SearchPath.moduleNameToString modName
         let testName = testCaseNameFrom modName

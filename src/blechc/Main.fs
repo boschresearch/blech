@@ -118,9 +118,15 @@ module Main =
     /// returns a Result type of
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
-    let compileFromStr cliArgs pkgCtx logger moduleName fileName fileContents =
+    let compileFromStr cliArgs pkgCtx logger (fromPath: FromPath.FromPath) fileName fileContents =
+        let moduleName = fromPath.ToModuleName
         // always run lexer, parser, name resolution, type check and causality checks
         let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
+        
+        // TODO: run compilation of imports here. Here you need the current from-path from the parameter list, 
+        // to determine the frompath of a relative import (FromPath.makeFromPath) instead of the modulename
+        // fjg. 24.09.20
+
         let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName fileName)
         let lutAndPackRes = astAndSymTableRes |> Result.bind (runTypeChecking cliArgs fileName)
         let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
@@ -169,7 +175,7 @@ module Main =
                         
                 
     /// Runs compilation starting with a filename
-    let compileFromFile cliArgs pkgCtx logger moduleName inputFile =
+    let compileFromFile cliArgs pkgCtx logger (moduleName: FromPath.FromPath) inputFile =
         // open stream from file
         File.ReadAllText (Path.GetFullPath(inputFile))
         |> compileFromStr cliArgs pkgCtx logger moduleName inputFile
@@ -178,14 +184,19 @@ module Main =
     let compileInterface (cliContext: Arguments.BlechCOptions) 
                          (pkgContext: CompilationUnit.Context<TypeCheckContext * BlechTypes.BlechModule>) 
                          diagnosticLogger 
-                         (moduleName: FromPath.ModuleName)
+                         (fromPath: FromPath.FromPath)
                          (inputFile: string) =
 
+        let moduleName = fromPath.ToModuleName
+        
         // parse
         Logging.log2 "Main" ("processing source file " + inputFile)
         let astRes = 
             ParsePkg.parseModuleFromFile diagnosticLogger CompilationUnit.Interface moduleName inputFile
         
+        // TODO: recurse over signature imports here, fromPath argument is needed here.
+        // fjg. 24.09.20
+
         // name resolution 
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
         let astAndEnvRes = 
@@ -220,15 +231,15 @@ module Main =
         tyAstAndLutRes
         
 
-    let loader options logger packageContext implOrIface moduleName infile : Result<CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->
-                compileFromFile options packageContext logger moduleName infile
+                compileFromFile options packageContext logger fromPath infile
             | CompilationUnit.Interface ->
-                compileInterface options packageContext logger moduleName infile
+                compileInterface options packageContext logger fromPath infile
                 
-        Result.bind (CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>.Make moduleName infile) compilationRes 
+        Result.bind (CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>.Make fromPath infile) compilationRes 
 
     let compile (options: Arguments.BlechCOptions) logger =
         let inputFile = options.inputFile

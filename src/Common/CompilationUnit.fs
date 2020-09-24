@@ -87,8 +87,8 @@ module CompilationUnit =
             file: string
             info: 'info
         }
-        static member Make moduleName file info =
-            Ok { moduleName = moduleName 
+        static member Make (fromPath : FromPath.FromPath) file info =
+            Ok { moduleName = fromPath.ToModuleName 
                  file = file 
                  info = info }
 
@@ -101,8 +101,8 @@ module CompilationUnit =
             package: string  // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
             logger: Diagnostics.Logger
-            loader: Context<'info> -> ImplOrIface -> FromPath.ModuleName -> string -> Result<Module<'info>, Diagnostics.Logger>  
-                    // package context -> LoadWhat -> module name -> file name -> Package or logged errors
+            loader: Context<'info> -> ImplOrIface -> FromPath.FromPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
+                    // package context -> LoadWhat -> from path -> file name -> Package or logged errors
             loaded: Dictionary<FromPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> Package
         }
@@ -144,26 +144,28 @@ module CompilationUnit =
                 Error lgr
             | Some srcDir -> 
                 let loadWhat = Option.get optLw 
-                match SearchPath.getModuleName fileName srcDir ctx.package  with
+                match SearchPath.getFromPath fileName srcDir ctx.package  with
                 | Error wrongIds ->
                     Diagnostics.Logger.logFatalError 
                     <| lgr
                     <| Diagnostics.Phase.Compiling
                     <| IllegalModuleFileName (fileName, wrongIds)
                     Error lgr
-                | Ok moduleName ->
+                | Ok fromPath ->
                     // TODO: check if file is already compiled
-                    ctx.loader ctx loadWhat moduleName fileName
+                    ctx.loader ctx loadWhat fromPath fileName
 
 
     /// requires an imported module for compilation
-    let require (ctx: Context<'info>) (moduleName: FromPath.ModuleName): Result<Module<'info>, Diagnostics.Logger> =
+    let require (ctx: Context<'info>) (fromPath: FromPath.FromPath): Result<Module<'info>, Diagnostics.Logger> =
         
+        let moduleName = fromPath.ToModuleName
+
         let tryBlechPath triedBlcs =
             let sigFile = SearchPath.searchInterface ctx.blechPath moduleName 
             match sigFile with
             | Ok blh ->
-                ctx.loader ctx Interface moduleName blh
+                ctx.loader ctx Interface fromPath blh
             | Error triedBlhs ->
                 let lgr = ctx.logger
                 Diagnostics.Logger.logFatalError 
@@ -180,13 +182,13 @@ module CompilationUnit =
             match blhFile, blcFile with
             | Ok blh, Ok blc ->
                 // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
-                let compiled = ctx.loader ctx Implementation moduleName blc
+                let compiled = ctx.loader ctx Implementation fromPath blc
                 ctx.loaded.Add (moduleName, compiled)
                 compiled
                 // TODO: here we need to call the complete compilation procedure
                 
             | Error _, Ok blc ->
-                ctx.loader ctx Implementation moduleName blc
+                ctx.loader ctx Implementation fromPath blc
             
             | _ , Error triedBlcs ->
                 tryBlechPath triedBlcs

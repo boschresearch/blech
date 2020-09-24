@@ -86,6 +86,15 @@ module FromPath =
         member fp.ToPackageName : PackageName =
             fp.package
 
+    // this is preliminary and just to enable recursion over imports in namechecking. TODO: Remove this, fjg. 23.09.20            
+    let moduleNameToFromPath moduleName = 
+        try 
+            { package = List.head moduleName
+              dirs = moduleName.[1 .. moduleName.Length-2]
+              file = List.last moduleName}
+        with
+        | _ -> failwith "this should never happen"
+
     let isValid path = 
         pathRegex.IsMatch path
 

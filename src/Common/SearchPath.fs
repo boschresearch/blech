@@ -182,7 +182,7 @@ let tryFindSourceDir file sourcePath =
     List.tryFind (fun sd -> isFileInSourceDir file sd) srcDirs
 
 
-let getModuleName file srcDir package =
+let getFromPath file srcDir package : Result<FromPath.FromPath, string list> =
     assert isFileInSourceDir file srcDir
     let ff = Path.GetFullPath file
     let fsd = Path.GetFullPath srcDir
@@ -196,13 +196,10 @@ let getModuleName file srcDir package =
     
     let wrongIds = List.filter (fun id -> not <| FromPath.isValidFileOrDirectoryName id) (dirs @ [file])
 
-    if List.isEmpty wrongIds then
-        let fp : FromPath.FromPath = 
-            { package = package
-              dirs = dirs
-              file = file }
-        Ok fp.ToModuleName
-        // Ok (package :: dirs @ [file])
+    if List.isEmpty wrongIds then 
+        Ok { package = package
+             dirs = dirs
+             file = file }
     else
         printfn "wrong: %A" wrongIds
         Error wrongIds
