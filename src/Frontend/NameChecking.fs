@@ -52,10 +52,13 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             logger: Diagnostics.Logger
         }
 
-
-    let initialise logger moduleName : NameCheckContext =
+    let initialise logger moduleName scopes : NameCheckContext =
+        { env = Env.init moduleName scopes 
+          logger = logger }
+    
+    let initialiseEmpty logger moduleName : NameCheckContext =
         { 
-            env = Env.init moduleName
+            env = Env.initEmptyTable moduleName
             logger = logger  // this will be create at blechc started and handed over
         }
 
@@ -537,23 +540,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx // Handled separately, maybe we should fail here
 
 
-    let checkImport (packageContext: CompilationUnit.Context<'info>) (import: AST.Member) = 
-        let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
-        match import with
-        | Member.Import i ->
-            CompilationUnit.require pkgCtx (FromPath.moduleNameToFromPath i.modulePath.ModuleName)  // TODO: move import checking into a separate phase, fjg. 16:09.20
-        | _ ->
-            failwith "This should never happen"
-
-
     let checkPackage packageContext (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
-        // addModule ctx p.moduleName  // TODO: use this just for imports
-        // TODO: checkModuleName for shadowing of imports
-        let imports = List.filter (fun (m: Member) -> not m.IsAPragma) p.imports
-        let importedModules = List.map (checkImport packageContext) imports
-        //printfn "%A" imports
         List.fold checkMember ctx p.members
-        // |> exitSubScope  // remove just for debugging
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
@@ -562,7 +550,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            Ok (ast, ncc.env.lookupTable)
+            printfn "end of checkDeclardness %A" ncc.env.path
+            Ok (ast, ncc.env)
     
 
     /// This function ist just for testing compiler phases. It ignores imports

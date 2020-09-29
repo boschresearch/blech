@@ -60,9 +60,9 @@ module Main =
         Logging.log2 "Main" ("processing file " + fileName)
         ParsePkg.parseModuleFromStr logger implOrIface moduleName fileName contents
 
-    let private runNameResolution logger pkgCtx moduleName inputFile ast =
+    let private runNameResolution logger pkgCtx moduleName scopes inputFile ast =
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
-        NameChecking.initialise logger moduleName
+        NameChecking.initialise logger moduleName scopes
         |> NameChecking.checkDeclaredness pkgCtx <| ast
 
     let private runTypeChecking cliArgs inputFile astAndEnv =
@@ -112,13 +112,22 @@ module Main =
         | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
         | None, _ -> 
             ()
+
+
+    let private checkImport (packageContext: CompilationUnit.Context<'info>) (import: AST.Member) = 
+        let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
+        match import with
+        | AST.Member.Import i ->
+            CompilationUnit.require pkgCtx (FromPath.moduleNameToFromPath i.modulePath.ModuleName)  // TODO: move import checking into a separate phase, fjg. 16:09.20
+        | _ ->
+            failwith "This should never happen"
     
     /// Runs compilation steps given input as a string
     /// which exactly depends on options such as --dry-run
     /// returns a Result type of
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
-    let compileFromStr cliArgs pkgCtx logger (fromPath: FromPath.FromPath) fileName fileContents =
+    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>) logger (fromPath: FromPath.FromPath) fileName fileContents =
         let moduleName = fromPath.ToModuleName
         // always run lexer, parser, name resolution, type check and causality checks
         let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
@@ -127,51 +136,85 @@ module Main =
         // to determine the frompath of a relative import (FromPath.makeFromPath) instead of the modulename
         // fjg. 24.09.20
 
-        let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName fileName)
-        let lutAndPackRes = astAndSymTableRes |> Result.bind (runTypeChecking cliArgs fileName)
-        let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
-        match astAndSymTableRes, lutAndPackRes, pgsRes with
-        | _, _, Error logger
-        | _, Error logger, _                  // the last two cases just
-        | Error logger, _, _ -> Error logger  // satisfy the F# compiler
-        | Ok (ast, symTable), Ok (lut, blechModule), Ok pgs ->
-            // generate block graphs for all activities
-            // this is only needed for code generation but is left here for debugging purposes
-            let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
-            let translationContext: TranslationContext =
-                { tcc = lut
-                  pgs = pgs
-                  bgs = blockGraphContext 
-                  cliContext = cliArgs }
+        let imports = astRes |> Result.map (fun p -> p.imports |> List.filter (fun (m: AST.Member) -> not m.IsAPragma))
+        let importedModules = 
+            imports 
+            |> function
+                | Ok imports -> imports |> (List.map (checkImport pkgCtx))
+                | Error lgr -> [Error lgr]
+
+        let contractCompUnits cuLst =
+            let rec recContract cus res =
+                match cus with
+                | [] -> res
+                | x::xs ->
+                    match x, res with
+                    | Error e1, _ -> recContract xs <| Error e1 // TODO: merge Diagnostics!
+                    | _, Error errs -> recContract xs <| Error errs
+                    | Ok sth, Ok someList -> recContract xs (Ok (someList @ [sth])) // respect the order!
+            recContract cuLst (Ok [])
+
+        let fst3 (a, _, _) = a
+
+        // get all top-level scopes of precompiled modules
+        // add them to the top level scope of the current compilation unit
+        // TODO: prefix with the given import name!
+        let scopeRes = 
+            importedModules
+            |> contractCompUnits
+            |> Result.map (List.map(fun cu -> (fst3 cu.info).path))
+            |> Result.map (List.concat)
+        printfn "%A" scopeRes
+
+        // addModule ctx p.moduleName  // TODO: use this just for imports
+        // TODO: checkModuleName for shadowing of imports
+        match scopeRes with
+        | Error foo -> Error foo
+        | Ok scopes ->
+            let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName scopes fileName)
+            let lutAndPackRes = astAndSymTableRes |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs fileName (ast, env.lookupTable))
+            let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
+            match astAndSymTableRes, lutAndPackRes, pgsRes with
+            | _, _, Error logger
+            | _, Error logger, _                  // the last two cases just
+            | Error logger, _, _ -> Error logger  // satisfy the F# compiler
+            | Ok (ast, env), Ok (lut, blechModule), Ok pgs ->
+                // generate block graphs for all activities
+                // this is only needed for code generation but is left here for debugging purposes
+                let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
+                let translationContext: TranslationContext =
+                    { tcc = lut
+                      pgs = pgs
+                      bgs = blockGraphContext 
+                      cliContext = cliArgs }
                         
-            let compilations = translate translationContext blechModule
+                let compilations = translate translationContext blechModule
 
-            Logging.log6 "Main" ("source code\n")
-            for c in compilations do
-                let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                Logging.log6 "Main" msg
+                Logging.log6 "Main" ("source code\n")
+                for c in compilations do
+                    let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                    let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                    Logging.log6 "Main" msg
 
-            // if not dry run, write it to file
-            // create code depending on entry point
-            if not cliArgs.isDryRun then
-                let isMainProgram = Option.isSome blechModule.entryPoint
-                
-                // if not entry point, create signature
-                if not isMainProgram then
-                    Logging.log2 "Main" ("writing signature for " + fileName)
-                    writeSignature cliArgs.outDir moduleName lut.ncEnv ast
+                // if not dry run, write it to file
+                // create code depending on entry point
+                if not cliArgs.isDryRun then
+                    // if not entry point, create signature
+                    let isMainProgram = Option.isSome blechModule.entryPoint
+                    if not isMainProgram then
+                        Logging.log2 "Main" ("writing signature for " + fileName)
+                        writeSignature cliArgs.outDir moduleName lut.ncEnv ast
 
-                Logging.log2 "Main" ("writing C code for " + fileName)
-                writeImplementation cliArgs.outDir moduleName blechModule translationContext compilations
+                    Logging.log2 "Main" ("writing C code for " + fileName)
+                    writeImplementation cliArgs.outDir moduleName blechModule translationContext compilations
 
-                writeHeader cliArgs.outDir moduleName blechModule translationContext compilations
+                    writeHeader cliArgs.outDir moduleName blechModule translationContext compilations
 
-                // generated test app if required by cliArgs
-                possiblyWriteTestApp cliArgs blechModule translationContext compilations
+                    // generated test app if required by cliArgs
+                    possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
-            // return interface information for module
-            Ok (lut, blechModule)
+                // return interface information for module
+                Ok (env, lut, blechModule)
                         
                 
     /// Runs compilation starting with a filename
@@ -181,65 +224,65 @@ module Main =
         |> compileFromStr cliArgs pkgCtx logger moduleName inputFile
     
 
-    let compileInterface (cliContext: Arguments.BlechCOptions) 
-                         (pkgContext: CompilationUnit.Context<TypeCheckContext * BlechTypes.BlechModule>) 
-                         diagnosticLogger 
-                         (fromPath: FromPath.FromPath)
-                         (inputFile: string) =
+    //let compileInterface (cliContext: Arguments.BlechCOptions) 
+    //                     (pkgContext: CompilationUnit.Context<TypeCheckContext * BlechTypes.BlechModule>) 
+    //                     diagnosticLogger 
+    //                     (fromPath: FromPath.FromPath)
+    //                     (inputFile: string) =
 
-        let moduleName = fromPath.ToModuleName
+    //    let moduleName = fromPath.ToModuleName
         
-        // parse
-        Logging.log2 "Main" ("processing source file " + inputFile)
-        let astRes = 
-            ParsePkg.parseModuleFromFile diagnosticLogger CompilationUnit.Interface moduleName inputFile
+    //    // parse
+    //    Logging.log2 "Main" ("processing source file " + inputFile)
+    //    let astRes = 
+    //        ParsePkg.parseModuleFromFile diagnosticLogger CompilationUnit.Interface moduleName inputFile
         
-        // TODO: recurse over signature imports here, fromPath argument is needed here.
-        // fjg. 24.09.20
+    //    // TODO: recurse over signature imports here, fromPath argument is needed here.
+    //    // fjg. 24.09.20
 
-        // name resolution 
-        Logging.log2 "Main" ("performing name resolution on " + inputFile)
-        let astAndEnvRes = 
-            let ncContext = NameChecking.initialise diagnosticLogger moduleName
-            Result.bind (NameChecking.checkDeclaredness pkgContext ncContext) astRes
+    //    // name resolution 
+    //    Logging.log2 "Main" ("performing name resolution on " + inputFile)
+    //    let astAndEnvRes = 
+    //        let ncContext = NameChecking.initialiseEmpty diagnosticLogger moduleName
+    //        Result.bind (NameChecking.checkDeclaredness pkgContext ncContext) astRes
         
-        // type check
-        Logging.log2 "Main" ("performing type checking on " + inputFile)
-        let tyAstAndLutRes = 
-            Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
+    //    // type check
+    //    Logging.log2 "Main" ("performing type checking on " + inputFile)
+    //    let tyAstAndLutRes = 
+    //        Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
         
-        //match tyAstAndLutRes with
-        //| Ok (lut, package) ->        
-        //    let translationContext: TranslationContext =
-        //        { tcc = lut
-        //          pgs = Dictionary()
-        //          bgs = Dictionary() 
-        //          cliContext = cliContext }
-        //    let compilations = translate translationContext package
+    //    //match tyAstAndLutRes with
+    //    //| Ok (lut, package) ->        
+    //    //    let translationContext: TranslationContext =
+    //    //        { tcc = lut
+    //    //          pgs = Dictionary()
+    //    //          bgs = Dictionary() 
+    //    //          cliContext = cliContext }
+    //    //    let compilations = translate translationContext package
             
-        //    // this ensures side-effects (files written) are prevented in a dry run
-        //    if not cliContext.isDryRun then
-        //        // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
-        //        // TODO: Take package into account, fjg 10.01.19
-        //        let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
-        //        let header = CodeGeneration.emitHeader translationContext package compilations
-        //        FileInfo(headerFile).Directory.Create()
-        //        File.WriteAllText(headerFile, header)
-        //| _ ->
-        //    ()
+    //    //    // this ensures side-effects (files written) are prevented in a dry run
+    //    //    if not cliContext.isDryRun then
+    //    //        // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
+    //    //        // TODO: Take package into account, fjg 10.01.19
+    //    //        let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
+    //    //        let header = CodeGeneration.emitHeader translationContext package compilations
+    //    //        FileInfo(headerFile).Directory.Create()
+    //    //        File.WriteAllText(headerFile, header)
+    //    //| _ ->
+    //    //    ()
     
-        tyAstAndLutRes
+    //    tyAstAndLutRes
         
 
-    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->
                 compileFromFile options packageContext logger fromPath infile
-            | CompilationUnit.Interface ->
-                compileInterface options packageContext logger fromPath infile
+            //| CompilationUnit.Interface ->
+            //    compileInterface options packageContext logger fromPath infile
                 
-        Result.bind (CompilationUnit.Module<TypeCheckContext * BlechTypes.BlechModule>.Make fromPath infile) compilationRes 
+        Result.bind (CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>.Make fromPath infile) compilationRes 
 
     let compile (options: Arguments.BlechCOptions) logger =
         let inputFile = options.inputFile

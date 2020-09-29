@@ -181,6 +181,11 @@ module SymbolTable =
             let namePart = this.getNamePart path
             let subExprPart = path.path.[namePart.Length..] // empty, if namePart = path.path
             this.lastNameToQname namePart, subExprPart
+
+        static member Join this that =
+            let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
+            { lookupTable = Dictionary(both) }
+            
             
     type Environment = 
         {
@@ -249,13 +254,15 @@ module SymbolTable =
     [<RequireQualifiedAccess>]        
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Environment =
-        
-        let init moduleName =
-            do Scope.init ()   // initialize global state for anonymous scopes
+         
+        let init moduleName scopes =
+            do Scope.init ()  // initialize global state for anonymous scopes
             { Environment.moduleName = moduleName
-              path = [ Scope.createGlobalScope () ]
+              path = scopes @ [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty }
- 
+
+        let initEmptyTable moduleName = init moduleName []
+        
         let private currentScope (env: Environment) = 
             List.head env.path 
 

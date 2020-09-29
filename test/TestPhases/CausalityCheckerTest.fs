@@ -40,7 +40,7 @@ type Test() =
         Assert.True (Result.isOk ast)
 
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
@@ -82,7 +82,7 @@ type Test() =
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         

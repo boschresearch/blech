@@ -182,6 +182,8 @@ let tryFindSourceDir file sourcePath =
     List.tryFind (fun sd -> isFileInSourceDir file sd) srcDirs
 
 
+// used only in tests
+// dead code?
 let getFromPath file srcDir package : Result<FromPath.FromPath, string list> =
     assert isFileInSourceDir file srcDir
     let ff = Path.GetFullPath file

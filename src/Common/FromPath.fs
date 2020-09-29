@@ -95,8 +95,9 @@ module FromPath =
         with
         | _ -> failwith "this should never happen"
 
-    let isValid path = 
-        pathRegex.IsMatch path
+    // dead code
+    //let isValid path = 
+    //    pathRegex.IsMatch path
 
     let makeFromPath (current: FromPath) path : Result<FromPath, string list> = 
         let m = pathRegex.Match path
