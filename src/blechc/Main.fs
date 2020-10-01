@@ -60,14 +60,14 @@ module Main =
         Logging.log2 "Main" ("processing file " + fileName)
         ParsePkg.parseModuleFromStr logger implOrIface moduleName fileName contents
 
-    let private runNameResolution logger pkgCtx moduleName scopes inputFile ast =
+    let private runNameResolution logger pkgCtx moduleName envs inputFile ast =
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
-        NameChecking.initialise logger moduleName scopes
+        NameChecking.initialise logger moduleName envs
         |> NameChecking.checkDeclaredness pkgCtx <| ast
 
-    let private runTypeChecking cliArgs inputFile astAndEnv =
+    let private runTypeChecking cliArgs inputFile otherLuts astAndEnv =
         Logging.log2 "Main" ("performing type checking on " + inputFile)
-        TypeChecking.typeCheck cliArgs astAndEnv
+        TypeChecking.typeCheck cliArgs otherLuts astAndEnv
 
     let private runCausalityCheck inputFile tyAstAndLut =
         Logging.log2 "Main" ("checking causality in " + inputFile) 
@@ -156,28 +156,31 @@ module Main =
             recContract cuLst (Ok [])
 
         let fst3 (a, _, _) = a
+        let snd3 (_, a, _) = a
 
         // get all top-level scopes of precompiled modules
         // add them to the top level scope of the current compilation unit
         // TODO: prefix with the given import name!
-        let insertLocalName (ln: CommonTypes.Name) (path: SymbolTable.Scope list) =
-            match path with
-            | [] -> []
+        let insertLocalName (ln: CommonTypes.Name) (env: SymbolTable.Environment) = //(path: SymbolTable.Scope list) =
+            match env.path with
+            | [] -> env //[]
             | globalScope :: tail ->
-                SymbolTable.Scope.rewriteId globalScope ln.id :: tail
-        let scopeRes = 
+                {env with path = SymbolTable.Scope.rewriteId globalScope ln.id :: tail}                
+
+        let envsRes = 
             importedModules
             |> contractCompUnits
-            |> Result.map (List.map(fun (localName,cu) -> insertLocalName localName (fst3 cu.info).path))
-            |> Result.map (List.concat)
+            |> Result.map (List.map(fun (localName,cu) -> insertLocalName localName (fst3 cu.info), snd3 cu.info))
+            //|> Result.map (List.concat)
 
         // addModule ctx p.moduleName  // TODO: use this just for imports
         // TODO: checkModuleName for shadowing of imports
-        match scopeRes with
+        match envsRes with
         | Error foo -> Error foo
-        | Ok scopes ->
-            let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName scopes fileName)
-            let lutAndPackRes = astAndSymTableRes |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs fileName (ast, env.lookupTable))
+        | Ok cus ->
+            let envs, otherLuts = List.unzip cus
+            let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName envs fileName)
+            let lutAndPackRes = astAndSymTableRes |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs fileName otherLuts (ast, env.lookupTable))
             let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
             match astAndSymTableRes, lutAndPackRes, pgsRes with
             | _, _, Error logger

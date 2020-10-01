@@ -45,7 +45,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv
         
         match lutAndTyPkg with
         | Ok _ ->

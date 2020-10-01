@@ -1373,7 +1373,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
         
     let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
     
-        assert (List.length types = lut.userTypes.Count)
+        //assert (List.length types = lut.userTypes.Count) // TODO: this assertion is wrong if we have imported types from other modules, fg 01.10.20
         {
             BlechModule.name = modName
             types = types
@@ -1413,8 +1413,14 @@ let public fPackage lut (pack: AST.CompilationUnit) =
 
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
-let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.CompilationUnit, ncEnv: SymbolTable.LookupTable) =
+let typeCheck (cliContext: Arguments.BlechCOptions) otherLuts (pack: AST.CompilationUnit, ncEnv: SymbolTable.LookupTable) =
     let lut = TypeCheckContext.Init cliContext ncEnv
+    otherLuts
+    |> List.iter (fun otherLut ->
+        for pair in otherLut.nameToDecl do addDeclToLut lut pair.Key pair.Value
+        for pair in otherLut.userTypes do addTypeToLut lut pair.Key pair.Value
+        for pragma in otherLut.memberPragmas do addPragmaToLut lut pragma
+        )
     fPackage lut pack
     |> function
         | Ok p -> 

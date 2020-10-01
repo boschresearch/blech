@@ -140,6 +140,14 @@ module SymbolTable =
 
         static member Empty = { lookupTable = Dictionary() }
 
+        static member Join this that =
+            let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
+            { lookupTable = Dictionary(both) }
+
+        override this.ToString () =
+            [for pair in this.lookupTable -> pair.Key.id + " -> " + pair.Value.ToString()]
+            |> String.concat "\n"
+
         member private lt.getQname name =
             let ok, info = lt.lookupTable.TryGetValue name
             if ok then 
@@ -167,7 +175,7 @@ module SymbolTable =
         member this.nameToQname name = 
             match this.getQname name with
             | Some qname -> qname
-            | None -> failwith ""
+            | None -> failwithf "failed to make QName for %A" name
 
         member private this.lastNameToQname path =
             List.last path |> this.nameToQname
@@ -187,10 +195,6 @@ module SymbolTable =
             let namePart = this.getNamePart path
             let subExprPart = path.path.[namePart.Length..] // empty, if namePart = path.path
             this.lastNameToQname namePart, subExprPart
-
-        static member Join this that =
-            let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
-            { lookupTable = Dictionary(both) }
             
             
     /// Context of the name resolution compiler phase
@@ -267,7 +271,7 @@ module SymbolTable =
 
         let empty =
             { moduleName = []
-              path = []
+              path = [Scope.createGlobalScope ()]
               lookupTable = LookupTable.Empty }
          
         let private currentScope (env: Environment) = 
@@ -333,7 +337,10 @@ module SymbolTable =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
-                do env.lookupTable.addDecl name qname
+                try
+                    do env.lookupTable.addDecl name qname
+                with _ ->
+                    printf "%A" (env.lookupTable.ToString())
                 let symbol = Symbol.Create name isScope
                 let newEnv = { env with path = Scope.addSymbol (currentScope env) symbol :: currentOuter env }
                 Ok newEnv
@@ -346,16 +353,26 @@ module SymbolTable =
         let insertScopeName env (name: Name) = 
             insertSymbol env name (IdLabel.Static) true
 
-        let init moduleName scopes =
+        let init moduleName (envs: Environment list) =
             do Scope.init ()  // initialize global state for anonymous scopes
+            
+            // add imported files' scopes as innerscopes
             let importedScopes =
                 let globalScope = Scope.createGlobalScope ()
-                scopes |> List.fold Scope.addInnerScope globalScope
+                envs
+                |> List.collect (fun env -> env.path)
+                |> List.fold Scope.addInnerScope globalScope
+            let importedLookupTables =
+                envs
+                |> List.map (fun env -> env.lookupTable)
+                |> List.fold LookupTable.Join LookupTable.Empty
             let globalEnv =
                 { Environment.moduleName = moduleName
                   path = [importedScopes]
-                  lookupTable = LookupTable.Empty }
-            scopes 
+                  lookupTable = importedLookupTables }
+            // add imported files' scopes as symbols
+            envs 
+            |> List.collect (fun env -> env.path)
             |> List.fold (fun envRes scope -> 
                 envRes
                 |> Result.bind (fun env ->

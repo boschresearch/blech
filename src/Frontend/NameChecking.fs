@@ -52,8 +52,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             logger: Diagnostics.Logger
         }
 
-    let initialise logger moduleName scopes : NameCheckContext =
-        Env.init moduleName scopes 
+    let initialise logger moduleName envs : NameCheckContext =
+        Env.init moduleName envs 
         |> function
             | Ok env ->
                 { env = env
@@ -560,7 +560,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            //printfn "end of checkDeclardness %A" ncc.env.path
+            printfn "end of checkDeclardness %A" ncc.env.lookupTable
             Ok (ast, ncc.env)
     
 

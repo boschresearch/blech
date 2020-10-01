@@ -45,7 +45,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
@@ -87,7 +87,7 @@ type Test() =
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
