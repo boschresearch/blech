@@ -80,6 +80,7 @@ let private assembleName pref infixLst identifier =
         match longId with
         | "" -> ""
         | _ -> "_" + longId
+        |> (fun s -> s.Replace(".", "_")) // TODO: hack to avoid directory names "." to become dots in C names, fg 01.10.20
     pref + infix + "_" + identifier
     |> txt
 

@@ -117,7 +117,7 @@ let searchInterface searchPath (name: FromPath.ModuleName) =
     search searchPath name interfaceFileExtension
       
 let private separateAndExtend sep (moduleName: FromPath.ModuleName) extension =
-    sprintf "%s%s" (String.concat sep moduleName) extension 
+    sprintf "%s%s" (String.concat sep moduleName) extension
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
 let moduleToHFile moduleName =
@@ -132,6 +132,7 @@ let moduleToCFileInclude moduleName =
 let moduleToIncludeGuard moduleName = 
     let ig = separateAndExtend (string underscore) moduleName hGuardExtension
     ig.ToUpper()
+    |> (fun s -> s.Replace(".", "_"))
     
 /// creates a suitable C implementation file name from a module name, has to be combined with the output directory
 let moduleToCFile moduleName = 
