@@ -53,14 +53,22 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         }
 
     let initialise logger moduleName scopes : NameCheckContext =
-        { env = Env.init moduleName scopes 
-          logger = logger }
+        Env.init moduleName scopes 
+        |> function
+            | Ok env ->
+                { env = env
+                  logger = logger }
+            | Error err ->
+                Logger.logError logger Diagnostics.Phase.Naming err
+                { env = SymbolTable.Environment.empty
+                  logger = logger }
     
     let initialiseEmpty logger moduleName : NameCheckContext =
-        { 
-            env = Env.initEmptyTable moduleName
-            logger = logger  // this will be create at blechc started and handed over
-        }
+        initialise logger moduleName []
+        //{ 
+        //    env = Env.initEmptyTable moduleName
+        //    logger = logger  // this will be create at blechc started and handed over
+        //}
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -96,6 +104,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx     
 
+    // TODO: instead of moduleName pass given local name and the result from previous name check (env.path), fg 01.10.20
     let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
         let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
         {ctx with env = env}
@@ -541,6 +550,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let checkPackage packageContext (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
+        printfn "path at the start\n%A" ctx.env.path
         List.fold checkMember ctx p.members
 
 
@@ -550,7 +560,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            printfn "end of checkDeclardness %A" ncc.env.path
+            //printfn "end of checkDeclardness %A" ncc.env.path
             Ok (ast, ncc.env)
     
 

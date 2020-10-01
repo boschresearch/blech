@@ -118,7 +118,8 @@ module Main =
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | AST.Member.Import i ->
-            CompilationUnit.require pkgCtx (FromPath.moduleNameToFromPath i.modulePath.ModuleName)  // TODO: move import checking into a separate phase, fjg. 16:09.20
+            CompilationUnit.require pkgCtx (FromPath.moduleNameToFromPath i.modulePath.ModuleName)
+            |> Result.map (fun cu -> i.localName, cu)
         | _ ->
             failwith "This should never happen"
     
@@ -159,12 +160,16 @@ module Main =
         // get all top-level scopes of precompiled modules
         // add them to the top level scope of the current compilation unit
         // TODO: prefix with the given import name!
+        let insertLocalName (ln: CommonTypes.Name) (path: SymbolTable.Scope list) =
+            match path with
+            | [] -> []
+            | globalScope :: tail ->
+                SymbolTable.Scope.rewriteId globalScope ln.id :: tail
         let scopeRes = 
             importedModules
             |> contractCompUnits
-            |> Result.map (List.map(fun cu -> (fst3 cu.info).path))
+            |> Result.map (List.map(fun (localName,cu) -> insertLocalName localName (fst3 cu.info).path))
             |> Result.map (List.concat)
-        printfn "%A" scopeRes
 
         // addModule ctx p.moduleName  // TODO: use this just for imports
         // TODO: checkModuleName for shadowing of imports

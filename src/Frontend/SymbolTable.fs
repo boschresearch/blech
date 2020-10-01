@@ -18,12 +18,14 @@ namespace Blech.Frontend
 
 module SymbolTable =
 
+    open System.Collections.Generic
+    
     open Blech.Common
     
     open CommonTypes
-    open System.Collections.Generic
     
     
+    /// TODO @FJG: What is a symbol?
     type Symbol = 
         private {
             name: Name
@@ -34,6 +36,7 @@ module SymbolTable =
             { name = name; isScope = isScope }
     
     
+    /// TODO @FJG: What does it mean?
     [<RequireQualifiedAccess>]
     type Visibility = // a scope property
         | Open
@@ -121,6 +124,9 @@ module SymbolTable =
         let createGlobalScope () : Scope = // id : Scope = 
            create globalId Visibility.Open Recursion.No
 
+        let rewriteId scope id : Scope =
+            {scope with id = id}
+
 
     type NameInfo =
         | Decl of QName
@@ -187,10 +193,14 @@ module SymbolTable =
             { lookupTable = Dictionary(both) }
             
             
+    /// Context of the name resolution compiler phase
+    /// The "path" is a stack which starts with an empty, global scope
+    /// At the end, only the global scope remains but all subscopes will have been added as inner scopes
+    /// Thus at the end, path is a singleton element list with a tree of scopes given by the innerscopes attributes
     type Environment = 
         {
             moduleName: FromPath.ModuleName
-            path: Scope list
+            path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
         }
     
@@ -254,15 +264,12 @@ module SymbolTable =
     [<RequireQualifiedAccess>]        
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Environment =
-         
-        let init moduleName scopes =
-            do Scope.init ()  // initialize global state for anonymous scopes
-            { Environment.moduleName = moduleName
-              path = scopes @ [ Scope.createGlobalScope () ]
-              lookupTable = LookupTable.Empty }
 
-        let initEmptyTable moduleName = init moduleName []
-        
+        let empty =
+            { moduleName = []
+              path = []
+              lookupTable = LookupTable.Empty }
+         
         let private currentScope (env: Environment) = 
             List.head env.path 
 
@@ -283,6 +290,7 @@ module SymbolTable =
                 | [] -> None
                 | current :: _ when Scope.containsSymbol current id ->    // first in current scope
                     Some current
+                // TODO @FJG: what situation does this case handle?
                 | current :: _ :: outer when Scope.idIsNonRecursive current id -> // then prevent recursive use of id
                     // printfn "id: %s -> scope id: %s" id current.id
                     // None
@@ -299,6 +307,7 @@ module SymbolTable =
             |> List.tail  // dismiss the global scope
             |> List.map (fun scope -> scope.id)
 
+        /// TODO @FJG: what is going on here?
         let private tryFindShadowedSymbol env id : Symbol option = 
             let rec shadows (path : Scope list) id =
                 match path with
@@ -337,6 +346,24 @@ module SymbolTable =
         let insertScopeName env (name: Name) = 
             insertSymbol env name (IdLabel.Static) true
 
+        let init moduleName scopes =
+            do Scope.init ()  // initialize global state for anonymous scopes
+            let importedScopes =
+                let globalScope = Scope.createGlobalScope ()
+                scopes |> List.fold Scope.addInnerScope globalScope
+            let globalEnv =
+                { Environment.moduleName = moduleName
+                  path = [importedScopes]
+                  lookupTable = LookupTable.Empty }
+            scopes 
+            |> List.fold (fun envRes scope -> 
+                envRes
+                |> Result.bind (fun env ->
+                    insertScopeName env {id = scope.id; range = Range.range0})) //TODO
+                (Ok globalEnv)
+
+        let initEmptyTable moduleName = init moduleName []
+
         let private enterInnerScope env id visibility recursion =
             assert not (Scope.containsInnerScope (currentScope env) id)
             let scp = Scope.create id visibility recursion
@@ -348,7 +375,7 @@ module SymbolTable =
             // printfn "Enter Scope: %s" scope.id
             scope :: env.path
         
- 
+        // TODO: add scope as symbol and inner scope, fg 01.10.20
         let enterModuleScope (env: Environment) (id: Identifier) : Environment =
             // TODO: Fully qualified names (for code generation) require whole module name - not only the last id
             // 
