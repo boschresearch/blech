@@ -407,7 +407,7 @@ let private cpMainModuleCode ctx (moduleName: FromPath.ModuleName)
 // end of cpMainModuleCode
 
 /// Emit C header for module as Doc
-let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) entryPoint =
+let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) otherMods (compilations: Compilation list) entryPoint =
     // C header
     let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
         
@@ -420,6 +420,11 @@ let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilatio
 
     let blechHeader = 
         txt "#include \"blech.h\""
+
+    let otherIncludes =
+        otherMods
+        |> List.map (fun otherMod -> txt "#include" <+> (SearchPath.moduleToInclude >> txt >> dquotes)otherMod.name)
+        |> dpBlock
 
     // Translate function prototypes to extern functions and direct C calls
     let functionPrototypes = 
@@ -445,7 +450,8 @@ let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilatio
 
     // Type Declarations
     let userTypes = 
-        ctx.tcc.userTypes.Values
+        ctx.tcc.userTypes
+        |> Seq.choose (fun kvp -> if kvp.Key.moduleName = moduleName then Some kvp.Value else None)
         |> Seq.map cpUserType
         |> dpBlock
 
@@ -499,6 +505,7 @@ let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilatio
       Comment.generatedCode
       Comment.blechHeader
       blechHeader
+      otherIncludes
       Comment.userTypes
       userTypes    // all user types are global
       Comment.activityContexts
@@ -526,7 +533,7 @@ let private cpMainModuleHeader ctx (moduleName: FromPath.ModuleName) (compilatio
 // end of cpMainModuleHeader
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) =
+let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) otherMods (compilations: Compilation list) =
     // C header
     let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
         
@@ -539,6 +546,11 @@ let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: 
 
     let blechHeader = 
         txt "#include \"blech.h\""
+
+    let otherIncludes =
+        otherMods
+        |> List.map (fun otherMod -> txt "#include" <+> (SearchPath.moduleToInclude >> txt >> dquotes)otherMod.name)
+        |> dpBlock
 
     // Translate function prototypes to extern functions and direct C calls
     let functionPrototypes = 
@@ -564,7 +576,8 @@ let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: 
 
     // Type Declarations
     let userTypes = 
-        ctx.tcc.userTypes.Values
+        ctx.tcc.userTypes
+        |> Seq.choose (fun kvp -> if kvp.Key.moduleName = moduleName then Some kvp.Value else None)
         |> Seq.map cpUserType
         |> dpBlock
 
@@ -598,6 +611,7 @@ let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) (compilations: 
       Comment.generatedCode
       Comment.blechHeader
       blechHeader
+      otherIncludes
       Comment.userTypes
       userTypes    // all user types are global
       Comment.activityContexts
@@ -665,12 +679,12 @@ let public emitMainCode ctx (package: BlechModule) compilations entryPointName =
     |> render (Some 80)
 
 // TODO: Remove entryPointName, it is part of package. fjg 10.01.19
-let public emitHeader ctx (package: BlechModule) compilations =
-    cpModuleHeader ctx package.name compilations
+let public emitHeader ctx (package: BlechModule) otherMods compilations =
+    cpModuleHeader ctx package.name otherMods compilations
     |> render (Some 80)
 
-let public emitMainHeader ctx (package: BlechModule) compilations entryPointName =
-    cpMainModuleHeader ctx package.name compilations entryPointName
+let public emitMainHeader ctx (package: BlechModule) otherMods compilations entryPointName =
+    cpMainModuleHeader ctx package.name otherMods compilations entryPointName
     |> render (Some 80)
 
 let public emitApp ctx (package: BlechModule) compilations entryPointName =

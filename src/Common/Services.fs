@@ -40,6 +40,15 @@ module Int32 =
 module Int64 = 
     let order = LanguagePrimitives.FastGenericComparer<int64>
 
+module List =
+    let rec unzip4 x =
+        match x with
+        | [] ->
+            [], [], [], []
+        | (h1, h2, h3, h4) :: t ->
+            let res1, res2, res3, res4 = unzip4 t
+            h1::res1, h2::res2, h3::res3, h4::res4
+
 
 module Pair = 
     open System.Collections.Generic

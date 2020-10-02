@@ -245,8 +245,12 @@ let private getUniqueSuccNode node =
     else
         failwith "FAIL: expected exactly one successor"
 
+
+let private findCompilationByName ctx compilations whoToCall =
+    ctx.compilations @ compilations |> List.find (fun c -> c.name = whoToCall)
+
 let private makeActCall ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
-    let callee = compilations |> List.find (fun c -> c.name = whoToCall)
+    let callee = findCompilationByName ctx compilations whoToCall
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
     let receiver, receiverDecl =
@@ -552,7 +556,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 advancePC ctx !curComp node succ
         
         // select callee's pcs from activity context and initialise them
-        let callee = compilations |> List.find (fun c -> c.name = whoToCall)
+        let callee = findCompilationByName ctx compilations whoToCall
         // add the PCs and locals of subprogram to this instance
         curComp := Compilation.addSubContext !curComp thisNodePc whoToCall callee.GetActCtx
         let calleesPCs = (!curComp).GetActCtx.subcontexts.[thisNodePc, whoToCall].pcs.AsList

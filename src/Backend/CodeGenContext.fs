@@ -30,14 +30,6 @@ open Blech.Intermediate
 type Action = Blech.Intermediate.Action
 
 
-type TranslationContext = {
-    tcc: TypeCheckContext
-    pgs: Dictionary<QName, ProgramGraph>
-    bgs: Dictionary<QName, BlockGraph.T>
-    cliContext: Blech.Common.Arguments.BlechCOptions
-}
-
-
 /// Program counters are hierarchically represented in a tree structure
 /// The root node is the main program counter of an activity
 /// Other nodes represent pcs for cobegin branches
@@ -94,6 +86,15 @@ type Compilation =
         match this.actctx with
         | Some x -> x
         | None -> failwith "Tried to access activity context where there is none. Is this Compilation a function?"
+
+
+type TranslationContext = {
+    tcc: TypeCheckContext
+    pgs: Dictionary<QName, ProgramGraph>
+    bgs: Dictionary<QName, BlockGraph.T>
+    compilations: Compilation list
+    cliContext: Blech.Common.Arguments.BlechCOptions
+}
 
 
 [<AutoOpen>]

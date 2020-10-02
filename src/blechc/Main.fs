@@ -92,14 +92,14 @@ module Main =
                 CodeGeneration.emitCode translationContext blechModule compilations
         writeFile codeFile code
 
-    let private writeHeader outDir moduleName (blechModule: BlechTypes.BlechModule) translationContext compilations =
+    let private writeHeader outDir moduleName (blechModule: BlechTypes.BlechModule) otherMods translationContext compilations =
         let headerFile = Path.Combine(outDir, SearchPath.moduleToHFile moduleName)
         let header = 
             match blechModule.entryPoint with
             | Some ep ->
-                CodeGeneration.emitMainHeader translationContext blechModule compilations ep.name
+                CodeGeneration.emitMainHeader translationContext blechModule otherMods compilations ep.name
             | None ->
-                CodeGeneration.emitHeader translationContext blechModule compilations
+                CodeGeneration.emitHeader translationContext blechModule otherMods compilations
         writeFile headerFile header
 
     let private possiblyWriteTestApp (cliArgs: Arguments.BlechCOptions) (blechModule: BlechTypes.BlechModule) translationContext compilations =
@@ -128,7 +128,7 @@ module Main =
     /// returns a Result type of
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
-    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>) logger (fromPath: FromPath.FromPath) fileName fileContents =
+    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: FromPath.FromPath) fileName fileContents =
         let moduleName = fromPath.ToModuleName
         // always run lexer, parser, name resolution, type check and causality checks
         let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
@@ -155,8 +155,10 @@ module Main =
                     | Ok sth, Ok someList -> recContract xs (Ok (someList @ [sth])) // respect the order!
             recContract cuLst (Ok [])
 
-        let fst3 (a, _, _) = a
-        let snd3 (_, a, _) = a
+        let fst4 (a, _, _, _) = a
+        let snd4 (_, a, _, _) = a
+        let trd4 (_, _, a, _) = a
+        let frt4 (_, _, _, a) = a
 
         // get all top-level scopes of precompiled modules
         // add them to the top level scope of the current compilation unit
@@ -170,7 +172,7 @@ module Main =
         let envsRes = 
             importedModules
             |> contractCompUnits
-            |> Result.map (List.map(fun (localName,cu) -> insertLocalName localName (fst3 cu.info), snd3 cu.info))
+            |> Result.map (List.map(fun (localName,cu) -> insertLocalName localName (fst4 cu.info), snd4 cu.info, trd4 cu.info, frt4 cu.info))
             //|> Result.map (List.concat)
 
         // addModule ctx p.moduleName  // TODO: use this just for imports
@@ -178,7 +180,7 @@ module Main =
         match envsRes with
         | Error foo -> Error foo
         | Ok cus ->
-            let envs, otherLuts = List.unzip cus
+            let envs, otherLuts, otherMods, preTranslationContexts = List.unzip4 cus
             let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName envs fileName)
             let lutAndPackRes = astAndSymTableRes |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs fileName otherLuts (ast, env.lookupTable))
             let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
@@ -190,13 +192,28 @@ module Main =
                 // generate block graphs for all activities
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
+                let preCompilations = preTranslationContexts |> List.collect (fun ctx -> ctx.compilations)
+                let collectedPgs = 
+                    preTranslationContexts 
+                    |> List.fold (fun (graphs: System.Collections.Generic.Dictionary<Blech.Frontend.CommonTypes.QName, ProgramGraph>) ctx -> 
+                        for graph in ctx.pgs do graphs.Add(graph.Key, graph.Value); 
+                        graphs
+                        ) pgs
+                let collectedBgs =
+                    preTranslationContexts
+                    |> List.fold (fun (graphs: System.Collections.Generic.Dictionary<Blech.Frontend.CommonTypes.QName, BlockGraph.T>) ctx ->
+                        for graph in ctx.bgs do graphs.Add(graph.Key, graph.Value)
+                        graphs
+                        ) blockGraphContext
                 let translationContext: TranslationContext =
                     { tcc = lut
-                      pgs = pgs
-                      bgs = blockGraphContext 
+                      pgs = collectedPgs
+                      bgs = collectedBgs
+                      compilations = preCompilations
                       cliContext = cliArgs }
                         
                 let compilations = translate translationContext blechModule
+                let translationContext = {translationContext with compilations = compilations @ translationContext.compilations}
 
                 Logging.log6 "Main" ("source code\n")
                 for c in compilations do
@@ -216,13 +233,13 @@ module Main =
                     Logging.log2 "Main" ("writing C code for " + fileName)
                     writeImplementation cliArgs.outDir moduleName blechModule translationContext compilations
 
-                    writeHeader cliArgs.outDir moduleName blechModule translationContext compilations
+                    writeHeader cliArgs.outDir moduleName blechModule otherMods translationContext compilations
 
                     // generated test app if required by cliArgs
                     possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
                 // return interface information for module
-                Ok (env, lut, blechModule)
+                Ok (env, lut, blechModule, translationContext)
                         
                 
     /// Runs compilation starting with a filename
@@ -282,7 +299,7 @@ module Main =
     //    tyAstAndLutRes
         
 
-    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->
@@ -290,7 +307,7 @@ module Main =
             //| CompilationUnit.Interface ->
             //    compileInterface options packageContext logger fromPath infile
                 
-        Result.bind (CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule>.Make fromPath infile) compilationRes 
+        Result.bind (CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>.Make fromPath infile) compilationRes 
 
     let compile (options: Arguments.BlechCOptions) logger =
         let inputFile = options.inputFile
