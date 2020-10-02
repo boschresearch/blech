@@ -170,8 +170,7 @@ let internal translate ctx (subProgDecl: SubProgramDecl) =
     let code = translateFunction ctx curComp subProgDecl
     
     let completeFunctionCode =
-        txt "static" // TODO must be non-static if function is exposed, fjg 17.01.19
-        <+> retType
+        retType
         <+> cpStaticName (!curComp).name
         <+> cpFunctionIface ctx.tcc (!curComp)
         <+> txt "{"

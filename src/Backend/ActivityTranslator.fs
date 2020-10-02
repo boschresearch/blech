@@ -956,8 +956,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             |> dpBlock
 
     let completeActivityCode =
-        txt "static" // TODO must be non-static if activity is exposed, fjg 17.01.19
-        <+> txt "blc_pc_t"
+        txt "blc_pc_t"
         <+> cpStaticName (!curComp).name
         <+> cpIface ctx.tcc (!curComp)
         <+> txt "{"
