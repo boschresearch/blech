@@ -21,6 +21,7 @@ module SymbolTable =
     open System.Collections.Generic
     
     open Blech.Common
+    open Blech.Common.TranslationUnitPath
     
     open CommonTypes
     
@@ -203,7 +204,7 @@ module SymbolTable =
     /// Thus at the end, path is a singleton element list with a tree of scopes given by the innerscopes attributes
     type Environment = 
         {
-            moduleName: FromPath.FromPath
+            moduleName: TranslationUnitPath
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
         }
@@ -270,7 +271,7 @@ module SymbolTable =
     module Environment =
 
         let empty =
-            { moduleName = FromPath.FromPath.Empty
+            { moduleName = TranslationUnitPath.Empty
               path = [Scope.createGlobalScope ()]
               lookupTable = LookupTable.Empty }
          

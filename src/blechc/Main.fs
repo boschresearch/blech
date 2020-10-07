@@ -20,8 +20,12 @@ module Main =
     open System.IO
     
     open Blech.Common
+    open Blech.Common.TranslationUnitPath
+
     open Blech.Frontend
+    
     open Blech.Intermediate
+    
     open Blech.Backend
     open Blech.Backend.CodeGeneration
 
@@ -78,12 +82,12 @@ module Main =
         File.WriteAllText(outFileName, txt)
 
     let private writeSignature outDir moduleName ncEnv ast =
-        let signatureFile = Path.Combine(outDir, SearchPath.moduleToInterfaceFile moduleName)
+        let signatureFile = Path.Combine(outDir, TranslatePath.moduleToInterfaceFile moduleName)
         let blechSignature = SignaturePrinter.printSignature ncEnv ast
         writeFile signatureFile blechSignature
 
     let private writeImplementation outDir moduleName (blechModule: BlechTypes.BlechModule) translationContext compilations =
-        let codeFile = Path.Combine(outDir, SearchPath.moduleToCFile moduleName)
+        let codeFile = Path.Combine(outDir, TranslatePath.moduleToCFile moduleName)
         let code = 
             match blechModule.entryPoint with
             | Some ep ->
@@ -93,7 +97,7 @@ module Main =
         writeFile codeFile code
 
     let private writeHeader outDir moduleName (blechModule: BlechTypes.BlechModule) otherMods translationContext compilations =
-        let headerFile = Path.Combine(outDir, SearchPath.moduleToHFile moduleName)
+        let headerFile = Path.Combine(outDir, TranslatePath.moduleToHFile moduleName)
         let header = 
             match blechModule.entryPoint with
             | Some ep ->
@@ -105,7 +109,7 @@ module Main =
     let private possiblyWriteTestApp (cliArgs: Arguments.BlechCOptions) (blechModule: BlechTypes.BlechModule) translationContext compilations =
         match cliArgs.appName, blechModule.entryPoint with
         | Some an, Some ep ->
-            let appFile = Path.Combine(cliArgs.outDir, SearchPath.appNameToCFile an)
+            let appFile = Path.Combine(cliArgs.outDir, TranslatePath.appNameToCFile an)
             let app = CodeGeneration.emitApp translationContext blechModule compilations ep.name
             FileInfo(appFile).Directory.Create()
             File.WriteAllText(appFile, app)
@@ -128,7 +132,7 @@ module Main =
     /// returns a Result type of
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
-    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: FromPath.FromPath) fileName fileContents =
+    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: TranslationUnitPath) fileName fileContents =
         //let moduleName = fromPath.ToModuleName
         // always run lexer, parser, name resolution, type check and causality checks
         let astRes = runParser logger CompilationUnit.Implementation fromPath fileContents fileName
@@ -243,7 +247,7 @@ module Main =
                         
                 
     /// Runs compilation starting with a filename
-    let compileFromFile cliArgs pkgCtx logger (moduleName: FromPath.FromPath) inputFile =
+    let compileFromFile cliArgs pkgCtx logger (moduleName: TranslationUnitPath) inputFile =
         // open stream from file
         File.ReadAllText (Path.GetFullPath(inputFile))
         |> compileFromStr cliArgs pkgCtx logger moduleName inputFile
@@ -299,7 +303,7 @@ module Main =
     //    tyAstAndLutRes
         
 
-    let loader options logger packageContext implOrIface (fromPath: FromPath.FromPath) infile : Result<CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>, Diagnostics.Logger> =
+    let loader options logger packageContext implOrIface (fromPath: TranslationUnitPath) infile : Result<CompilationUnit.Module<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->

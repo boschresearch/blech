@@ -14,16 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace Blech.Common.Tests
+
+module SearchPathTest
 
 open NUnit.Framework
 open System.IO
-open Blech.Common
-open SearchPath // system under test
+open Blech.Common.TranslationUnitPath // system under test
+open Blech.Backend.TranslatePath // system under test
 
 [<TestFixture>]
-module SearchPathTest =
-
+type Test () =
     let replace (path: string) = path.Replace('/', Path.DirectorySeparatorChar)
 
     let path = replace ".;C:/somewhere"
@@ -34,7 +34,7 @@ module SearchPathTest =
     let fileB = Path.Combine(dirA, "b.blc")
     
     [<SetUp>]
-    let createDirAndFiles() =
+    member x.createDirAndFiles() =
         ignore <| Directory.CreateDirectory(dirA)
         let a = File.Create(fileA)
         let a_b = File.Create(fileB)
@@ -42,13 +42,13 @@ module SearchPathTest =
         a_b.Close()
 
     [<TearDown>]
-    let deleteDirAndFiles() =
+    member x.deleteDirAndFiles() =
         File.Delete fileB
         File.Delete fileA
         Directory.Delete dirA
 
     [<Test>]
-    let testFileName () =
+    member x.testFileName () =
         let dirs = List.ofArray <| path.Split ";"   
         let templates = List.map (fun dir -> mkTemplate dir ".blc" ) dirs
         
@@ -59,7 +59,7 @@ module SearchPathTest =
         Assert.AreEqual(replace "C:/somewhere/a/b.blc", fileName (replace "a/b") templates.[1])   
         
     [<Test>]   
-    let testSearchImplementation () =
+    member x.testSearchImplementation () =
 
         let getResult result =
             match result with
@@ -68,50 +68,50 @@ module SearchPathTest =
         
         // found
         let case1 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = ["a"]
-              FromPath.FromPath.file = "b" }
+            { TranslationUnitPath.package = ""
+              dirs = ["a"]
+              file = "b" }
         Assert.AreEqual(replace "./a/b.blc", searchImplementation path case1 |> getResult)
         let case2 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = []
-              FromPath.FromPath.file = "a" }
+            { TranslationUnitPath.package = ""
+              dirs = []
+              file = "a" }
         Assert.AreEqual(replace "./a.blc", searchImplementation path case2 |> getResult)
        
         // not found
         let case3 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = []
-              FromPath.FromPath.file = "c" }
+            { TranslationUnitPath.package = ""
+              dirs = []
+              file = "c" }
         Assert.AreEqual(replace "./c.blc;C:/somewhere/c.blc" , searchImplementation path case3 |> getResult )
         
     [<Test>]
-    let testFileNames() = 
+    member x.testFileNames() = 
         let case1 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = ["a"]
-              FromPath.FromPath.file = "b" }
+            { TranslationUnitPath.package = ""
+              dirs = ["a"]
+              file = "b" }
         Assert.AreEqual( replace "a/b.blh", moduleToInterfaceFile case1)
         let case2 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = []
-              FromPath.FromPath.file = "a" }
+            { TranslationUnitPath.package = ""
+              dirs = []
+              file = "a" }
         Assert.AreEqual( replace "a.blh", moduleToInterfaceFile case2)
         Assert.AreEqual( replace "a/b.c", moduleToCFile case1)
         let case3 =
-            { FromPath.FromPath.package = ""
-              FromPath.FromPath.dirs = ["blech"]
-              FromPath.FromPath.file = "a" }
+            { TranslationUnitPath.package = ""
+              dirs = ["blech"]
+              file = "a" }
         Assert.AreEqual( replace "blech/a.c", moduleToCFile case3)
         Assert.AreEqual( replace "a/b.h", moduleToHFile case1)
         Assert.AreEqual( replace "blech/a.h", moduleToHFile case3)
         
     [<Test>]
-    let testFileToModuleName() =
+    member x.testFileToModuleName() =
         
         
-        let error err : Result<FromPath.FromPath, string list> = Error err
-        let okay ok: Result<FromPath.FromPath, string list> = Ok ok
+        let error err : Result<TranslationUnitPath, string list> = Error err
+        let okay ok: Result<TranslationUnitPath, string list> = Ok ok
         
         Assert.AreEqual( okay { package = "blech"; dirs = ["dir"]; file = "file" }, getFromPath "dir/file.blc" "." "blech") 
         Assert.AreEqual( okay { package = "blech"; dirs = []; file = "file" }, getFromPath "dir/file.blc" "./dir" "blech"  )

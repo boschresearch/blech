@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TranslationUnitPath.fs" />
     <Compile Include="Arguments.fs" />
     <Compile Include="Logging.fs" />
     <Compile Include="Services.fs" />
@@ -15,8 +16,6 @@
     <Compile Include="BlechString.fs" />
     <Compile Include="Bindings.fs" />
     <Compile Include="Diagnostics.fs" />
-    <Compile Include="FromPath.fs" />
-    <Compile Include="SearchPath.fs" />
     <Compile Include="CompilationUnit.fs" />
     <Compile Include="GenericGraph.fs" />
   </ItemGroup>

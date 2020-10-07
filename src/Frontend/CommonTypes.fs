@@ -20,8 +20,12 @@
 /// with the untyped AST.)
 module Blech.Frontend.CommonTypes
 
+
 open Blech.Common
+open Blech.Common.TranslationUnitPath
+
 open Constants
+
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -44,7 +48,7 @@ type IdLabel =
 /// qualified names
 type QName = 
     {
-        moduleName: FromPath.FromPath
+        moduleName: TranslationUnitPath
         prefix: LongIdentifier // TODO: what exactly is the meaning of prefix? 
                                // Is the following invariant true:
                                // prefix is empty <=> QName is on top level <=> IsStatic, or equivalently
@@ -65,7 +69,7 @@ type QName =
         }
 
     static member CreateAuxiliary path id =
-        QName.Create FromPath.FromPath.Empty path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
+        QName.Create TranslationUnitPath.Empty path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
 
     /// Creates a QName for program names: tick, init, printState
     static member CreateProgramName moduleName id =

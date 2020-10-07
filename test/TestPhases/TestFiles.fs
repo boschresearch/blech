@@ -17,8 +17,11 @@
 module TestFiles
 
 open System.IO
+
 open NUnit.Framework
+
 open Blech.Common
+open Blech.Common.TranslationUnitPath
 
 type Phase =
     | Parser 
@@ -43,12 +46,12 @@ type Validity =
 
 let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let where = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory, validity.Directory)
-    let testCaseNameFrom (moduleName: FromPath.FromPath) =
+    let testCaseNameFrom moduleName =
         sprintf "%s/%s: %s" phase.Directory validity.Directory (moduleName.ToString())
     let mkTestCaseData file = 
-        let modName: FromPath.FromPath = 
+        let modName = 
             printfn "file name: '%s'" file
-            match SearchPath.getFromPath file where "blech" with
+            match getFromPath file where "blech" with
             | Ok fp -> fp
             | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
         printfn "module name: '%s'" <| modName.ToString()
@@ -58,7 +61,7 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let files = 
         Directory.EnumerateFiles where
     
-    Seq.filter (fun f -> SearchPath.isImplementation f || SearchPath.isInterface f) files
+    Seq.filter (fun f -> isImplementation f || isInterface f) files
     |> Seq.map mkTestCaseData
 
 /// Returns a sequence of TestCaseData formed from pairs: filepath * modulename, for invalid source files 

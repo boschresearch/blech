@@ -19,6 +19,7 @@ module Blech.Frontend.ParsePkg
 open System
     
 open Blech.Common
+open Blech.Common.TranslationUnitPath
 
 open SyntaxUtils
 open SyntaxUtils.ParserUtils
@@ -232,7 +233,7 @@ let private myBlechParser lexer lexbuf : AST.CompilationUnit =
 
 /// Parses a Blech module from a file given by a string
 /// The result is an untyped blech package
-let parseModuleFromStr diagnosticLogger (implOrIface: CompilationUnit.ImplOrIface) (moduleName: FromPath.FromPath) fileName (contents: string) =
+let parseModuleFromStr diagnosticLogger (implOrIface: CompilationUnit.ImplOrIface) (moduleName: TranslationUnitPath) fileName (contents: string) =
     Logging.log8 "ParsePkg.parseModule" 
     <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
                                                    (moduleName.ToString()) 

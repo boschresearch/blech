@@ -257,12 +257,15 @@ module SyntaxErrors =
     
 
 module ParserUtils = 
-    open System.Numerics
+    
     open System
-
+    open System.Numerics
 
     open Blech.Common
+    open Blech.Common.TranslationUnitPath
+
     open SyntaxErrors
+
 
     type ParserErrorInfo = 
         {
@@ -283,7 +286,7 @@ module ParserUtils =
         
     type ParserContext = 
         {
-            mutable currentModuleName: FromPath.FromPath
+            mutable currentModuleName: TranslationUnitPath
             mutable currentLoadWhat: CompilationUnit.ImplOrIface
             //mutable packageHead: PackageHead
             mutable errorTokenAccepted: bool
@@ -292,7 +295,7 @@ module ParserUtils =
         }
 
         static member Default = {
-                currentModuleName = FromPath.FromPath.Empty
+                currentModuleName = TranslationUnitPath.Empty
                 currentLoadWhat = CompilationUnit.Implementation
                 // packageHead = PackageHead.Default 
                 errorTokenAccepted = false

@@ -17,6 +17,7 @@
 module Blech.Backend.CodeGeneration
 
 open Blech.Common
+open Blech.Common.TranslationUnitPath
 open Blech.Common.PPrint.PPrint
 
 open Blech.Frontend
@@ -116,13 +117,13 @@ let includeQuotedHfile hfile =
 let blechHeader = includeQuotedHfile "blech.h"
 
 let generateSelfHeader =
-    SearchPath.moduleToInclude >> includeQuotedHfile
+    TranslatePath.moduleToInclude >> includeQuotedHfile
         
 let generateCProgramHeader =
-    SearchPath.moduleToCFileInclude >> includeQuotedHfile
+    TranslatePath.moduleToCFileInclude >> includeQuotedHfile
 
 let generateIncludeGuards moduleName =
-    let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
+    let guard = txt <| TranslatePath.moduleToIncludeGuard moduleName
     let includeGuardBegin = 
         txt "#ifndef" <+> guard
         <.> txt "#define" <+> guard
@@ -132,11 +133,11 @@ let generateIncludeGuards moduleName =
 
 let generateSubmoduleIncludes otherMods =
     otherMods
-    |> List.map (fun otherMod -> SearchPath.moduleToInclude otherMod.name |> includeQuotedHfile)
+    |> List.map (fun otherMod -> TranslatePath.moduleToInclude otherMod.name |> includeQuotedHfile)
     |> dpBlock
 
 /// Emit C code for module as Doc
-let private cpModuleCode ctx (moduleName: FromPath.FromPath) 
+let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
                              (pragmas: Attribute.MemberPragma list) 
                              (compilations: Compilation list) 
                              entryPointOpt =
@@ -287,7 +288,7 @@ let private cpModuleCode ctx (moduleName: FromPath.FromPath)
 // end of cpModuleCode
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: FromPath.FromPath) otherMods (compilations: Compilation list) entryPointOpt =
+let private cpModuleHeader ctx (moduleName: TranslationUnitPath) otherMods (compilations: Compilation list) entryPointOpt =
     // C header
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
@@ -401,7 +402,7 @@ let private cpModuleHeader ctx (moduleName: FromPath.FromPath) otherMods (compil
 
 /// Emit C code for main app as Doc
 /// compilations is required to find the entry point name
-let private cpApp ctx (moduleName: FromPath.FromPath) (compilations: Compilation list) entryPointName =
+let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilation list) entryPointName =
     let includeCProgramFile = generateCProgramHeader moduleName
         
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPointName)

@@ -18,6 +18,7 @@ module Blech.Frontend.AST
 
 open Blech.Common
 open Blech.Common.Range
+open Blech.Common.TranslationUnitPath
 
 open Constants
 open CommonTypes
@@ -429,10 +430,10 @@ and ModulePath =
     
     member mp.Range = mp.range
 
-    member mp.FromPath : FromPath.FromPath = 
+    member mp.FromPath : TranslationUnitPath = 
         let moduleName = List.ofArray <| mp.path.Split [| '/' |]
         try 
-            { FromPath.FromPath.package = List.head moduleName
+            { TranslationUnitPath.package = List.head moduleName
               dirs = moduleName.[1 .. moduleName.Length-2]
               file = List.last moduleName}
         with
@@ -535,7 +536,7 @@ and ModuleSpec =
 and CompilationUnit = 
     {
         range: range
-        moduleName: FromPath.FromPath
+        moduleName: TranslationUnitPath
         loadWhat: CompilationUnit.ImplOrIface
         imports: Member list
         spec: ModuleSpec option

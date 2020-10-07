@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TranslatePath.fs" />
     <Compile Include="Normalisation.fs" />
     <Compile Include="CodeGenContext.fs" />
     <Compile Include="CPdataAccess2.fs" />

@@ -28,6 +28,7 @@ open System.Collections.Generic
 
 open Blech.Common.PPrint
 open Blech.Common.Range
+open Blech.Common.TranslationUnitPath
 
 open Constants
 open CommonTypes
@@ -419,7 +420,7 @@ and FunctionPrototype =
 /// A Blech module corresponds to a file    
 and BlechModule =
     {
-        name: Blech.Common.FromPath.FromPath
+        name: TranslationUnitPath
         types: Types list
         funPrototypes: FunctionPrototype list
         funacts: SubProgramDecl list
