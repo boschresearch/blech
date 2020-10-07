@@ -105,9 +105,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx     
 
     // TODO: instead of moduleName pass given local name and the result from previous name check (env.path), fg 01.10.20
-    let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
-        let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
-        {ctx with env = env}
+    //let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
+    //    let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
+    //    {ctx with env = env}
         
 
     let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
@@ -550,7 +550,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let checkPackage packageContext (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
-        printfn "path at the start\n%A" ctx.env.path
+        //printfn "path at the start\n%A" ctx.env.path
         List.fold checkMember ctx p.members
 
 
@@ -560,7 +560,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            printfn "end of checkDeclardness %A" ncc.env.lookupTable
+            //printfn "end of checkDeclardness %A" ncc.env.lookupTable
             Ok (ast, ncc.env)
     
 

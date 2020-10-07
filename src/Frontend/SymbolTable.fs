@@ -203,7 +203,7 @@ module SymbolTable =
     /// Thus at the end, path is a singleton element list with a tree of scopes given by the innerscopes attributes
     type Environment = 
         {
-            moduleName: FromPath.ModuleName
+            moduleName: FromPath.FromPath
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
         }
@@ -270,7 +270,7 @@ module SymbolTable =
     module Environment =
 
         let empty =
-            { moduleName = []
+            { moduleName = FromPath.FromPath.Empty
               path = [Scope.createGlobalScope ()]
               lookupTable = LookupTable.Empty }
          

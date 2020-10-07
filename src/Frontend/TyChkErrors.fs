@@ -409,7 +409,7 @@ type TyCheckError =
             | MissingNamedArgument (p, key) -> p, sprintf "Missing [... %s = \"<file>\" ...] annotation argument." key
             | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation."
             | MultipleEntryPoints (second = p) -> p, "'@[EntryPoint]' activity already defined."
-            | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
+            | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (pack.moduleName.ToString())
             | BindingIndexOutOfBounds (p, indices) -> p, sprintf "Parameter index: %s, out-of bounds." <| String.concat ", " indices
             
             // pragmas

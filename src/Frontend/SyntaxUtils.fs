@@ -283,7 +283,7 @@ module ParserUtils =
         
     type ParserContext = 
         {
-            mutable currentModuleName: LongIdentifier
+            mutable currentModuleName: FromPath.FromPath
             mutable currentLoadWhat: CompilationUnit.ImplOrIface
             //mutable packageHead: PackageHead
             mutable errorTokenAccepted: bool
@@ -292,7 +292,7 @@ module ParserUtils =
         }
 
         static member Default = {
-                currentModuleName = []
+                currentModuleName = FromPath.FromPath.Empty
                 currentLoadWhat = CompilationUnit.Implementation
                 // packageHead = PackageHead.Default 
                 errorTokenAccepted = false
@@ -490,7 +490,7 @@ module ParserUtils =
 
     /// Checks the correct module in the package head
     let checkModuleName (name: AST.StaticNamedPath) =
-        if not (name.identifiers = ParserContext.getModuleName ()) then
+        if not (name.identifiers = ParserContext.getModuleName().AsList) then
             reportError <| InconsistentModuleName name 
       
     /// Checks the 

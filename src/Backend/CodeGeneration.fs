@@ -136,7 +136,7 @@ let generateSubmoduleIncludes otherMods =
     |> dpBlock
 
 /// Emit C code for module as Doc
-let private cpModuleCode ctx (moduleName: FromPath.ModuleName) 
+let private cpModuleCode ctx (moduleName: FromPath.FromPath) 
                              (pragmas: Attribute.MemberPragma list) 
                              (compilations: Compilation list) 
                              entryPointOpt =
@@ -287,7 +287,7 @@ let private cpModuleCode ctx (moduleName: FromPath.ModuleName)
 // end of cpModuleCode
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) otherMods (compilations: Compilation list) entryPointOpt =
+let private cpModuleHeader ctx (moduleName: FromPath.FromPath) otherMods (compilations: Compilation list) entryPointOpt =
     // C header
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
@@ -401,7 +401,7 @@ let private cpModuleHeader ctx (moduleName: FromPath.ModuleName) otherMods (comp
 
 /// Emit C code for main app as Doc
 /// compilations is required to find the entry point name
-let private cpApp ctx (moduleName: FromPath.ModuleName) (compilations: Compilation list) entryPointName =
+let private cpApp ctx (moduleName: FromPath.FromPath) (compilations: Compilation list) entryPointName =
     let includeCProgramFile = generateCProgramHeader moduleName
         
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPointName)

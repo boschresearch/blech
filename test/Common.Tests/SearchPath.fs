@@ -67,20 +67,44 @@ module SearchPathTest =
             | Error err ->  String.concat ";" err
         
         // found
-        Assert.AreEqual(replace "./a/b.blc", searchImplementation path ["a";"b"] |> getResult)
-        Assert.AreEqual(replace "./a.blc", searchImplementation path ["a"] |> getResult)
+        let case1 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = ["a"]
+              FromPath.FromPath.file = "b" }
+        Assert.AreEqual(replace "./a/b.blc", searchImplementation path case1 |> getResult)
+        let case2 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = []
+              FromPath.FromPath.file = "a" }
+        Assert.AreEqual(replace "./a.blc", searchImplementation path case2 |> getResult)
        
         // not found
-        Assert.AreEqual(replace "./c.blc;C:/somewhere/c.blc" , searchImplementation path ["c"] |> getResult )
+        let case3 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = []
+              FromPath.FromPath.file = "c" }
+        Assert.AreEqual(replace "./c.blc;C:/somewhere/c.blc" , searchImplementation path case3 |> getResult )
         
     [<Test>]
     let testFileNames() = 
-        Assert.AreEqual( replace "a/b.blh", moduleToInterfaceFile ["a";"b"])
-        Assert.AreEqual( replace "a.blh", moduleToInterfaceFile ["a"])
-        Assert.AreEqual( replace "a/b.c", moduleToCFile ["a";"b"])
-        Assert.AreEqual( replace "blech/a.c", moduleToCFile ["blech";"a"])
-        Assert.AreEqual( replace "a/b.h", moduleToHFile ["a";"b"])
-        Assert.AreEqual( replace "blech/a.h", moduleToHFile ["blech";"a"])
+        let case1 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = ["a"]
+              FromPath.FromPath.file = "b" }
+        Assert.AreEqual( replace "a/b.blh", moduleToInterfaceFile case1)
+        let case2 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = []
+              FromPath.FromPath.file = "a" }
+        Assert.AreEqual( replace "a.blh", moduleToInterfaceFile case2)
+        Assert.AreEqual( replace "a/b.c", moduleToCFile case1)
+        let case3 =
+            { FromPath.FromPath.package = ""
+              FromPath.FromPath.dirs = ["blech"]
+              FromPath.FromPath.file = "a" }
+        Assert.AreEqual( replace "blech/a.c", moduleToCFile case3)
+        Assert.AreEqual( replace "a/b.h", moduleToHFile case1)
+        Assert.AreEqual( replace "blech/a.h", moduleToHFile case3)
         
     [<Test>]
     let testFileToModuleName() =

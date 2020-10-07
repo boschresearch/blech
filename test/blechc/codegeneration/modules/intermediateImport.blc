@@ -1,0 +1,19 @@
+import M "./importMe"
+
+module
+
+const C: float32 = 2
+
+activity Acc () (sum: float32)
+    let foo: M.S = {a = 1, b = 2.0}
+    let bar: M.S = {a = 2, b = 1.0}
+    var x: M.S
+    cobegin
+        run M.accMultS(foo, bar)(x)
+    with
+        repeat
+            sum = x.a as! float32 + x.b
+            await true
+        end
+    end
+end

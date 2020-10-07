@@ -118,7 +118,7 @@ module Main =
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | AST.Member.Import i ->
-            CompilationUnit.require pkgCtx (FromPath.moduleNameToFromPath i.modulePath.ModuleName)
+            CompilationUnit.require pkgCtx i.modulePath.FromPath
             |> Result.map (fun cu -> i.localName, cu)
         | _ ->
             failwith "This should never happen"
@@ -129,9 +129,9 @@ module Main =
     /// TypeCheckContext and typed AST (BlechModule)
     /// or Diagnostic.Logger
     let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: FromPath.FromPath) fileName fileContents =
-        let moduleName = fromPath.ToModuleName
+        //let moduleName = fromPath.ToModuleName
         // always run lexer, parser, name resolution, type check and causality checks
-        let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
+        let astRes = runParser logger CompilationUnit.Implementation fromPath fileContents fileName
         
         // TODO: run compilation of imports here. Here you need the current from-path from the parameter list, 
         // to determine the frompath of a relative import (FromPath.makeFromPath) instead of the modulename
@@ -181,7 +181,7 @@ module Main =
         | Error foo -> Error foo
         | Ok cus ->
             let envs, otherLuts, otherMods, preTranslationContexts = List.unzip4 cus
-            let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx moduleName envs fileName)
+            let astAndSymTableRes = astRes |> Result.bind (runNameResolution logger pkgCtx fromPath envs fileName)
             let lutAndPackRes = astAndSymTableRes |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs fileName otherLuts (ast, env.lookupTable))
             let pgsRes = lutAndPackRes |> Result.bind (runCausalityCheck fileName)
             match astAndSymTableRes, lutAndPackRes, pgsRes with
@@ -228,12 +228,12 @@ module Main =
                     let isMainProgram = Option.isSome blechModule.entryPoint
                     if not isMainProgram then
                         Logging.log2 "Main" ("writing signature for " + fileName)
-                        writeSignature cliArgs.outDir moduleName lut.ncEnv ast
+                        writeSignature cliArgs.outDir fromPath lut.ncEnv ast
 
                     Logging.log2 "Main" ("writing C code for " + fileName)
-                    writeImplementation cliArgs.outDir moduleName blechModule translationContext compilations
+                    writeImplementation cliArgs.outDir fromPath blechModule translationContext compilations
 
-                    writeHeader cliArgs.outDir moduleName blechModule otherMods translationContext compilations
+                    writeHeader cliArgs.outDir fromPath blechModule otherMods translationContext compilations
 
                     // generated test app if required by cliArgs
                     possiblyWriteTestApp cliArgs blechModule translationContext compilations

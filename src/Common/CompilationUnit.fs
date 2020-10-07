@@ -24,7 +24,7 @@ module CompilationUnit =
 
     type CompilationUnitError = 
         | FileNotFound of fileName: string
-        | ModuleNotFound of moduleName: FromPath.ModuleName * triedFiles: string list
+        | ModuleNotFound of moduleName: FromPath.FromPath * triedFiles: string list
         | FileNotInSourcePath of inputFileName: string * searchDirs: string list  // TODO: rethink this error messages in the light of modules and packages fjg. 21.09.20
         | IllegalModuleFileName of moduleFileName: string * wrongIds: string list
         | InvalidFileExtension of fileName: string
@@ -38,7 +38,7 @@ module CompilationUnit =
                       message = sprintf "file '%s' not found" fileName}
                 | ModuleNotFound (moduleName = mn)->
                     { range = Range.rangeCmdArgs
-                      message = sprintf "module '%s' not found" <| SearchPath.moduleNameToString mn }
+                      message = sprintf "module '%s' not found" <| mn.ToString() }
                 | FileNotInSourcePath (inputFileName = ifn) ->
                     { range = Range.rangeCmdArgs
                       message = sprintf "input file '%s' outside source path" ifn}
@@ -83,12 +83,12 @@ module CompilationUnit =
 
     type Module<'info> = 
         {
-            moduleName: FromPath.ModuleName
+            moduleName: FromPath.FromPath
             file: string
             info: 'info
         }
         static member Make (fromPath : FromPath.FromPath) file info =
-            Ok { moduleName = fromPath.ToModuleName 
+            Ok { moduleName = fromPath
                  file = file 
                  info = info }
 
@@ -103,7 +103,7 @@ module CompilationUnit =
             logger: Diagnostics.Logger
             loader: Context<'info> -> ImplOrIface -> FromPath.FromPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
                     // package context -> LoadWhat -> from path -> file name -> Package or logged errors
-            loaded: Dictionary<FromPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>              
+            loaded: Dictionary<FromPath.FromPath, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> Package
         }
         static member Make (arguments: Arguments.BlechCOptions) logger loader =
@@ -113,7 +113,7 @@ module CompilationUnit =
               outDir = arguments.outDir
               logger = logger
               loader = loader
-              loaded = Dictionary<FromPath.ModuleName, Result<Module<'info>, Diagnostics.Logger>>() }
+              loaded = Dictionary<FromPath.FromPath, Result<Module<'info>, Diagnostics.Logger>>() }
 
     
     /// loads a program or or a module for compilation
@@ -158,11 +158,8 @@ module CompilationUnit =
 
     /// requires an imported module for compilation
     let require (ctx: Context<'info>) (fromPath: FromPath.FromPath): Result<Module<'info>, Diagnostics.Logger> =
-        
-        let moduleName = fromPath.ToModuleName
-
         let tryBlechPath triedBlcs =
-            let sigFile = SearchPath.searchInterface ctx.blechPath moduleName 
+            let sigFile = SearchPath.searchInterface ctx.blechPath fromPath 
             match sigFile with
             | Ok blh ->
                 ctx.loader ctx Interface fromPath blh
@@ -171,19 +168,19 @@ module CompilationUnit =
                 Diagnostics.Logger.logFatalError 
                 <| lgr
                 <| Diagnostics.Phase.Compiling
-                <| ModuleNotFound (moduleName, triedBlcs @ triedBlhs) 
+                <| ModuleNotFound (fromPath, triedBlcs @ triedBlhs) 
                 Error lgr
 
-        if ctx.loaded.ContainsKey moduleName then
-            ctx.loaded.[moduleName]
+        if ctx.loaded.ContainsKey fromPath then
+            ctx.loaded.[fromPath]
         else
-            let blcFile = SearchPath.searchImplementation ctx.sourcePath moduleName
-            let blhFile = SearchPath.searchInterface ctx.outDir moduleName
+            let blcFile = SearchPath.searchImplementation ctx.sourcePath fromPath
+            let blhFile = SearchPath.searchInterface ctx.outDir fromPath
             match blhFile, blcFile with
             | Ok blh, Ok blc ->
                 // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
                 let compiled = ctx.loader ctx Implementation fromPath blc
-                ctx.loaded.Add (moduleName, compiled)
+                ctx.loaded.Add (fromPath, compiled)
                 compiled
                 // TODO: here we need to call the complete compilation procedure
                 

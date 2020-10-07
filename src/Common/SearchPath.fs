@@ -20,7 +20,7 @@ open System
 open System.IO
 open System.Text
     
-let dot = '.'     // module name separator
+
 let slash = '/'   // directory separator in includes and frompaths
 let underscore = '_' //directory separator in include guards
 
@@ -42,10 +42,6 @@ let blech = "blech"  // reserved name and keyword for code generation purposes
 let searchPath2Dirs (searchPath: string): string list =
     List.ofArray <| searchPath.Split dirSep    
 
-
-/// Creates a module name from a list of ids
-let moduleNameToString ids =
-    String.concat (string dot) ids
 
 /// Replaces '.' in a module name by another separator.
 /// For example a.b.c -> a/b/c if seperator = '/'
@@ -101,23 +97,23 @@ let searchFile partialFileName (searchPath: String) extension =
         Error filesToTry
 
 
-let search searchPath name extension =
+let private search searchPath (name: FromPath.FromPath) extension =
     //let partialFileName = replaceSeparator dot Path.DirectorySeparatorChar name 
-    let partialFileName = String.concat (string Path.DirectorySeparatorChar) name
+    let partialFileName = String.concat (string Path.DirectorySeparatorChar) name.AsList
     searchFile partialFileName searchPath extension 
 
 /// Returns the resulting name of the first implementation file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open    
-let searchImplementation searchPath (name: FromPath.ModuleName) = 
+let searchImplementation searchPath name = 
     search searchPath name implementationFileExtension
 
 /// Returns the resulting name of the first interface file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open   
-let searchInterface searchPath (name: FromPath.ModuleName) = 
+let searchInterface searchPath name = 
     search searchPath name interfaceFileExtension
       
-let private separateAndExtend sep (moduleName: FromPath.ModuleName) extension =
-    sprintf "%s%s" (String.concat sep moduleName) extension
+let private separateAndExtend sep (moduleName: FromPath.FromPath) extension =
+    sprintf "%s%s" (String.concat sep moduleName.AsList) extension
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
 let moduleToHFile moduleName =
@@ -140,8 +136,8 @@ let moduleToCFile moduleName =
 
 
 /// creates a suituable interface file name from a module name, has to be combined with the output directory
-let moduleToInterfaceFile moduleName = 
-    sprintf "%s%s" (String.concat (string Path.DirectorySeparatorChar) moduleName) interfaceFileExtension 
+let moduleToInterfaceFile (moduleName: FromPath.FromPath) = 
+    sprintf "%s%s" (String.concat (string Path.DirectorySeparatorChar) moduleName.AsList) interfaceFileExtension 
     
 
 /// creates a suitable C implementation file name from an app name, has to be combined with the output directory

@@ -429,8 +429,15 @@ and ModulePath =
     
     member mp.Range = mp.range
 
-    member mp.ModuleName : FromPath.ModuleName = 
-        List.ofArray <| mp.path.Split [| '/' |]  // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
+    member mp.FromPath : FromPath.FromPath = 
+        let moduleName = List.ofArray <| mp.path.Split [| '/' |]
+        try 
+            { FromPath.FromPath.package = List.head moduleName
+              dirs = moduleName.[1 .. moduleName.Length-2]
+              file = List.last moduleName}
+        with
+        | _ -> failwith "this should never happen"
+        // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
@@ -528,7 +535,7 @@ and ModuleSpec =
 and CompilationUnit = 
     {
         range: range
-        moduleName: FromPath.ModuleName
+        moduleName: FromPath.FromPath
         loadWhat: CompilationUnit.ImplOrIface
         imports: Member list
         spec: ModuleSpec option

@@ -419,7 +419,7 @@ and FunctionPrototype =
 /// A Blech module corresponds to a file    
 and BlechModule =
     {
-        name: LongIdentifier
+        name: Blech.Common.FromPath.FromPath
         types: Types list
         funPrototypes: FunctionPrototype list
         funacts: SubProgramDecl list

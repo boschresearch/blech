@@ -55,8 +55,10 @@ module FromPath =
     let pathRegex = 
         Regex <| sprintf "^(%s|%s|%s|%s)?(%s)*(%s)$" 
                          package rootDir upDirs hereDir directory moduleFile 
+
+    let dot = '.'     // module name separator
     
-    // Move this to Common.Tests
+    // TODO: Move this to Common.Tests, fjg 2020
     let test s =
         let m = pathRegex.Match s 
         let ns : string[] = pathRegex.GetGroupNames()
@@ -72,7 +74,6 @@ module FromPath =
         not (ReservedPkg.Equals name) && isId name
 
     
-    type ModuleName = string list
     type PackageName = string
 
     type FromPath = 
@@ -81,24 +82,20 @@ module FromPath =
             dirs: string list
             file: string 
         } 
-        member fp.ToModuleName : ModuleName = 
-            fp.package :: fp.dirs @ [fp.file]
+        static member Empty = { package = ""; dirs = []; file = "" }
+        override this.ToString () =
+            this.AsList |> String.concat (string dot)
+        member this.AsList =
+            this.package :: this.dirs @ [this.file]
         member fp.ToPackageName : PackageName =
             fp.package
-
-    // this is preliminary and just to enable recursion over imports in namechecking. TODO: Remove this, fjg. 23.09.20            
-    let moduleNameToFromPath moduleName = 
-        try 
-            { package = List.head moduleName
-              dirs = moduleName.[1 .. moduleName.Length-2]
-              file = List.last moduleName}
-        with
-        | _ -> failwith "this should never happen"
 
     // dead code
     //let isValid path = 
     //    pathRegex.IsMatch path
 
+    /// Given the current path of the translation unit and an import path
+    /// construct the path of the imported translation unit
     let makeFromPath (current: FromPath) path : Result<FromPath, string list> = 
         let m = pathRegex.Match path
         assert m.Success // assert that fromPath is valid
@@ -121,7 +118,7 @@ module FromPath =
                 Ok { package = current.package
                      dirs = List.take (current.dirs.Length - ups.Count) current.dirs @ dirs
                      file = file }
-            else // to many up steps from current directory
+            else // too many up steps from current directory
                 Error [ for up in ups do yield up.Value ]
         elif isHere then // relative in-package import from current directory  with ./
             Ok { package = current.package 

@@ -1,0 +1,15 @@
+import I "./intermediateImport"
+
+@[EntryPoint]
+activity Main () ()
+    var mainvar: float32
+    var mainvar2: float32
+    cobegin
+        run I.Acc()(mainvar)
+    with
+        repeat
+            mainvar2 = I.C * mainvar
+            await true
+        end
+    end
+end

@@ -43,15 +43,15 @@ type Validity =
 
 let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let where = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory, validity.Directory)
-    let testCaseNameFrom moduleName =
-        sprintf "%s/%s: %s" phase.Directory validity.Directory (SearchPath.moduleNameToString moduleName)
+    let testCaseNameFrom (moduleName: FromPath.FromPath) =
+        sprintf "%s/%s: %s" phase.Directory validity.Directory (moduleName.ToString())
     let mkTestCaseData file = 
-        let modName = 
+        let modName: FromPath.FromPath = 
             printfn "file name: '%s'" file
             match SearchPath.getFromPath file where "blech" with
-            | Ok fp -> fp.ToModuleName
-            | Error wrongIds -> wrongIds //failwith (sprintf "illegal filename '%A'" wrongIds)
-        printfn "module name: '%s'" <| SearchPath.moduleNameToString modName
+            | Ok fp -> fp
+            | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
+        printfn "module name: '%s'" <| modName.ToString()
         let testName = testCaseNameFrom modName
         let loadWhat = Option.get (CompilationUnit.loadWhat file) 
         TestCaseData(loadWhat, modName, file).SetName(testName)    
