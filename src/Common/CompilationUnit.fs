@@ -118,24 +118,21 @@ module CompilationUnit =
 
     
     /// loads a program or or a module for compilation
+    /// Given a context with package information and a filename
+    /// try to determine a TranslationUnitName for it and load it
     let load (ctx: Context<'info>) (fileName: string) =
-          
         let lgr = ctx.logger
         let optLw = loadWhat fileName
         
-        if Option.isNone optLw then
-            Diagnostics.Logger.logFatalError 
-            <| lgr
-            <| Diagnostics.Phase.Compiling
-            <| InvalidFileExtension fileName 
-            Error lgr
-        elif not (canOpen fileName) then
+        // file exists and is readable?
+        if not (canOpen fileName) then
             Diagnostics.Logger.logFatalError 
             <| lgr
             <| Diagnostics.Phase.Compiling
             <| FileNotFound fileName 
             Error lgr
         else
+            // file belongs to the source directory?
             match tryFindSourceDir fileName ctx.sourcePath with
             | None ->
                 Diagnostics.Logger.logFatalError 
@@ -143,51 +140,59 @@ module CompilationUnit =
                 <| Diagnostics.Phase.Compiling
                 <| FileNotInSourcePath (fileName, searchPath2Dirs ctx.sourcePath)
                 Error lgr
-            | Some srcDir -> 
-                let loadWhat = Option.get optLw 
-                match getFromPath fileName srcDir ctx.package  with
-                | Error wrongIds ->
+            | Some srcDir ->
+                // file is either .blc or .blh?
+                match optLw with
+                | None ->
                     Diagnostics.Logger.logFatalError 
                     <| lgr
                     <| Diagnostics.Phase.Compiling
-                    <| IllegalModuleFileName (fileName, wrongIds)
+                    <| InvalidFileExtension fileName 
                     Error lgr
-                | Ok fromPath ->
-                    // TODO: check if file is already compiled
-                    ctx.loader ctx loadWhat fromPath fileName
+                | Some loadWhat ->
+                    // file and source directory have valid names?
+                    match tryMakeTranslationUnitPath fileName srcDir ctx.package with
+                    | Error wrongIds ->
+                        Diagnostics.Logger.logFatalError 
+                        <| lgr
+                        <| Diagnostics.Phase.Compiling
+                        <| IllegalModuleFileName (fileName, wrongIds)
+                        Error lgr
+                    | Ok translationUnitPath ->
+                        // a valid TranslationUnitPath has been constructed
+                        // now load it
+                        // TODO: check if file is already compiled
+                        ctx.loader ctx loadWhat translationUnitPath fileName
 
 
     /// requires an imported module for compilation
-    let require (ctx: Context<'info>) (fromPath: TranslationUnitPath): Result<Module<'info>, Diagnostics.Logger> =
-        let tryBlechPath triedBlcs =
-            let sigFile = searchInterface ctx.blechPath fromPath 
-            match sigFile with
-            | Ok blh ->
-                ctx.loader ctx Interface fromPath blh
-            | Error triedBlhs ->
-                let lgr = ctx.logger
-                Diagnostics.Logger.logFatalError 
-                <| lgr
-                <| Diagnostics.Phase.Compiling
-                <| ModuleNotFound (fromPath, triedBlcs @ triedBlhs) 
-                Error lgr
-
-        if ctx.loaded.ContainsKey fromPath then
-            ctx.loaded.[fromPath]
+    /// Given a context (including loaded translation units) and the 
+    /// TranslationUnitPath to a translation unit to be loaded
+    /// load the unit and update the context
+    let require (ctx: Context<'info>) (requiredPath: TranslationUnitPath): Result<Module<'info>, Diagnostics.Logger> =
+        if ctx.loaded.ContainsKey requiredPath then
+            ctx.loaded.[requiredPath]
         else
-            let blcFile = searchImplementation ctx.sourcePath fromPath
-            let blhFile = searchInterface ctx.outDir fromPath
+            let blcFile = searchImplementation ctx.sourcePath requiredPath
+            let blhFile = searchInterface ctx.outDir requiredPath
             match blhFile, blcFile with
             | Ok blh, Ok blc ->
                 // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
-                let compiled = ctx.loader ctx Implementation fromPath blc
-                ctx.loaded.Add (fromPath, compiled)
+                let compiled = ctx.loader ctx Implementation requiredPath blc
+                ctx.loaded.Add (requiredPath, compiled)
                 compiled
-                // TODO: here we need to call the complete compilation procedure
-                
             | Error _, Ok blc ->
-                ctx.loader ctx Implementation fromPath blc
-            
+                ctx.loader ctx Implementation requiredPath blc
             | _ , Error triedBlcs ->
-                tryBlechPath triedBlcs
+                let sigFile = searchInterface ctx.blechPath requiredPath 
+                match sigFile with
+                | Ok blh ->
+                    ctx.loader ctx Interface requiredPath blh
+                | Error triedBlhs ->
+                    let lgr = ctx.logger
+                    Diagnostics.Logger.logFatalError 
+                    <| lgr
+                    <| Diagnostics.Phase.Compiling
+                    <| ModuleNotFound (requiredPath, triedBlcs @ triedBlhs) 
+                    Error lgr
             

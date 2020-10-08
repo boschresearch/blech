@@ -118,12 +118,17 @@ module Main =
             ()
 
 
-    let private checkImport (packageContext: CompilationUnit.Context<'info>) (import: AST.Member) = 
+    let private checkImport (packageContext: CompilationUnit.Context<'info>) currentPath (import: AST.Member) = 
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | AST.Member.Import i ->
-            CompilationUnit.require pkgCtx i.modulePath.FromPath
-            |> Result.map (fun cu -> i.localName, cu)
+            makeFromPath currentPath i.modulePath.path
+            |> function
+                | Ok tup ->
+                    CompilationUnit.require pkgCtx tup
+                    |> Result.map (fun cu -> i.localName, cu)
+                | Error strlist ->
+                    failwithf "makeFromPath failed:\n%A" strlist
         | _ ->
             failwith "This should never happen"
     
@@ -145,7 +150,7 @@ module Main =
         let importedModules = 
             imports 
             |> function
-                | Ok imports -> imports |> (List.map (checkImport pkgCtx))
+                | Ok imports -> imports |> (List.map (checkImport pkgCtx fromPath))
                 | Error lgr -> [Error lgr]
 
         let contractCompUnits cuLst =

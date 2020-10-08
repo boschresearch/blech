@@ -51,44 +51,71 @@ let blech = "blech"  // reserved name and keyword for code generation purposes
 /// Local Submodule ===========================================================
 [<RequireQualifiedAccess>]
 module PathRegex =
-    open System.Text.RegularExpressions
+    open FParsec
 
     // Names for capturing groups
-    [<Literal>]
-    let Pkg = "pkg"
-    [<Literal>]
-    let Root = "root"
-    [<Literal>]
-    let Up = "up"
-    [<Literal>]
-    let Here = "here"
-    [<Literal>]
-    let Dir = "dir"
-    [<Literal>]
-    let File = "file"
-
-    [<Literal>]
-    let ReservedPkg = "blech"  // reserved name for unnamed packages
-    [<Literal>]
-    let Id = "^[_a-zA-Z0-9]+$"  // can be used as part of a C identifier for code generation
-
-    // relevant capturing groups are named: (?<name>pattern)
-    let package = sprintf "bl:(?<%s>%s)/" Pkg Id
-    let rootDir = sprintf "(?<%s>/)" Root
-    let upDirs = sprintf "(?<%s>\\.\\./)+" Up
-    let hereDir = sprintf "(?<%s>\\./)" Here
-    let directory = sprintf "(?<%s>%s)/" Dir Id
-    let moduleFile = sprintf "(?<%s>%s)" File Id
+    type Navigation =
+        | Up of int
+        | Pack of string
+        | Here
+        | Root
     
+    // `identifier` taken from https://www.quanttec.com/fparsec/tutorial.html#parsing-string-data
+    let private identifier =
+        let isIdentifierFirstChar c = isLetter c || c = '_'
+        let isIdentifierChar c = isLetter c || isDigit c || c = '_'
+    
+        many1Satisfy2L isIdentifierFirstChar isIdentifierChar "Identifier must start with a letter or underscore."
+        .>> spaces // skips trailing whitespace
+    
+    let private slash = pstring "/"
+    
+    let private thisDir =
+        pstring "./" >>% Here
+    
+    let private parentDir =
+        pstring "../" >>% ()
+    
+    let private dirUp =
+        many1 parentDir 
+        |>> (List.length >> Up)
+    
+    let private package =
+        pstring "bl:" >>. identifier .>> slash
+        |>> Pack
+    
+    let private root =
+        slash
+        >>% Root
+    
+    let private navigationPrefix =
+        choice [package; root; dirUp; thisDir]
+        |> opt
+        |>> (function Some x -> x | None -> Here) // this makes ./ optional
+    
+    let private directories =
+        identifier .>>? slash
+        |> many
+    
+    let private path =
+        directories .>>. identifier
+
     // import paths have the following form
     // bl:package/a/b/file  - external package import
     // /a/b/file            - absolute in-package import with '/' under package dir
     // b/file               - relative in-package import from current directory
     // ./b/file             - relative in-package import with ./ indicating current directory
     // ../../b/file         - relative in-package import with ../ up from current directory
-    let pathRegex = 
-        Regex <| sprintf "^(%s|%s|%s|%s)?(%s)*(%s)$" 
-                         package rootDir upDirs hereDir directory moduleFile 
+    let parseImportPath input =
+        match run (navigationPrefix .>>. path .>> eof) input with
+        | ParserResult.Success (res,_,_) -> res
+        | ParserResult.Failure _ -> failwith "invalid import path"
+
+    open System.Text.RegularExpressions
+    [<Literal>]
+    let ReservedPkg = "blech"  // reserved name for unnamed packages
+    [<Literal>]
+    let Id = "^[_a-zA-Z0-9]+$"  // can be used as part of a C identifier for code generation
 
     /// Checks if a directory or file name - without extension - can be used as a Blech identifier
     let isValidFileOrDirectoryName name =
@@ -120,34 +147,27 @@ type TranslationUnitPath =
 /// Given the current path of the translation unit and an import path
 /// construct the path of the imported translation unit
 let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string list> = 
-    let m = PathRegex.pathRegex.Match path
-    assert m.Success // assert that fromPath is valid
-    let pkg = m.Groups.[PathRegex.Pkg].Captures
-    let isRoot = m.Groups.[PathRegex.Root].Captures.Count = 1
-    let ups = m.Groups.[PathRegex.Up].Captures
-    let isHere = m.Groups.[PathRegex.Here].Captures.Count = 1
-    let dirs = [ for d in m.Groups.[PathRegex.Dir].Captures do yield d.Value ]
-    let file = m.Groups.[PathRegex.File].Captures.Item(0).Value // there is always 1 file
-    if pkg.Count = 1 then // external package import
-        Ok { package = pkg.Item(0).Value 
+    let nav, (dirs, file) = PathRegex.parseImportPath path
+    printfn "nav: %A" nav
+    printfn "dirs: %A" dirs
+    printfn "file: %A" file
+    match nav with
+    | PathRegex.Pack pkg -> // external package import
+        Ok { package = pkg
              dirs = dirs
-             file = file } 
-    elif isRoot then // absolute in-package import
+             file = file }
+    | PathRegex.Root -> // absolute in-package import
         Ok { package = current.package 
              dirs = dirs
              file = file }
-    elif ups.Count > 0 then
-        if ups.Count <= current.dirs.Length then // in-package import up from current directory
+    | PathRegex.Up levels ->
+        if levels <= current.dirs.Length then // in-package import up from current directory
             Ok { package = current.package
-                 dirs = List.take (current.dirs.Length - ups.Count) current.dirs @ dirs
+                 dirs = List.take (current.dirs.Length - levels) current.dirs @ dirs
                  file = file }
         else // too many up steps from current directory
-            Error [ for up in ups do yield up.Value ]
-    elif isHere then // relative in-package import from current directory  with ./
-        Ok { package = current.package 
-             dirs = current.dirs @ dirs
-             file = file }
-    else // relative in-package import from current directory
+            Error [] // TODO
+    | PathRegex.Here ->
         Ok { package = current.package 
              dirs = current.dirs @ dirs
              file = file }
@@ -161,7 +181,6 @@ let searchPath2Dirs (searchPath: string): string list =
 let mkTemplate dir suffix = 
     let globPattern = sprintf "%c%s" glob suffix 
     Path.Combine [|dir; globPattern|]
-
 
     
 /// Calculates a filename from a partial filename and a file path template 'template'.
@@ -233,14 +252,20 @@ let private isFileInSourceDir file srcDir =
         false
 
 
-let tryFindSourceDir file sourcePath =
-    let srcDirs = searchPath2Dirs sourcePath
-    List.tryFind (fun sd -> isFileInSourceDir file sd) srcDirs
+/// Given a file (path) and a string representation of directories
+/// such as searchPath = ".;../otherSources", return
+/// Some path - if file is in this path
+/// None - if the file cannot be found in any directory
+let tryFindSourceDir file searchPath =
+    searchPath2Dirs searchPath
+    |> List.tryFind (isFileInSourceDir file)
 
 
-// used only in tests
-// dead code?
-let getFromPath file srcDir package : Result<TranslationUnitPath, string list> =
+/// Makes a TranslationUnitPath from strings
+/// representing the filename, source path and the current package name
+/// The result is an Error if the path elements or filename are invalid identifiers
+/// such as "blech" or contain non-alphanumerical characters.
+let tryMakeTranslationUnitPath file srcDir package : Result<TranslationUnitPath, string list> =
     assert isFileInSourceDir file srcDir
     let ff = Path.GetFullPath file
     let fsd = Path.GetFullPath srcDir
@@ -263,9 +288,11 @@ let getFromPath file srcDir package : Result<TranslationUnitPath, string list> =
         Error wrongIds
 
 
+/// Filename ends in .blc
 let isImplementation (file: string) = 
     (Path.GetExtension file) = implementationFileExtension
 
 
+/// Filename ends in .blh
 let isInterface (file: string) =
     (Path.GetExtension file) = interfaceFileExtension

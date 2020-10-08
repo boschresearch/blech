@@ -51,7 +51,7 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let mkTestCaseData file = 
         let modName = 
             printfn "file name: '%s'" file
-            match getFromPath file where "blech" with
+            match tryMakeTranslationUnitPath file where "blech" with
             | Ok fp -> fp
             | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
         printfn "module name: '%s'" <| modName.ToString()

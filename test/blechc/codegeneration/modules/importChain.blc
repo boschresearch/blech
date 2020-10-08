@@ -1,4 +1,4 @@
-import I "./intermediateImport"
+import I "intermediateImport"
 
 @[EntryPoint]
 activity Main () ()

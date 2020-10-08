@@ -113,13 +113,13 @@ type Test () =
         let error err : Result<TranslationUnitPath, string list> = Error err
         let okay ok: Result<TranslationUnitPath, string list> = Ok ok
         
-        Assert.AreEqual( okay { package = "blech"; dirs = ["dir"]; file = "file" }, getFromPath "dir/file.blc" "." "blech") 
-        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "file" }, getFromPath "dir/file.blc" "./dir" "blech"  )
+        Assert.AreEqual( okay { package = "blech"; dirs = ["dir"]; file = "file" }, tryMakeTranslationUnitPath "dir/file.blc" "." "blech") 
+        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "file" }, tryMakeTranslationUnitPath "dir/file.blc" "./dir" "blech"  )
 
         // Trailing '/' in searchpath
         let msg = "trailing '/'"
-        Assert.AreEqual( okay { package = "blech"; dirs = ["dir"]; file = "file" }, getFromPath "./dir/file.blc" "./" "blech", msg )
-        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "file" }, getFromPath "./dir/file.blc" "./dir/" "blech", msg )
+        Assert.AreEqual( okay { package = "blech"; dirs = ["dir"]; file = "file" }, tryMakeTranslationUnitPath "./dir/file.blc" "./" "blech", msg )
+        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "file" }, tryMakeTranslationUnitPath "./dir/file.blc" "./dir/" "blech", msg )
         
         // outside of searchpath 
         // Assert.AreEqual( error [], getModuleName "a/b.blc" "../somewhere" "blech", "not in searchpath" ) 
@@ -127,17 +127,17 @@ type Test () =
         
         // ' ' NOT allowed in Blech identifiers and module path components
         let msg = "' ' in module path"
-        Assert.AreEqual( error ["my file"], getFromPath "my file.blc" "." "blech", msg )
-        Assert.AreEqual( error ["my dir"; "my file"], getFromPath "my dir/my file.blc" "." "blech" , msg )
-        Assert.AreEqual( error ["file "], getFromPath "file .blc" "." "blech", msg )
-        Assert.AreEqual( error [" dir"], getFromPath " dir/file.blc" "." "blech", msg )
+        Assert.AreEqual( error ["my file"], tryMakeTranslationUnitPath "my file.blc" "." "blech", msg )
+        Assert.AreEqual( error ["my dir"; "my file"], tryMakeTranslationUnitPath "my dir/my file.blc" "." "blech" , msg )
+        Assert.AreEqual( error ["file "], tryMakeTranslationUnitPath "file .blc" "." "blech", msg )
+        Assert.AreEqual( error [" dir"], tryMakeTranslationUnitPath " dir/file.blc" "." "blech", msg )
         
         
         // '_' allowed in Blech identifiers and module path components
-        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "my_file" }, getFromPath "my_file.blc" "." "blech" )
-        Assert.AreEqual( okay { package = "blech"; dirs = ["my_dir"]; file = "my_file" }, getFromPath "my_dir/my_file.blc" "." "blech" )
+        Assert.AreEqual( okay { package = "blech"; dirs = []; file = "my_file" }, tryMakeTranslationUnitPath "my_file.blc" "." "blech" )
+        Assert.AreEqual( okay { package = "blech"; dirs = ["my_dir"]; file = "my_file" }, tryMakeTranslationUnitPath "my_dir/my_file.blc" "." "blech" )
         
         // '-' NOT allowed in Blech identifiers and module path components
-        Assert.AreEqual( error ["my-file"], getFromPath "my-file.blc" "." "blech" )
-        Assert.AreEqual( error ["my-dir"], getFromPath "my-dir/my_file.blc" "." "blech" )
+        Assert.AreEqual( error ["my-file"], tryMakeTranslationUnitPath "my-file.blc" "." "blech" )
+        Assert.AreEqual( error ["my-dir"], tryMakeTranslationUnitPath "my-dir/my_file.blc" "." "blech" )
         
