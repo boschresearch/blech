@@ -2,7 +2,7 @@
 
 #include "blech.h"
 
-#include "blech/appWithExternFun.h"
+#include "appWithExternFun.h"
 
 static int x = 0;
 blc_int32 blc_blech_appWithExternFun_myExternFun (void){

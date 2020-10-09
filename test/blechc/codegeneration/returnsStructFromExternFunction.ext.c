@@ -2,7 +2,7 @@
 
 #include "blech.h"
 
-#include "blech/returnsStructFromExternFunction.h"
+#include "returnsStructFromExternFunction.h"
 
 void blc_blech_returnsStructFromExternFunction_rrr (const blc_bool blc_a,
                      struct blc_blech_returnsStructFromExternFunction_S *blc_retvar) {
