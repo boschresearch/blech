@@ -36,7 +36,7 @@ module CmdLine =
 
                 | NoOutDir directory ->
                     { range = Range.rangeCmdArgs
-                      message = sprintf "output directory '%s' not found" directory }
+                      message = sprintf "output directory '%s' not found and cannot be created" directory }
            
             member err.ContextInformation = []
             
@@ -64,9 +64,14 @@ module CmdLine =
             if options.inputFile = "" then 
                 Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling NoInputModule
         
-            if not (Directory.Exists options.outDir || options.isDryRun ) then
-                Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling (NoOutDir options.outDir)
-    
+            if not options.isDryRun then // we actually want to emit code
+                // check if output dir is there or can be created
+                if not (Directory.Exists options.outDir) then
+                    try
+                        do ignore <| Directory.CreateDirectory options.outDir
+                    with _ ->
+                        Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling (NoOutDir options.outDir)        
+            
             if Diagnostics.Logger.hasErrors logger then
                 Error logger
             else

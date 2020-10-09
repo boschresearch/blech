@@ -41,7 +41,7 @@ module Arguments =
     
     let defaultBlechPath = "."
     let defaultSourcePath = "." 
-    let defaultOutDir = "."
+    let defaultOutDir = "./blech" // put all generated files into blech folder bei default
     let defaultAppName = "blech"
     
     

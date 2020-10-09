@@ -46,11 +46,11 @@ let moduleToIncludeGuard moduleName =
     
 /// creates a suitable C implementation file name from a module name, has to be combined with the output directory
 let moduleToCFile moduleName = 
-    separateAndExtend (string Path.DirectorySeparatorChar)moduleName cFileExtension
+    separateAndExtend (string Path.DirectorySeparatorChar) moduleName cFileExtension
 
 /// creates a suituable interface file name from a module name, has to be combined with the output directory
 let moduleToInterfaceFile (moduleName: TranslationUnitPath) = 
-    sprintf "%s%s" (String.concat (string Path.DirectorySeparatorChar) moduleName.AsList) interfaceFileExtension 
+    separateAndExtend (string Path.DirectorySeparatorChar) moduleName interfaceFileExtension
     
 /// creates a suitable C implementation file name from an app name, has to be combined with the output directory
 let appNameToCFile appName = 

@@ -137,7 +137,10 @@ type TranslationUnitPath =
     override this.ToString () =
         this.AsList |> String.concat (string dot)
     member this.AsList =
-        this.package :: this.dirs @ [this.file]
+        let packAsLst =
+            if System.String.IsNullOrWhiteSpace this.package then []
+            else [this.package]
+        packAsLst @ this.dirs @ [this.file]
     member fp.ToPackageName : PackageName =
         fp.package
 
@@ -148,9 +151,6 @@ type TranslationUnitPath =
 /// construct the path of the imported translation unit
 let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string list> = 
     let nav, (dirs, file) = PathRegex.parseImportPath path
-    printfn "nav: %A" nav
-    printfn "dirs: %A" dirs
-    printfn "file: %A" file
     match nav with
     | PathRegex.Pack pkg -> // external package import
         Ok { package = pkg

@@ -1,4 +1,4 @@
-import I1 "importMe"
+import I1 "foo_import/foofoo"
 
 
 @[EntryPoint]
