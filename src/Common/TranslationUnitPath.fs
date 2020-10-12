@@ -118,6 +118,7 @@ module PathRegex =
     let Id = "^[_a-zA-Z0-9]+$"  // can be used as part of a C identifier for code generation
 
     /// Checks if a directory or file name - without extension - can be used as a Blech identifier
+    // also used by the language server
     let isValidFileOrDirectoryName name =
         let isId = (Regex Id).IsMatch
         not (ReservedPkg.Equals name) && isId name
@@ -151,6 +152,7 @@ type TranslationUnitPath =
 /// construct the path of the imported translation unit
 let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string list> = 
     let nav, (dirs, file) = PathRegex.parseImportPath path
+    // TODO: guess we should use tryMakeTranslationUnitPath here to ensure pkg, dirs and file are valid identifiers, fg 12.10.20
     match nav with
     | PathRegex.Pack pkg -> // external package import
         Ok { package = pkg

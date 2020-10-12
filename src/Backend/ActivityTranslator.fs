@@ -861,15 +861,19 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
     |> List.map (fun bn -> translateBlock ctx compilations curComp bn.Payload) 
     // return C source code
 
-    
-/// Generate statements which initialises program counters 
-/// used in the init function
-let internal mainPCinit ctx (entryCompilation: Compilation) =
-    let mainPc = txt "blc_blech_ctx." <^> txt entryCompilation.GetActCtx.pcs.mainpc.name.basicId
-    let initVal = initValue ctx entryCompilation.name
+
+let private pcInit ctx prefix (comp: Compilation) =
+    // TODO passing the "blc_blech_ctx. or ->" as a string seems unclean, fg 12.10.20
+    let mainPc = txt prefix <^> txt comp.GetActCtx.pcs.mainpc.name.basicId
+    let initVal = initValue ctx comp.name
     let initVal2 = 2 * initVal |> string |> txt
     mainPc <+> txt "=" <+> initVal2 <^> semi // assignPC won't work here, mind the level of indirection!
     |> cpIndent
+
+/// Generate statements which initialises program counters 
+/// used in the init function
+let internal mainPCinit ctx (entryCompilation: Compilation) =
+    pcInit ctx "blc_blech_ctx." entryCompilation
 
 
 /// Given a translation context, a list of produced compilations so far,
@@ -959,6 +963,16 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             :: rest 
             |> dpBlock
 
+    let initBody = pcInit ctx "blc_blech_ctx->" !curComp
+
+    let initActivityCode =
+        txt "void"
+        <+> cpStaticName (!curComp).name <^> txt "_init"
+        <+> cpIface ctx.tcc (!curComp)
+        <+> txt "{"
+        <.> cpIndent initBody // set main pc to 0
+        <.> txt "}"
+
     let completeActivityCode =
         txt "blc_pc_t"
         <+> cpStaticName (!curComp).name
@@ -980,9 +994,15 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     let optDoc = 
         cpOptDocComments subProgDecl.annotation.doc
 
+    let initAndStep =
+        [ initActivityCode
+          empty // insert empty line in between
+          completeActivityCode ]
+        |> vsep
+
     curComp := { !curComp
                  with 
                     signature = signature
-                    implementation = completeActivityCode
+                    implementation = initAndStep
                     doc = optDoc }
     !curComp
