@@ -959,7 +959,7 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
     let initActivityCode =
         txt "void"
         <+> cpStaticName (!curComp).name <^> txt "_init"
-        <+> cpIface ctx.tcc (!curComp)
+        <+> cpActCtxIfaceOnly (!curComp)
         <+> txt "{"
         <.> cpIndent initBody // set main pc to 0
         <.> txt "}"

@@ -128,6 +128,14 @@ let internal cpIface tcc (iface: Compilation) =
     |> List.concat
     |> dpCommaSeparatedInParens
 
+/// Print an activity interface that consists of the context only
+/// This is needed for rendering the _init functions
+let internal cpActCtxIfaceOnly (iface: Compilation) =
+    iface.actctx 
+    |> Option.toList 
+    |> List.map (fun _ -> cpActContext iface.name)
+    |> dpCommaSeparatedInParens
+
 /// Translates a Blech Function interface to a
 /// C Function interface and returns a Doc representation thereof
 let internal cpFunctionIface tcc (iface: Compilation) =
