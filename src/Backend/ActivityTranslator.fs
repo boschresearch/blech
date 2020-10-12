@@ -559,18 +559,9 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
         let callee = findCompilationByName ctx compilations whoToCall
         // add the PCs and locals of subprogram to this instance
         curComp := Compilation.addSubContext !curComp thisNodePc whoToCall callee.GetActCtx
-        let calleesPCs = (!curComp).GetActCtx.subcontexts.[thisNodePc, whoToCall].pcs.AsList
-        let prefixedPcs = calleesPCs |> List.map (fun p -> accessPC4node !curComp node <^> txt "_" <^> cpStaticName whoToCall <^> txt "." <^> txt p.name.basicId)
+                
         let initCalleesPCs =
-            match prefixedPcs with
-            | mainpc :: otherPCs ->
-                [
-                    [mainpc </> txt "=" </> (2 * initValue ctx whoToCall |> string |> txt) <^> semi]
-                    otherPCs |> List.map (fun pc -> pc </> txt "=" </> txt "0" <^> semi)
-                ]
-                |> List.concat
-                |> dpBlock
-            | _ -> failwith "A called activity needs to have at least one PC in its interface."
+            cpInitActivityCall thisNodePc callee.name
 
         let retcodeVarDoc =
             renderCName Current ctx.tcc retcodeVar

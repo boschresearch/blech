@@ -852,6 +852,17 @@ let cpFunctionCall tcc whoToCall inputs outputs =
     <| (pe.cExpr.Render <^> semi)
 
 
+let cpInitActivityCall pcName whoToCall =
+    let renderedWhoToCall = cpStaticName whoToCall
+    let renderedCalleeName = renderedWhoToCall <^> txt "_init"
+    let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedWhoToCall
+    let actCall = 
+        [subctx]
+        |> dpCommaSeparatedInParens
+        |> (<^>) renderedCalleeName
+    actCall <^> semi
+
+
 /// Create a Doc for an activity call
 /// tcc - type check context
 /// pcName - string, the calling thread's program counter name (used as field name in activity context)

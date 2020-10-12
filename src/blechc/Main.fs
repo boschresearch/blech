@@ -202,22 +202,10 @@ module Main =
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
                 let preCompilations = preTranslationContexts |> List.collect (fun ctx -> ctx.compilations)
-                let collectedPgs = 
-                    preTranslationContexts 
-                    |> List.fold (fun (graphs: System.Collections.Generic.Dictionary<Blech.Frontend.CommonTypes.QName, ProgramGraph>) ctx -> 
-                        for graph in ctx.pgs do graphs.Add(graph.Key, graph.Value); 
-                        graphs
-                        ) pgs
-                let collectedBgs =
-                    preTranslationContexts
-                    |> List.fold (fun (graphs: System.Collections.Generic.Dictionary<Blech.Frontend.CommonTypes.QName, BlockGraph.T>) ctx ->
-                        for graph in ctx.bgs do graphs.Add(graph.Key, graph.Value)
-                        graphs
-                        ) blockGraphContext
                 let translationContext: TranslationContext =
                     { tcc = lut
-                      pgs = collectedPgs
-                      bgs = collectedBgs
+                      pgs = pgs
+                      bgs = blockGraphContext 
                       compilations = preCompilations
                       cliContext = cliArgs }
                         
