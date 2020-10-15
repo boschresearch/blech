@@ -68,21 +68,21 @@ module PathRegex =
         many1Satisfy2L isIdentifierFirstChar isIdentifierChar "Identifier must start with a letter or underscore."
         .>> spaces // skips trailing whitespace
     
-    let private slash = pstring "/"
+    let private slash = pstring "/" // prstring is a predefined parser, that parses a given string
     
     let private thisDir =
-        pstring "./" >>% Here
+        pstring "./" >>% Here // >>% if the parser on the left succeeds, return the value on the right as the result
     
     let private parentDir =
         pstring "../" >>% ()
     
     let private dirUp =
-        many1 parentDir 
-        |>> (List.length >> Up)
+        many1 parentDir // many1 succeeds if the given parser succeeds one or more times
+        |>> (List.length >> Up) // |>> takes the result of the parser on the left and applies the function on the right 
     
     let private package =
-        pstring "bl:" >>. identifier .>> slash
-        |>> Pack
+        pstring "bl:" >>. identifier .>> slash // >>. returns the result of the right parser
+        |>> Pack                               // .>> returns the result of the left parser
     
     let private root =
         slash
@@ -94,11 +94,11 @@ module PathRegex =
         |>> (function Some x -> x | None -> Here) // this makes ./ optional
     
     let private directories =
-        identifier .>>? slash
+        identifier .>>? slash // ? means backtrack if not successful
         |> many
     
     let private path =
-        directories .>>. identifier
+        directories .>>. identifier // .>>. returns left * right result
 
     // import paths have the following form
     // bl:package/a/b/file  - external package import
