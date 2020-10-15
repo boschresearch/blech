@@ -99,7 +99,7 @@ module CompilationUnit =
         {
             sourcePath: string
             blechPath: string
-            package: string  // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
+            package: string option // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
             logger: Diagnostics.Logger
             loader: Context<'info> -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
@@ -110,7 +110,7 @@ module CompilationUnit =
         static member Make (arguments: Arguments.BlechCOptions) logger loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
-              package = "" //PathRegex.ReservedPkg // the default package name is "blech", when nothing is given
+              package = None //PathRegex.ReservedPkg // the default package name is "blech", when nothing is given
               outDir = arguments.outDir
               logger = logger
               loader = loader

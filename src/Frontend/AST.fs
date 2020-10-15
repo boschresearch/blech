@@ -424,21 +424,21 @@ and Prototype =
 and ModulePath = 
     {
         range: range
-        path: string
+        path: string // TODO: Make this a TranslationUnitPath already checked before building the syntax tree, fjg. 15.10.20
     }
     static member Empty = { range = Range.range0; path = "" }
     
     member mp.Range = mp.range
 
-    member mp.FromPath : TranslationUnitPath = 
-        let moduleName = List.ofArray <| mp.path.Split [| '/' |]
-        try 
-            { TranslationUnitPath.package = List.head moduleName
-              dirs = moduleName.[1 .. moduleName.Length-2]
-              file = List.last moduleName}
-        with
-        | _ -> failwith "this should never happen"
-        // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
+    //member mp.FromPath : TranslationUnitPath = 
+    //    let moduleName = List.ofArray <| mp.path.Split [| '/' |]
+    //    try 
+    //        { TranslationUnitPath.package = List.head moduleName
+    //          dirs = moduleName.[1 .. moduleName.Length-2]
+    //          file = List.last moduleName}
+    //    with
+    //    | _ -> failwith "this should never happen"
+    //    // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
