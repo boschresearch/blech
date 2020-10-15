@@ -129,22 +129,24 @@ module PathRegex =
 type PackageName = string
 
 type TranslationUnitPath = 
-    { 
+    {   // TODO: add protocol "bl:" to this type, in case we need more than one protocol. fjg. 15.10.20
         package: string option
         dirs: string list
         file: string 
     } 
     static member Empty = { package = None; dirs = []; file = "" }
+    
     override this.ToString () =
-        this.AsList |> String.concat (string dot)
+        let prefix = 
+            match this.package with | None -> "" | Some _ -> "bl:"
+        prefix + (this.AsList |> String.concat (string slash))
+    
     member this.AsList =
+        let path = this.dirs @ [this.file]
         match this.package with
-        | None -> this.dirs @ [this.file]
-        | Some pkg -> pkg::this.dirs @ [this.file]
-        //let packAsLst =
-        //    if System.String.IsNullOrWhiteSpace this.package then []
-        //    else [this.package]
-        //packAsLst @ this.dirs @ [this.file]
+        | None -> path
+        | Some pkg -> pkg::path
+        
     member this.ToPackageName : PackageName =
         match this.package with
         | None -> ""

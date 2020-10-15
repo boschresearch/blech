@@ -122,13 +122,8 @@ module Main =
         let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
         match import with
         | AST.Member.Import i ->
-            makeFromPath currentPath i.modulePath.path
-            |> function
-                | Ok tup ->
-                    CompilationUnit.require pkgCtx tup
-                    |> Result.map (fun cu -> i.localName, cu)
-                | Error strlist ->
-                    failwithf "makeFromPath failed:\n%A" strlist
+            CompilationUnit.require pkgCtx i.modulePath.path
+            |> Result.map (fun cu -> i.localName, cu)
         | _ ->
             failwith "This should never happen"
     

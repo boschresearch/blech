@@ -424,9 +424,10 @@ and Prototype =
 and ModulePath = 
     {
         range: range
-        path: string // TODO: Make this a TranslationUnitPath already checked before building the syntax tree, fjg. 15.10.20
+        path: TranslationUnitPath
     }
-    static member Empty = { range = Range.range0; path = "" }
+
+    static member Empty = { range = Range.range0; path = TranslationUnitPath.Empty }
     
     member mp.Range = mp.range
 
