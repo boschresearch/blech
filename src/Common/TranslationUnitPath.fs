@@ -129,21 +129,28 @@ module PathRegex =
 type PackageName = string
 
 type TranslationUnitPath = 
-    { 
-        package: string
+    {   // TODO: add protocol "bl:" to this type, in case we need more than one protocol. fjg. 15.10.20
+        package: string option
         dirs: string list
         file: string 
     } 
-    static member Empty = { package = ""; dirs = []; file = "" }
+    static member Empty = { package = None; dirs = []; file = "" }
+    
     override this.ToString () =
-        this.AsList |> String.concat (string dot)
+        let prefix = 
+            match this.package with | None -> "" | Some _ -> "bl:"
+        prefix + (this.AsList |> String.concat (string slash))
+    
     member this.AsList =
-        let packAsLst =
-            if System.String.IsNullOrWhiteSpace this.package then []
-            else [this.package]
-        packAsLst @ this.dirs @ [this.file]
-    member fp.ToPackageName : PackageName =
-        fp.package
+        let path = this.dirs @ [this.file]
+        match this.package with
+        | None -> path
+        | Some pkg -> pkg::path
+        
+    member this.ToPackageName : PackageName =
+        match this.package with
+        | None -> ""
+        | Some pkg -> pkg
 
 
 /// Functions =================================================================
@@ -155,7 +162,7 @@ let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPat
     // TODO: guess we should use tryMakeTranslationUnitPath here to ensure pkg, dirs and file are valid identifiers, fg 12.10.20
     match nav with
     | PathRegex.Pack pkg -> // external package import
-        Ok { package = pkg
+        Ok { package = Some pkg
              dirs = dirs
              file = file }
     | PathRegex.Root -> // absolute in-package import
@@ -267,7 +274,7 @@ let tryFindSourceDir file searchPath =
 /// representing the filename, source path and the current package name
 /// The result is an Error if the path elements or filename are invalid identifiers
 /// such as "blech" or contain non-alphanumerical characters.
-let tryMakeTranslationUnitPath file srcDir package : Result<TranslationUnitPath, string list> =
+let tryMakeTranslationUnitPath file srcDir optPackage : Result<TranslationUnitPath, string list> =
     assert isFileInSourceDir file srcDir
     let ff = Path.GetFullPath file
     let fsd = Path.GetFullPath srcDir
@@ -282,7 +289,7 @@ let tryMakeTranslationUnitPath file srcDir package : Result<TranslationUnitPath,
     let wrongIds = List.filter (fun id -> not <| PathRegex.isValidFileOrDirectoryName id) (dirs @ [file])
 
     if List.isEmpty wrongIds then 
-        Ok { package = package
+        Ok { package = optPackage
              dirs = dirs
              file = file }
     else
