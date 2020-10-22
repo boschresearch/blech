@@ -141,9 +141,16 @@ module SymbolTable =
 
         static member Empty = { lookupTable = Dictionary() }
 
-        static member Join this that =
-            let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
-            { lookupTable = Dictionary(both) }
+        //static member Join this that =
+        //    let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
+        //    { lookupTable = Dictionary(both) }
+
+        member this.AddLookupTable imported = 
+            // lookuptables might be imported more than once via different local names
+            // these duplicates must be ignored
+            for pair in imported.lookupTable do
+                ignore <| this.lookupTable.TryAdd (pair.Key, pair.Value)
+            this
 
         override this.ToString () =
             [for pair in this.lookupTable -> pair.Key.id + " -> " + pair.Value.ToString()]
@@ -160,6 +167,7 @@ module SymbolTable =
 
         // should be invisible outside this file
         member nqt.addDecl name qname =
+            // printfn "addDecl: name: %A qname: %A" name qname
             nqt.lookupTable.Add (name, Decl qname)
 
         // should be invisible outside this file
@@ -205,6 +213,7 @@ module SymbolTable =
     type Environment = 
         {
             moduleName: TranslationUnitPath
+            // imports: Dictionary<TranslationUnitPath, Environment>
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
         }
@@ -270,10 +279,17 @@ module SymbolTable =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Environment =
 
-        let empty =
-            { moduleName = TranslationUnitPath.Empty
-              path = [Scope.createGlobalScope ()]
+        let init moduleName =
+            do Scope.init ()   // initialize global state for anonymous scopes
+            { Environment.moduleName = moduleName
+              path = [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty }
+        
+        //let empty =
+        //    { moduleName = TranslationUnitPath.Empty
+        //      // imports = Dictionary()
+        //      path = [Scope.createGlobalScope ()]
+        //      lookupTable = LookupTable.Empty }
          
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -340,8 +356,9 @@ module SymbolTable =
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
                 try
                     do env.lookupTable.addDecl name qname
-                with _ ->
-                    printf "%A" (env.lookupTable.ToString())
+                with exp ->
+                    printfn "%A" exp
+                    // printf "%A" (env.lookupTable.ToString())
                 let symbol = Symbol.Create name isScope
                 let newEnv = { env with path = Scope.addSymbol (currentScope env) symbol :: currentOuter env }
                 Ok newEnv
@@ -354,33 +371,39 @@ module SymbolTable =
         let insertScopeName env (name: Name) = 
             insertSymbol env name (IdLabel.Static) true
 
-        let init moduleName (envs: Environment list) =
-            do Scope.init ()  // initialize global state for anonymous scopes
-            
-            // add imported files' scopes as innerscopes
-            let importedScopes =
-                let globalScope = Scope.createGlobalScope ()
-                envs
-                |> List.collect (fun env -> env.path)
-                |> List.fold Scope.addInnerScope globalScope
-            let importedLookupTables =
-                envs
-                |> List.map (fun env -> env.lookupTable)
-                |> List.fold LookupTable.Join LookupTable.Empty
-            let globalEnv =
-                { Environment.moduleName = moduleName
-                  path = [importedScopes]
-                  lookupTable = importedLookupTables }
-            // add imported files' scopes as symbols
-            envs 
-            |> List.collect (fun env -> env.path)
-            |> List.fold (fun envRes scope -> 
-                envRes
-                |> Result.bind (fun env ->
-                    insertScopeName env {id = scope.id; range = Range.range0})) //TODO
-                (Ok globalEnv)
+        //let addImport env (translationUnitPath, importedEnv) : Environment =
+        //    do ignore <| env.imports.TryAdd(translationUnitPath, importedEnv)
+        //    env
 
-        let initEmptyTable moduleName = init moduleName []
+        //let init moduleName (envs: Environment list) =
+        //    do Scope.init ()  // initialize global state for anonymous scopes
+            
+        //    // add imported files' scopes as innerscopes
+        //    let importedScopes =
+        //        let globalScope = Scope.createGlobalScope ()
+        //        envs
+        //        |> List.collect (fun env -> env.path)
+        //        |> List.fold Scope.addInnerScope globalScope
+        //    let importedLookupTables =
+        //        envs
+        //        |> List.map (fun env -> env.lookupTable)
+        //        // |> List.fold LookupTable.Join LookupTable.Empty
+        //        |> List.fold (fun (lt: LookupTable) ilt -> lt.AddLookupTable ilt) LookupTable.Empty
+        //    let globalEnv =
+        //        { Environment.moduleName = moduleName
+        //          //imports = Dictionary()
+        //          path = [importedScopes]
+        //          lookupTable = importedLookupTables }
+        //    // add imported files' scopes as symbols
+        //    envs 
+        //    |> List.collect (fun env -> env.path)
+        //    |> List.fold (fun envRes scope -> 
+        //        envRes
+        //        |> Result.bind (fun env ->
+        //            insertScopeName env {id = scope.id; range = Range.range0})) //TODO
+        //        (Ok globalEnv)
+
+        //let initEmptyTable moduleName = init moduleName []
 
         let private enterInnerScope env id visibility recursion =
             assert not (Scope.containsInnerScope (currentScope env) id)

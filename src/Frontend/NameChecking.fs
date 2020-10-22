@@ -52,23 +52,29 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             logger: Diagnostics.Logger
         }
 
-    let initialise logger moduleName envs : NameCheckContext =
-        Env.init moduleName envs 
-        |> function
-            | Ok env ->
-                { env = env
-                  logger = logger }
-            | Error err ->
-                Logger.logError logger Diagnostics.Phase.Naming err
-                { env = SymbolTable.Environment.empty
-                  logger = logger }
+    let initialise logger moduleName : NameCheckContext =
+        { 
+            env = Env.init moduleName
+            logger = logger  // this will be create at blechc started and handed over
+        }
+
+    //let initialise logger moduleName envs : NameCheckContext =
+    //    Env.init moduleName envs 
+    //    |> function
+    //        | Ok env ->
+    //            { env = env
+    //              logger = logger }
+    //        | Error err ->
+    //            Logger.logError logger Diagnostics.Phase.Naming err
+    //            { env = SymbolTable.Environment.empty
+    //              logger = logger }
     
-    let initialiseEmpty logger moduleName : NameCheckContext =
-        initialise logger moduleName []
-        //{ 
-        //    env = Env.initEmptyTable moduleName
-        //    logger = logger  // this will be create at blechc started and handed over
-        //}
+    //let initialiseEmpty logger moduleName : NameCheckContext =
+    //    initialise logger moduleName []
+    //    //{ 
+    //    //    env = Env.initEmptyTable moduleName
+    //    //    logger = logger  // this will be create at blechc started and handed over
+    //    //}
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -549,14 +555,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx // Handled separately, maybe we should fail here
 
 
-    let checkPackage packageContext (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
+    let checkPackage (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
         //printfn "path at the start\n%A" ctx.env.path
         List.fold checkMember ctx p.members
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
-    let checkDeclaredness packageContext (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
-        let ncc = checkPackage packageContext ctx ast
+    let checkDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
+        let ncc = checkPackage ctx ast
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else

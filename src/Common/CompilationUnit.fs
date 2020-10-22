@@ -23,6 +23,7 @@ module CompilationUnit =
     
     open TranslationUnitPath
 
+
     type CompilationUnitError = 
         | FileNotFound of fileName: string
         | ModuleNotFound of moduleName: TranslationUnitPath * triedFiles: string list
@@ -68,6 +69,7 @@ module CompilationUnit =
                       sprintf "use '%s' for implementation files." <| implementationFileExtension
                       sprintf "use '%s' for interface files." <| interfaceFileExtension ]
 
+    
     type ImplOrIface =
         | Implementation
         | Interface
@@ -93,7 +95,6 @@ module CompilationUnit =
                  file = file 
                  info = info }
 
-        //static member Empty
 
     type Context<'info> =
         {
@@ -101,98 +102,108 @@ module CompilationUnit =
             blechPath: string
             package: string option // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
-            logger: Diagnostics.Logger
-            loader: Context<'info> -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
-                    // package context -> LoadWhat -> from path -> file name -> Package or logged errors
+            // logger: Diagnostics.Logger
+            loader: Context<'info> -> Diagnostics.Logger -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
+                    // package context -> module logger -> LoadWhat -> from path -> file name -> Package or logged errors
             loaded: Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> Package
         }
-        static member Make (arguments: Arguments.BlechCOptions) logger loader =
+        static member Make (arguments: Arguments.BlechCOptions) loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
               package = None //PathRegex.ReservedPkg // the default package name is "blech", when nothing is given
               outDir = arguments.outDir
-              logger = logger
+              // logger = logger
               loader = loader
               loaded = Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>() }
 
-    
+        member this.GetErrorImports : (TranslationUnitPath * Diagnostics.Logger) list =
+            [ for pairs in this.loaded do 
+                if Result.isError pairs.Value then yield pairs.Key, Result.getError pairs.Value ]
+
+        member this.GetLoaded =
+            Seq.toList (this.loaded.Values)
+            
+        
     /// loads a program or or a module for compilation
     /// Given a context with package information and a filename
     /// try to determine a TranslationUnitName for it and load it
-    let load (ctx: Context<'info>) (fileName: string) =
-        let lgr = ctx.logger
+    let load (ctx: Context<'info>) logger (fileName: string)
+            : Result<Module<'info>, Diagnostics.Logger> =
+        // let logger = ctx.logger
         let optLw = loadWhat fileName
         
         // file exists and is readable?
         if not (canOpen fileName) then
             Diagnostics.Logger.logFatalError 
-            <| lgr
+            <| logger
             <| Diagnostics.Phase.Compiling
             <| FileNotFound fileName 
-            Error lgr
+            Error logger
         else
             // file belongs to the source directory?
             match tryFindSourceDir fileName ctx.sourcePath with
             | None ->
                 Diagnostics.Logger.logFatalError 
-                <| lgr
+                <| logger
                 <| Diagnostics.Phase.Compiling
                 <| FileNotInSourcePath (fileName, searchPath2Dirs ctx.sourcePath)
-                Error lgr
+                Error logger
             | Some srcDir ->
                 // file is either .blc or .blh?
                 match optLw with
                 | None ->
                     Diagnostics.Logger.logFatalError 
-                    <| lgr
+                    <| logger
                     <| Diagnostics.Phase.Compiling
                     <| InvalidFileExtension fileName 
-                    Error lgr
+                    Error logger
                 | Some loadWhat ->
                     // file and source directory have valid names?
                     match tryMakeTranslationUnitPath fileName srcDir ctx.package with
                     | Error wrongIds ->
                         Diagnostics.Logger.logFatalError 
-                        <| lgr
+                        <| logger
                         <| Diagnostics.Phase.Compiling
                         <| IllegalModuleFileName (fileName, wrongIds)
-                        Error lgr
+                        Error logger
                     | Ok translationUnitPath ->
                         // a valid TranslationUnitPath has been constructed
                         // now load it
                         // TODO: check if file is already compiled
-                        ctx.loader ctx loadWhat translationUnitPath fileName
+                        ctx.loader ctx logger loadWhat translationUnitPath fileName
 
 
     /// requires an imported module for compilation
     /// Given a context (including loaded translation units) and the 
     /// TranslationUnitPath to a translation unit to be loaded
-    /// load the unit and update the context
-    let require (ctx: Context<'info>) (requiredPath: TranslationUnitPath): Result<Module<'info>, Diagnostics.Logger> =
-        if ctx.loaded.ContainsKey requiredPath then
-            ctx.loaded.[requiredPath]
+    /// load the unit, compile it and return the compilation result for imported usage
+
+    let require (ctx: Context<'info>) logger (requiredModule: TranslationUnitPath) 
+            : Result<Module<'info>, Diagnostics.Logger> =
+        if ctx.loaded.ContainsKey requiredModule then
+            ctx.loaded.[requiredModule]
         else
-            let blcFile = searchImplementation ctx.sourcePath requiredPath
-            let blhFile = searchInterface ctx.outDir requiredPath
+            let blcFile = searchImplementation ctx.sourcePath requiredModule
+            let blhFile = searchInterface ctx.outDir requiredModule
             match blhFile, blcFile with
             | Ok blh, Ok blc ->
                 // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
-                let compiled = ctx.loader ctx Implementation requiredPath blc
-                ctx.loaded.Add (requiredPath, compiled)
+                let compiled = ctx.loader ctx logger Implementation requiredModule blc
+                ctx.loaded.Add (requiredModule, compiled)
                 compiled
             | Error _, Ok blc ->
-                ctx.loader ctx Implementation requiredPath blc
+                ctx.loader ctx logger Implementation requiredModule blc
             | _ , Error triedBlcs ->
-                let sigFile = searchInterface ctx.blechPath requiredPath 
+                let sigFile = searchInterface ctx.blechPath requiredModule 
                 match sigFile with
                 | Ok blh ->
-                    ctx.loader ctx Interface requiredPath blh
+                    ctx.loader ctx logger Interface requiredModule blh
                 | Error triedBlhs ->
-                    let lgr = ctx.logger
+                    // let lgr = ctx.logger
                     Diagnostics.Logger.logFatalError 
-                    <| lgr
+                    <| logger
                     <| Diagnostics.Phase.Compiling
-                    <| ModuleNotFound (requiredPath, triedBlcs @ triedBlhs) 
-                    Error lgr
+                    <| ModuleNotFound (requiredModule, triedBlcs @ triedBlhs) 
+                    Error logger
             

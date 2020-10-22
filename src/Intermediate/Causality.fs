@@ -444,21 +444,21 @@ let private checkCausality context causalityLogger activityName =
     determineCycles context.pgs.[activityName]
     |> Seq.iter (fun mapAndCycle -> checkWR mapAndCycle causalityLogger)
 
-let private getLoggerAfterCausalityCheck context = 
-    let causalityLogger = Diagnostics.Logger.create()
+let private getLoggerAfterCausalityCheck logger context = 
+    // let causalityLogger = Diagnostics.Logger.create()
     context.pgs.Keys
-    |> Seq.iter (fun name -> checkCausality context causalityLogger name)
+    |> Seq.iter (fun name -> checkCausality context logger name)
 
-    causalityLogger
+    logger
         
 /// Inserts DataFlow edges into the graphs as a side effect.
 /// These are relevant both for checking causality and for 
 /// Block generation and ordering.
-let private checkCausalityOfContext context =
-    let causalityLogger = getLoggerAfterCausalityCheck context
+let private checkCausalityOfContext logger context =
+    let causalityLogger = getLoggerAfterCausalityCheck logger context
 
-    // for every activity write its program graph
-    // to the logger (now including the data flow edges)
+    // for every activity log its program graph
+    // (now including the data flow edges)
     context.pgs
     |> Seq.iter(fun kvp -> 
         Blech.Common.Logging.log6 "Main" ("program graph for " + kvp.Key.ToString() + "\n" + kvp.Value.ToString())
@@ -469,5 +469,5 @@ let private checkCausalityOfContext context =
     else
         Ok context.pgs
 
-let checkPackCausality (lut, pack) =
-    createPGofPackage (lut, pack) |> checkCausalityOfContext
+let checkPackCausality logger (lut, pack) =
+    createPGofPackage (lut, pack) |> checkCausalityOfContext logger

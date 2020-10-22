@@ -1413,7 +1413,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
 
 /// Performs type checking starting with an untyped package and a namecheck loopup table.
 /// Returns a TypeCheck context and a BlechModule.
-let typeCheck (cliContext: Arguments.BlechCOptions) otherLuts (pack: AST.CompilationUnit, ncEnv: SymbolTable.LookupTable) =
+let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit, ncEnv: SymbolTable.LookupTable) =
     let lut = TypeCheckContext.Init cliContext ncEnv
     otherLuts
     |> List.iter (fun otherLut ->
@@ -1426,5 +1426,5 @@ let typeCheck (cliContext: Arguments.BlechCOptions) otherLuts (pack: AST.Compila
         | Ok p -> 
             Blech.Common.Logging.log6 "Main" ("typed syntax tree built\n" + p.ToString())
             Ok (lut, p)
-        | Error errs -> Error (Diagnostics.wrapErrsInLogger Diagnostics.Phase.Typing errs)
+        | Error errs -> Error (Diagnostics.wrapErrsInLogger logger Diagnostics.Phase.Typing errs)
         

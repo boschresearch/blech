@@ -317,15 +317,13 @@ module Diagnostics =
         let getDiagnostics (dl: Logger) =
             dl.diagnostics
 
-    let wrapErrsInLogger phase errs =
-        let errLogger = Logger.create()
-        let logError e = Logger.logError errLogger phase e
+    let wrapErrsInLogger logger phase errs =
+        // let errLogger = Logger.create()
+        let logError e = Logger.logError logger phase e
+        do List.iter logError errs
+        logger
 
-        errs
-        |> List.iter logError
-        errLogger
-
-    let printErrors phase errs =
-        wrapErrsInLogger phase errs
+    let printErrors logger phase errs =
+        wrapErrsInLogger logger phase errs
         |> Emitter.printDiagnostics
             

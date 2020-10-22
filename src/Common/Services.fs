@@ -87,16 +87,25 @@ module String =
 [<RequireQualifiedAccess>]
 module Result =
 
-    let isError (result: Result<'a, 'x>) : bool =
+    let isError (result: Result<'ok, 'err>) : bool =
         match result with
         | Ok _ -> false
         | Error _ -> true
     
-    let isOk (result: Result<'a, 'x>) : bool =
+    let isOk (result: Result<'ok, 'err>) : bool =
         match result with
         | Ok _ -> true
         | Error _ -> false
 
+    let getOk (result: Result<'ok, 'err>) : 'ok = 
+        match result with 
+        | Error err -> failwithf "Could not get Ok item from Result as it contains an error: %A" err 
+        | Ok ok -> ok
+        
+    let getError (result: Result<'ok, 'err>) : 'err = 
+        match result with 
+        | Error err -> err 
+        | Ok ok -> failwithf "Could not get Error from Result: %A" ok
 
 //-------------------------------------------------------------------------
 // Bits, from fsharp compiler

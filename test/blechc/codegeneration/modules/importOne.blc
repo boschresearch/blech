@@ -1,8 +1,12 @@
 import I1 "foo_import/foofoo"
 
+struct S 
+    var c: int32
+end
 
 @[EntryPoint]
 activity Main () ()
+    let y: S = {c = 1}
     let foo: I1.S = {a = 1, b = 2.0}
     let bar: I1.S = {a = 2, b = 1.0}
     var x: I1.S

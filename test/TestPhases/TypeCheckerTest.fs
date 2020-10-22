@@ -40,12 +40,12 @@ type Test() =
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv
         
         match lutAndTyPkg with
         | Ok _ ->
@@ -71,7 +71,7 @@ type Test() =
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
@@ -101,10 +101,10 @@ type Test() =
                     | _ -> false
                 if errs |> List.exists isUndesiredError then
                     printfn "Errors did occur in this invalid test case, BUT NOT THE ONES WE EXPECTED!"
-                    Diagnostics.printErrors Diagnostics.Phase.Typing errs
+                    Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
                     Assert.Fail()
                 else
                     printfn "Discovered Errors:\n" 
-                    Diagnostics.printErrors Diagnostics.Phase.Typing errs
+                    Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
                     Assert.True true
             

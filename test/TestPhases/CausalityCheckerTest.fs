@@ -40,17 +40,17 @@ type Test() =
         Assert.True (Result.isOk ast)
 
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
             Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality
+            <| Blech.Intermediate.Causality.checkPackCausality logger
             <| lutAndTyPkg
         
         //let causalityContext = Blech.Intermediate.ProgramGraph.createPGofPackage lut blechPack
@@ -82,17 +82,17 @@ type Test() =
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialiseEmpty logger moduleName
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
             Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
         let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext []) astAndEnv 
+            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv 
         Assert.True (Result.isOk lutAndTyPkg)
         
         let progGraphs = 
             Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality
+            <| Blech.Intermediate.Causality.checkPackCausality logger
             <| lutAndTyPkg
         
         match progGraphs with

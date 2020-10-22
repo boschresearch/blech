@@ -236,22 +236,25 @@ module TypeCheckContext =
 
     // Setters ====================================================================
     let addDeclToLut (lut: TypeCheckContext) name decl =
-        if lut.nameToDecl.ContainsKey(name) then
-            failwith <| sprintf "Fatal error: tried to add the name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
-        else
-            lut.nameToDecl.Add(name, decl)
-
+        //if lut.nameToDecl.ContainsKey(name) then
+        //    failwith <| sprintf "Fatal error: tried to add the name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
+        //else
+        //    lut.nameToDecl.Add(name, decl)
+        ignore <| lut.nameToDecl.TryAdd(name, decl)
+            
 
     let addTypeToLut (lut: TypeCheckContext) name typ =
-        if lut.userTypes.ContainsKey(name) then
-            failwith <| sprintf "Fatal error: tried to add the type name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
-        else
-            lut.userTypes.Add(name, typ)
+        //if lut.userTypes.ContainsKey(name) then
+        //    failwith <| sprintf "Fatal error: tried to add the type name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
+        //else
+        //    lut.userTypes.Add(name, typ)
+        ignore <| lut.userTypes.TryAdd(name, typ)
 
 
     let addPragmaToLut (lut: TypeCheckContext) pragma =
+        // TODO: Pragmas might be added more than once on multiple import, correct this. fjg. 20.10.20
         lut.memberPragmas.Add pragma
-
+        
 
     // Testers ====================================================================
     let hasInclude (lut: TypeCheckContext) =
