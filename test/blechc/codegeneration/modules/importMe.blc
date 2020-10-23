@@ -7,7 +7,7 @@ end
 
 function multS (a: S, b: S)() returns S
     return {a = a.a * b.a, b = a.b * b.b}
-
+end
 
 function addS (a: S, b: S)() returns S
     return {a = a.a + b.a, b = a.b + b.b}

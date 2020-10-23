@@ -226,7 +226,8 @@ module SymbolTable =
         | NoDeclarationInStaticAccess of usage:Name * access: AST.StaticNamedPath
         | NoImplicitMemberDeclaration of access: AST.StaticNamedPath
         | NonUniqueImplicitMember of usage: AST.StaticNamedPath * decls: Name list list   // static path * declaration names
-    
+        | Dummy of range: Range.range * msg: string   // just for development purposes
+
         interface Diagnostics.IDiagnosable with
             
             member err.MainInformation =
@@ -249,6 +250,9 @@ module SymbolTable =
                 | NonUniqueImplicitMember (usage = spath) ->
                     { range = spath.Range
                       message = sprintf "the implicit member access '%s' is not unique" (spath.dottedPathToString) }
+                | Dummy (rng, msg) ->
+                    { range = rng
+                      message = sprintf "Dummy error: %s" msg }
 
             member err.ContextInformation  = 
                 match err with
@@ -272,6 +276,8 @@ module SymbolTable =
                     List.foldBack ( fun decl infos -> declInfo decl @ infos ) decls              
                         [ { range = usage.Range; message = "more than one declaration found"; isPrimary = true } ]
                     //|> List.append [ { range = r; message = "this is a test"; isPrimary = true } ]        
+                | Dummy (range = rng) ->
+                    [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
             member err.NoteInformation = []
 
@@ -284,12 +290,14 @@ module SymbolTable =
             { Environment.moduleName = moduleName
               path = [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty }
-        
-        //let empty =
-        //    { moduleName = TranslationUnitPath.Empty
-        //      // imports = Dictionary()
-        //      path = [Scope.createGlobalScope ()]
-        //      lookupTable = LookupTable.Empty }
+
+
+        let renameGlobalScope env id =
+            match env.path with
+            | [ globalScope ] ->
+                { env with path = [ Scope.rewriteId globalScope id ] }
+            | _ -> failwith "This should never happen"  // Todo: Check this, fjg. 23.10.20
+            
          
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -416,12 +424,17 @@ module SymbolTable =
             // printfn "Enter Scope: %s" scope.id
             scope :: env.path
         
-        // TODO: add scope as symbol and inner scope, fg 01.10.20
-        let enterModuleScope (env: Environment) (id: Identifier) : Environment =
-            // TODO: Fully qualified names (for code generation) require whole module name - not only the last id
-            // 
-            // let basicId = ""
-            { env with path = [ Scope.createGlobalScope ()] }
+        /// add the top-level module scope in the top level scope of the importing module with the id of the import name
+        /// combine the the lookup tables of both
+        let addModuleEnv (env: Environment) (name: Name) (modEnv: Environment) = // TODO: This should always work, remove the Result return, fjg. 23.10.20
+            match env.path, modEnv.path with
+            | [globalscope], [modGlobalScope] ->
+                let renamedScope = Scope.rewriteId modGlobalScope name.id
+                let joinedLT = env.lookupTable.AddLookupTable modEnv.lookupTable
+                Ok { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
+                              lookupTable = joinedLT}
+            | _ ->
+                Error <| Dummy (name.range, "adding the module scope should always works")
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Visibility.Open Recursion.No }

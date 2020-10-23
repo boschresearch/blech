@@ -24,15 +24,14 @@ open Blech
 open Blech.Common
 open Blech.Frontend
 
-type TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
-type Logger = Diagnostics.Logger
 
-
+type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
+type private Environment = SymbolTable.Environment
 
 type ModuleInfo = 
     {
         dependsOn: TranslationUnitPath list
-        nameCheck: SymbolTable.Environment
+        nameCheck: Environment
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
         translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
@@ -47,17 +46,26 @@ type ModuleInfo =
             translation = translationContext
         }
 
+    member this.GetModuleName : TranslationUnitPath = 
+        this.typedModule.name
+
+    member this.GetEnv : SymbolTable.Environment = 
+        this.nameCheck
+
+
+type private Logger = Diagnostics.Logger
+type private CompilationResult = Result<CompilationUnit.Module<ModuleInfo>, Logger>
+
 type Imports = 
     private {
-        imports: ResizeArray<TranslationUnitPath>
-        compiled: Dictionary<TranslationUnitPath, Result<CompilationUnit.Module<ModuleInfo>, Logger>>
-        logger: Logger
+        imports: TranslationUnitPath list
+        compiled: Dictionary<TranslationUnitPath, CompilationResult> // TODO: Remove this, it is also stored in the PackageContext
+        logger: Logger  // The logger of the importing module
     }
-
     
     static member Initialise logger = 
-        { imports = ResizeArray()
-          compiled = Dictionary() 
+        { imports = List.empty
+          compiled = Dictionary()  // TODO: This is also cached in PackageContext - Remove from here, fjg. 23.10.20
           logger = logger }
     
     static member Empty = 
@@ -68,8 +76,9 @@ type Imports =
        
     member this.AddImport moduleName result =
         if this.compiled.TryAdd(moduleName, result) then // The same module might be added more than once
-            do this.imports.Add moduleName
-        this
+            { this with imports = this.imports @ [moduleName] }
+        else
+            this
     
     member this.GetOkImports : ModuleInfo list = 
         [ for mn in this.imports do 
@@ -81,6 +90,11 @@ type Imports =
             let res = this.compiled.[mn]
             if Result.isError res then yield Result.getError res ]
 
+    member this.GetNameCheckEnvironments : Map<TranslationUnitPath, Environment> =
+        Map.ofList [ for pair in this.compiled do 
+                        if Result.isOk pair.Value then 
+                            yield (pair.Key, (Result.getOk pair.Value).info.GetEnv) ]
+        
     member this.GetTypeCheckContexts =
         this.GetOkImports
         |> List.map (fun i -> i.typeCheck)
@@ -101,7 +115,7 @@ let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) (imports: 
     | AST.Member.Import i ->
         let loggerForImport = Diagnostics.Logger.create() // new module needs a fresh logger
         let moduleName = i.modulePath.path
-        printfn "Create a new logger to require import: %s" <| string moduleName
+        // printfn "Create a new logger to require import: %s" <| string moduleName
         let res = CompilationUnit.require pkgCtx loggerForImport moduleName
         imports.AddImport moduleName <| res
     | AST.Member.Pragma _ ->

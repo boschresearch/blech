@@ -121,6 +121,14 @@ module CompilationUnit =
             [ for pairs in this.loaded do 
                 if Result.isError pairs.Value then yield pairs.Key, Result.getError pairs.Value ]
 
+        member this.GetOkImports : Dictionary<TranslationUnitPath, Module<'info>> =
+            let oks = Dictionary()
+            for pairs in this.loaded do 
+                if Result.isOk pairs.Value then 
+                    oks.Add (pairs.Key, Result.getOk pairs.Value)
+            oks
+                    
+       
         member this.GetLoaded =
             Seq.toList (this.loaded.Values)
             

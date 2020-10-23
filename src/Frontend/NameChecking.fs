@@ -39,23 +39,23 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     open AST
 
     module Env = SymbolTable.Environment
-    
-
-    // type ErrorMessage = Cmd.ErrorMessage
-
     module Logger = Diagnostics.Logger
 
+    type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
+    type private Environment = SymbolTable.Environment
 
     type NameCheckContext = 
         {
-            env: SymbolTable.Environment
+            env: Environment
             logger: Diagnostics.Logger
+            importedEnvs: Map<TranslationUnitPath, Environment>
         }
 
-    let initialise logger moduleName : NameCheckContext =
+    let initialise logger moduleName importedEnvs : NameCheckContext =
         { 
             env = Env.init moduleName
             logger = logger  // this will be create at blechc started and handed over
+            importedEnvs = importedEnvs
         }
 
     //let initialise logger moduleName envs : NameCheckContext =
@@ -114,7 +114,32 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     //let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
     //    let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
     //    {ctx with env = env}
-        
+     
+    let private addModule (ctx: NameCheckContext) (import: AST.Import) = 
+        //let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
+        //{ctx with env = env}
+        let localName = import.localName
+        try 
+            let modEnv = ctx.importedEnvs.[import.modulePath.path]  // TODO: This fails as long as any analysis runs after a failed import check, fjg. 23.10.20
+            match Env.addModuleEnv ctx.env localName modEnv with
+            | Ok env ->
+                { ctx with env = env }
+            | Error err ->
+                Logger.logError ctx.logger Diagnostics.Phase.Naming err
+                ctx
+        with _ ->  // TODO: Remove this just for the time beeing, see above
+            ctx
+
+    let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
+        let name = import.localName
+        // First step shadowing test
+        match Env.insertScopeName ctx.env name with
+        | Ok env ->
+            { ctx with env = env } // here is the difference to addDecl!
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            { ctx with env = Env.enterAnonymousScope ctx.env } // cannot be accessed because it is anonymous 
+     
 
     let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
         let name = decl.name
@@ -490,6 +515,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | _ -> // other members do no occur as fields
             ctx
 
+    let checkImport ctx (import: AST.Import) = 
+        addImportNameDecl ctx import
+        |> addModule <| import
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
             addTypeDecl ctx etd                     // open, named, non-recursive                          
@@ -551,18 +579,21 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx 
             | Member.Nothing -> 
                 ctx
-            | Member.Import _ ->
-                ctx // Handled separately, maybe we should fail here
+            | Member.Import i ->
+                checkImport ctx i
+                // ctx // Handled separately, maybe we should fail here
+        
 
-
-    let checkPackage (ctx: NameCheckContext) (p: AST.CompilationUnit) : NameCheckContext =
+    let checkCompilationUnit (ctx: NameCheckContext) (cu: AST.CompilationUnit) : NameCheckContext =
+        printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         //printfn "path at the start\n%A" ctx.env.path
-        List.fold checkMember ctx p.members
+        List.fold checkMember ctx cu.imports
+        |> List.fold checkMember <| cu.members
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
     let checkDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
-        let ncc = checkPackage ctx ast
+        let ncc = checkCompilationUnit ctx ast
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
