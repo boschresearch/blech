@@ -81,6 +81,10 @@ module Main =
         Logging.log2 "Main" ("checking causality in " + inputFile) 
         Causality.checkPackCausality logger tyAstAndLut
 
+
+    let private runImportCompilation packageContext logger importChain moduleName fileName ast = 
+        Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
+        ImportChecking.checkImports packageContext logger importChain moduleName ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -149,21 +153,15 @@ module Main =
     /// or Diagnostic.Logger
     //let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: TranslationUnitPath) fileName fileContents =
 
-    type private ModuleInfo = ImportChecking.ModuleInfo
-    type private Imports = ImportChecking.Imports
-
-    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger moduleName fileName fileContents =
-        // always run lexer, parser, name resolution, type check and causality checks
+    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
+        // always run lexer, parser, import compilation, name resolution, type check and causality checks
         
         let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
         
-        let imports =  // TODO: Result.bind this to a successful AST result, fjg. 23.10.20  
-            if Result.isOk astRes then
-                let ast = Result.getOk astRes
-                ImportChecking.checkImports pkgCtx logger ast
-            else
-                Imports.Empty
-            
+        let importsRes =
+            astRes
+            |> Result.bind (runImportCompilation pkgCtx logger importChain moduleName fileName)
+                        
         // TODO: run compilation of imports here. Here you need the current from-path from the parameter list, 
         // to determine the frompath of a relative import (FromPath.makeFromPath) instead of the modulename
         // fjg. 24.09.20
@@ -216,78 +214,83 @@ module Main =
         //| Ok cus ->
         //    //  let envs, otherLuts, otherMods, preTranslationContexts = List.unzip4 cus
 
-        let astAndSymTableRes = // TODO: Result.bind this to a successful import check, fjg. 23.10.20
-            let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
-            astRes 
-            |> Result.bind (runNameResolution logger moduleName fileName importedEnvs)
-        
-        let lutAndPackRes = 
-            let otherLuts = imports.GetTypeCheckContexts
-            astAndSymTableRes 
-            |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName otherLuts (ast, env.lookupTable))
-        
-        let pgsRes = 
-            lutAndPackRes 
-            |> Result.bind (runCausalityCheck logger fileName)
+        match astRes, importsRes with
+        | Ok ast, Ok imports -> 
             
-        match astAndSymTableRes, lutAndPackRes, pgsRes with    
-        | Ok (ast, env), Ok (lut, blechModule), Ok pgs ->
-            // generate block graphs for all activities
-            // this is only needed for code generation but is left here for debugging purposes
-            let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
-            let preTranslationContexts = imports.GetTranslationContexts
-            let preCompilations = preTranslationContexts |> List.collect (fun ctx -> ctx.compilations)
-            let translationContext: TranslationContext =
-                { tcc = lut
-                  pgs = pgs
-                  bgs = blockGraphContext 
-                  compilations = preCompilations
-                  cliContext = cliArgs }
+            let astAndSymTableRes =
+                let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
+                runNameResolution logger moduleName fileName importedEnvs ast
+        
+            let lutAndPackRes = 
+                let otherLuts = imports.GetTypeCheckContexts
+                astAndSymTableRes 
+                |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName otherLuts (ast, env.lookupTable))
+        
+            let pgsRes = 
+                lutAndPackRes 
+                |> Result.bind (runCausalityCheck logger fileName)
+            
+            match astAndSymTableRes, lutAndPackRes, pgsRes with    
+            | Ok (ast, env), Ok (lut, blechModule), Ok pgs ->
+                // generate block graphs for all activities
+                // this is only needed for code generation but is left here for debugging purposes
+                let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
+                let preTranslationContexts = imports.GetTranslationContexts
+                let preCompilations = preTranslationContexts |> List.collect (fun ctx -> ctx.compilations)
+                let translationContext: TranslationContext =
+                    { tcc = lut
+                      pgs = pgs
+                      bgs = blockGraphContext 
+                      compilations = preCompilations
+                      cliContext = cliArgs }
                         
-            let compilations = CodeGeneration.translate translationContext blechModule
-            let translationContext = 
-                { translationContext with compilations = compilations @ translationContext.compilations}
+                let compilations = CodeGeneration.translate translationContext blechModule
+                let translationContext = 
+                    { translationContext with compilations = compilations @ translationContext.compilations}
 
-            Logging.log6 "Main" ("source code\n")
-            for c in compilations do
-                let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                Logging.log6 "Main" msg
+                Logging.log6 "Main" ("source code\n")
+                for c in compilations do
+                    let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                    let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                    Logging.log6 "Main" msg
 
-            // if not dry run, write it to file
-            // create code depending on entry point
-            if not cliArgs.isDryRun then
-                // if not entry point, create signature
-                let isMainProgram = Option.isSome blechModule.entryPoint
-                if not isMainProgram then
-                    Logging.log2 "Main" ("writing signature for " + fileName)
-                    do writeSignature cliArgs.outDir moduleName lut.ncEnv ast
+                // if not dry run, write it to file
+                // create code depending on entry point
+                if not cliArgs.isDryRun then
+                    // if not entry point, create signature
+                    let isMainProgram = Option.isSome blechModule.entryPoint
+                    if not isMainProgram then
+                        Logging.log2 "Main" ("writing signature for " + fileName)
+                        do writeSignature cliArgs.outDir moduleName lut.ncEnv ast
 
-                Logging.log2 "Main" ("writing C code for " + fileName)
+                    Logging.log2 "Main" ("writing C code for " + fileName)
 
                 
-                let otherMods = imports.GetTypedModules
-                // TODO: Add otherMods to writeImplementation
-                // implementation should also include headers of imported modules, fjg. 19.10.20
-                do writeImplementation cliArgs.outDir moduleName blechModule otherMods translationContext compilations
-                do writeHeader cliArgs.outDir moduleName blechModule otherMods translationContext compilations
-                // generated test app if required by cliArgs
-                do possiblyWriteTestApp cliArgs blechModule translationContext compilations
+                    let otherMods = imports.GetTypedModules
+                    // TODO: Add otherMods to writeImplementation
+                    // implementation should also include headers of imported modules, fjg. 19.10.20
+                    do writeImplementation cliArgs.outDir moduleName blechModule otherMods translationContext compilations
+                    do writeHeader cliArgs.outDir moduleName blechModule otherMods translationContext compilations
+                    // generated test app if required by cliArgs
+                    do possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
-            // return interface information and dependencies for module 
-            let importedModules = imports.GetImportedModules
-            Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule translationContext
+                // return interface information and dependencies for module 
+                let importedModules = imports.GetImportedModules
+                Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule translationContext
 
+            | _ ->
+                // Error during name checking or-else type checking or-else causality checking
+                Error <| logger
         | _ ->
-            // let errorImports = imports.GetErrorImports
+            // Error during parsing or else import compilation
             Error <| logger
 
                 
     /// Runs compilation starting with a filename
-    let compileFromFile cliArgs pkgCtx logger moduleName inputFile =
+    let compileFromFile cliArgs pkgCtx logger importChain moduleName inputFile =
         // open stream from file
         File.ReadAllText (Path.GetFullPath(inputFile))
-        |> compileFromStr cliArgs pkgCtx logger moduleName inputFile
+        |> compileFromStr cliArgs pkgCtx logger importChain moduleName inputFile
     
 
     //let compileInterface (cliContext: Arguments.BlechCOptions) 
@@ -340,12 +343,12 @@ module Main =
     //    tyAstAndLutRes
 
         
-    let loader options packageContext logger implOrIface moduleName infile 
+    let loader options packageContext logger importChain implOrIface moduleName infile 
             : Result<CompilationUnit.Module<ImportChecking.ModuleInfo>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->
-                compileFromFile options packageContext logger moduleName infile
+                compileFromFile options packageContext logger importChain moduleName infile
             //| CompilationUnit.Interface ->
             //    compileInterface options packageContext logger fromPath infile
                 
@@ -360,7 +363,8 @@ module Main =
         | CmdLine.Compile ->
             let logger = Diagnostics.Logger.create()   
             let inputFile = options.inputFile
-            CompilationUnit.load pkgCtx logger inputFile
+            let noImportChain = CompilationUnit.ImportChain.Empty
+            CompilationUnit.load pkgCtx logger noImportChain inputFile
             |> Result.bind (fun _ -> Ok ())
 
 

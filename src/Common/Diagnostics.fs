@@ -61,6 +61,7 @@ module Diagnostics =
         | Default
         | Compiling
         | Parsing
+        | Importing
         | Naming
         | Typing
         | Causality
@@ -69,6 +70,7 @@ module Diagnostics =
             match phs with
             | Default
             | Compiling -> "compiling"
+            | Importing -> "importing"
             | Parsing -> "parsing"
             | Naming -> "name resolution"
             | Typing -> "typing"

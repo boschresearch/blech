@@ -1,0 +1,6 @@
+import I "importRecB"
+
+@[EntryPoint]
+activity Main () ()
+    await true
+end

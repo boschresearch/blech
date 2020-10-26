@@ -1,0 +1,6 @@
+import I "importSelf"
+
+@[EntryPoint]
+activity Main () ()
+    await true
+end

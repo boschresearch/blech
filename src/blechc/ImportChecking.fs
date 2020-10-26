@@ -53,77 +53,140 @@ type ModuleInfo =
         this.nameCheck
 
 
-type private Logger = Diagnostics.Logger
-type private CompilationResult = Result<CompilationUnit.Module<ModuleInfo>, Logger>
+type ImportError = 
+    | Dummy of range: Range.range * msg: string   // just for development purposes
+
+    interface Diagnostics.IDiagnosable with
+        
+        member err.MainInformation =
+            match err with
+            | Dummy (rng, msg) ->
+                { range = rng
+                  message = sprintf "Dummy error: %s" msg }
+
+        member err.ContextInformation  = 
+            match err with
+            | Dummy (range = rng) ->
+                [ { range = rng; message = "thats wrong"; isPrimary = true } ]
+
+        member err.NoteInformation = []
+
+
+// type private Logger = Diagnostics.Logger
 
 type Imports = 
     private {
-        imports: TranslationUnitPath list
-        compiled: Dictionary<TranslationUnitPath, CompilationResult> // TODO: Remove this, it is also stored in the PackageContext
-        logger: Logger  // The logger of the importing module
+        // imports: TranslationUnitPath list
+        moduleName: TranslationUnitPath
+        importChain: CompilationUnit.ImportChain // in reverse order, enables finding of import cycles
+        compiledImports: Dictionary<TranslationUnitPath, ModuleInfo> // TODO: Remove this, it is also stored in the PackageContext
+        logger: Diagnostics.Logger  // The logger of the importing module
     }
     
-    static member Initialise logger = 
-        { imports = List.empty
-          compiled = Dictionary()  // TODO: This is also cached in PackageContext - Remove from here, fjg. 23.10.20
+    static member Initialise logger importChain moduleName = 
+        { moduleName = moduleName
+          importChain = importChain
+          compiledImports = Dictionary()  // TODO: This is also cached in PackageContext - Remove from here, fjg. 23.10.20
           logger = logger }
     
-    static member Empty = 
-        Imports.Initialise <| Diagnostics.Logger.create()
+    member this.IncreaseImportChain moduleName = 
+        { this with importChain = this.importChain.Increase moduleName }
+
+    member this.DecreaseImportChain =
+        { this with importChain = this.importChain.Decrease}
 
     member this.GetImportedModules : TranslationUnitPath list = 
-        Seq.toList ( this.imports )
+        Seq.toList ( this.compiledImports.Keys )
        
-    member this.AddImport moduleName result =
-        if this.compiled.TryAdd(moduleName, result) then // The same module might be added more than once
-            { this with imports = this.imports @ [moduleName] }
-        else
-            this
-    
-    member this.GetOkImports : ModuleInfo list = 
-        [ for mn in this.imports do 
-            let res = this.compiled.[mn]
-            if Result.isOk res then yield (Result.getOk res).info ]
+    member this.AddImport moduleName moduleInfo =
+        ignore <| this.compiledImports.TryAdd(moduleName, moduleInfo)  // The same module might be added more than once
+        this
 
-    member this.GetErrorImports : Logger list =
-        [ for mn in this.imports do 
-            let res = this.compiled.[mn]
-            if Result.isError res then yield Result.getError res ]
+    member this.GetImports : ModuleInfo list = 
+        Seq.toList this.compiledImports.Values
 
     member this.GetNameCheckEnvironments : Map<TranslationUnitPath, Environment> =
-        Map.ofList [ for pair in this.compiled do 
-                        if Result.isOk pair.Value then 
-                            yield (pair.Key, (Result.getOk pair.Value).info.GetEnv) ]
+        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv) ]
         
     member this.GetTypeCheckContexts =
-        this.GetOkImports
+        this.GetImports
         |> List.map (fun i -> i.typeCheck)
 
     member this.GetTypedModules = 
-        this.GetOkImports
+        this.GetImports
         |> List.map (fun i -> i.typedModule)
 
     member this.GetTranslationContexts = 
-        this.GetOkImports
+        this.GetImports
         |> List.map (fun i -> i.translation)
 
 
 
+// Checks if a compilation unit imports itself
+let private checkSelfImport (importedModule: AST.ModulePath) imports = 
+    if imports.moduleName = importedModule.path then
+        Dummy (importedModule.range, sprintf "Module '%s' imports itself" <| string imports.moduleName)
+        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
+        Error imports 
+    else
+        Ok imports
+
+
+let private checkCyclicImport (importedModule: AST.ModulePath) (imports: Imports) =
+    let modName = importedModule.path
+    let srcRng = importedModule.Range
+    if imports.importChain.Contains importedModule.path then
+        Dummy (srcRng, sprintf "Import of module '%s' is cyclic " <| string modName) 
+        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
+        Error imports
+    else
+        Ok imports
+    
+
+// tries to compile an imported module
+// if successful, adds it to the collection of compiled imported modules.
+// else logs an error for the importing module.
+let private compileImportedModule pkgCtx (modul: AST.ModulePath) (imports: Imports)  = 
+    let freshLogger = Diagnostics.Logger.create ()
+    let modName = modul.path
+    let srcRng = modul.Range
+    let importChain = imports.importChain
+    let compRes = CompilationUnit.require pkgCtx freshLogger importChain modName srcRng
+    match compRes with
+    | Ok modul ->
+        Ok <| imports.AddImport modName modul.info
+    | Error moduleLogger ->
+        Dummy (srcRng, "Could not import module " + string modName) 
+        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
+        Error imports 
+
+
+// Check one import
 let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) (imports: Imports) (import: AST.Member) 
                 : Imports = 
     match import with
     | AST.Member.Import i ->
-        let loggerForImport = Diagnostics.Logger.create() // new module needs a fresh logger
-        let moduleName = i.modulePath.path
-        // printfn "Create a new logger to require import: %s" <| string moduleName
-        let res = CompilationUnit.require pkgCtx loggerForImport moduleName
-        imports.AddImport moduleName <| res
+        let imports = { imports with importChain = imports.importChain.Increase i.modulePath.path }
+        checkSelfImport i.modulePath imports
+        |> Result.bind (checkCyclicImport i.modulePath)
+        |> Result.bind (compileImportedModule pkgCtx i.modulePath) 
+        |> fun res -> 
+            match res with | Error imports | Ok imports -> imports
+        
     | AST.Member.Pragma _ ->
         imports
     | _ ->
         failwith "This should never happen"
 
-let checkImports (pktCtx: CompilationUnit.Context<ModuleInfo>) logger (compUnit: AST.CompilationUnit) 
-        : Imports = 
-    let importCtx = Imports.Initialise logger
-    List.fold (checkImport pktCtx) importCtx compUnit.imports
+
+// Check all imports one after another
+// go on even if an import is not compilable
+let checkImports (pktCtx: CompilationUnit.Context<ModuleInfo>) logger importChain moduleName (compUnit: AST.CompilationUnit) 
+        : Result<Imports, Diagnostics.Logger> = 
+    // ToDo: Chain results and handle import chain correctly
+    // ToDo: Do not allow import of programs
+    let imports = List.fold (checkImport pktCtx) (Imports.Initialise logger importChain moduleName) compUnit.imports
+    if Diagnostics.Logger.hasErrors imports.logger then
+        Error imports.logger
+    else 
+        Ok imports
