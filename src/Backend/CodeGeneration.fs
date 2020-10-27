@@ -41,6 +41,9 @@ module Comment =
     
     let blechHeader = 
         cpGeneratedComment <| txt "blech types"
+
+    let importHeaders = 
+        cpGeneratedComment <| txt "imports"
     
     let selfInclude = 
         cpGeneratedComment <| txt "exports, user types and C wrappers"
@@ -139,6 +142,7 @@ let generateSubmoduleIncludes otherMods =
 /// Emit C code for module as Doc
 let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
                              (pragmas: Attribute.MemberPragma list) 
+                             importedModules
                              (compilations: Compilation list) 
                              entryPointOpt =
 
@@ -215,6 +219,8 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         |> Seq.map includeQuotedHfile
         |> dpBlock
     
+    let importIncludes = generateSubmoduleIncludes importedModules
+    
     let directCCalls = 
         cCalls
         |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
@@ -262,6 +268,8 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
       cHeaders
       Comment.blechHeader
       blechHeader
+      Comment.importHeaders
+      importIncludes 
       Comment.selfInclude
       selfHeader
       Comment.cConstants
@@ -288,11 +296,11 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
 // end of cpModuleCode
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: TranslationUnitPath) otherMods (compilations: Compilation list) entryPointOpt =
+let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules (compilations: Compilation list) entryPointOpt =
     // C header
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
-    let otherIncludes = generateSubmoduleIncludes otherMods
+    let importIncludes = generateSubmoduleIncludes importedModules
 
     // Translate function prototypes to extern functions and direct C calls
     let functionPrototypes = 
@@ -373,7 +381,8 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) otherMods (comp
       Comment.generatedCode
       Comment.blechHeader
       blechHeader
-      otherIncludes
+      Comment.importHeaders
+      importIncludes
       Comment.userTypes
       userTypes    // all user types are global
       Comment.activityContexts
@@ -434,24 +443,24 @@ let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilati
 
 
 // TODO: Use module name for self include. Remove separate entryPointName param - it is part of package fjg 10.01.19
-let public emitCode ctx (package: BlechModule) compilations =
-    cpModuleCode ctx package.name package.memberPragmas compilations None
+let public emitCode ctx (modul: BlechModule) importedModules compilations =
+    cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations None
     |> render (Some 80)
 
-let public emitMainCode ctx (package: BlechModule) compilations entryPointName =
-    cpModuleCode ctx package.name package.memberPragmas compilations (Some entryPointName)
+let public emitMainCode ctx (modul: BlechModule) importedModules compilations entryPointName =
+    cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations (Some entryPointName)
     |> render (Some 80)
 
 // TODO: Remove entryPointName, it is part of package. fjg 10.01.19
-let public emitHeader ctx (package: BlechModule) otherMods compilations =
-    cpModuleHeader ctx package.name otherMods compilations None
+let public emitHeader ctx (modul: BlechModule) importedModules compilations =
+    cpModuleHeader ctx modul.name importedModules compilations None
     |> render (Some 80)
 
-let public emitMainHeader ctx (package: BlechModule) otherMods compilations entryPointName =
-    cpModuleHeader ctx package.name otherMods compilations (Some entryPointName)
+let public emitMainHeader ctx (modul: BlechModule) importedModules compilations entryPointName =
+    cpModuleHeader ctx modul.name importedModules compilations (Some entryPointName)
     |> render (Some 80)
 
-let public emitApp ctx (package: BlechModule) compilations entryPointName =
-    cpApp ctx package.name compilations entryPointName
+let public emitApp ctx (modul: BlechModule) compilations entryPointName =
+    cpApp ctx modul.name compilations entryPointName
     //|> render (Some 160)
     |> render (Some 80)

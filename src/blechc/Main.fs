@@ -101,33 +101,33 @@ module Main =
         do writeFile signatureFile blechSignature
 
 
-    let private writeImplementation outDir moduleName (blechModule: BlechTypes.BlechModule) otherMods translationContext compilations =
+    let private writeImplementation outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
         let codeFile = Path.Combine(outDir, TranslatePath.moduleToCFile moduleName)
         let code = 
-            match blechModule.entryPoint with
+            match modul.entryPoint with
             | Some ep ->
-                CodeGeneration.emitMainCode translationContext blechModule compilations ep.name
+                CodeGeneration.emitMainCode translationContext modul importedModules compilations ep.name
             | None ->
-                CodeGeneration.emitCode translationContext blechModule compilations
+                CodeGeneration.emitCode translationContext modul importedModules compilations
         do writeFile codeFile code
 
 
-    let private writeHeader outDir moduleName (blechModule: BlechTypes.BlechModule) otherMods translationContext compilations =
+    let private writeHeader outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
         let headerFile = Path.Combine(outDir, TranslatePath.moduleToHFile moduleName)
         let header = 
-            match blechModule.entryPoint with
+            match modul.entryPoint with
             | Some ep ->
-                CodeGeneration.emitMainHeader translationContext blechModule otherMods compilations ep.name
+                CodeGeneration.emitMainHeader translationContext modul importedModules compilations ep.name
             | None ->
-                CodeGeneration.emitHeader translationContext blechModule otherMods compilations
+                CodeGeneration.emitHeader translationContext modul importedModules compilations
         do writeFile headerFile header
 
 
-    let private possiblyWriteTestApp (cliArgs: Arguments.BlechCOptions) (blechModule: BlechTypes.BlechModule) translationContext compilations =
-        match cliArgs.appName, blechModule.entryPoint with
+    let private possiblyWriteTestApp (cliArgs: Arguments.BlechCOptions) (modul: BlechTypes.BlechModule) translationContext compilations =
+        match cliArgs.appName, modul.entryPoint with
         | Some an, Some ep ->
             let appFile = Path.Combine(cliArgs.outDir, TranslatePath.appNameToCFile an)
-            let app = CodeGeneration.emitApp translationContext blechModule compilations ep.name
+            let app = CodeGeneration.emitApp translationContext modul compilations ep.name
             do FileInfo(appFile).Directory.Create()
             do File.WriteAllText(appFile, app)
         | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
@@ -266,16 +266,16 @@ module Main =
                     Logging.log2 "Main" ("writing C code for " + fileName)
 
                 
-                    let otherMods = imports.GetTypedModules
+                    let importedMods = imports.GetTypedModules
                     // TODO: Add otherMods to writeImplementation
                     // implementation should also include headers of imported modules, fjg. 19.10.20
-                    do writeImplementation cliArgs.outDir moduleName blechModule otherMods translationContext compilations
-                    do writeHeader cliArgs.outDir moduleName blechModule otherMods translationContext compilations
+                    do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
+                    do writeHeader cliArgs.outDir moduleName blechModule importedMods translationContext compilations
                     // generated test app if required by cliArgs
                     do possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
                 // return interface information and dependencies for module 
-                let importedModules = imports.GetImportedModules
+                let importedModules = imports.GetImportedModuleNames
                 Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule translationContext
 
             | _ ->

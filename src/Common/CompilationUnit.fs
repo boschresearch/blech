@@ -157,7 +157,7 @@ module CompilationUnit =
             
         
     /// loads a program or a module for compilation
-    /// Given a context with package information and a filename
+    /// Given a context with package information, a diagnostic logger for errors, an import chain and a filename
     /// try to determine a TranslationUnitName for it and load it
     let load (ctx: Context<'info>) logger (importChain: ImportChain) (fileName: string)
             : Result<Module<'info>, Diagnostics.Logger> =
@@ -210,7 +210,6 @@ module CompilationUnit =
     /// Given a context (including loaded translation units) and the 
     /// TranslationUnitPath to a translation unit to be loaded
     /// load the unit, compile it and return the compilation result for imported usage
-
     let require (ctx: Context<'info>) logger importChain (requiredModule: TranslationUnitPath) (importRange: Range.range)
             : Result<Module<'info>, Diagnostics.Logger> =
         if ctx.loaded.ContainsKey requiredModule then

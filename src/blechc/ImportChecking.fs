@@ -96,7 +96,7 @@ type Imports =
     member this.DecreaseImportChain =
         { this with importChain = this.importChain.Decrease}
 
-    member this.GetImportedModules : TranslationUnitPath list = 
+    member this.GetImportedModuleNames : TranslationUnitPath list = 
         Seq.toList ( this.compiledImports.Keys )
        
     member this.AddImport moduleName moduleInfo =
