@@ -46,6 +46,9 @@ type ModuleInfo =
             translation = translationContext
         }
 
+    member this.IsCompiledProgram = 
+        this.typedModule.IsAProgram
+
     member this.GetModuleName : TranslationUnitPath = 
         this.typedModule.name
 
@@ -80,14 +83,12 @@ type Imports =
         moduleName: TranslationUnitPath
         importChain: CompilationUnit.ImportChain // in reverse order, enables finding of import cycles
         compiledImports: Dictionary<TranslationUnitPath, ModuleInfo> // TODO: Remove this, it is also stored in the PackageContext
-        logger: Diagnostics.Logger  // The logger of the importing module
     }
     
-    static member Initialise logger importChain moduleName = 
+    static member Initialise importChain moduleName = 
         { moduleName = moduleName
           importChain = importChain
-          compiledImports = Dictionary()  // TODO: This is also cached in PackageContext - Remove from here, fjg. 23.10.20
-          logger = logger }
+          compiledImports = Dictionary() }
     
     member this.IncreaseImportChain moduleName = 
         { this with importChain = this.importChain.Increase moduleName }
@@ -123,58 +124,78 @@ type Imports =
 
 
 // Checks if a compilation unit imports itself
-let private checkSelfImport (importedModule: AST.ModulePath) imports = 
-    if imports.moduleName = importedModule.path then
-        Dummy (importedModule.range, sprintf "Module '%s' imports itself" <| string imports.moduleName)
-        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
-        Error imports 
-    else
-        Ok imports
+//let private checkSelfImport (importedModule: AST.ModulePath) logger imports = 
+//    if imports.moduleName = importedModule.path then
+//        Dummy (importedModule.range, sprintf "Module '%s' imports itself" <| string imports.moduleName)
+//        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+//        Error logger 
+//    else
+//        Ok imports
 
 
-let private checkCyclicImport (importedModule: AST.ModulePath) (imports: Imports) =
+let private checkCyclicImport (importedModule: AST.ModulePath) logger (imports: Imports) =
     let modName = importedModule.path
     let srcRng = importedModule.Range
     if imports.importChain.Contains importedModule.path then
         Dummy (srcRng, sprintf "Import of module '%s' is cyclic " <| string modName) 
-        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
-        Error imports
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger
     else
         Ok imports
+
+
+// check if the imported and compiled module is NOT a program
+let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledModule: CompilationUnit.Module<ModuleInfo>) (imports: Imports) =
+    let modName = modul.path
+    let srcRng = modul.Range
+    if compiledModule.info.IsCompiledProgram then
+        Dummy (srcRng, sprintf "Program '%s' cannot be imported." <| string modName) 
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger
+    else
+        Ok <| imports.AddImport modul.path compiledModule.info
     
 
 // tries to compile an imported module
 // if successful, adds it to the collection of compiled imported modules.
 // else logs an error for the importing module.
-let private compileImportedModule pkgCtx (modul: AST.ModulePath) (imports: Imports)  = 
-    let freshLogger = Diagnostics.Logger.create ()
+let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) (imports: Imports)  = 
     let modName = modul.path
     let srcRng = modul.Range
-    let importChain = imports.importChain
+    
+    let freshLogger = Diagnostics.Logger.create ()
+    let importChain = imports.importChain.Increase modName
     let compRes = CompilationUnit.require pkgCtx freshLogger importChain modName srcRng
+    
     match compRes with
-    | Ok modul ->
-        Ok <| imports.AddImport modName modul.info
-    | Error moduleLogger ->
-        Dummy (srcRng, "Could not import module " + string modName) 
-        |> Diagnostics.Logger.logError imports.logger Diagnostics.Phase.Importing
-        Error imports 
+    | Ok compiledModule ->
+        checkImportIsNotAProgram logger modul compiledModule imports  // log error the importing module's logger
+    | Error _ ->
+        Dummy (srcRng, "Could not compile module " + string modName) 
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger
+
 
 
 // Check one import
-let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) (imports: Imports) (import: AST.Member) 
-                : Imports = 
+let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (imports: Imports) (import: AST.Member) : Imports = 
     match import with
     | AST.Member.Import i ->
-        let imports = { imports with importChain = imports.importChain.Increase i.modulePath.path }
-        checkSelfImport i.modulePath imports
-        |> Result.bind (checkCyclicImport i.modulePath)
-        |> Result.bind (compileImportedModule pkgCtx i.modulePath) 
-        |> fun res -> 
-            match res with | Error imports | Ok imports -> imports
+        let returnImports = function 
+            | Ok updatedImports -> updatedImports
+            | Error _ -> imports
+            
+        // let imports = { imports with importChain = imports.importChain.Increase i.modulePath.path }
+        //checkSelfImport i.modulePath logger imports
+        //|> Result.bind (checkCyclicImport i.modulePath logger)
         
+        checkCyclicImport i.modulePath logger imports
+        |> Result.bind (compileImportedModule pkgCtx logger i.modulePath)
+        |> returnImports 
+    
     | AST.Member.Pragma _ ->
         imports
+    
     | _ ->
         failwith "This should never happen"
 
@@ -183,10 +204,12 @@ let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) (imports: 
 // go on even if an import is not compilable
 let checkImports (pktCtx: CompilationUnit.Context<ModuleInfo>) logger importChain moduleName (compUnit: AST.CompilationUnit) 
         : Result<Imports, Diagnostics.Logger> = 
-    // ToDo: Chain results and handle import chain correctly
-    // ToDo: Do not allow import of programs
-    let imports = List.fold (checkImport pktCtx) (Imports.Initialise logger importChain moduleName) compUnit.imports
-    if Diagnostics.Logger.hasErrors imports.logger then
-        Error imports.logger
+    // Compile all imported modules, regardless of compilation errors
+    let imports = 
+        List.fold (checkImport pktCtx logger) (Imports.Initialise importChain moduleName) compUnit.imports
+    
+    // Return Error if at least one imported module could not be compiled
+    if Diagnostics.Logger.hasErrors logger then
+        Error logger
     else 
         Ok imports

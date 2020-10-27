@@ -1,7 +1,7 @@
 import I1 "foo_import/foofoo"
 
 struct S 
-    var c: int32
+    var c: int32 
 end
 
 @[EntryPoint]

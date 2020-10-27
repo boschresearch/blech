@@ -444,6 +444,8 @@ and BlechModule =
         |> punctuate line 
         |> vsep
 
+    member this.IsAProgram = 
+        Option.isSome this.entryPoint
 
 //=============================================================================
 // Expressions 

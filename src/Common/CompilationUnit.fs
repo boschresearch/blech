@@ -52,12 +52,12 @@ module CompilationUnit =
                       message = sprintf "file '%s' uses and invalid Blech file extension" fileName}
                 
            
-            member err.ContextInformation = 
-                match err with
-                | ModuleNotFound (range = rng) ->
-                    [ { range = rng; message = "not found"; isPrimary = true } ]
-                | _ -> 
-                    []
+            member err.ContextInformation = []
+                //match err with
+                //| ModuleNotFound (range = rng) ->
+                //    [ { range = rng; message = "not found"; isPrimary = true } ]
+                //| _ -> 
+                //    []
             
             member err.NoteInformation =
                 match err with 
@@ -156,10 +156,10 @@ module CompilationUnit =
             Seq.toList (this.loaded.Values)
             
         
-    /// loads a program or or a module for compilation
+    /// loads a program or a module for compilation
     /// Given a context with package information and a filename
     /// try to determine a TranslationUnitName for it and load it
-    let load (ctx: Context<'info>) logger importChain (fileName: string)
+    let load (ctx: Context<'info>) logger (importChain: ImportChain) (fileName: string)
             : Result<Module<'info>, Diagnostics.Logger> =
         // let logger = ctx.logger
         let optLw = loadWhat fileName
@@ -198,11 +198,12 @@ module CompilationUnit =
                         <| Diagnostics.Phase.Compiling
                         <| IllegalModuleFileName (fileName, wrongIds)
                         Error logger
-                    | Ok translationUnitPath ->
+                    | Ok moduleName ->
                         // a valid TranslationUnitPath has been constructed
                         // now load it
                         // TODO: check if file is already compiled
-                        ctx.loader ctx logger importChain loadWhat translationUnitPath fileName
+                        let initialImportChain = importChain.Increase moduleName
+                        ctx.loader ctx logger initialImportChain loadWhat moduleName fileName
 
 
     /// requires an imported module for compilation
@@ -235,7 +236,7 @@ module CompilationUnit =
                     match sigFile with
                     | Ok blh ->
                         // ctx.loader ctx freshLogger Interface requiredModule blh
-                        ctx.loader ctx logger  importChain Implementation requiredModule blh
+                        ctx.loader ctx logger importChain Implementation requiredModule blh
                         //let compiled = ctx.loader ctx freshLogger Implementation requiredModule blh
                         //ctx.loaded.Add (requiredModule, compiled)
                         //compiled
