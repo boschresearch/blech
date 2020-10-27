@@ -786,6 +786,7 @@ module LexerUtils =
             mls, rng
 
     let finishSingleLineString lexbuf =
+        tokenBuilder.Append (String.Empty, getRange lexbuf)
         tokenBuilder.Token
 
     let unknownTokenInString lexbuf =
