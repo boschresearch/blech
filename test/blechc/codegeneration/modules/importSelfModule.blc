@@ -1,0 +1,7 @@
+import I "importSelf"
+
+module 
+
+activity Main () ()
+    await true
+end

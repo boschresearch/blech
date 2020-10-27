@@ -265,7 +265,6 @@ module Main =
 
                     Logging.log2 "Main" ("writing C code for " + fileName)
 
-                
                     let importedMods = imports.GetTypedModules
                     // TODO: Add otherMods to writeImplementation
                     // implementation should also include headers of imported modules, fjg. 19.10.20

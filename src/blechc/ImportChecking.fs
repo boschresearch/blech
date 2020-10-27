@@ -81,8 +81,8 @@ type Imports =
     private {
         // imports: TranslationUnitPath list
         moduleName: TranslationUnitPath
-        importChain: CompilationUnit.ImportChain // in reverse order, enables finding of import cycles
-        compiledImports: Dictionary<TranslationUnitPath, ModuleInfo> // TODO: Remove this, it is also stored in the PackageContext
+        importChain: CompilationUnit.ImportChain
+        compiledImports: Dictionary<TranslationUnitPath, ModuleInfo>
     }
     
     static member Initialise importChain moduleName = 
@@ -90,11 +90,11 @@ type Imports =
           importChain = importChain
           compiledImports = Dictionary() }
     
-    member this.IncreaseImportChain moduleName = 
-        { this with importChain = this.importChain.Increase moduleName }
+    member this.ExtendImportChain moduleName = 
+        { this with importChain = this.importChain.Extend moduleName }
 
-    member this.DecreaseImportChain =
-        { this with importChain = this.importChain.Decrease}
+    //member this.DecreaseImportChain =
+    //    { this with importChain = this.importChain.Decrease}
 
     member this.GetImportedModuleNames : TranslationUnitPath list = 
         Seq.toList ( this.compiledImports.Keys )
@@ -122,17 +122,9 @@ type Imports =
         |> List.map (fun i -> i.translation)
 
 
-
-// Checks if a compilation unit imports itself
-//let private checkSelfImport (importedModule: AST.ModulePath) logger imports = 
-//    if imports.moduleName = importedModule.path then
-//        Dummy (importedModule.range, sprintf "Module '%s' imports itself" <| string imports.moduleName)
-//        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
-//        Error logger 
-//    else
-//        Ok imports
-
-
+// check if there is a cylic module imported, i.e. 
+// the module to import is already contained in the chain of module imports
+// this also handles self import
 let private checkCyclicImport (importedModule: AST.ModulePath) logger (imports: Imports) =
     let modName = importedModule.path
     let srcRng = importedModule.Range
@@ -164,12 +156,13 @@ let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) (imports
     let srcRng = modul.Range
     
     let freshLogger = Diagnostics.Logger.create ()
-    let importChain = imports.importChain.Increase modName
+    let importChain = imports.importChain.Extend modName
     let compRes = CompilationUnit.require pkgCtx freshLogger importChain modName srcRng
     
     match compRes with
     | Ok compiledModule ->
-        checkImportIsNotAProgram logger modul compiledModule imports  // log error the importing module's logger
+        checkImportIsNotAProgram logger modul compiledModule imports  // log error to the importing module's logger
+
     | Error _ ->
         Dummy (srcRng, "Could not compile module " + string modName) 
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
@@ -184,11 +177,7 @@ let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (im
         let returnImports = function 
             | Ok updatedImports -> updatedImports
             | Error _ -> imports
-            
-        // let imports = { imports with importChain = imports.importChain.Increase i.modulePath.path }
-        //checkSelfImport i.modulePath logger imports
-        //|> Result.bind (checkCyclicImport i.modulePath logger)
-        
+
         checkCyclicImport i.modulePath logger imports
         |> Result.bind (compileImportedModule pkgCtx logger i.modulePath)
         |> returnImports 

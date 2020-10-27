@@ -53,11 +53,6 @@ module CompilationUnit =
                 
            
             member err.ContextInformation = []
-                //match err with
-                //| ModuleNotFound (range = rng) ->
-                //    [ { range = rng; message = "not found"; isPrimary = true } ]
-                //| _ -> 
-                //    []
             
             member err.NoteInformation =
                 match err with 
@@ -89,24 +84,19 @@ module CompilationUnit =
             None
 
 
-
     type ImportChain =
         private { chain : TranslationUnitPath list } // in reverse order
                 
         static member Empty = 
             { chain = [] }
         
-        member this.Increase moduleName =
+        member this.Extend moduleName =
             { chain = moduleName :: this.chain }
-
-        member this.Decrease =
-            { chain = List.tail this.chain}
 
         member this.Contains moduleName =  // detects a cyclic import
             List.contains moduleName this.chain
  
  
-
     type Module<'info> = 
         {
             moduleName: TranslationUnitPath
@@ -125,18 +115,16 @@ module CompilationUnit =
             blechPath: string
             package: string option // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
-            // logger: Diagnostics.Logger
             loader: Context<'info> -> Diagnostics.Logger -> ImportChain -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
-                    // package context -> module logger -> import chain -> LoadWhat -> from path -> file name -> Package or logged errors
+                    // package context -> module logger -> import chain -> LoadWhat -> module name -> file name -> compiled module or errors in logged errors
             loaded: Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>              
-                    // module name |-> Package
+                    // module name |-> compiled module or errors in logger
         }
         static member Make (arguments: Arguments.BlechCOptions) loader =
             { sourcePath = arguments.sourcePath
               blechPath = arguments.blechPath
-              package = None //PathRegex.ReservedPkg // the default package name is "blech", when nothing is given
+              package = None
               outDir = arguments.outDir
-              // logger = logger
               loader = loader
               loaded = Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>() }
 
@@ -150,12 +138,11 @@ module CompilationUnit =
                 if Result.isOk pairs.Value then 
                     oks.Add (pairs.Key, Result.getOk pairs.Value)
             oks
-                    
-       
+
         member this.GetLoaded =
             Seq.toList (this.loaded.Values)
-            
-        
+
+
     /// loads a program or a module for compilation
     /// Given a context with package information, a diagnostic logger for errors, an import chain and a filename
     /// try to determine a TranslationUnitName for it and load it
@@ -202,7 +189,7 @@ module CompilationUnit =
                         // a valid TranslationUnitPath has been constructed
                         // now load it
                         // TODO: check if file is already compiled
-                        let initialImportChain = importChain.Increase moduleName
+                        let initialImportChain = importChain.Extend moduleName
                         ctx.loader ctx logger initialImportChain loadWhat moduleName fileName
 
 
@@ -220,33 +207,22 @@ module CompilationUnit =
                 let blhFile = searchInterface ctx.outDir requiredModule
                 match blhFile, blcFile with
                 | Ok blh, Ok blc ->
-                    // TODO: compare blh and blc, if valid blh exists compile the blh as 'Interface' else
                     ctx.loader ctx logger importChain Implementation requiredModule blc
-                    //let compiled = ctx.loader ctx freshLogger Implementation requiredModule blc
-                    //ctx.loaded.Add (requiredModule, compiled)
-                    //compiled
+                
                 | Error _, Ok blc ->
                     ctx.loader ctx logger importChain Implementation requiredModule blc
-                    //let compiled = ctx.loader ctx freshLogger Implementation requiredModule blc
-                    //ctx.loaded.Add (requiredModule, compiled)
-                    //compiled
+                
                 | _ , Error triedBlcs ->
                     let sigFile = searchInterface ctx.blechPath requiredModule 
                     match sigFile with
                     | Ok blh ->
-                        // ctx.loader ctx freshLogger Interface requiredModule blh
                         ctx.loader ctx logger importChain Implementation requiredModule blh
-                        //let compiled = ctx.loader ctx freshLogger Implementation requiredModule blh
-                        //ctx.loaded.Add (requiredModule, compiled)
-                        //compiled
                     | Error triedBlhs ->
-                        // let lgr = ctx.logger
-                        printfn "Module not found: %s" <| requiredModule.ToString()
                         Diagnostics.Logger.logFatalError 
                         <| logger
                         <| Diagnostics.Phase.Compiling
                         <| ModuleNotFound (requiredModule, importRange, triedBlcs @ triedBlhs) 
                         Error logger
             
-            ctx.loaded.Add (requiredModule, compiled)
+            do ctx.loaded.Add (requiredModule, compiled)
             compiled

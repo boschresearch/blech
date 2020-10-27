@@ -430,11 +430,11 @@ module SymbolTable =
             match env.path, modEnv.path with
             | [globalscope], [modGlobalScope] ->
                 let renamedScope = Scope.rewriteId modGlobalScope name.id
-                let joinedLT = env.lookupTable.AddLookupTable modEnv.lookupTable
+                let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
                 Ok { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
-                              lookupTable = joinedLT}
+                              lookupTable = joinedLoookupTable}
             | _ ->
-                Error <| Dummy (name.range, "adding the module scope should always works")
+                Error <| Dummy (name.range, "adding the module scope should always work")
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Visibility.Open Recursion.No }
