@@ -128,17 +128,16 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 Logger.logError ctx.logger Diagnostics.Phase.Naming err
                 ctx
         with _ ->  // TODO: Remove this just for the time beeing, see above
-            ctx
+            failwith "this should not happen"
 
     let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
         let name = import.localName
-        // First step shadowing test
-        match Env.insertScopeName ctx.env name with
+        match Env.insertScopeName ctx.env name with // check for shadowing
         | Ok env ->
-            { ctx with env = env } // here is the difference to addDecl!
+            { ctx with env = env }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
-            { ctx with env = Env.enterAnonymousScope ctx.env } // cannot be accessed because it is anonymous 
+            ctx
      
 
     let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
