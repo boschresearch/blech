@@ -110,25 +110,15 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx     
 
-    // TODO: instead of moduleName pass given local name and the result from previous name check (env.path), fg 01.10.20
-    //let private addModule (ctx: NameCheckContext) (moduleName: FromPath.ModuleName) = 
-    //    let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
-    //    {ctx with env = env}
-     
-    let private addModule (ctx: NameCheckContext) (import: AST.Import) = 
+    
+    /// adds an imported module to the name check context
+    let private addModuleEnv (ctx: NameCheckContext) (import: AST.Import) = 
         //let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
         //{ctx with env = env}
         let localName = import.localName
-        try 
-            let modEnv = ctx.importedEnvs.[import.modulePath.path]  // TODO: This fails as long as any analysis runs after a failed import check, fjg. 23.10.20
-            match Env.addModuleEnv ctx.env localName modEnv with
-            | Ok env ->
-                { ctx with env = env }
-            | Error err ->
-                Logger.logError ctx.logger Diagnostics.Phase.Naming err
-                ctx
-        with _ ->  // TODO: Remove this just for the time beeing, see above
-            failwith "this should not happen"
+        let modEnv = ctx.importedEnvs.[import.modulePath.path]
+        { ctx with env = Env.addModuleEnv ctx.env localName modEnv }
+
 
     let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
         let name = import.localName
@@ -516,7 +506,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkImport ctx (import: AST.Import) = 
         addImportNameDecl ctx import
-        |> addModule <| import
+        |> addModuleEnv <| import
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
             addTypeDecl ctx etd                     // open, named, non-recursive                          

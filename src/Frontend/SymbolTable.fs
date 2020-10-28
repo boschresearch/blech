@@ -47,7 +47,7 @@ module SymbolTable =
     [<RequireQualifiedAccess>]
     type Recursion =
         | Yes       // The scope id can be used recursively, e.g a structured type
-        | No    // e.g a subprogram
+        | No        // e.g a subprogram
 
 
     type Scope = 
@@ -65,6 +65,7 @@ module SymbolTable =
     module Scope =
         
         let private globalId = "$Global"
+        let private exportId = "$Export"
 
         // this is a global state
         let private anonCounter = ref 0
@@ -123,7 +124,10 @@ module SymbolTable =
             create id Visibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-           create globalId Visibility.Open Recursion.No
+            create globalId Visibility.Open Recursion.No
+
+        let createExportScope () : Scope = 
+            create exportId Visibility.Open Recursion.No
 
         let rewriteId scope id : Scope =
             {scope with id = id}
@@ -216,6 +220,7 @@ module SymbolTable =
             // imports: Dictionary<TranslationUnitPath, Environment>
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
+            exports: Scope // gets populated via the exposes declaration
         }
     
         
@@ -289,15 +294,17 @@ module SymbolTable =
             do Scope.init ()   // initialize global state for anonymous scopes
             { Environment.moduleName = moduleName
               path = [ Scope.createGlobalScope () ]
-              lookupTable = LookupTable.Empty }
-
+              lookupTable = LookupTable.Empty 
+              exports = Scope.createExportScope () }
 
         let renameGlobalScope env id =
             match env.path with
             | [ globalScope ] ->
                 { env with path = [ Scope.rewriteId globalScope id ] }
             | _ -> failwith "This should never happen"  // Todo: Check this, fjg. 23.10.20
-            
+        
+        let renameExportScope env id = 
+            { env with exports = Scope.rewriteId env.exports id }
          
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -329,7 +336,6 @@ module SymbolTable =
 
             tryFindDeclScope env.path id
 
-        
         /// Returns a list of scopes names starting from the outermost scope in the current compilation unit
         let getQNamePrefix env : LongIdentifier = 
             List.rev env.path  
@@ -379,39 +385,6 @@ module SymbolTable =
         let insertScopeName env (name: Name) = 
             insertSymbol env name (IdLabel.Static) true
 
-        //let addImport env (translationUnitPath, importedEnv) : Environment =
-        //    do ignore <| env.imports.TryAdd(translationUnitPath, importedEnv)
-        //    env
-
-        //let init moduleName (envs: Environment list) =
-        //    do Scope.init ()  // initialize global state for anonymous scopes
-            
-        //    // add imported files' scopes as innerscopes
-        //    let importedScopes =
-        //        let globalScope = Scope.createGlobalScope ()
-        //        envs
-        //        |> List.collect (fun env -> env.path)
-        //        |> List.fold Scope.addInnerScope globalScope
-        //    let importedLookupTables =
-        //        envs
-        //        |> List.map (fun env -> env.lookupTable)
-        //        // |> List.fold LookupTable.Join LookupTable.Empty
-        //        |> List.fold (fun (lt: LookupTable) ilt -> lt.AddLookupTable ilt) LookupTable.Empty
-        //    let globalEnv =
-        //        { Environment.moduleName = moduleName
-        //          //imports = Dictionary()
-        //          path = [importedScopes]
-        //          lookupTable = importedLookupTables }
-        //    // add imported files' scopes as symbols
-        //    envs 
-        //    |> List.collect (fun env -> env.path)
-        //    |> List.fold (fun envRes scope -> 
-        //        envRes
-        //        |> Result.bind (fun env ->
-        //            insertScopeName env {id = scope.id; range = Range.range0})) //TODO
-        //        (Ok globalEnv)
-
-        //let initEmptyTable moduleName = init moduleName []
 
         let private enterInnerScope env id visibility recursion =
             assert not (Scope.containsInnerScope (currentScope env) id)
@@ -426,15 +399,15 @@ module SymbolTable =
         
         /// add the top-level module scope in the top level scope of the importing module with the id of the import name
         /// combine the the lookup tables of both
-        let addModuleEnv (env: Environment) (name: Name) (modEnv: Environment) = // TODO: This should always work, remove the Result return, fjg. 23.10.20
+        let addModuleEnv (env: Environment) (name: Name) (modEnv: Environment) = 
             match env.path, modEnv.path with
             | [globalscope], [modGlobalScope] ->
                 let renamedScope = Scope.rewriteId modGlobalScope name.id
                 let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
-                Ok { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
-                              lookupTable = joinedLoookupTable}
+                { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
+                           lookupTable = joinedLoookupTable }
             | _ ->
-                Error <| Dummy (name.range, "adding the module scope should always work")
+                failwith "Adding the module scope should always work"
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Visibility.Open Recursion.No }
@@ -476,8 +449,7 @@ module SymbolTable =
 
         
         /// name checks a static access path
-        /// updates the environment 
-        
+        /// updates the environment         
         let findCompletePath env (spath : AST.StaticNamedPath) : Result<Environment, NameCheckError> = 
             
             let rec findInnerDecls (decls: Name list) (scope: Scope) (path: Name list) : Name list = 
@@ -526,9 +498,8 @@ module SymbolTable =
         /// name check the static part of dynamic access path 
         /// updates the environment with a list of used names
         /// returns declaration name or an error
-        
-        let findPartialPath env (dpath: AST.DynamicAccessPath) : Result< Environment, NameCheckError > =   // we use array for better error messages
-            
+        let findPartialPath env (dpath: AST.DynamicAccessPath) : Result< Environment, NameCheckError > =
+
             let rec probeInnerDecls (decls: Name list) (scope: Scope) (path: Name list) = 
                 match path with
                 | [] ->
@@ -573,13 +544,13 @@ module SymbolTable =
             else
                 Error (NoDeclarationInDynamicAccess (path.[decls.Length], dpath))
 
+
         /// name checks an impliit member access
         /// i.e. a static access path without (currently?) one qualifying names
         /// updates the environment with the name usages
         /// returns declaration name or an error
-
         let findImplicitPath (env: Environment) (implicitMember: AST.StaticNamedPath) : Result<Environment, NameCheckError> =
-            
+
             // on success returns a list of declaration names
             // in case of failure an empty list
             // declsAcc starts with a guessed declaration
