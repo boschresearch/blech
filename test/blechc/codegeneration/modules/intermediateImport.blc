@@ -1,6 +1,6 @@
 import M "importMe"
 
-module
+module exposes ...
 
 const C: float32 = 2
 

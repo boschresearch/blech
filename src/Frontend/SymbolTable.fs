@@ -134,9 +134,9 @@ module SymbolTable =
 
 
     type NameInfo =
-        | Decl of QName
-        | Use of Name //TODO @FJG: please, clarify what Use is. When then name appears on the rhs? Is it not a "Use" when it is on the lhs?
-
+        | Decl of QName  // name declaration
+        | Use of Name    // usage of name that has been declared before 
+        | Expose of Name // exposing of name that is declared in a module, this is a declaration in the export scope 
 
     type LookupTable = 
         private { 
@@ -144,10 +144,6 @@ module SymbolTable =
         }
 
         static member Empty = { lookupTable = Dictionary() }
-
-        //static member Join this that =
-        //    let both = Seq.concat (seq{this.lookupTable; that.lookupTable})
-        //    { lookupTable = Dictionary(both) }
 
         member this.AddLookupTable imported = 
             // lookuptables might be imported more than once via different local names
@@ -170,16 +166,19 @@ module SymbolTable =
                 None
 
         // should be invisible outside this file
-        member nqt.addDecl name qname =
+        member internal nqt.addDecl name qname =
             // printfn "addDecl: name: %A qname: %A" name qname
             nqt.lookupTable.Add (name, Decl qname)
 
         // should be invisible outside this file
         // assumes declare before use        
-        member lt.addUsage usageName declName =
+        member internal lt.addUsage usageName declName =
             // Artificially generated names use the same range multiple times
             // therefore it is possible that a key already exists
             ignore <| lt.lookupTable.TryAdd (usageName,  Use declName)
+
+        member lt.addExposed exposedName declName =
+            lt.lookupTable.Add (exposedName, declName)
 
         member lt.Show = 
             let pairs = seq { for KeyValue(k,v) in lt.lookupTable do yield k, v }

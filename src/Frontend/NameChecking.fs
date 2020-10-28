@@ -171,6 +171,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         { ctx with env = Env.exitInnerScope ctx.env }
 
 
+    let private addExposeDecl (ctx: NameCheckContext) = 
+        ctx
+
     // begin ==========================================================
     // recursively descend the AST for name checking
 
@@ -571,13 +574,28 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             | Member.Import i ->
                 checkImport ctx i
                 // ctx // Handled separately, maybe we should fail here
-        
+
+
+    let checkExposing (ctx: NameCheckContext) (exposing: AST.Exposing) : NameCheckContext = 
+        match exposing with
+        | Few (names, rng) ->
+            List.iter (fun n -> printfn "Exposes: %s" <| string n) names
+            ctx 
+        | All rng ->
+            printfn "Expose all toplevel identifiers"
+            ctx 
+
+
+    let checkModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
+        Option.fold checkExposing ctx modSpec.exposing
+
 
     let checkCompilationUnit (ctx: NameCheckContext) (cu: AST.CompilationUnit) : NameCheckContext =
         printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
-        //printfn "path at the start\n%A" ctx.env.path
+        
         List.fold checkMember ctx cu.imports
         |> List.fold checkMember <| cu.members
+        |> Option.fold checkModuleSpec <| cu.spec  // check exposing last 
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
