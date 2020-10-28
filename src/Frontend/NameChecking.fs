@@ -174,6 +174,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let private addExposeDecl (ctx: NameCheckContext) = 
         ctx
 
+    let private enterModuleScope (ctx: NameCheckContext) =
+        { ctx with env = Env.enterModuleScope ctx.env}
+
+    let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
+        { ctx with env = Env.exportModuleScope ctx.env }
+
     // begin ==========================================================
     // recursively descend the AST for name checking
 
@@ -573,29 +579,37 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx
             | Member.Import i ->
                 checkImport ctx i
-                // ctx // Handled separately, maybe we should fail here
 
+    
+    let checkExposedName (ctx: NameCheckContext) (name: Name) =
+        ctx
 
-    let checkExposing (ctx: NameCheckContext) (exposing: AST.Exposing) : NameCheckContext = 
+    let checkExposing (ctx: NameCheckContext) (exposing: AST.Exposing) = 
         match exposing with
         | Few (names, rng) ->
             List.iter (fun n -> printfn "Exposes: %s" <| string n) names
-            ctx 
+            List.fold checkExposedName ctx names 
         | All rng ->
             printfn "Expose all toplevel identifiers"
-            ctx 
+            exportModuleScope ctx
 
+    let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
+        enterModuleScope ctx  // add an additional module scope, from which identifiers are exposed
+                            // imports cannot be exposed therefore the global scope is not suitable
+        //|> (fun ctx -> printfn "Scopes: %A" ctx.env.path; ctx)
 
-    let checkModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
+    let checkExposesInModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
         Option.fold checkExposing ctx modSpec.exposing
 
 
     let checkCompilationUnit (ctx: NameCheckContext) (cu: AST.CompilationUnit) : NameCheckContext =
-        printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
-        
+        // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
+        // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkMember ctx cu.imports
+        //|> Option.fold checkModuleSpec <| cu.spec // TODO: check why an optional module scope crashes code generation
+        |> enterModuleScope 
         |> List.fold checkMember <| cu.members
-        |> Option.fold checkModuleSpec <| cu.spec  // check exposing last 
+        |> Option.fold checkExposesInModuleSpec <| cu.spec  // check exposes <identifiers> last 
 
 
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking

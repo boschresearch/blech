@@ -1,7 +1,6 @@
 
 
-module 
-exposes S, multS, addS, accMultS
+module exposes ...
 
 struct S
     var a: int32

@@ -1,4 +1,4 @@
-module
+module exposes ...
 
 struct S
     var a: int32
