@@ -606,7 +606,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkMember ctx cu.imports
-        //|> Option.fold checkModuleSpec <| cu.spec // TODO: check why an optional module scope crashes code generation
+        // |> Option.fold checkModuleSpec <| cu.spec // TODO: check why an optional module scope crashes code generation
         |> enterModuleScope 
         |> List.fold checkMember <| cu.members
         |> Option.fold checkExposesInModuleSpec <| cu.spec  // check exposes <identifiers> last 
@@ -624,11 +624,11 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     /// This function ist just for testing compiler phases. It ignores imports
     /// It does not need a package context
-    let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) =
-        let ncc = List.fold checkMember ctx ast.members
-        if Diagnostics.Logger.hasErrors ncc.logger then
-            Error ncc.logger
-        else
-            Ok (ast, ncc.env.lookupTable)
+    //let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) =
+    //    let ncc = List.fold checkMember ctx ast.members
+    //    if Diagnostics.Logger.hasErrors ncc.logger then
+    //        Error ncc.logger
+    //    else
+    //        Ok (ast, ncc.env.lookupTable)
     
     // end ============================================================

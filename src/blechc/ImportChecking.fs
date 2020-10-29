@@ -52,7 +52,7 @@ type ModuleInfo =
     member this.GetModuleName : TranslationUnitPath = 
         this.typedModule.name
 
-    member this.GetEnv : SymbolTable.Environment = 
+    member this.GetEnv : Environment = 
         this.nameCheck
 
 

@@ -224,7 +224,7 @@ module Main =
             let lutAndPackRes = 
                 let otherLuts = imports.GetTypeCheckContexts
                 astAndSymTableRes 
-                |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName otherLuts (ast, env.lookupTable))
+                |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName otherLuts (ast, env))
         
             let pgsRes = 
                 lutAndPackRes 

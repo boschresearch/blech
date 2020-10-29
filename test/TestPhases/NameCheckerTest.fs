@@ -39,13 +39,15 @@ type Test() =
         
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
+            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
+            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
+
         match astAndEnv with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
         | Ok (ast, env) ->
-            printfn "%s" env.Show
+            printfn "%s" env.lookupTable.Show
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test
@@ -63,13 +65,14 @@ type Test() =
 
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
+            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
+            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
         match astAndEnv with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
         | Ok (ast, env) ->
-            printfn "%s" env.Show
+            printfn "%s" env.lookupTable.Show
             Assert.False true
 
         

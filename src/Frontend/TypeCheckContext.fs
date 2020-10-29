@@ -105,9 +105,9 @@ type TypeCheckContext =
           userTypes = Dictionary() 
           memberPragmas = ResizeArray() }
 
-    static member Init cliContext ncLut =
+    static member Init cliContext (ncEnv: SymbolTable.Environment) =
         { cliContext = cliContext
-          ncEnv = ncLut
+          ncEnv = ncEnv.lookupTable
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
           memberPragmas = ResizeArray() }
