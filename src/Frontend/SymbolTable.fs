@@ -127,6 +127,9 @@ module SymbolTable =
         let createGlobalScope () : Scope = // id : Scope = 
             create globalId Visibility.Open Recursion.No
 
+        let createModuleScope () : Scope =
+            create moduleId Visibility.Open Recursion.No
+
         let createExportScope () : Scope = 
             let id = nextAnonymousId()
             create id Visibility.Open Recursion.No
@@ -222,7 +225,7 @@ module SymbolTable =
             // imports: Dictionary<TranslationUnitPath, Environment>
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
-            exports: Scope // gets populated via the exposes declaration
+            exports: Scope option // gets populated via the exposes declaration
         }
     
         
@@ -297,16 +300,22 @@ module SymbolTable =
             { Environment.moduleName = moduleName
               path = [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty 
-              exports = Scope.createExportScope () }
+              exports = None }
+              // exports = Scope.createExportScope () }
 
-        let renameGlobalScope env id =
-            match env.path with
-            | [ globalScope ] ->
-                { env with path = [ Scope.rewriteId globalScope id ] }
-            | _ -> failwith "This should never happen"  // Todo: Check this, fjg. 23.10.20
+        let isModuleEnv env = 
+            Option.isSome env.exports
+
+        //let renameGlobalScope env id =
+        //    match env.path with
+        //    | [ globalScope ] ->
+        //        { env with path = [ Scope.rewriteId globalScope id ] }
+        //    | _ -> failwith "This should never happen"  // Todo: Check this, fjg. 23.10.20
         
         let renameExportScope env id = 
-            { env with exports = Scope.rewriteId env.exports id }
+            assert Option.isSome env.exports
+            let expScp = Option.get env.exports
+            { env with exports = Some <| Scope.rewriteId expScp id }
          
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -339,11 +348,9 @@ module SymbolTable =
             tryFindDeclScope env.path id
 
         /// Returns a list of scopes names starting from the outermost scope in the current compilation unit
-        // TODO: This is still ugly improve this
         let getQNamePrefix env : LongIdentifier = 
             List.rev env.path
-            |> List.tail  // dismiss the global scope
-            |> fun l -> if List.isEmpty l then List.empty else List.tail l  // dismiss the module scope if it is already created - after imports 
+            |> if isModuleEnv env then List.skip 2 else List.skip 1  // skip global scope and optional module scope
             |> List.map (fun scope -> scope.id)
 
         /// TODO @FJG: what is going on here?
@@ -402,36 +409,44 @@ module SymbolTable =
             // printfn "Enter Scope: %s" scope.id
             scope :: env.path
         
-        let enterModuleScope env : Environment = 
-            { env with path = enterInnerScope env "$Module" Visibility.Open Recursion.No} // TODO: call a function in the Scope module
-
+        /// exports the whole module scope, i.e. exposes ...
         let exportModuleScope env : Environment =
+            assert isModuleEnv env             // has Some exports
             match env.path with
-            | [moduleScope; globalScope] -> // in case we check a module, this is the final path
-                //printfn "The module scope is named : %s" moduleScope.id
-                //printfn "Module scope %A" moduleScope
-                { env with exports = moduleScope }
+            | [moduleScope; globalScope] ->
+                { env with exports = Some moduleScope }
             | scopes -> 
                 // printfn "Scopes: %A" scopes
-                failwith "this should be called wenn the global scope is fully namechecked and has a module scope"
+                failwith "this should be called wenn the module scope is fully namechecked"
 
-        /// add the export scope of an imported module in the top level scope of the importing module 
-        /// name it with the id of the import name
-        /// combine the the lookup tables of both
-        let addModuleEnv (env: Environment) (name: Name) (modEnv: Environment) = 
+        /// Add the export scope of an imported module in the top level scope of the importing module. 
+        /// Name it with the id of the import name.
+        /// Combine the the lookup tables of both
+        let addModuleEnv env (name: Name) (modEnv: Environment) : Environment = 
+            assert isModuleEnv modEnv
             //match env.path, modEnv.path with
             //| [globalscope], [modGlobalScope] ->
             match env.path with
             | [globalscope ] ->
-                // let renamedScope = Scope.rewriteId modGlobalScope name.id
-                let renamedScope = Scope.rewriteId modEnv.exports name.id
+                let expFromMod = Option.get modEnv.exports // exports from imported module
+                let renamedScope = Scope.rewriteId expFromMod name.id
                 let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
                 { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
                            lookupTable = joinedLoookupTable }
             | _ ->
                 failwith "Adding the module scope should always work"
 
-        
+        let private initialiseExportScope env : Environment =
+            { env with exports = Some <| Scope.createExportScope() }
+
+        /// Enters a module scope - keyword module - and creates the export scope.
+        /// This makes the enviroment a module environment - 
+        /// instead of a program environment with None exports
+        let enterModuleScope env : Environment =
+            assert (List.length env.path = 1)  // We only have the global import scope
+            let modEnv = initialiseExportScope env
+            let modScp = Scope.createModuleScope ()
+            { modEnv with path = modScp :: modEnv.path }
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Visibility.Open Recursion.No }
@@ -453,14 +468,14 @@ module SymbolTable =
         let exitInnerScope (env: Environment) =
             assert (List.length env.path >= 1) // at least GlobalScope
             match env.path with
-            | [globalscope] ->
-                // printfn "Exit Scope: %s" globalscope.id
-                { env with path = [] }// leaving the global scope
             | current :: parent :: outer ->
                 // printfn "Exit Scope: %s" current.id
                 { env with path = Scope.addInnerScope parent current :: outer } 
+            | [globalscope] ->
+                // printfn "Exit Scope: %s" globalscope.id
+                { env with path = [] }// leaving the global scope
             | [] ->
-                failwith "this should never happen"
+                failwith "the scope path should never be empty"
 
         let findNameInCurrentScope env (name: Name) : Result<Environment, NameCheckError> =
             match Scope.tryFindSymbol (currentScope env) name.id with
@@ -471,7 +486,7 @@ module SymbolTable =
             | None ->
                 Result.Error (NoDeclaration name)
 
-        
+
         /// name checks a static access path
         /// updates the environment         
         let findCompletePath env (spath : AST.StaticNamedPath) : Result<Environment, NameCheckError> = 

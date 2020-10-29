@@ -175,7 +175,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         ctx
 
     let private enterModuleScope (ctx: NameCheckContext) =
-        { ctx with env = Env.enterModuleScope ctx.env}
+        { ctx with env = Env.enterModuleScope ctx.env }
 
     let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
         { ctx with env = Env.exportModuleScope ctx.env }
@@ -595,9 +595,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
         enterModuleScope ctx  // add an additional module scope, from which identifiers are exposed
-                            // imports cannot be exposed therefore the global scope is not suitable
-        //|> (fun ctx -> printfn "Scopes: %A" ctx.env.path; ctx)
-
+                              // imports cannot be exposed therefore the global scope is not suitable
+        
     let checkExposesInModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
         Option.fold checkExposing ctx modSpec.exposing
 
@@ -606,12 +605,10 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkMember ctx cu.imports
-        // |> Option.fold checkModuleSpec <| cu.spec // TODO: check why an optional module scope crashes code generation
-        |> enterModuleScope 
+        |> Option.fold checkModuleSpec <| cu.spec
         |> List.fold checkMember <| cu.members
         |> Option.fold checkExposesInModuleSpec <| cu.spec  // check exposes <identifiers> last 
-
-
+        
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
     let checkDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
         let ncc = checkCompilationUnit ctx ast
