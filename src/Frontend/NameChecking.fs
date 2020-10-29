@@ -171,8 +171,13 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         { ctx with env = Env.exitInnerScope ctx.env }
 
 
-    let private addExposeDecl (ctx: NameCheckContext) = 
-        ctx
+    let private addExposedName (ctx: NameCheckContext) name = 
+        match Env.insertExposedName ctx.env name with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err       
+            ctx
 
     let private enterModuleScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterModuleScope ctx.env }
@@ -581,17 +586,15 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkImport ctx i
 
     
-    let checkExposedName (ctx: NameCheckContext) (name: Name) =
-        ctx
-
     let checkExposing (ctx: NameCheckContext) (exposing: AST.Exposing) = 
         match exposing with
         | Few (names, rng) ->
             List.iter (fun n -> printfn "Exposes: %s" <| string n) names
-            List.fold checkExposedName ctx names 
+            List.fold addExposedName ctx names 
         | All rng ->
-            printfn "Expose all toplevel identifiers"
+            printfn "Exposes: All toplevel identifiers"
             exportModuleScope ctx
+
 
     let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
         enterModuleScope ctx  // add an additional module scope, from which identifiers are exposed

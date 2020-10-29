@@ -130,6 +130,9 @@ module SymbolTable =
         let createModuleScope () : Scope =
             create moduleId Visibility.Open Recursion.No
 
+        let isModuleScope scope = 
+            scope.id = moduleId
+
         let createExportScope () : Scope = 
             let id = nextAnonymousId()
             create id Visibility.Open Recursion.No
@@ -139,9 +142,10 @@ module SymbolTable =
 
 
     type NameInfo =
-        | Decl of QName  // name declaration
-        | Use of Name    // usage of name that has been declared before 
-        | Expose of Name // exposing of name that is declared in a module, this is a declaration in the export scope 
+        | Decl of QName  // declaration of a name, points to the fully qualified name
+        | Use of Name    // usage of a name that has been declared before, points to the declaration name
+        | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
+
 
     type LookupTable = 
         private { 
@@ -184,7 +188,7 @@ module SymbolTable =
             ignore <| lt.lookupTable.TryAdd (usageName,  Use declName)
 
         member lt.addExposed exposedName declName =
-            lt.lookupTable.Add (exposedName, declName)
+            lt.lookupTable.Add (exposedName, Expose declName)
 
         member lt.Show = 
             let pairs = seq { for KeyValue(k,v) in lt.lookupTable do yield k, v }
@@ -391,11 +395,49 @@ module SymbolTable =
             | Some shadowed ->
                 Error <| ShadowingDeclaration (name, shadowed.name)
          
+
+        
+
         let insertName env (name: Name) (label: IdLabel) = 
             insertSymbol env name label false
 
         let insertScopeName env (name: Name) = 
             insertSymbol env name (IdLabel.Static) true
+
+        ////////////////////////////////////
+        // TODO: meaningful error messages
+        // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" expose
+
+        let insertExposedName env (name: Name) =
+            assert isModuleEnv env
+            let exportScope = Option.get env.exports
+            let moduleScope = currentScope env
+            assert Scope.isModuleScope moduleScope
+                    
+            match Scope.tryFindSymbol exportScope name.id with // is id already exposed?
+            | None ->
+                match Scope.tryFindSymbol moduleScope name.id with // lookup the top-level declaration
+                | None -> 
+                    Error <| Dummy (name.Range, sprintf "Exported id '%s' not found" name.id)
+                
+                | Some declSymbol ->
+                    do env.lookupTable.addExposed name declSymbol.name 
+                    // TODO: move this to a helper function 
+                    let exposedSymbol = Symbol.Create name declSymbol.isScope
+                    match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
+                    | Some exposedScope -> // exposed id is also a scope
+                        let export = 
+                            Scope.addInnerScope exportScope exposedScope
+                            |> Scope.addSymbol <| exposedSymbol
+                        Ok { env with exports = Some export} 
+                    | None ->             // exposed id is not a scope
+                        Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
+                            
+            | Some alreadyExposed ->
+                Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
+        
+        /////////////////
+        
 
 
         let private enterInnerScope env id visibility recursion =
