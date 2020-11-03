@@ -1355,15 +1355,16 @@ Import
                                                                    exposing = None } }
 
 
-NameList
-    : Name                                      { [$1] }
-    | Name NameList                             { $1 :: $2 }
-
 /*
 NameList
     : Name                                      { [$1] }
-    | Name COMMA NameList                       { $1::$3 }
+    | Name NameList                             { $1 :: $2 }
 */
+
+NameList
+    : Name                                      { [$1] }
+    | Name COMMA NameList                       { $1::$3 }
+
 
 ImportList
     :                                           { [] } 

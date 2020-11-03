@@ -125,7 +125,7 @@ module SymbolTable =
             create id Visibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-            create globalId Visibility.Open Recursion.No
+            create globalId Visibility.Closed Recursion.No // Closed to disable shadowing for top-level module declarations
 
         let createModuleScope () : Scope =
             create moduleId Visibility.Open Recursion.No
@@ -472,9 +472,9 @@ module SymbolTable =
             | [globalscope ] ->
                 let expFromMod = Option.get modEnv.exports // exports from imported module
                 let renamedScope = Scope.rewriteId expFromMod name.id
-                let joinedLookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
+                let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
                 { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
-                           lookupTable = joinedLookupTable }
+                           lookupTable = joinedLoookupTable }
             | _ ->
                 failwith "Adding the module scope should always work"
 
