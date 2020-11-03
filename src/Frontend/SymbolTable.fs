@@ -125,7 +125,7 @@ module SymbolTable =
             create id Visibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-            create globalId Visibility.Closed Recursion.No // Closed to disable shadowing for top-level module declarations
+            create globalId Visibility.Open Recursion.No
 
         let createModuleScope () : Scope =
             create moduleId Visibility.Open Recursion.No
@@ -139,6 +139,9 @@ module SymbolTable =
 
         let rewriteId scope id : Scope =
             {scope with id = id}
+
+        let closeScope scope = 
+            { scope with visibility = Visibility.Closed }
 
 
     type NameInfo =
@@ -306,6 +309,7 @@ module SymbolTable =
               lookupTable = LookupTable.Empty 
               exports = None }
               // exports = Scope.createExportScope () }
+
 
         let isModuleEnv env = 
             Option.isSome env.exports
@@ -481,12 +485,22 @@ module SymbolTable =
         let private initialiseExportScope env : Environment =
             { env with exports = Some <| Scope.createExportScope() }
 
+        
+        // For a program the global scope must be open
+        // This is the default for the global scope
+        // A module has an additional open module scope, 
+        // For a module the global scope must be closed to prevent shadowing of imports and module declarations
+        let private closeGlobalScope env =
+            assert (List.length env.path = 1)           
+            let globalScope = env.path.[0]
+            { env with path = [Scope.closeScope globalScope] }
+
         /// Enters a module scope - keyword module - and creates the export scope.
-        /// This makes the enviroment a module environment - 
-        /// instead of a program environment with None exports
+        /// This makes the environment a module environment - 
+        /// instead of a program environment with None exports and and open global scope
         let enterModuleScope env : Environment =
-            assert (List.length env.path = 1)  // We only have the global import scope
-            let modEnv = initialiseExportScope env
+            assert (List.length env.path = 1)  // We only have the global scope to be used for imports
+            let modEnv = closeGlobalScope env |> initialiseExportScope
             let modScp = Scope.createModuleScope ()
             { modEnv with path = modScp :: modEnv.path }
 
