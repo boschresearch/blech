@@ -599,7 +599,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
         enterModuleScope ctx  // add an additional module scope, from which identifiers are exposed
                               // imports cannot be exposed therefore the global scope is not suitable
-        
+
+
     let checkExposesInModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
         Option.fold checkExposing ctx modSpec.exposing
 

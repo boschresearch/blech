@@ -406,7 +406,7 @@ module SymbolTable =
 
         ////////////////////////////////////
         // TODO: meaningful error messages
-        // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" expose
+        // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
 
         let insertExposedName env (name: Name) =
             assert isModuleEnv env
@@ -472,9 +472,9 @@ module SymbolTable =
             | [globalscope ] ->
                 let expFromMod = Option.get modEnv.exports // exports from imported module
                 let renamedScope = Scope.rewriteId expFromMod name.id
-                let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
+                let joinedLookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
                 { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
-                           lookupTable = joinedLoookupTable }
+                           lookupTable = joinedLookupTable }
             | _ ->
                 failwith "Adding the module scope should always work"
 
