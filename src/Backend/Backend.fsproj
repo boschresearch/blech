@@ -15,6 +15,7 @@
     <Compile Include="CPrinter.fs" />
     <Compile Include="ActivityTranslator.fs" />
     <Compile Include="FunctionTranslator.fs" />
+    <Compile Include="TraceGenerator.fs" />
     <Compile Include="ProgramGenerator.fs" />
     <Compile Include="CodeGeneration.fs" />
   </ItemGroup>

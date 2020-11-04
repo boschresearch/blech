@@ -109,7 +109,8 @@ let private cpOutputParam tcc (output: ParamDecl) =
     | ValueTypes (ArrayType _) -> cpArrayDeclDoc oname output.datatype
     | _ -> cpType output.datatype <+> cpDeref oname
 
-let private cpActContext name =
+// used also in TraceGenerator
+let cpActContext name =
     let typename = txt "struct" <+> cpStaticName name
     let ctxname = txt CTX
     typename <+> cpDeref ctxname
