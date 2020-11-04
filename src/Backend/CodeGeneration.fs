@@ -16,6 +16,10 @@
 
 module Blech.Backend.CodeGeneration
 
+// Concerning header files we follow:
+// http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
+
+
 open Blech.Common
 open Blech.Common.TranslationUnitPath
 open Blech.Common.PPrint.PPrint
@@ -268,10 +272,13 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
       cHeaders
       Comment.blechHeader
       blechHeader
-      Comment.importHeaders
-      importIncludes 
+      
+      // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
       Comment.selfInclude
       selfHeader
+      Comment.importHeaders 
+      importIncludes 
+
       Comment.cConstants
       externConstMacros
       Comment.cFunctions
