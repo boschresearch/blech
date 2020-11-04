@@ -122,7 +122,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
         let name = import.localName
-        match Env.insertScopeName ctx.env name with // check for shadowing
+        match Env.insertImportName ctx.env name with // check for shadowing
         | Ok env ->
             { ctx with env = env }
         | Error err ->
@@ -140,9 +140,19 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
 
 
+    let private addConstOrParamDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) =
+        let name = decl.name
+        match Env.insertConstOrParamName ctx.env name with
+        | Ok env -> 
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx
+
+
     let private addTypeDecl (ctx: NameCheckContext) (sd: AST.IDeclarable) = 
         let name = sd.name
-        match Env.insertScopeName ctx.env name with
+        match Env.insertTypeName ctx.env name with
         | Ok env ->
             { ctx with env = Env.enterOpenScope env name } // here is the difference to addDecl!
         | Error err ->
@@ -151,7 +161,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
  
     let private addSubprogramDecl (ctx: NameCheckContext) name = 
-        match Env.insertScopeName ctx.env name with  // wird im inner scope eingetragen
+        match Env.insertSubProgramName ctx.env name with  // wird im inner scope eingetragen
         | Ok env ->
             { ctx with env = Env.enterClosedScope env name }
         | Error err ->
@@ -184,6 +194,13 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
         { ctx with env = Env.exportModuleScope ctx.env }
+
+    let private addExposedId ctx name =
+        { ctx with env = Env.addExposedIdentifier ctx.env name.id }
+
+    let private addExposedAll ctx = 
+        { ctx with env = Env.addExposedAll ctx.env } 
+
 
     // begin ==========================================================
     // recursively descend the AST for name checking
@@ -344,7 +361,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkStaticVarDecl ctx (vd: AST.VarDecl) = 
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
-        |> addDecl <| vd <| IdLabel.Static// added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        |> addConstOrParamDecl <| vd // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+
 
     let checkLocation ctx (lhs: AST.Receiver) =
         match lhs with
@@ -586,6 +604,19 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkImport ctx i
 
     
+    let collectExposing ctx (exposing: AST.Exposing) =
+        match exposing with
+        | Few (names, _) ->
+            List.fold addExposedId ctx names 
+        | All _ ->
+            addExposedAll ctx
+        
+   
+    let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
+        Option.fold collectExposing ctx modSpec.exposing
+        |> enterModuleScope   // add an additional module scope, from which identifiers are exposed
+                              // imports cannot be exposed therefore the global scope is not suitable
+
     let checkExposing (ctx: NameCheckContext) (exposing: AST.Exposing) = 
         match exposing with
         | Few (names, rng) ->
@@ -594,12 +625,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | All rng ->
             printfn "Exposes: All toplevel identifiers"
             exportModuleScope ctx
-
-
-    let checkModuleSpec ctx (modSpec: AST.ModuleSpec) =
-        enterModuleScope ctx  // add an additional module scope, from which identifiers are exposed
-                              // imports cannot be exposed therefore the global scope is not suitable
-
 
     let checkExposesInModuleSpec (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
         Option.fold checkExposing ctx modSpec.exposing
