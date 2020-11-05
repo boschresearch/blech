@@ -26,15 +26,22 @@ module SymbolTable =
     open CommonTypes
     
     
+    type Access = // a symbol property
+        | Hidden        // non-exposed const, param, function, activitity, or any other internal declaration
+        | Opaque        // non-exposed type, struct, enum
+        | Transparent   // all exposed entitites
+        | Imported      // imported modules 
+
+
     /// TODO @FJG: What is a symbol?
     type Symbol = 
         private {
             name: Name
-            // access: AccessControl
+            access: Access
             isScope: bool
         }
-        static member Create name isScope =
-            { name = name; isScope = isScope }
+        static member Create name access isScope =
+            { name = name; access = access; isScope = isScope }
     
     
     /// TODO @FJG: What does it mean?
@@ -144,7 +151,7 @@ module SymbolTable =
             { scope with visibility = Visibility.Closed }
 
 
-    type NameInfo =
+    type private NameInfo =
         | Decl of QName  // declaration of a name, points to the fully qualified name
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
@@ -222,19 +229,6 @@ module SymbolTable =
             this.lastNameToQname namePart, subExprPart
             
             
-    /// Context of the name resolution compiler phase
-    /// The "path" is a stack which starts with an empty, global scope
-    /// At the end, only the global scope remains but all subscopes will have been added as inner scopes
-    /// Thus at the end, path is a singleton element list with a tree of scopes given by the innerscopes attributes
-    type Environment = 
-        {
-            moduleName: TranslationUnitPath
-            // imports: Dictionary<TranslationUnitPath, Environment>
-            path: Scope list // sorted from current (innermost) to outermost
-            lookupTable: LookupTable
-            exports: Scope option // gets populated via the exposes declaration
-        }
-    
         
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name
@@ -298,6 +292,26 @@ module SymbolTable =
 
             member err.NoteInformation = []
 
+
+    
+    type private Exposed = 
+        | Few of Identifier list
+        | All
+
+    /// Context of the name resolution compiler phase
+    /// The "path" is a stack which starts with an empty, global scope
+    /// At the end, only the global scope remains but all subscopes will have been added as inner scopes
+    /// Thus at the end, path is a singleton element list with a tree of scopes given by the innerscopes attributes
+    type Environment = 
+        private {
+            moduleName: TranslationUnitPath
+            // imports: Dictionary<TranslationUnitPath, Environment>
+            exposed: Exposed option 
+            path: Scope list // sorted from current (innermost) to outermost
+            lookupTable: LookupTable
+            exports: Scope option // gets populated via the exposes declaration
+        }
+
     [<RequireQualifiedAccess>]        
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Environment =
@@ -305,14 +319,42 @@ module SymbolTable =
         let init moduleName =
             do Scope.init ()   // initialize global state for anonymous scopes
             { Environment.moduleName = moduleName
+              exposed = None
               path = [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty 
               exports = None }
               // exports = Scope.createExportScope () }
 
+        let getLookupTable env =
+            env.lookupTable
 
         let isModuleEnv env = 
             Option.isSome env.exports
+
+        let isExposedId env identifier =
+            match env.exposed with
+            | None -> 
+                false
+            | Some (Few ids) -> 
+                List.contains identifier ids
+            | Some (All) -> 
+                true
+
+        let addExposedIdentifier env id = 
+            let exposed = 
+                match env.exposed with
+                | None -> Some <| Few [id]
+                | Some (Few ids) -> Some <| Few (id::ids)
+                | Some All -> failwith "This can never happen"
+            { env with exposed = exposed }
+
+        let addExposedAll env = 
+            let exposed =
+                match env.exposed with
+                | None -> Some All
+                | Some _ -> failwith "This can never happen"
+            { env with exposed = exposed }
+
 
         //let renameGlobalScope env id =
         //    match env.path with
@@ -383,30 +425,46 @@ module SymbolTable =
             | None ->
                 shadows (currentOuter env) id
 
-        let private insertSymbol env (name: Name) (label: IdLabel) isScope =
+        let private insertSymbol env (name: Name) (label: IdLabel) access isScope =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
                 // printfn "Qname: %A" qname
                 try
                     do env.lookupTable.addDecl name qname
+                    // printfn "Name: %A, QName: %A" name qname
                 with exp ->
                     printfn "%A" exp
                     // printf "%A" (env.lookupTable.ToString())
-                let symbol = Symbol.Create name isScope
+                let symbol = Symbol.Create name access isScope
                 let newEnv = { env with path = Scope.addSymbol (currentScope env) symbol :: currentOuter env }
                 Ok newEnv
             | Some shadowed ->
                 Error <| ShadowingDeclaration (name, shadowed.name)
          
 
-        
+        let insertName env (name: Name) (label: IdLabel) =
+            insertSymbol env name label Access.Hidden false
 
-        let insertName env (name: Name) (label: IdLabel) = 
-            insertSymbol env name label false
 
-        let insertScopeName env (name: Name) = 
-            insertSymbol env name (IdLabel.Static) true
+        let insertSubProgramName env (name: Name) =
+            let access = if isExposedId env name.id then Access.Transparent else Access.Hidden
+            insertSymbol env name (IdLabel.Static) access true
+
+
+        let insertImportName env (name: Name) =
+            insertSymbol env name IdLabel.Static Access.Imported true
+
+
+        let insertTypeName env (name: Name) =
+            let access = if isExposedId env name.id then Access.Transparent else Access.Opaque
+            insertSymbol env name (IdLabel.Static) access true
+ 
+ 
+        let insertConstOrParamName env (name: Name) = 
+            let access = if isExposedId env name.id then Access.Transparent else Access.Hidden
+            insertSymbol env name IdLabel.Static access false
+
 
         ////////////////////////////////////
         // TODO: meaningful error messages
@@ -427,7 +485,7 @@ module SymbolTable =
                 | Some declSymbol ->
                     do env.lookupTable.addExposed name declSymbol.name 
                     // TODO: move this to a helper function 
-                    let exposedSymbol = Symbol.Create name declSymbol.isScope
+                    let exposedSymbol = Symbol.Create name Transparent declSymbol.isScope
                     match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
                     | Some exposedScope -> // exposed id is also a scope
                         let export = 
@@ -578,9 +636,10 @@ module SymbolTable =
             
             let path = spath.names
             let decls = findDecls path
-            
             do List.iter2 env.lookupTable.addUsage <| List.take decls.Length path <| decls
-
+            //do List.iter (fun decl -> printfn "Decl:\n %A" decl; 
+            //                          printfn "QName:\n %A" (env.lookupTable.nameToQname decl) ) decls
+            
             let isOk = decls.Length = path.Length 
             if isOk then
                 Ok env
