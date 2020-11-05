@@ -286,7 +286,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
           globVars
       Comment.compilations
       code
-      (if ctx.cliContext.trace then genStatePrinters compilations else empty)
+      (if ctx.cliContext.trace then genStatePrinters ctx.tcc compilations else empty)
       if entryPointOpt.IsSome then
           Comment.progam
           mainCallback

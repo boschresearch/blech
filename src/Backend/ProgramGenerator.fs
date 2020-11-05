@@ -361,12 +361,24 @@ let internal printState ctx printState (entryCompilation: Compilation) =
               txt "&blc_blech_ctx" ]
             |> dpCommaSeparatedInParens
         cpStaticName entryCompilation.name <^> txt "_printPcs" <^> args <^> semi
+
+    let showVars =
+        let args =
+            [ txt "\"\""
+              txt "&blc_blech_ctx" ]
+            |> dpCommaSeparatedInParens
+        cpStaticName entryCompilation.name <^> txt "_printLocals" <^> args <^> semi
         
     txt "void" 
     <+> cpStaticName printState
     <+> cpMainIface ctx.tcc false entryCompilation
     <+> txt "{"
-    <.> (cpIndent (dpBlock [showPcs]))
+    <.> txt """printf("\t\t\t\"pcs\": {");"""
+    <.> cpIndent showPcs
+    <.> txt """printf("\n\t\t\t},\n");"""
+    <.> txt """printf("\t\t\t\"vars\": {");"""
+    <.> cpIndent showVars
+    <.> txt """printf("\n\t\t\t}\n");"""
     <.> txt "}"
 
 let appMainLoop ctx init tick printState entryCompilation =
