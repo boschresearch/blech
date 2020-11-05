@@ -182,7 +182,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let private addExposedName (ctx: NameCheckContext) name = 
-        match Env.insertExposedName ctx.env name with
+        match Env.exportExposedName ctx.env name with
         | Ok env ->
             { ctx with env = env }
         | Error err ->

@@ -26,10 +26,11 @@ module SymbolTable =
     open CommonTypes
     
     
-    type Access = // a symbol property
-        | Hidden        // non-exposed const, param, function, activitity, or any other internal declaration
-        | Opaque        // non-exposed type, struct, enum
-        | Transparent   // all exposed entitites
+    type Visibility = // a symbol property
+        | Hidden        // non-exposed: const, param, function, activitity, or any other internal declaration
+        | Opaque        // implicitly exposed types: type, struct, enum
+        | Translucent   // explicitly exposed prototypes: function, activity 
+        | Transparent   // explicitly exposed: types, const, param 
         | Imported      // imported modules 
 
 
@@ -37,16 +38,16 @@ module SymbolTable =
     type Symbol = 
         private {
             name: Name
-            access: Access
+            visibility: Visibility
             isScope: bool
         }
-        static member Create name access isScope =
-            { name = name; access = access; isScope = isScope }
-    
+        static member Create name visibility isScope =
+            { name = name; visibility = visibility; isScope = isScope }
+            // |> fun symbol -> printfn "Symbol: %A" symbol; symbol
     
     /// TODO @FJG: What does it mean?
     [<RequireQualifiedAccess>]
-    type Visibility = // a scope property
+    type Accessibility = // a scope property
         | Open
         | Closed  // a closed scope cannot be accessed from outside
 
@@ -60,7 +61,7 @@ module SymbolTable =
     type Scope = 
         private {
             id: Identifier
-            visibility: Visibility
+            access: Accessibility
             recursion: Recursion
             symbols: Map<Identifier, Symbol>
             innerscopes : Map<Identifier, Scope>    // added when scopes are left 
@@ -118,37 +119,37 @@ module SymbolTable =
             scope.innerscopes.TryFind id
 
         let allowsShadowing scope =
-            scope.visibility = Visibility.Open
+            scope.access = Accessibility.Open
 
-        let create id visibility recursion =
+        let create id access recursion =
             { Scope.id = id
-              visibility = visibility
+              access = access
               recursion = recursion
               symbols = Map.empty
               innerscopes = Map.empty }
     
         let createAnonymous () =
             let id = nextAnonymousId ()
-            create id Visibility.Closed Recursion.No // always closed non-recursive, because id is generated
+            create id Accessibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-            create globalId Visibility.Open Recursion.No
+            create globalId Accessibility.Open Recursion.No
 
         let createModuleScope () : Scope =
-            create moduleId Visibility.Open Recursion.No
+            create moduleId Accessibility.Open Recursion.No
 
         let isModuleScope scope = 
             scope.id = moduleId
 
         let createExportScope () : Scope = 
             let id = nextAnonymousId()
-            create id Visibility.Open Recursion.No
+            create id Accessibility.Open Recursion.No
 
         let rewriteId scope id : Scope =
             {scope with id = id}
 
         let closeScope scope = 
-            { scope with visibility = Visibility.Closed }
+            { scope with access = Accessibility.Closed }
 
 
     type private NameInfo =
@@ -444,25 +445,25 @@ module SymbolTable =
          
 
         let insertName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label Access.Hidden false
+            insertSymbol env name label Visibility.Hidden false
 
 
         let insertSubProgramName env (name: Name) =
-            let access = if isExposedId env name.id then Access.Transparent else Access.Hidden
+            let access = if isExposedId env name.id then Visibility.Translucent else Visibility.Hidden
             insertSymbol env name (IdLabel.Static) access true
 
 
         let insertImportName env (name: Name) =
-            insertSymbol env name IdLabel.Static Access.Imported true
+            insertSymbol env name IdLabel.Static Visibility.Imported true
 
 
         let insertTypeName env (name: Name) =
-            let access = if isExposedId env name.id then Access.Transparent else Access.Opaque
+            let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Opaque
             insertSymbol env name (IdLabel.Static) access true
  
  
         let insertConstOrParamName env (name: Name) = 
-            let access = if isExposedId env name.id then Access.Transparent else Access.Hidden
+            let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Hidden
             insertSymbol env name IdLabel.Static access false
 
 
@@ -470,7 +471,7 @@ module SymbolTable =
         // TODO: meaningful error messages
         // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
 
-        let insertExposedName env (name: Name) =
+        let exportExposedName env (name: Name) =
             assert isModuleEnv env
             let exportScope = Option.get env.exports
             let moduleScope = currentScope env
@@ -485,26 +486,30 @@ module SymbolTable =
                 | Some declSymbol ->
                     do env.lookupTable.addExposed name declSymbol.name 
                     // TODO: move this to a helper function 
-                    let exposedSymbol = Symbol.Create name Transparent declSymbol.isScope
                     match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
                     | Some exposedScope -> // exposed id is also a scope
                         let export = 
                             Scope.addInnerScope exportScope exposedScope
-                            |> Scope.addSymbol <| exposedSymbol
+                            |> Scope.addSymbol <| declSymbol
                         Ok { env with exports = Some export} 
                     | None ->             // exposed id is not a scope
-                        Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
+                        Ok { env with exports = Some <| Scope.addSymbol exportScope declSymbol }    
                             
             | Some alreadyExposed ->
                 Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
         
+        //let exportImplicitlyExposedName env name = 
+        //    assert isModuleEnv env
+        //    let exportScope = Option.get env.exports
+        //    match 
+
         /////////////////
         
 
 
-        let private enterInnerScope env id visibility recursion =
+        let private enterInnerScope env id access recursion =
             assert not (Scope.containsInnerScope (currentScope env) id)
-            let scp = Scope.create id visibility recursion
+            let scp = Scope.create id access recursion
             // printfn "Enter Scope: %s" scp.id
             scp :: env.path // extend current qname 
                
@@ -563,10 +568,10 @@ module SymbolTable =
             { modEnv with path = modScp :: modEnv.path }
 
         let enterOpenScope env (name: Name) : Environment = 
-            { env with path = enterInnerScope env name.id Visibility.Open Recursion.No }
+            { env with path = enterInnerScope env name.id Accessibility.Open Recursion.No }
 
         let enterClosedScope env (name: Name) : Environment =
-            { env with path = enterInnerScope env name.id Visibility.Closed Recursion.No }
+            { env with path = enterInnerScope env name.id Accessibility.Closed Recursion.No }
 
         let enterAnonymousScope env : Environment =
             { env with path = enterAnonymousInnerScope env }
@@ -731,7 +736,7 @@ module SymbolTable =
 
             let probeInnerScopes (scope: Scope) : Name list list =
                 let openInnerScopes = Map.fold
-                                        (fun oiss _ s -> if s.visibility = Visibility.Open then oiss @ [s] else oiss) 
+                                        (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) 
                                         [] scope.innerscopes
                 
                 let declName innerscope = (Scope.getSymbol scope innerscope.id).name 
