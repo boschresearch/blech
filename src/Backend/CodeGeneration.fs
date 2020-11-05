@@ -81,6 +81,9 @@ module Comment =
   
     let cPrototypes = 
         cpGeneratedComment <| txt "extern functions to be implemented in C"
+
+    let exportedFunctions =
+        cpGeneratedComment <| txt "exported functions"
     
     let userTypes = 
         cpGeneratedComment <| txt "all user defined types"
@@ -396,11 +399,26 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
       userTypes    // all user types are global
       Comment.activityContexts
       activityContexts
+      
+      // Comment.constants
       // userConst // only exposed constants and params go there, currently none
+      
+      // Comment.parameters
+      // userParams // only exposed params go there, currently non
+      
+      // Comment.constants
+      
       Comment.cPrototypes
       externFunctions
+      
+      Comment.cConstants
+      // externConstMacros
+      
+      Comment.cFunctions
       // directCCalls  // only exposed direct C Calls go there, currently none
-      // localFunctions  // only exposed functions go there, currently none
+      
+      Comment.exportedFunctions
+      // localFunctions // only exposed functions go there, currently all
 
       // Program functions must not be created and exposed for blech modules
       if entryPointOpt.IsSome then
