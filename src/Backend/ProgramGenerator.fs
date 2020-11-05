@@ -210,148 +210,175 @@ let ppTml isLocal ctx (tml: TypedMemLoc) =
     else
         ppTopLevelArgument ctx tml
 
+//let internal printState ctx printState (entryCompilation: Compilation) = 
+//    let showPcs =
+//        let rec getAllPcs pref actctx =
+//            actctx.subcontexts
+//            |> Seq.collect (fun kvp -> getAllPcs ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
+//            |> Seq.append (seq{pref, actctx.pcs})
+        
+//        getAllPcs "" entryCompilation.GetActCtx
+//        |> Seq.map (fun (pref,tree) -> pref, PCtree.asList tree)
+//        |> Seq.collect (fun (pref,pc) -> pc |> List.map(fun p -> pref,p))
+//        |> Seq.toList
+//        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + pc.name.basicId)
+//        |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", "blc_blech_ctx." + pc)
+//        |> List.unzip
+//        |> (fun (ppList, argList) -> String.concat @",\n\t\t\t\t" ppList, String.concat ", " argList)
+//        |> (fun (a, b) -> sprintf """printf ("\t\t\t\"pcs\": {\n\t\t\t\t%s\n\t\t\t},\n", %s);""" a b)
+//        |> txt
+    
+//    // show variables
+//    let showVars =
+//        let getFormatStrForArithmetic (dty: Types) =
+//            assert dty.IsPrimitive
+//            match dty with
+//            | ValueTypes (BoolType) -> "%d"
+//            | ValueTypes (FloatType Float64)
+//            | ValueTypes (FloatType Float32) -> "%e"
+//            | ValueTypes (IntType Int64) -> "%lld"
+//            | ValueTypes (IntType Int32) -> "%ld"
+//            | ValueTypes (IntType Int16) -> "%hd"
+//            | ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
+//            | ValueTypes (NatType Nat64) -> "%llu"
+//            | ValueTypes (NatType Nat32) -> "%lu"
+//            | ValueTypes (NatType Nat16) -> "%hu"
+//            | ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
+//            | ValueTypes (BitsType Bits64) -> "%llu"
+//            | ValueTypes (BitsType Bits32) -> "%lu"
+//            | ValueTypes (BitsType Bits16) -> "%hu"
+//            | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
+//            | _ -> failwithf "No format string for composite data type %A." dty
+
+//        let printPrimitive isLocal prefStr (n: TypedMemLoc) =
+//            let dty = getDatatypeFromTML ctx.tcc n
+//            match dty with
+//            | ValueTypes _ when dty.IsPrimitive ->
+//                let formStr = getFormatStrForArithmetic dty
+//                sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx.tcc n |> render None))
+//            | _ -> failwith "printPrimitive called on non-primitive."
+
+//        let rec printArray isLocal level prefStr (n: TypedMemLoc) =
+//            let ind = String.replicate level @"\t"
+//            let dty = getDatatypeFromTML ctx.tcc n
+//            match dty with
+//            | ValueTypes (ArrayType (size, _)) ->
+//                ([for i in [SizeZero .. SizeOne .. size - SizeOne] do 
+//                        //let idx = { rhs = IntConst (System.Numerics.BigInteger i); typ = ValueTypes (IntType Int64) ; range = Range.range0}
+//                        let idx = { rhs = NatConst <| N64 i; typ = ValueTypes (NatType Nat64) ; range = Range.range0}
+//                        yield sprintf """printf("%s");""" ind + (printAnything isLocal (level + 1) prefStr (TypedMemLoc.ArrayAccess (n, idx)))]
+//                 |> String.concat "\n\tprintf(\",\\n\");\n\t")
+//            | _ -> failwith "printArray called on non-array."
+
+//        and printStruct isLocal level prefStr (n: TypedMemLoc) =
+//            let ind = String.replicate level @"\t"
+//            let prefix x = "\\\"" + (x.basicId.ToString()) + """\" : """
+//            let dty = getDatatypeFromTML ctx.tcc n
+//            match dty with
+//            | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
+//                let printField isLocal (v:VarDecl)  = 
+//                    sprintf """printf("%s");""" ind 
+//                    + sprintf """printf("%s");""" (prefix v.name) 
+//                    + printAnything isLocal (level + 1) prefStr (TypedMemLoc.FieldAccess (n, v.name.basicId))
+//                List.map (printField isLocal) fields 
+//                |> String.concat "\n\tprintf(\",\\n\");\n\t"
+//            | _ -> 
+//                failwith "printStruct called on non-struct."
+        
+//        and printAnything isLocal level prefStr (n: TypedMemLoc) =
+//            let ind = String.replicate level @"\t"
+//            let dty = getDatatypeFromTML ctx.tcc n
+//            match dty with
+//            | ValueTypes _ when dty.IsPrimitive ->
+//                printPrimitive isLocal prefStr n
+//            | ValueTypes (ValueTypes.StructType _) ->
+//                sprintf """printf("{\n");"""
+//                + printStruct isLocal (level + 1) prefStr n
+//                + sprintf """printf("\n%s}");""" ind
+//            | ValueTypes (ArrayType _) ->
+//                sprintf """printf("[\n");"""
+//                + printArray isLocal (level + 1) prefStr n
+//                + sprintf """printf("\n%s]");""" ind
+//            | _ -> failwith "Only value types implemented."
+            
+//        let rec printVar isLocal level prefStr (n: TypedMemLoc) (pos: Range.range) =
+//            // silently ignore if given tml is not in type check context
+//            // this happens for external prev variables that are added
+//            // as locals into the iface (after type checking)
+//            let ind = String.replicate level @"\t"
+//            let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
+//            sprintf """printf("%s%s");""" ind prefix
+//            + printAnything isLocal level prefStr n    
+                    
+//        let printParamDecl isLocal prefStr (p: ParamDecl) = 
+//            printVar isLocal 4 prefStr (TypedMemLoc.Loc p.name) p.pos
+
+//        let vars = 
+//            let rec getAllLocals pref actctx =
+//                actctx.subcontexts
+//                |> Seq.collect (fun kvp -> getAllLocals ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
+//                |> Seq.append (seq{pref, actctx.locals})
+            
+//            let allLocals =
+//                getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
+//                |> Seq.collect (fun (pref,locals) -> locals |> List.map(fun p -> pref,p))
+//                |> Seq.toList
+//                |> List.map (fun (pref,local) -> (if pref.Equals "" then "" else pref + "."), local)
+//                |> List.unzip
+                
+//            [
+//                entryCompilation.inputs |> List.map (printParamDecl false "")
+//                entryCompilation.outputs |> List.map (printParamDecl false "")
+//                allLocals ||> List.map2 (printParamDecl true) |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
+//            ]
+//            |> List.concat
+//            |> List.filter (System.String.IsNullOrWhiteSpace >> not)
+            
+//        match vars with
+//        | [] ->
+//            txt """printf ("\t\t\t\"vars\": {}\n");"""
+//        | vs ->
+//            // the generated variable access will -> into the context but here the context is give as a value directly
+//            // so we rewrite all -> into .
+//            // yes this is a temprorary hack
+//            //let vs = vs |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
+//            """printf("\t\t\t\"vars\": {\n");"""
+//            + String.concat "\n\tprintf(\",\\n\");\n\t" vs
+//            + """printf("\n\t\t\t}\n");"""
+//            |> txt
+
+//    txt "void" 
+//    <+> cpStaticName printState
+//    <+> cpMainIface ctx.tcc false entryCompilation
+//    <+> txt "{"
+//    <.> (cpIndent (dpBlock [showPcs; showVars]))
+//    <.> txt "}"
+
 let internal printState ctx printState (entryCompilation: Compilation) = 
     let showPcs =
-        let rec getAllPcs pref actctx =
-            actctx.subcontexts
-            |> Seq.collect (fun kvp -> getAllPcs ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
-            |> Seq.append (seq{pref, actctx.pcs})
-        
-        getAllPcs "" entryCompilation.GetActCtx
-        |> Seq.map (fun (pref,tree) -> pref, PCtree.asList tree)
-        |> Seq.collect (fun (pref,pc) -> pc |> List.map(fun p -> pref,p))
-        |> Seq.toList
-        |> List.map (fun (pref,pc) -> (if pref.Equals "" then "" else pref + ".") + pc.name.basicId)
-        |> List.map (fun pc -> "\\\"" + pc + """\" : %u""", "blc_blech_ctx." + pc)
-        |> List.unzip
-        |> (fun (ppList, argList) -> String.concat @",\n\t\t\t\t" ppList, String.concat ", " argList)
-        |> (fun (a, b) -> sprintf """printf ("\t\t\t\"pcs\": {\n\t\t\t\t%s\n\t\t\t},\n", %s);""" a b)
-        |> txt
-    
-    // show variables
+        let args =
+            [ txt "\"\""
+              txt "&blc_blech_ctx" ]
+            |> dpCommaSeparatedInParens
+        cpStaticName entryCompilation.name <^> txt "_printPcs" <^> args <^> semi
+
     let showVars =
-        let getFormatStrForArithmetic (dty: Types) =
-            assert dty.IsPrimitive
-            match dty with
-            | ValueTypes (BoolType) -> "%d"
-            | ValueTypes (FloatType Float64)
-            | ValueTypes (FloatType Float32) -> "%e"
-            | ValueTypes (IntType Int64) -> "%lld"
-            | ValueTypes (IntType Int32) -> "%ld"
-            | ValueTypes (IntType Int16) -> "%hd"
-            | ValueTypes (IntType Int8) -> "%hd" // should be hhd since C99
-            | ValueTypes (NatType Nat64) -> "%llu"
-            | ValueTypes (NatType Nat32) -> "%lu"
-            | ValueTypes (NatType Nat16) -> "%hu"
-            | ValueTypes (NatType Nat8) -> "%hu" // should be hhu since C99
-            | ValueTypes (BitsType Bits64) -> "%llu"
-            | ValueTypes (BitsType Bits32) -> "%lu"
-            | ValueTypes (BitsType Bits16) -> "%hu"
-            | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
-            | _ -> failwithf "No format string for composite data type %A." dty
-
-        let printPrimitive isLocal prefStr (n: TypedMemLoc) =
-            let dty = getDatatypeFromTML ctx.tcc n
-            match dty with
-            | ValueTypes _ when dty.IsPrimitive ->
-                let formStr = getFormatStrForArithmetic dty
-                sprintf """printf("%s", %s);""" formStr (prefStr + (ppTml isLocal ctx.tcc n |> render None))
-            | _ -> failwith "printPrimitive called on non-primitive."
-
-        let rec printArray isLocal level prefStr (n: TypedMemLoc) =
-            let ind = String.replicate level @"\t"
-            let dty = getDatatypeFromTML ctx.tcc n
-            match dty with
-            | ValueTypes (ArrayType (size, _)) ->
-                ([for i in [SizeZero .. SizeOne .. size - SizeOne] do 
-                        //let idx = { rhs = IntConst (System.Numerics.BigInteger i); typ = ValueTypes (IntType Int64) ; range = Range.range0}
-                        let idx = { rhs = NatConst <| N64 i; typ = ValueTypes (NatType Nat64) ; range = Range.range0}
-                        yield sprintf """printf("%s");""" ind + (printAnything isLocal (level + 1) prefStr (TypedMemLoc.ArrayAccess (n, idx)))]
-                 |> String.concat "\n\tprintf(\",\\n\");\n\t")
-            | _ -> failwith "printArray called on non-array."
-
-        and printStruct isLocal level prefStr (n: TypedMemLoc) =
-            let ind = String.replicate level @"\t"
-            let prefix x = "\\\"" + (x.basicId.ToString()) + """\" : """
-            let dty = getDatatypeFromTML ctx.tcc n
-            match dty with
-            | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
-                let printField isLocal (v:VarDecl)  = 
-                    sprintf """printf("%s");""" ind 
-                    + sprintf """printf("%s");""" (prefix v.name) 
-                    + printAnything isLocal (level + 1) prefStr (TypedMemLoc.FieldAccess (n, v.name.basicId))
-                List.map (printField isLocal) fields 
-                |> String.concat "\n\tprintf(\",\\n\");\n\t"
-            | _ -> 
-                failwith "printStruct called on non-struct."
+        let args =
+            [ txt "\"\""
+              txt "&blc_blech_ctx" ]
+            |> dpCommaSeparatedInParens
+        cpStaticName entryCompilation.name <^> txt "_printLocals" <^> args <^> semi
         
-        and printAnything isLocal level prefStr (n: TypedMemLoc) =
-            let ind = String.replicate level @"\t"
-            let dty = getDatatypeFromTML ctx.tcc n
-            match dty with
-            | ValueTypes _ when dty.IsPrimitive ->
-                printPrimitive isLocal prefStr n
-            | ValueTypes (ValueTypes.StructType _) ->
-                sprintf """printf("{\n");"""
-                + printStruct isLocal (level + 1) prefStr n
-                + sprintf """printf("\n%s}");""" ind
-            | ValueTypes (ArrayType _) ->
-                sprintf """printf("[\n");"""
-                + printArray isLocal (level + 1) prefStr n
-                + sprintf """printf("\n%s]");""" ind
-            | _ -> failwith "Only value types implemented."
-            
-        let rec printVar isLocal level prefStr (n: TypedMemLoc) (pos: Range.range) =
-            // silently ignore if given tml is not in type check context
-            // this happens for external prev variables that are added
-            // as locals into the iface (after type checking)
-            let ind = String.replicate level @"\t"
-            let prefix = "\\\"" + (n.ToBasicString()) + "_line" + string(pos.StartLine) + """\" : """
-            sprintf """printf("%s%s");""" ind prefix
-            + printAnything isLocal level prefStr n    
-                    
-        let printParamDecl isLocal prefStr (p: ParamDecl) = 
-            printVar isLocal 4 prefStr (TypedMemLoc.Loc p.name) p.pos
-
-        let vars = 
-            let rec getAllLocals pref actctx =
-                actctx.subcontexts
-                |> Seq.collect (fun kvp -> getAllLocals ((if pref.Equals "" then "" else pref + ".") + (kvp.Key |> fst) + "_" + (kvp.Key |> snd |> (renderCName Current ctx.tcc) |> render None)) kvp.Value)
-                |> Seq.append (seq{pref, actctx.locals})
-            
-            let allLocals =
-                getAllLocals "blc_blech_ctx" entryCompilation.GetActCtx
-                |> Seq.collect (fun (pref,locals) -> locals |> List.map(fun p -> pref,p))
-                |> Seq.toList
-                |> List.map (fun (pref,local) -> (if pref.Equals "" then "" else pref + "."), local)
-                |> List.unzip
-                
-            [
-                entryCompilation.inputs |> List.map (printParamDecl false "")
-                entryCompilation.outputs |> List.map (printParamDecl false "")
-                allLocals ||> List.map2 (printParamDecl true) |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
-            ]
-            |> List.concat
-            |> List.filter (System.String.IsNullOrWhiteSpace >> not)
-            
-        match vars with
-        | [] ->
-            txt """printf ("\t\t\t\"vars\": {}\n");"""
-        | vs ->
-            // the generated variable access will -> into the context but here the context is give as a value directly
-            // so we rewrite all -> into .
-            // yes this is a temprorary hack
-            //let vs = vs |> List.map(fun s -> s.Replace(CTX+"->", CTX+"."))
-            """printf("\t\t\t\"vars\": {\n");"""
-            + String.concat "\n\tprintf(\",\\n\");\n\t" vs
-            + """printf("\n\t\t\t}\n");"""
-            |> txt
-
     txt "void" 
     <+> cpStaticName printState
     <+> cpMainIface ctx.tcc false entryCompilation
     <+> txt "{"
-    <.> (cpIndent (dpBlock [showPcs; showVars]))
+    <.> txt """printf("\t\t\t\"pcs\": {");"""
+    <.> cpIndent showPcs
+    <.> txt """printf("\n\t\t\t},\n");"""
+    <.> txt """printf("\t\t\t\"vars\": {");"""
+    <.> cpIndent showVars
+    <.> txt """printf("\n\t\t\t}\n");"""
     <.> txt "}"
 
 let appMainLoop ctx init tick printState entryCompilation =
