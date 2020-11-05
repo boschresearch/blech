@@ -202,6 +202,10 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         { ctx with env = Env.addExposedAll ctx.env } 
 
 
+    let private addImplicitlyExportedName (ctx: NameCheckContext) (typeName: AST.StaticNamedPath) =
+        let name = List.head typeName.names
+        { ctx with env = Env.exportImplicitlyExposedName ctx.env name }  // TODO: check for explicit export in case of constants/params
+
     // begin ==========================================================
     // recursively descend the AST for name checking
 
@@ -336,6 +340,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             checkDataType ctx dty
         | TypeName snp ->
             identifyStatic ctx snp
+            |> addImplicitlyExportedName <| snp  // TODO: 
         | Signal (value = dt) ->
             Option.fold checkDataType ctx dt
   
@@ -645,6 +650,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Error ncc.logger
         else
             //printfn "end of checkDeclardness %A" ncc.env.lookupTable
+            //printfn "Exports: %A" ncc.env
             Ok (ast, ncc.env)
     
 

@@ -329,8 +329,17 @@ module SymbolTable =
         let getLookupTable env =
             env.lookupTable
 
+        let getGlobalScope env =
+            assert (List.length env.path >= 1)
+            List.last env.path
+        
         let isModuleEnv env = 
             Option.isSome env.exports
+
+        let getModuleScope env=
+            assert isModuleEnv env
+            let len = List.length env.path
+            List.item (len-2) env.path
 
         let isExposedId env identifier =
             match env.exposed with
@@ -474,7 +483,9 @@ module SymbolTable =
         let exportExposedName env (name: Name) =
             assert isModuleEnv env
             let exportScope = Option.get env.exports
-            let moduleScope = currentScope env
+            //let moduleScope = currentScope env
+            let moduleScope = getModuleScope env
+
             assert Scope.isModuleScope moduleScope
                     
             match Scope.tryFindSymbol exportScope name.id with // is id already exposed?
@@ -485,23 +496,46 @@ module SymbolTable =
                 
                 | Some declSymbol ->
                     do env.lookupTable.addExposed name declSymbol.name 
-                    // TODO: move this to a helper function 
+                    // TODO: move this to a private helper function 
+                    let exposedSymbol = Symbol.Create name declSymbol.visibility declSymbol.isScope
                     match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
                     | Some exposedScope -> // exposed id is also a scope
                         let export = 
                             Scope.addInnerScope exportScope exposedScope
-                            |> Scope.addSymbol <| declSymbol
+                            |> Scope.addSymbol <| exposedSymbol
                         Ok { env with exports = Some export} 
                     | None ->             // exposed id is not a scope
-                        Ok { env with exports = Some <| Scope.addSymbol exportScope declSymbol }    
+                        Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
                             
             | Some alreadyExposed ->
                 Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
         
-        //let exportImplicitlyExposedName env name = 
-        //    assert isModuleEnv env
-        //    let exportScope = Option.get env.exports
-        //    match 
+
+        let exportImplicitlyExposedName env (declName: Name) = 
+            // let exports = env.exports
+            if isModuleEnv env then
+                let exportScope = Option.get env.exports
+                let moduleScope = getModuleScope env
+                match Scope.tryFindSymbol exportScope declName.id with
+                | None ->
+                    match Scope.tryFindSymbol moduleScope declName.id with
+                    | Some declSymbol ->
+                        // TODO: Move this to a private helper function
+                        // module level declaration found 
+                        if declSymbol.visibility = Visibility.Opaque then
+                            // implicit export necessary
+                            // Never export an inner scope, the implementation of opaque types is hidden
+                            { env with exports = Some <| Scope.addSymbol exportScope declSymbol }
+                        else
+                            // do not export it
+                           env
+                    | None -> // 
+                        // do not export it
+                        env
+                | Some _ -> // already exported, do nothing
+                    env
+            else
+                env
 
         /////////////////
         
@@ -646,7 +680,11 @@ module SymbolTable =
             //                          printfn "QName:\n %A" (env.lookupTable.nameToQname decl) ) decls
             
             let isOk = decls.Length = path.Length 
+            
             if isOk then
+                // Move this to type annotation checking
+                //let exports = exportImplicitlyExposedName env (List.head decls)
+                //Ok { env with exports = exports }
                 Ok env
             elif path.Length = 1 then
                 Error (NoDeclaration path.[0])

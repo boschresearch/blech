@@ -1,0 +1,10 @@
+import p "pair"
+
+@[EntryPoint]
+activity Main ()
+    var ab: p.Pair = p.set(1,2)
+
+    var i = p.fst(ab)
+    var j = p.snd(ab)
+    await true
+end

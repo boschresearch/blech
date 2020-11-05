@@ -1,0 +1,20 @@
+module exposes set, fst, snd
+
+struct Pair
+    var fst: int32
+    var snd: int32
+end
+
+// const p = {fst = 1, snd = 2} : Pair
+
+function set (fst: int32, snd: int32) returns Pair
+    return {fst = fst, snd = snd}
+end
+
+function fst (p: Pair) returns int32
+    return p.fst
+end
+
+function snd (p: Pair) returns int32
+    return p.snd
+end
