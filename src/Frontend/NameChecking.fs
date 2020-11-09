@@ -650,7 +650,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Error ncc.logger
         else
             //printfn "end of checkDeclardness %A" ncc.env.lookupTable
-            //printfn "Exports: %A" ncc.env
+            //printfn "Exports: %A" <| Env.getExports ncc.env
             Ok (ast, ncc.env)
     
 

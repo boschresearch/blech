@@ -46,10 +46,14 @@ module SymbolTable =
             // |> fun symbol -> printfn "Symbol: %A" symbol; symbol
     
     /// TODO @FJG: What does it mean?
+    // Currently this is only used for shadowing and does not prevent access from outside
+    // Currently access is only prevented by intermediate anonymous scopes which are named with numbers
+    // This is a bug.
+    // Currently, name resolution allows static access to function parameters - which is bullshit
     [<RequireQualifiedAccess>]
     type Accessibility = // a scope property
         | Open
-        | Closed  // a closed scope cannot be accessed from outside
+        | Closed  // a closed forbids shadowing inside
 
 
     [<RequireQualifiedAccess>]
@@ -329,6 +333,9 @@ module SymbolTable =
         let getLookupTable env =
             env.lookupTable
 
+        let getExports env = 
+            env.exports
+
         let getGlobalScope env =
             assert (List.length env.path >= 1)
             List.last env.path
@@ -524,7 +531,7 @@ module SymbolTable =
                         // module level declaration found 
                         if declSymbol.visibility = Visibility.Opaque then
                             // implicit export necessary
-                            // Never export an inner scope, the implementation of opaque types is hidden
+                            // TODO: Also export inner scope and close it 
                             { env with exports = Some <| Scope.addSymbol exportScope declSymbol }
                         else
                             // do not export it
@@ -560,7 +567,7 @@ module SymbolTable =
                 { env with exports = Some moduleScope }
             | scopes -> 
                 // printfn "Scopes: %A" scopes
-                failwith "this should be called wenn the module scope is fully namechecked"
+                failwith "this should be called when the module scope is fully namechecked"
 
         /// Add the export scope of an imported module in the top level scope of the importing module. 
         /// Name it with the id of the import name.
@@ -650,6 +657,7 @@ module SymbolTable =
                     decls
 
                 | [name] ->
+                    printfn "Static path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls
@@ -658,6 +666,7 @@ module SymbolTable =
                         decls @ [declName]
 
                 | name :: tail ->
+                    printfn "Static path component: %s" name.id
                     match Scope.tryFindInnerScope scope name.id with
                     | None ->
                         decls
@@ -702,12 +711,14 @@ module SymbolTable =
                 | [] ->
                     decls, true
                 | [name] ->
+                    printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls, false
                     | Some symbol ->
                         decls @ [symbol.name], true
                 | name :: tail ->
+                    printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None ->
                         decls, false
@@ -719,7 +730,10 @@ module SymbolTable =
                             else
                                 decls @ [symbol.name], true
                         | Some innerscope ->
-                            probeInnerDecls ( decls @ [symbol.name] ) innerscope tail
+                            if innerscope.access = Accessibility.Open then
+                                decls @ [symbol.name], true
+                            else
+                                probeInnerDecls ( decls @ [symbol.name] ) innerscope tail
                      
             let findDecls (path: Name list) =
                 let firstName = List.head path
