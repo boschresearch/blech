@@ -137,7 +137,7 @@ module SymbolTable =
             create id Accessibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-            create globalId Accessibility.Open Recursion.No
+            create globalId Accessibility.Open Recursion.No   // Gets closed when a module scope is added
 
         let createModuleScope () : Scope =
             create moduleId Accessibility.Open Recursion.No
@@ -148,6 +148,10 @@ module SymbolTable =
         let createExportScope () : Scope = 
             let id = nextAnonymousId()
             create id Accessibility.Open Recursion.No
+
+        let createExposingScope () : Scope = 
+            let id = nextAnonymousId()
+            create id Accessibility.Closed Recursion.No
 
         let rewriteId scope id : Scope =
             {scope with id = id}
@@ -300,7 +304,7 @@ module SymbolTable =
 
     
     type private Exposed = 
-        | Few of Identifier list
+        | Few of Scope
         | All
 
     /// Context of the name resolution compiler phase
@@ -311,7 +315,7 @@ module SymbolTable =
         private {
             moduleName: TranslationUnitPath
             // imports: Dictionary<TranslationUnitPath, Environment>
-            exposed: Exposed option 
+            exposed: Scope option
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
             exports: Scope option // gets populated via the exposes declaration
@@ -333,44 +337,57 @@ module SymbolTable =
         let getLookupTable env =
             env.lookupTable
 
-        let getExports env = 
-            env.exports
-
+        
         let getGlobalScope env =
             assert (List.length env.path >= 1)
             List.last env.path
         
+        
         let isModuleEnv env = 
             Option.isSome env.exports
 
+        
+        let getExports env =
+            assert isModuleEnv env
+            Option.get env.exports
+
+        
         let getModuleScope env=
             assert isModuleEnv env
             let len = List.length env.path
             List.item (len-2) env.path
 
-        let isExposedId env identifier =
+        
+        let isExposedName env (name: Name) = 
             match env.exposed with
-            | None -> 
+            | Some exposed ->
+                Scope.containsSymbol exposed name.id
+            | None ->
                 false
-            | Some (Few ids) -> 
-                List.contains identifier ids
-            | Some (All) -> 
-                true
 
-        let addExposedIdentifier env id = 
-            let exposed = 
-                match env.exposed with
-                | None -> Some <| Few [id]
-                | Some (Few ids) -> Some <| Few (id::ids)
-                | Some All -> failwith "This can never happen"
-            { env with exposed = exposed }
+        //let isExposedId env identifier =
+        //    match env.exposed with
+        //    | None -> 
+        //        false
+        //    | Some (Few ids) -> 
+        //        List.contains identifier ids
+        //    | Some (All) -> 
+        //        true
 
-        let addExposedAll env = 
-            let exposed =
-                match env.exposed with
-                | None -> Some All
-                | Some _ -> failwith "This can never happen"
-            { env with exposed = exposed }
+        //let addExposedIdentifier env id = 
+        //    let exposed = 
+        //        match env.exposed with
+        //        | None -> Some <| Few [id]
+        //        | Some (Few ids) -> Some <| Few (id::ids)
+        //        | Some All -> failwith "This can never happen"
+        //    { env with exposed = exposed }
+
+        //let addExposedAll env = 
+        //    let exposed =
+        //        match env.exposed with
+        //        | None -> Some All
+        //        | Some _ -> failwith "This can never happen"
+        //    { env with exposed = exposed }
 
 
         //let renameGlobalScope env id =
@@ -465,8 +482,8 @@ module SymbolTable =
 
 
         let insertSubProgramName env (name: Name) =
-            let access = if isExposedId env name.id then Visibility.Translucent else Visibility.Hidden
-            insertSymbol env name (IdLabel.Static) access true
+            //let access = if isExposedId env name.id then Visibility.Translucent else Visibility.Hidden
+            insertSymbol env name (IdLabel.Static) Visibility.Hidden true
 
 
         let insertImportName env (name: Name) =
@@ -474,20 +491,71 @@ module SymbolTable =
 
 
         let insertTypeName env (name: Name) =
-            let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Opaque
-            insertSymbol env name (IdLabel.Static) access true
+            // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Opaque
+            insertSymbol env name (IdLabel.Static) Visibility.Hidden true
  
  
         let insertConstOrParamName env (name: Name) = 
-            let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Hidden
-            insertSymbol env name IdLabel.Static access false
+            // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Hidden
+            insertSymbol env name IdLabel.Static Visibility.Hidden false
 
+        
+        let exportScope env (name: Name) = 
+            if isModuleEnv env then
+                let moduleScope = getModuleScope env
+                let exports = getExports env
+                match Scope.tryFindInnerScope moduleScope name.id with
+                | Some scope when isExposedName env name -> // non-exposed types are exported abstractly - without their inner scope
+                    { env with exports = Some <| Scope.addInnerScope exports scope }
+                | _ -> 
+                    env
+            else 
+                env
+
+
+        let exportName env (name: Name) isType =
+            if isModuleEnv env then
+                let moduleScope = getModuleScope env
+                let exports = getExports env
+                match Scope.tryFindSymbol moduleScope name.id with
+                | Some symbol when isType ->  // type names are always exported
+                    { env with exports = Some <| Scope.addSymbol exports symbol }
+                | Some symbol when isExposedName env name ->
+                    { env with exports = Some <| Scope.addSymbol exports symbol }
+                | _ ->
+                    env
+            else
+                env
+                               
+
+        // let exposedSymbol = Symbol.Create name Visibility.Hidden declSymbol.isScope
+        //match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
+        //| Some exposedScope -> // exposed id is also a scope
+        //    let export = 
+        //        Scope.addInnerScope exportScope exposedScope
+        //        |> Scope.addSymbol <| exposedSymbol
+        //    Ok { env with exports = Some export} 
+        //| None ->             // exposed id is not a scope
+        //    Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
+
+        ////////////////////
+        // Before
+
+        let declareExposedName env (name: Name) =
+            assert Option.isSome env.exposed
+            let exposed = Option.get env.exposed
+            match Scope.tryFindSymbol exposed name.id with
+            | None ->
+                let exposedSymbol = Symbol.Create name Visibility.Hidden false // no scope
+                Ok { env with exposed = Some <| Scope.addSymbol exposed exposedSymbol }
+            | Some alreadyExposed ->
+                Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
 
         ////////////////////////////////////
         // TODO: meaningful error messages
         // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
 
-        let exportExposedName env (name: Name) =
+        let defineExposedName env (name: Name) =
             assert isModuleEnv env
             let exportScope = Option.get env.exports
             //let moduleScope = currentScope env
@@ -495,27 +563,28 @@ module SymbolTable =
 
             assert Scope.isModuleScope moduleScope
                     
-            match Scope.tryFindSymbol exportScope name.id with // is id already exposed?
-            | None ->
-                match Scope.tryFindSymbol moduleScope name.id with // lookup the top-level declaration
-                | None -> 
-                    Error <| Dummy (name.Range, sprintf "Exported id '%s' not found" name.id)
+            //match Scope.tryFindSymbol exportScope name.id with // is id already exposed?
+            //| None ->
+            match Scope.tryFindSymbol moduleScope name.id with // lookup the top-level declaration
+            | None -> 
+                Error <| Dummy (name.Range, sprintf "Exported id '%s' not found" name.id)
                 
-                | Some declSymbol ->
-                    do env.lookupTable.addExposed name declSymbol.name 
+            | Some declSymbol ->
+                do env.lookupTable.addExposed name declSymbol.name 
+                Ok env
                     // TODO: move this to a private helper function 
-                    let exposedSymbol = Symbol.Create name declSymbol.visibility declSymbol.isScope
-                    match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
-                    | Some exposedScope -> // exposed id is also a scope
-                        let export = 
-                            Scope.addInnerScope exportScope exposedScope
-                            |> Scope.addSymbol <| exposedSymbol
-                        Ok { env with exports = Some export} 
-                    | None ->             // exposed id is not a scope
-                        Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
+                    //let exposedSymbol = Symbol.Create name Visibility.Hidden declSymbol.isScope
+                    //match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
+                    //| Some exposedScope -> // exposed id is also a scope
+                    //    let export = 
+                    //        Scope.addInnerScope exportScope exposedScope
+                    //        |> Scope.addSymbol <| exposedSymbol
+                    //    Ok { env with exports = Some export} 
+                    //| None ->             // exposed id is not a scope
+                    //    Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
                             
-            | Some alreadyExposed ->
-                Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
+            //| Some alreadyExposed ->
+            //    Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
         
 
         let exportImplicitlyExposedName env (declName: Name) = 
@@ -581,6 +650,7 @@ module SymbolTable =
                 let expFromMod = Option.get modEnv.exports // exports from imported module
                 let renamedScope = Scope.rewriteId expFromMod name.id
                 let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
+                // printfn "Joined Lookup Table: %A" joinedLoookupTable
                 { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
                            lookupTable = joinedLoookupTable }
             | _ ->
@@ -589,6 +659,10 @@ module SymbolTable =
         let private initialiseExportScope env : Environment =
             { env with exports = Some <| Scope.createExportScope() }
 
+
+        let addExposed env : Environment =
+            { env with exposed = Some <| Scope.createExposingScope ()}
+            
         
         // For a program the global scope must be open
         // This is the default for the global scope
@@ -601,7 +675,7 @@ module SymbolTable =
 
         /// Enters a module scope - keyword module - and creates the export scope.
         /// This makes the environment a module environment - 
-        /// instead of a program environment with None exports and and open global scope
+        /// instead of a program environment with None exports and an open global scope
         let enterModuleScope env : Environment =
             assert (List.length env.path = 1)  // We only have the global scope to be used for imports
             let modEnv = closeGlobalScope env |> initialiseExportScope
@@ -657,7 +731,7 @@ module SymbolTable =
                     decls
 
                 | [name] ->
-                    printfn "Static path component: %s" name.id
+                    // printfn "Static path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls
@@ -666,7 +740,7 @@ module SymbolTable =
                         decls @ [declName]
 
                 | name :: tail ->
-                    printfn "Static path component: %s" name.id
+                    // printfn "Static path component: %s" name.id
                     match Scope.tryFindInnerScope scope name.id with
                     | None ->
                         decls
@@ -711,14 +785,14 @@ module SymbolTable =
                 | [] ->
                     decls, true
                 | [name] ->
-                    printfn "Partial path component: %s" name.id
+                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls, false
                     | Some symbol ->
                         decls @ [symbol.name], true
                 | name :: tail ->
-                    printfn "Partial path component: %s" name.id
+                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None ->
                         decls, false
@@ -730,7 +804,7 @@ module SymbolTable =
                             else
                                 decls @ [symbol.name], true
                         | Some innerscope ->
-                            if innerscope.access = Accessibility.Open then
+                            if innerscope.access = Accessibility.Closed then
                                 decls @ [symbol.name], true
                             else
                                 probeInnerDecls ( decls @ [symbol.name] ) innerscope tail
