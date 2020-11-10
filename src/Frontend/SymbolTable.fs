@@ -307,7 +307,7 @@ module SymbolTable =
     //    | Few of Scope
     //    | All
 
-    type Signature =
+    type private Signature =
         { requiredImports: Scope
           exposing: Scope
           exports: Scope }
@@ -326,14 +326,18 @@ module SymbolTable =
         
         member this.IsRequiredImportName name = 
             Scope.containsSymbol this.requiredImports name.id
-            
-        member this.SetExports scope = 
-            { this with exports = scope }
+        
+        /// this is only used for 'module exposes ...', which replaces exports by the module scope 
+        member this.ReplaceExports moduleScope = 
+            { this with exports = moduleScope }
 
-        member this.exportSymbol symbol =
+        member this.ExposeSymbol symbol = 
+            { this with exposing = Scope.addSymbol this.exposing symbol }
+
+        member this.ExportSymbol symbol =
             { this with exports = Scope.addSymbol this.exports symbol }
             
-        member this.exportScope scope =
+        member this.ExportScope scope =
             { this with exports = Scope.addInnerScope this.exports scope }
 
 
@@ -345,7 +349,7 @@ module SymbolTable =
         private {
             moduleName: TranslationUnitPath
             // imports: Dictionary<TranslationUnitPath, Environment>
-            exposed: Scope option
+            // exposed: Scope option
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
             signature: Signature option
@@ -358,20 +362,20 @@ module SymbolTable =
         let init moduleName =
             do Scope.init ()   // initialize global state for anonymous scopes
             { Environment.moduleName = moduleName
-              exposed = None
+              // exposed = None
               path = [ Scope.createGlobalScope () ]
               lookupTable = LookupTable.Empty 
               signature = None }
               
         
-        let private initialiseSignature env : Environment =
+        let addSignature env =
             { env with signature = Some <| Signature.Create() }
 
 
         let getLookupTable env =
             env.lookupTable
 
-        
+
         let getGlobalScope env =
             assert (List.length env.path >= 1)
             List.last env.path
@@ -387,10 +391,10 @@ module SymbolTable =
             signature.exports
 
 
-        let setExports env scope =
+        let replaceExports env scope =
             assert hasSignature env
             let signature = Option.get env.signature
-            { env with signature = Some <| signature.SetExports scope}
+            { env with signature = Some <| signature.ReplaceExports scope}
 
 
         let getModuleScope env=
@@ -400,11 +404,9 @@ module SymbolTable =
 
         
         let isExposedName env (name: Name) = 
-            match env.exposed with
-            | Some exposed ->
-                Scope.containsSymbol exposed name.id
-            | None ->
-                false
+            assert hasSignature env
+            let signature = Option.get env.signature
+            Scope.containsSymbol signature.exposing name.id
                 
        
         let private currentScope (env: Environment) = 
@@ -513,7 +515,7 @@ module SymbolTable =
                 let signature = Option.get env.signature
                 match Scope.tryFindInnerScope moduleScope name.id with
                 | Some scope when isExposedName env name -> // non-exposed types are exported abstractly - without their inner scope
-                    { env with signature = Some <| signature.exportScope scope }
+                    { env with signature = Some <| signature.ExportScope scope }
                 | _ -> 
                     env
             else 
@@ -526,56 +528,47 @@ module SymbolTable =
                 let signature = Option.get env.signature
                 match Scope.tryFindSymbol moduleScope name.id with
                 | Some symbol when isType ->  // type names are always exported
-                    { env with signature = Some <| signature.exportSymbol symbol }
+                    { env with signature = Some <| signature.ExportSymbol symbol }
                 | Some symbol when isExposedName env name ->
-                    { env with signature = Some <| signature.exportSymbol symbol }
+                    { env with signature = Some <| signature.ExportSymbol symbol }
                 | _ ->
                     env
             else
                 env
-                               
 
-        // let exposedSymbol = Symbol.Create name Visibility.Hidden declSymbol.isScope
-        //match Scope.tryFindInnerScope moduleScope declSymbol.name.id with 
-        //| Some exposedScope -> // exposed id is also a scope
-        //    let export = 
-        //        Scope.addInnerScope exportScope exposedScope
-        //        |> Scope.addSymbol <| exposedSymbol
-        //    Ok { env with exports = Some export} 
-        //| None ->             // exposed id is not a scope
-        //    Ok { env with exports = Some <| Scope.addSymbol exportScope exposedSymbol }    
 
         ////////////////////
         // TODO: meaningful error messages
         // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
         
-        let addExposedNameBefore env (name: Name) =
-            assert Option.isSome env.exposed
-            let exposed = Option.get env.exposed
-            match Scope.tryFindSymbol exposed name.id with
+        let addExposedNameBefore env (exposedName: Name) =
+            assert hasSignature env
+            let importScope = getGlobalScope env
+            let signature = Option.get env.signature
+            match Scope.tryFindSymbol importScope exposedName.id with   // exposed name must not shadow imported name
             | None ->
-                let exposedSymbol = Symbol.Create name false // no scope
-                Ok { env with exposed = Some <| Scope.addSymbol exposed exposedSymbol }
-            | Some alreadyExposed ->
-                Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
+                match Scope.tryFindSymbol signature.exposing exposedName.id with // exposed name must not shadow other exposed name
+                | None ->
+                    let exposedSymbol = Symbol.Create exposedName false // no scope
+                    Ok { env with signature = Some <| signature.ExposeSymbol exposedSymbol }
+                | Some alreadyExposed ->
+                    Error <| ShadowingDeclaration (exposedName, alreadyExposed.name) // TODO: Double Export
+            | Some shadowedImport   ->
+                Error <| ShadowingDeclaration (exposedName, shadowedImport.name)
 
         ////////////////////////////////////
 
-        let addExposedNameAfter env (name: Name) =
+        let addExposedNameAfter env (exposedName: Name) =
             assert hasSignature env
-            let moduleScope = getModuleScope env
-            assert Scope.isModuleScope moduleScope
-                    
-            //match Scope.tryFindSymbol exportScope name.id with // is id already exposed?
-            //| None ->
-            match Scope.tryFindSymbol moduleScope name.id with // lookup the top-level declaration
-            | None -> 
-                Error <| Dummy (name.Range, sprintf "Exported id '%s' not found" name.id)
-                
+            
+            let moduleScope = getModuleScope env        
+            match Scope.tryFindSymbol moduleScope exposedName.id with // lookup the top-level declaration
             | Some declSymbol ->
-                do env.lookupTable.addExposed name declSymbol.name 
+                do env.lookupTable.addExposed exposedName declSymbol.name 
                 Ok env
-
+            | None -> 
+                Error <| Dummy (exposedName.Range, sprintf "Exported id '%s' not found" exposedName.id)
+                
         //let exportImplicitlyExposedName env (declName: Name) = 
         //    // let exports = env.exports
         //    if isModuleEnv env then
@@ -623,7 +616,7 @@ module SymbolTable =
             assert hasSignature env             // has Some exports
             match env.path with
             | [moduleScope; globalScope] ->
-                setExports env moduleScope
+                replaceExports env moduleScope
             | scopes -> 
                 // printfn "Scopes: %A" scopes
                 failwith "this should be called when the module scope is fully namechecked"
@@ -634,11 +627,12 @@ module SymbolTable =
         /// Combine the the lookup tables of both
         let addModuleEnv env (name: Name) (modEnv: Environment) : Environment = 
             assert hasSignature modEnv
+            let sigFromMod = Option.get modEnv.signature
             //match env.path, modEnv.path with
             //| [globalscope], [modGlobalScope] ->
             match env.path with
             | [globalscope ] ->
-                let expFromMod = getExports modEnv 
+                let expFromMod = sigFromMod.exports 
                 let renamedScope = Scope.rewriteId expFromMod name.id
                 // printfn "Renamed import Scope: \n %A" renamedScope
                 let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
@@ -649,20 +643,11 @@ module SymbolTable =
                 failwith "Adding the module scope should always work"
 
 
-
-        let addExposed env : Environment =
-            { env with exposed = Some <| Scope.createExposingScope ()}
-            
-        
         let enterModuleScope env : Environment =
-            assert (List.length env.path = 1)  // We only have the global scope to be used for imports
+            assert (List.length env.path = 1)      // We only have the global scope to be used for imports
             let modScp = Scope.createModuleScope ()
             { env with path = modScp :: env.path } // Todo: This should be enter inner scope with special name
-
-
-        let addSignature env =
-            initialiseSignature env
-            
+    
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Accessibility.Open Recursion.No }
@@ -750,9 +735,6 @@ module SymbolTable =
             let isOk = decls.Length = path.Length 
             
             if isOk then
-                // Move this to type annotation checking
-                //let exports = exportImplicitlyExposedName env (List.head decls)
-                //Ok { env with exports = exports }
                 Ok env
             elif path.Length = 1 then
                 Error (NoDeclaration path.[0])
