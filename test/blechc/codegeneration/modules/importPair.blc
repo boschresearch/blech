@@ -1,0 +1,14 @@
+import p "pair"
+
+@[EntryPoint]
+activity Main ()
+    var ab: p.Pair = p.set.fst(1,2)  // lookup in closed scope: param fst
+
+    var b: p.Both 
+    b.one = b.f
+
+    var i = p.fst(ab)
+    var j = p.snd(ab)
+    var k = b.one
+    await true
+end

@@ -1,0 +1,23 @@
+module exposes Pair, 
+    set, fst, snd, act
+
+struct Pair
+    var fst: int32
+    var snd: int32
+end
+
+function set (one: int32, two: int32) returns Pair
+    return {fst = one, snd = two}
+end
+
+function fst (p: Pair) returns int32
+    return p.fst
+end
+
+function snd (p: Pair) returns int32
+    return p.snd
+end
+
+activity act (flag: bool) 
+    await true
+end

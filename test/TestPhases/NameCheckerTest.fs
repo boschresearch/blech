@@ -47,7 +47,7 @@ type Test() =
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
         | Ok (ast, env) ->
-            printfn "%s" <| (SymbolTable.Environment.getLookupTable env).Show
+            printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test

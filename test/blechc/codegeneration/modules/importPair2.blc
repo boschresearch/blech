@@ -1,0 +1,12 @@
+import p "pair2"
+
+@[EntryPoint]
+activity Main ()
+    var ab: p.Pair = p.set.one(1,2)  // lookup in closed scope: param one
+
+    
+    var i = p.fst(ab)
+    var j = p.snd(ab)
+    await true
+    run p.act.flag.bla[1](true)
+end

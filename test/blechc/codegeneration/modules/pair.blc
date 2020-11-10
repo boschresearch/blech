@@ -1,0 +1,31 @@
+module exposes Pair, Both, set, fst, snd
+
+struct Pair
+    var fst: int32
+    var snd: int32
+end
+
+struct Both
+    var one: bool = true
+extension
+    function f() end
+end
+
+function f(b: Both)
+end
+
+function set (fst: int32, snd: int32) returns Pair
+    var teste: int32
+    do
+        var test: bool 
+    end
+    return {fst = fst, snd = snd}
+end
+
+function fst (pp: Pair) returns int32
+    return pp.fst
+end
+
+function snd (pp: Pair) returns int32
+    return pp.snd
+end
