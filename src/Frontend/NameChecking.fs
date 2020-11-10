@@ -202,8 +202,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err       
             ctx
 
+    let private addModuleScope (ctx: NameCheckContext) =
+        { ctx with env = Env.enterModuleScope ctx.env }
+
     let private enterModuleScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterModuleScope ctx.env }
+
+    let private addSignature (ctx: NameCheckContext) =
+        { ctx with env = Env.addSignature ctx.env }
 
     let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
         { ctx with env = Env.exportModuleScope ctx.env }
@@ -665,8 +671,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkModuleSpecBefore ctx (modSpec: AST.ModuleSpec) =
         Option.fold checkExposingBefore ctx modSpec.exposing
-        |> enterModuleScope   // add an additional module scope, from which identifiers are exposed
-                              // imports cannot be exposed therefore the global scope is not suitable
+        |> addSignature         // add an additional module scope, from which identifiers are exposed
+                                // imports cannot be exposed therefore the global scope is not suitable
 
     //let checkExposedNameAfter ctx exposedName =
     //    addExposedNameAfter ctx exposedName
@@ -689,6 +695,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkMember ctx cu.imports
+        |> enterModuleScope
         |> Option.fold checkModuleSpecBefore <| cu.spec
         |> List.fold checkMember <| cu.members
         |> Option.fold checkModuleSpecAfter <| cu.spec     // check exposes <identifiers> last 

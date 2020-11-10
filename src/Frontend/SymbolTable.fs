@@ -128,7 +128,8 @@ module SymbolTable =
             create id Accessibility.Closed Recursion.No // always closed non-recursive, because id is generated
 
         let createGlobalScope () : Scope = // id : Scope = 
-            create globalId Accessibility.Open Recursion.No   // Gets closed when a module scope is added
+            //create globalId Accessibility.Open Recursion.No   // Gets closed when a module scope is added
+            create globalId Accessibility.Closed Recursion.No
 
         let createModuleScope () : Scope =
             create moduleId Accessibility.Open Recursion.No
@@ -147,8 +148,8 @@ module SymbolTable =
         let rewriteId scope id : Scope =
             {scope with id = id}
 
-        let closeScope scope = 
-            { scope with access = Accessibility.Closed }
+        //let closeScope scope = 
+        //    { scope with access = Accessibility.Closed }
 
 
     type private NameInfo =
@@ -294,9 +295,14 @@ module SymbolTable =
 
 
     
-    type private Exposed = 
-        | Few of Scope
-        | All
+    //type private Exposed = 
+    //    | Few of Scope
+    //    | All
+
+    type Signature =
+        { imports: Scope
+          exposing: Scope
+          exports: Scope }
 
     /// Context of the name resolution compiler phase
     /// The "path" is a stack which starts with an empty, global scope
@@ -425,7 +431,7 @@ module SymbolTable =
         /// Returns a list of scopes names starting from the outermost scope in the current compilation unit
         let getQNamePrefix env : LongIdentifier = 
             List.rev env.path
-            |> if isModuleEnv env then List.skip 2 else List.skip 1  // skip global scope and optional module scope
+            |> if List.length env.path > 1 then List.skip 2 else List.skip 1  // skip import scope and module scope if already entered
             |> List.map (fun scope -> scope.id)
 
         /// TODO @FJG: what is going on here?
@@ -454,7 +460,7 @@ module SymbolTable =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
-                // printfn "Qname: %A" qname
+                printfn "Qname: %A" qname
                 try
                     do env.lookupTable.addDecl name qname
                     // printfn "Name: %A, QName: %A" name qname
@@ -473,7 +479,6 @@ module SymbolTable =
 
 
         let insertSubProgramName env (name: Name) =
-            //let access = if isExposedId env name.id then Visibility.Translucent else Visibility.Hidden
             insertSymbol env name IdLabel.Static true
 
 
@@ -482,12 +487,10 @@ module SymbolTable =
 
 
         let insertTypeName env (name: Name) =
-            // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Opaque
             insertSymbol env name IdLabel.Static true
  
  
         let insertConstOrParamName env (name: Name) = 
-            // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Hidden
             insertSymbol env name IdLabel.Static false
 
         
@@ -660,19 +663,22 @@ module SymbolTable =
         // This is the default for the global scope
         // A module has an additional open module scope, 
         // For a module the global scope must be closed to prevent shadowing of imports and module declarations
-        let private closeGlobalScope env =
-            assert (List.length env.path = 1)           
-            let globalScope = env.path.[0]
-            { env with path = [Scope.closeScope globalScope] }
+        //let private closeGlobalScope env =
+        //    assert (List.length env.path = 1)           
+        //    let globalScope = env.path.[0]
+        //    { env with path = [Scope.closeScope globalScope] }
 
         /// Enters a module scope - keyword module - and creates the export scope.
         /// This makes the environment a module environment - 
         /// instead of a program environment with None exports and an open global scope
         let enterModuleScope env : Environment =
             assert (List.length env.path = 1)  // We only have the global scope to be used for imports
-            let modEnv = closeGlobalScope env |> initialiseExportScope
+            // let modEnv = closeGlobalScope env // |> initialiseExportScope
             let modScp = Scope.createModuleScope ()
-            { modEnv with path = modScp :: modEnv.path }
+            { env with path = modScp :: env.path } // Todo: This should be enter inner scope with special name
+
+        let addSignature env =
+            initialiseExportScope env  // This is prelimary
 
         let enterOpenScope env (name: Name) : Environment = 
             { env with path = enterInnerScope env name.id Accessibility.Open Recursion.No }
