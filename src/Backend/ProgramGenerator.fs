@@ -163,52 +163,52 @@ let internal mainInit ctx init (entryCompilation: Compilation) =
     <.> ActivityTranslator.mainPCinit ctx entryCompilation
     <.> txt "}"
 
-open Blech.Frontend
-let rec private ppTopLevelArgument (tcc: TypeCheckContext) = function
-    | TypedMemLoc.Loc qname ->
-        // cannot simply use getValueFromName because of primitive-pass-by-value special case
-        let result = BLC + "_" + qname.basicId |> txt
-        let typeAndIsOutput =
-            match tcc.nameToDecl.TryGetValue qname with
-            | true, Declarable.ParamDecl p -> Some p.datatype, p.isMutable
-            | _ -> None, false
-        let needDeref = false
-        // if given qname is an input AND primitive AND primitive pass by address is true 
-        let needDeref = 
-            needDeref
-            || match typeAndIsOutput with
-               | Some t, true when t.IsPrimitive && tcc.cliContext.passPrimitiveByAddress -> true
-               | _ -> false
-        // if given qname is an output AND primitive
-        let needDeref = 
-            needDeref
-            || match typeAndIsOutput with
-               | Some t, true when t.IsPrimitive-> true
-               | _ -> false
-        // or given qname is a struct 
-        let needDeref = 
-            needDeref
-            || match fst typeAndIsOutput with
-               | Some (ValueTypes (ValueTypes.StructType _)) -> true
-               | _ -> false
-        // then dereference
-        if needDeref then
-            txt "(*" <^> result <^> txt")"
-        // otherwise just print the name
-        else
-            result
-    | TypedMemLoc.FieldAccess (subtml, ident) ->
-        (ppTopLevelArgument tcc subtml) <^> dot <^> txt ident
-    | TypedMemLoc.ArrayAccess (subtml, idx) ->
-        let {prereqStmts=preStmts; cExpr=idxDoc} = cpExpr tcc idx
-        preStmts @ [(ppTopLevelArgument tcc subtml) <^> (brackets idxDoc.Render)]
-        |> dpBlock
+//open Blech.Frontend
+//let rec private ppTopLevelArgument (tcc: TypeCheckContext) = function
+//    | TypedMemLoc.Loc qname ->
+//        // cannot simply use getValueFromName because of primitive-pass-by-value special case
+//        let result = BLC + "_" + qname.basicId |> txt
+//        let typeAndIsOutput =
+//            match tcc.nameToDecl.TryGetValue qname with
+//            | true, Declarable.ParamDecl p -> Some p.datatype, p.isMutable
+//            | _ -> None, false
+//        let needDeref = false
+//        // if given qname is an input AND primitive AND primitive pass by address is true 
+//        let needDeref = 
+//            needDeref
+//            || match typeAndIsOutput with
+//               | Some t, true when t.IsPrimitive && tcc.cliContext.passPrimitiveByAddress -> true
+//               | _ -> false
+//        // if given qname is an output AND primitive
+//        let needDeref = 
+//            needDeref
+//            || match typeAndIsOutput with
+//               | Some t, true when t.IsPrimitive-> true
+//               | _ -> false
+//        // or given qname is a struct 
+//        let needDeref = 
+//            needDeref
+//            || match fst typeAndIsOutput with
+//               | Some (ValueTypes (ValueTypes.StructType _)) -> true
+//               | _ -> false
+//        // then dereference
+//        if needDeref then
+//            txt "(*" <^> result <^> txt")"
+//        // otherwise just print the name
+//        else
+//            result
+//    | TypedMemLoc.FieldAccess (subtml, ident) ->
+//        (ppTopLevelArgument tcc subtml) <^> dot <^> txt ident
+//    | TypedMemLoc.ArrayAccess (subtml, idx) ->
+//        let {prereqStmts=preStmts; cExpr=idxDoc} = cpExpr tcc idx
+//        preStmts @ [(ppTopLevelArgument tcc subtml) <^> (brackets idxDoc.Render)]
+//        |> dpBlock
     
-let ppTml isLocal ctx (tml: TypedMemLoc) = 
-    if isLocal then
-        BLC + "_" + tml.ToUnderscoreString() |> txt
-    else
-        ppTopLevelArgument ctx tml
+//let ppTml isLocal ctx (tml: TypedMemLoc) = 
+//    if isLocal then
+//        BLC + "_" + tml.ToUnderscoreString() |> txt
+//    else
+//        ppTopLevelArgument ctx tml
 
 //let internal printState ctx printState (entryCompilation: Compilation) = 
 //    let showPcs =
@@ -363,9 +363,25 @@ let internal printState ctx printState (entryCompilation: Compilation) =
         cpStaticName entryCompilation.name <^> txt "_printPcs" <^> args <^> semi
 
     let showVars =
+        let argOfInput (i: ParamDecl) =
+            {
+                rhs = RhsCur (TypedMemLoc.Loc i.name)
+                typ = i.datatype
+                range = i.pos
+            }
+        let argOfOutput (i: ParamDecl) =
+            {
+                lhs = LhsCur (TypedMemLoc.Loc i.name)
+                typ = i.datatype
+                range = i.pos
+            }
         let args =
-            [ txt "\"\""
-              txt "&blc_blech_ctx" ]
+            [ [txt "\"\""]
+              [txt "&blc_blech_ctx"]
+              entryCompilation.inputs |> List.map (argOfInput >> cpInputArg ctx.tcc >> (fun x -> x.Render))
+              entryCompilation.outputs |> List.map (argOfOutput >> cpOutputArg ctx.tcc >> (fun x -> x.Render))
+              ]
+            |> List.concat
             |> dpCommaSeparatedInParens
         cpStaticName entryCompilation.name <^> txt "_printLocals" <^> args <^> semi
         

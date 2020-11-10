@@ -4,7 +4,7 @@
 
 #include "returnsStructFromExternFunction.h"
 
-void blc_blech_returnsStructFromExternFunction_rrr (const blc_bool blc_a,
+void blc_returnsStructFromExternFunction_rrr (const blc_bool blc_a,
                      struct blc_blech_returnsStructFromExternFunction_S *blc_retvar) {
     struct blc_blech_returnsStructFromExternFunction_S blc_s;
     memset(&(blc_s), 0, sizeof(struct blc_blech_returnsStructFromExternFunction_S));
