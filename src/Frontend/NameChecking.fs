@@ -187,7 +187,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let private addExposedNameBefore (ctx: NameCheckContext) name =
-        match Env.declareExposedName ctx.env name with
+        match Env.addExposedNameBefore ctx.env name with
         | Ok env ->
             { ctx with env = env }
         | Error err ->
@@ -195,7 +195,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
 
     let private addExposedNameAfter (ctx: NameCheckContext) name = 
-        match Env.defineExposedName ctx.env name with
+        match Env.addExposedNameAfter ctx.env name with
         | Ok env ->
             { ctx with env = env }
         | Error err ->

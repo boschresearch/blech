@@ -25,25 +25,16 @@ module SymbolTable =
     
     open CommonTypes
     
-    
-    type Visibility = // a symbol property
-        | Hidden        // non-exposed: const, param, function, activitity, or any other internal declaration
-        | Opaque        // implicitly exposed types: type, struct, enum
-        | Translucent   // explicitly exposed prototypes: function, activity 
-        | Transparent   // explicitly exposed: types, const, param 
-        | Imported      // imported modules 
-
 
     /// TODO @FJG: What is a symbol?
     type Symbol = 
         private {
             name: Name
-            visibility: Visibility
             isScope: bool
         }
-        static member Create name visibility isScope =
-            { name = name; visibility = visibility; isScope = isScope }
-            // |> fun symbol -> printfn "Symbol: %A" symbol; symbol
+        static member Create name isScope =
+            { name = name; isScope = isScope }
+            
     
     /// TODO @FJG: What does it mean?
     // Currently this is only used for shadowing and does not prevent access from outside
@@ -459,7 +450,7 @@ module SymbolTable =
             | None ->
                 shadows (currentOuter env) id
 
-        let private insertSymbol env (name: Name) (label: IdLabel) access isScope =
+        let private insertSymbol env (name: Name) (label: IdLabel) isScope =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
@@ -470,7 +461,7 @@ module SymbolTable =
                 with exp ->
                     printfn "%A" exp
                     // printf "%A" (env.lookupTable.ToString())
-                let symbol = Symbol.Create name access isScope
+                let symbol = Symbol.Create name isScope
                 let newEnv = { env with path = Scope.addSymbol (currentScope env) symbol :: currentOuter env }
                 Ok newEnv
             | Some shadowed ->
@@ -478,26 +469,26 @@ module SymbolTable =
          
 
         let insertName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label Visibility.Hidden false
+            insertSymbol env name label  false
 
 
         let insertSubProgramName env (name: Name) =
             //let access = if isExposedId env name.id then Visibility.Translucent else Visibility.Hidden
-            insertSymbol env name (IdLabel.Static) Visibility.Hidden true
+            insertSymbol env name IdLabel.Static true
 
 
         let insertImportName env (name: Name) =
-            insertSymbol env name IdLabel.Static Visibility.Imported true
+            insertSymbol env name IdLabel.Static true
 
 
         let insertTypeName env (name: Name) =
             // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Opaque
-            insertSymbol env name (IdLabel.Static) Visibility.Hidden true
+            insertSymbol env name IdLabel.Static true
  
  
         let insertConstOrParamName env (name: Name) = 
             // let access = if isExposedId env name.id then Visibility.Transparent else Visibility.Hidden
-            insertSymbol env name IdLabel.Static Visibility.Hidden false
+            insertSymbol env name IdLabel.Static false
 
         
         let exportScope env (name: Name) = 
@@ -541,12 +532,12 @@ module SymbolTable =
         ////////////////////
         // Before
 
-        let declareExposedName env (name: Name) =
+        let addExposedNameBefore env (name: Name) =
             assert Option.isSome env.exposed
             let exposed = Option.get env.exposed
             match Scope.tryFindSymbol exposed name.id with
             | None ->
-                let exposedSymbol = Symbol.Create name Visibility.Hidden false // no scope
+                let exposedSymbol = Symbol.Create name false // no scope
                 Ok { env with exposed = Some <| Scope.addSymbol exposed exposedSymbol }
             | Some alreadyExposed ->
                 Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
@@ -555,7 +546,7 @@ module SymbolTable =
         // TODO: meaningful error messages
         // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
 
-        let defineExposedName env (name: Name) =
+        let addExposedNameAfter env (name: Name) =
             assert isModuleEnv env
             let exportScope = Option.get env.exports
             //let moduleScope = currentScope env
@@ -587,31 +578,32 @@ module SymbolTable =
             //    Error <| ShadowingDeclaration (name, alreadyExposed.name) // TODO: Double Export
         
 
-        let exportImplicitlyExposedName env (declName: Name) = 
-            // let exports = env.exports
-            if isModuleEnv env then
-                let exportScope = Option.get env.exports
-                let moduleScope = getModuleScope env
-                match Scope.tryFindSymbol exportScope declName.id with
-                | None ->
-                    match Scope.tryFindSymbol moduleScope declName.id with
-                    | Some declSymbol ->
-                        // TODO: Move this to a private helper function
-                        // module level declaration found 
-                        if declSymbol.visibility = Visibility.Opaque then
-                            // implicit export necessary
-                            // TODO: Also export inner scope and close it 
-                            { env with exports = Some <| Scope.addSymbol exportScope declSymbol }
-                        else
-                            // do not export it
-                           env
-                    | None -> // 
-                        // do not export it
-                        env
-                | Some _ -> // already exported, do nothing
-                    env
-            else
-                env
+        //let exportImplicitlyExposedName env (declName: Name) = 
+        //    // let exports = env.exports
+        //    if isModuleEnv env then
+        //        let exportScope = Option.get env.exports
+        //        let moduleScope = getModuleScope env
+        //        match Scope.tryFindSymbol exportScope declName.id with
+        //        | None ->
+        //            match Scope.tryFindSymbol moduleScope declName.id with
+        //            | Some declSymbol ->
+        //                // TODO: Move this to a private helper function
+        //                // module level declaration found 
+        //                // if declSymbol.visibility = Visibility.Opaque then
+        //                if true then
+        //                    // implicit export necessary
+        //                    // TODO: Also export inner scope and close it 
+        //                    { env with exports = Some <| Scope.addSymbol exportScope declSymbol }
+        //                else
+        //                    // do not export it
+        //                   env
+        //            | None -> // 
+        //                // do not export it
+        //                env
+        //        | Some _ -> // already exported, do nothing
+        //            env
+        //    else
+        //        env
 
         /////////////////
         
