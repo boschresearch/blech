@@ -90,7 +90,8 @@ let internal cpDeref o = txt "*" <^> o
 let internal cpRefto o = txt "&" <^> o
 
 /// Inputs cannot be changed and may be passed in by value
-let private cpInputParam tcc (input: ParamDecl) =
+// used by trace printer
+let cpInputParam tcc (input: ParamDecl) =
     let iname = (cpName (Some Current) tcc input.name).Render
     // determine whether it is a primitive value type or not
     txt "const"
@@ -103,7 +104,8 @@ let private cpInputParam tcc (input: ParamDecl) =
             cpType input.datatype <+> cpDeref (txt "const" <+> iname)
         
 /// Outputs, PCs, Locals are changed and are always passed "by reference"
-let private cpOutputParam tcc (output: ParamDecl) =
+// used by trace printer
+let cpOutputParam tcc (output: ParamDecl) =
     let oname = (cpName (Some Current) tcc output.name).Render
     match output.datatype with
     | ValueTypes (ArrayType _) -> cpArrayDeclDoc oname output.datatype
