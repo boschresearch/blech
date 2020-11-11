@@ -67,7 +67,7 @@ module SymbolTable =
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Scope =
         
-        let private globalId = "$Global"
+        let private globalId = "$Global" // TODO. Rename this and all varibles to $import and call it import scope
         let private moduleId = "$Module"
         // let private exportId = "$Export"
 
@@ -308,13 +308,15 @@ module SymbolTable =
     //    | All
 
     type private Signature =
-        { requiredImports: Scope
-          exposing: Scope
-          exports: Scope }
+        { exposing: Scope        // symbols of top-level entities in module, that are exported
+          opaque: Scope          // symbols of top-level types that are not exported
+          requiredImports: Scope // names that are required to be imported in order to use an imported module
+          exports: Scope }       // top-level entities that are exported, with innerscopes if necessary
 
         static member Create () =
-            { requiredImports = Scope.createOpenScope ()     
-              exposing = Scope.createClosedScope () 
+            { exposing = Scope.createClosedScope ()
+              opaque = Scope.createClosedScope ()
+              requiredImports = Scope.createOpenScope ()     
               exports = Scope.createOpenScope () }
 
 
@@ -404,11 +406,17 @@ module SymbolTable =
 
         
         let isExposedName env (name: Name) = 
-            assert hasSignature env
-            let signature = Option.get env.signature
-            Scope.containsSymbol signature.exposing name.id
-                
-       
+            if hasSignature env then
+                let signature = Option.get env.signature
+                Scope.containsSymbol signature.exposing name.id
+            else
+                false
+
+        let isImportedName env (name: Name) =
+            let importScope = getGlobalScope env
+            Scope.containsSymbol importScope name.id
+
+
         let private currentScope (env: Environment) = 
             List.head env.path 
 
