@@ -845,13 +845,11 @@ module PrettyPrint =
                 <.> indent dpTabsize (membersDoc |> vsep)
                 <.> txt "end"
 
-            let fNewTypeDecl (_, isRef, name, represents, members, annons) =
+            let fOpaqueTypeDecl (_, isRef, name, members, annons) =
                 vsep annons
                 <.> if isRef then txt "ref" else empty
                 <+> txt "type" 
                 <+> dpName name
-                <+> (dpAliasedType represents
-                     |> gnest dpTabsize)
                 <.> match members with | [] -> empty | _ -> txt "extension"
                 <.> indent dpTabsize (members |> vsep)
                 <.> txt "end"
@@ -896,8 +894,8 @@ module PrettyPrint =
 
             // call the catamorphism using the functions defined above
             // signature is
-            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
+            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
             render (Some 72) doc
 
         // end of template

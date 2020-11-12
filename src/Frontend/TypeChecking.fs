@@ -777,7 +777,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
     newType
 
         
-let private fNewTypeDecl pos = unsupported4 "new type declarations" pos //TODO
+let private fOpaqueTypeDecl pos = unsupported3 "new type declarations" pos //TODO
 let private fTypeAliasDecl pos = unsupported4 "alias declarations" pos //TODO
 let private fEnumTypeDecl (etd: AST.EnumTypeDecl) = unsupported1 "enum declarations" etd.range //TODO 
 let private fUnitDecl pos = unsupported4 "unit declarations" pos //TODO
@@ -1321,14 +1321,12 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddType (fEnumTypeDecl e)
             | AST.Member.StructType s -> 
                 do typedMembers.AddType (fStructTypeDecl lut s)
-            | AST.Member.NewType nt ->
+            | AST.Member.OpaqueType ot ->
                 let t =
-                    fNewTypeDecl nt.range nt.name
-                    // <| fDataType lut nt.representation
-                    <| Option.map (fDataType lut) nt.representation
-                    <| Annotation.checkOtherDecl nt.annotations
+                    fOpaqueTypeDecl ot.range ot.name
+                    <| Annotation.checkOtherDecl ot.annotations
                 do typedMembers.AddType t
-            | AST.Member.Type t ->
+            | AST.Member.TypeAlias t ->
                 let t =
                     fTypeAliasDecl t.range t.name
                     <| fDataType lut t.aliasfor

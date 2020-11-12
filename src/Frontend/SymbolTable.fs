@@ -307,8 +307,13 @@ module SymbolTable =
     //    | Few of Scope
     //    | All
 
+    type Visibility =
+    | Open           // 
+    | SemiOpen
+    | Closed
+
     type private Signature =
-        { exposing: Scope        // symbols of top-level entities in module, that are exported
+        { exposing: Scope        // symbols of exposed top-level entities in module
           opaque: Scope          // symbols of top-level types that are not exported
           requiredImports: Scope // names that are required to be imported in order to use an imported module
           exports: Scope }       // top-level entities that are exported, with innerscopes if necessary
@@ -316,7 +321,7 @@ module SymbolTable =
         static member Create () =
             { exposing = Scope.createClosedScope ()
               opaque = Scope.createClosedScope ()
-              requiredImports = Scope.createOpenScope ()     
+              requiredImports = Scope.createClosedScope ()     
               exports = Scope.createOpenScope () }
 
 

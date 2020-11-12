@@ -1,6 +1,6 @@
 module
 
-type Emitted = int32 signal                              // event type
+typealias Emitted = int32 signal                              // event type
 // typealias Writer = fun () (MyStruct) -> (int32, bool) // function type
 // typealias Testing = act (float32) (MyClass)           // activity type 
 

@@ -210,7 +210,23 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     //    let name = List.head typeName.names
     //    { ctx with env = Env.exportImplicitlyExposedName ctx.env name }  // TODO: check for explicit export in case of constants/params
 
-    
+    let private exportExposedDecl ctx name =
+        if Env.isExposedName ctx.env name then
+            { ctx with env = Env.exportName ctx.env name true
+                             |> Env.exportScope <| name }
+        else
+            ctx
+
+    let private exportHiddenDecl ctx name isCode =
+        if isCode then
+            failwith "Must be exposed to be exported"
+        elif Env.isExposedName ctx.env name then
+            ctx // already exported
+        else // is an opaque type
+            { ctx with env = Env.exportName ctx.env name true }
+            
+        
+
     let private exportTypeDecl ctx name =
         { ctx with env = Env.exportName ctx.env name true
                          |> Env.exportScope <| name }
@@ -586,16 +602,16 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> exportTypeDecl <| std.name
 
 
-        and checkNewType ctx (ntd: AST.NewTypeDecl) =
+        and checkOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
             addTypeDecl ctx ntd                 // open, named, non-recursive scope 
             // |> checkDataType <| ntd.representation    // check representation first, before typename becomes visible
-            |> Option.fold checkDataType <| ntd.representation
+            // |> Option.fold checkDataType <| ntd.representation
             |> enableRecursion                         
             |> List.fold checkMember <| ntd.members
             |> exitSubScope
             |> exportTypeDecl <| ntd.name
 
-        and checkTypeAlias ctx (tad: AST.TypeDecl) =
+        and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
             addTypeDecl ctx tad                 // open, named, non-recursive scope  
             |> checkDataType <| tad.aliasfor          // check alias first, before new typename becomes visible
             |> enableRecursion
@@ -610,9 +626,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkEnumType ctx et
             | Member.StructType st ->
                 checkStructType ctx st
-            | Member.NewType nt ->
-                checkNewType ctx nt
-            | Member.Type ta -> 
+            | Member.OpaqueType nt ->
+                checkOpaqueType ctx nt
+            | Member.TypeAlias ta -> 
                 checkTypeAlias ctx ta
             | Member.Var vdecl ->
                 checkStaticVarDecl ctx vdecl
