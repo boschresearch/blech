@@ -362,6 +362,7 @@ OpaqueTypeDecl
                                             { logParserError $3;
                                               Member.Nothing }
 
+/*
 OpaqueTypeDef
     : OptAnnotations OptModifiers TYPE Name      
                                             { Member.OpaqueType { OpaqueTypeDecl.range = typeDeclRange $1 $2 $3 $4.Range
@@ -374,7 +375,7 @@ OpaqueTypeDef
     | OptAnnotations OptModifiers TYPE ErrorBeforeEOL EOL  
                                             { logParserError $3;
                                               Member.Nothing }
-
+*/
 
 OptExtension
     :                                       { [] }
@@ -1372,12 +1373,6 @@ Import
                                                                    exposing = None } }
 
 
-/*
-NameList
-    : Name                                      { [$1] }
-    | Name NameList                             { $1 :: $2 }
-*/
-
 NameList
     : Name                                      { [$1] }
     | Name COMMA NameList                       { $1::$3 }
@@ -1427,6 +1422,7 @@ SignatureMember
     | EnumDecl                                  { $1 }
     | StructDecl                                { $1 }
     | OpaqueSingleton                           { $1 }
+    | OpaqueTypeDecl                            { $1 }
     | ExtensionMemberDecl                       { $1 }
     | ExtensionDecl                             { $1 }
 
