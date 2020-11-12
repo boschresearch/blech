@@ -1146,7 +1146,15 @@ let prototypeRange (annos: Annotation list) singleton startRange inputsRange opt
     | hd::_, _ ->
         unionRanges hd.Range endRange
 
- 
+
+let opaqueSingletonRange (annos: Annotation list) singleton nameRange =
+    match annos with
+    | [] -> 
+        unionRanges singleton nameRange
+    | hd::_ ->
+        unionRanges hd.Range nameRange
+
+
 let vardeclRange (annos: Annotation list) keywordRange endRange =
     match annos with
     | [] ->

@@ -513,8 +513,10 @@ OptAccess
                                                 { Access.Point($2, unionRanges $1 $2.Range) :: $3 }
     | LBRACKET Expr RBRACKET OptAccess
                                                 { Access.Index($2, unionRanges $1 $3) :: $4 }
-	| POINT LBRACKET Expr RBRACKET OptAccess    
-												{ Access.StaticIndex($3, unionRanges $1 $4) :: $5 }
+
+    /* TODO: Do we keep this in the language? fjg. 11.11.20 */
+    | POINT LBRACKET Expr RBRACKET OptAccess    
+                                                { Access.StaticIndex($3, unionRanges $1 $4) :: $5 }
                                                 
 
 /* --- Literals ----- */
@@ -1109,6 +1111,21 @@ ExternalFunction
                                         { logParserError $2;
                                           Member.Nothing }
 
+
+// TODO: This should not be a prototype because it is not callable, just for the time being, fjg. 12.11.20
+OpaqueSingleton:
+    | OptAnnotations SINGLETON Name     { Member.Prototype { Prototype.range = opaqueSingletonRange $1 $2 $3.range
+                                                             isExtern = false
+                                                             isSingleton = true
+                                                             singletons = []
+                                                             isFunction = false
+                                                             name = $3
+                                                             inputs = []
+                                                             outputs = []
+                                                             result = None
+                                                             annotations = $1 } }
+
+
 Prototype
     : OptAnnotations OptSingletonDecl FunOrAct Name InputParameters OptOutputParameters OptReturns OptOnClock
                                         { Member.Prototype { Prototype.range = prototypeRange $1 (fst $2) (snd $3) (snd $5) (snd $6) $7 $8
@@ -1121,6 +1138,7 @@ Prototype
                                                              outputs = fst $6
                                                              result = $7
                                                              annotations = $1 } }
+
                                         
     | OptAnnotations OptSingletonDecl FunOrAct ErrorBeforeEOL
                                         { logParserError (snd $3);
@@ -1409,6 +1427,7 @@ SignatureMember
     | Unit                                      { $1 }
     | EnumDecl                                  { $1 }
     | StructDecl                                { $1 }
+    | OpaqueSingleton                           { $1 }
     | ExtensionMemberDecl                       { $1 }
     | ExtensionDecl                             { $1 }
 
