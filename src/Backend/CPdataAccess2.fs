@@ -237,6 +237,11 @@ let cpStaticName =
     cpName None TypeCheckContext.Empty
     >> (fun x -> x.Render)
 
+/// Given QName of calle and arguments as Doc list
+/// return Doc of "callee(arg1,arg2,...)"
+let assembleSubprogCall whoToCall args =
+    cpStaticName whoToCall <^> dpCommaSeparatedInParens args
+
 /// Translates a primitive Blech type or a type name to a C type and returns a Doc representation thereof
 let rec internal cpType typ =
     match typ with
@@ -300,6 +305,8 @@ and CExpr =
         | Blob p -> p.Render
         | Value d -> d
         | ComplexExpr (f, c) -> f c
+    static member RenderAll (xs: CExpr list) =
+        xs |> List.map (fun x -> x.Render)
 
 and CPath =
     | Name of CName
@@ -520,7 +527,6 @@ and cpExpr tcc expr : PrereqExpression =
     | FunCall (whoToCall, inputs, outputs) ->
         let reIns = inputs |> List.map (cpInputArg tcc)
         let reOuts = outputs |> List.map (cpOutputArg tcc)
-        let name = (cpStaticName whoToCall)
         let retType =
             match tcc.nameToDecl.[whoToCall].TryGetReturnType with
             | Some t -> t
@@ -529,8 +535,8 @@ and cpExpr tcc expr : PrereqExpression =
         if retType.IsPrimitive then
             // in case we call a function that returns a primitive value
             // rely on C return values
-            let render (rs: CExpr list) =
-                name <^> (rs |> List.map (fun x -> x.Render) |> dpCommaSeparatedInParens)
+            let render rs =
+                assembleSubprogCall whoToCall (CExpr.RenderAll rs)
             mkPrereqExpr
             <| (reIns @ reOuts |> List.collect getPrereq)
             <| ComplexExpr (render, (reIns @ reOuts |> List.map getCExpr))
@@ -557,8 +563,8 @@ and cpExpr tcc expr : PrereqExpression =
             let tmpRExpr = {rhs = RhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = v.pos}
             let reReceiverAsRhs = cpExpr tcc tmpRExpr
             let funCall =
-                name 
-                <^> (reIns @ reOuts @ [reReceiverAsOutArg] |> List.map (getCExpr >> (fun x -> x.Render)) |> dpCommaSeparatedInParens) 
+                let rs = reIns @ reOuts @ [reReceiverAsOutArg] |> List.map getCExpr
+                assembleSubprogCall whoToCall (CExpr.RenderAll rs)
                 <^> semi
             mkPrereqExpr
             <| ((reIns @ reOuts @ [reReceiverAsOutArg] |> List.collect getPrereq) @ [tmpDecl; funCall])
@@ -762,6 +768,9 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
         cpExpr tcc expr
     
 
+let renderSubContext pcId whoToCall =
+    let renderedWhoToCall = cpStaticName whoToCall
+    txt ("&" + CTX + "->") <^> txt pcId <^> txt "_" <^> renderedWhoToCall
 
 //=============================================================================
 // Printing statements
@@ -855,7 +864,7 @@ let cpFunctionCall tcc whoToCall inputs outputs =
 let cpInitActivityCall pcName whoToCall =
     let renderedWhoToCall = cpStaticName whoToCall
     let renderedCalleeName = renderedWhoToCall <^> txt "_init"
-    let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedWhoToCall
+    let subctx = renderSubContext pcName whoToCall
     let actCall = 
         [subctx]
         |> dpCommaSeparatedInParens
@@ -872,10 +881,9 @@ let cpInitActivityCall pcName whoToCall =
 /// receiverVar - optional TypedLhs (r = run A...)
 /// termRetcodeVarName - QName of the variable that stores the termination information
 let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVarName =
-    let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = inputs |> List.map (cpInputArg tcc)
     let renderedOutputs = outputs |> List.map (cpOutputArg tcc)
-    let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedCalleeName
+    let subctx = renderSubContext pcName whoToCall
     let renderedRetvarOpt =
         receiverVar
         |> Option.map (cpOutputArg tcc)
@@ -887,8 +895,7 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVa
             renderedRetvarOpt |> Option.toList |> List.map (getCExpr >> (fun x -> x.Render))
         ]
         |> List.concat
-        |> dpCommaSeparatedInParens
-        |> (<^>) renderedCalleeName
+        |> assembleSubprogCall whoToCall
     let prereqStmts =
         [
             renderedInputs |> List.collect getPrereq

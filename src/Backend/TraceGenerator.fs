@@ -14,6 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//=============================================================================
+/// This module generates C code for printing execution traces in JSON format.
+//=============================================================================
+
 module Blech.Backend.TraceGenerator
 
 open Blech.Common.PPrint
@@ -30,55 +34,78 @@ open Blech.Backend.CPdataAccess2
 open Blech.Backend.CPrinter
 
 
-let private printerInterface tcc name ins outs =
-    [ [txt "char * prefix"]
-      [cpActContext name]
-      ins |> List.map (cpInputParam tcc)
-      outs |> List.map (cpOutputParam tcc) ]
-    |> List.concat
-    |> dpCommaSeparatedInParens
+/// Constants
+let printPcSuffix = "_printPcs"
+let printLocalsSuffix = "_printLocals"
+let emptyCString = "\"\"" // also used in ProgramGenerator.fs
+let private BUFFER = "buffer"
+let private BUFFER_SIZE = 10000
+let private BUFFER_DECL = sprintf "char %s[%d];" BUFFER BUFFER_SIZE
+let private PREFIX = "prefix"
+let private PREFIX_DECL = "char * " + PREFIX
+let private QT = "\"" // a double quote character "
+let private cCodeDotIfPrefixExists = sprintf "strcmp(%s, %s)? \".\" : %s" PREFIX emptyCString emptyCString
+let private cCodeCommaIfNotTopLevel = sprintf "strcmp(%s, %s)? \",\" : %s" PREFIX emptyCString emptyCString //strcmp(prefix, "")? "," : ""
 
+
+let private cCodeAppendArg accumulator arg =
+    accumulator + ", " + arg
+
+let private cCodePrintf format args =
+    args
+    |> List.fold cCodeAppendArg ""
+    |> sprintf "printf(%s%s);" (QT + format + QT)
+
+let private cCodeSprintf destination format args =
+    args
+    |> List.fold cCodeAppendArg ""
+    |> sprintf "sprintf(%s, %s%s);" destination (QT + format + QT)
+
+/// void <name>_<suffix> (char * prefix, struct <name> blc_blech_ctx, <ins>, <outs>) { <body> }
 let private printerTemplate lut name suffix body ins outs =
+    let printerInterface =
+        [ [txt PREFIX_DECL]
+          [cpActContext name]
+          ins |> List.map (cpInputParam lut)
+          outs |> List.map (cpOutputParam lut) ]
+        |> List.concat
+        |> dpCommaSeparatedInParens
+    
     txt "void"
     <+> cpStaticName name <^> txt suffix
-    <+> printerInterface lut name ins outs
+    <+> printerInterface
     <+> txt "{"
     <.> cpIndent body
     <.> txt "}"
 
-let callSubPrinter callerPc name suffix =
-    let mangledName = txt callerPc <^> txt "_" <^> cpStaticName name
+
+let private callSubPrinter callerPc name suffix =
+    let mangledName = callerPc + "_" + (cpStaticName name |> render None) // doppelt gemoppelt
+    let subcontext = renderSubContext callerPc name                       // <-^
     let prefixvar = 
-        txt "sprintf(buffer,\"%s%s"
-        <^> mangledName
-        <^> txt "\", prefix"
-        <^> txt """, strcmp(prefix, "")? "." : "");"""
-        
+        let format = "%s%s" + mangledName 
+        cCodeSprintf BUFFER format [PREFIX; cCodeDotIfPrefixExists]
+        |> txt
     let args = 
-        [ txt "buffer" // glue together path through state struct
-          txt "&blc_blech_ctx->" <^> mangledName] // sub-context
+        [ txt BUFFER // glue together path through state struct
+          subcontext] // sub-context
         |> dpCommaSeparatedInParens
     [ prefixvar
       cpStaticName name <^> txt suffix <^> args <^> semi ]
     |> dpBlock
 
-let printPc isLast (pc: ParamDecl) =
+let private printPc isLast (pc: ParamDecl) =
     // generated line should like like
     // printf("\"%s.pc: %u\"", prefix, ctx->pc);
-    txt """printf("\n\t\t\t\t\"%s%s""" 
-    <^> txt pc.name.basicId 
-    <^> txt """\": %u"""
-    <^> if isLast then txt "%s" else txt ","
-    <^> txt "\", prefix" // here we use the prefix parameter of _printX
-    <^> txt """, strcmp(prefix, "")? "." : "", """
-    <^> cpPcName pc.name
-    <^> if isLast then
-            txt """, strcmp(prefix, "")? "," : "" """ // prefix empty means we are at top level and this is the last line - do not add a comma
-        else
-            empty
-    <^> txt ");"
+    let format = "\\n\\t\\t\\t\\t\\\"%s%s" + pc.name.basicId + "\\\": %u" + if isLast then "%s" else ","
+    let args = [ PREFIX
+                 cCodeDotIfPrefixExists
+                 cpPcName pc.name |> render None
+                 cCodeCommaIfNotTopLevel ]
+    cCodePrintf format args
+    |> txt
 
-let getFormatStrForArithmetic (dty: Types) =
+let private getFormatStrForArithmetic (dty: Types) =
     assert dty.IsPrimitive
     match dty with
     | ValueTypes (BoolType) -> "%d"
@@ -98,7 +125,7 @@ let getFormatStrForArithmetic (dty: Types) =
     | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
     | _ -> failwithf "No format string for composite data type %A." dty
 
-let rec printTml level lut isLast tml (pos: range) = 
+let rec private printTml level lut isLast tml (pos: range) = 
     let dty = getDatatypeFromTML lut tml
     let ident =
         let innerIdent =
@@ -114,18 +141,21 @@ let rec printTml level lut isLast tml (pos: range) =
     match dty with
     | ValueTypes _ when dty.IsPrimitive ->
         // do the printing
-        txt <| sprintf "printf(\"\\n\\t\\t\\t\\t%s" tabs
-        <^> txt ident
-        <^> txt (getFormatStrForArithmetic dty)
-        <^> if isLast && level = 0 then txt "%s" 
-            elif isLast && level > 0 then empty // do not put a , behind the last element of struct or array
-            else txt "," // not last, always comma
-        <^> txt "\","
-        <^> (cpTml Current lut tml).Render
-        <^> if level = 0 && isLast then
-                txt """, strcmp(prefix, "")? "," : "" """ // prefix empty means we are at top level and this is the last line - do not add a comma
-            else empty 
-        <^> txt ");"
+        let format = 
+            sprintf "\\n\\t\\t\\t\\t%s" tabs
+            + ident
+            + getFormatStrForArithmetic dty
+            + if isLast && level = 0 then "%s" 
+              elif isLast && level > 0 then "" // do not put a , behind the last element of struct or array
+              else "," // not last, always comma
+        let args = 
+            ((cpTml Current lut tml).Render |> render None)
+            :: if level = 0 && isLast then
+                [ cCodeCommaIfNotTopLevel ]
+               else
+                []
+        cCodePrintf format args
+        |> txt
     | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
         // access each field and call recursively
         let structContents =
@@ -138,17 +168,26 @@ let rec printTml level lut isLast tml (pos: range) =
                     :: List.map (fun (x: VarDecl) -> printTml (level + 1) lut false (tml.AddFieldAccess x.name.basicId) pos) fs
             |> List.rev
         let openStruct =
-            txt <| sprintf "printf(\"\\n\\t\\t\\t\\t%s" tabs
-            <^> txt ident
-            <^> txt """{");"""
+            let format = 
+                sprintf "\\n\\t\\t\\t\\t%s" tabs
+                + ident
+                + "{"
+            cCodePrintf format []
+            |> txt
         let closeStruct =
-            txt <| sprintf "printf(\"\\n\\t\\t\\t\\t%s}" tabs
-            //<^> if isLast then empty else txt ","
-            <^> if level = 0 && isLast then
-                    txt """%s", strcmp(prefix, "")? "," : "" """ // prefix empty means we are at top level and this is the last line - do not add a comma
-                elif isLast then txt "\""
-                else txt ",\""
-            <^> txt ");"
+            let format = 
+                sprintf "\\n\\t\\t\\t\\t%s}" tabs
+                + if level = 0 && isLast then
+                      "%s"
+                  elif isLast then ""
+                  else ","
+            let args =
+                if level = 0 && isLast then
+                    [cCodeCommaIfNotTopLevel] // prefix empty means we are at top level and this is the last line - do not add a comma
+                else 
+                    []
+            cCodePrintf format args
+            |> txt
         openStruct :: structContents @ [closeStruct]
         |> dpBlock
     | ValueTypes (ArrayType (size,_)) ->
@@ -157,17 +196,26 @@ let rec printTml level lut isLast tml (pos: range) =
               typ = ValueTypes (IntType Int32)
               range = range0 }
         let openArray =
-            txt <| sprintf "printf(\"\\n\\t\\t\\t\\t%s" tabs
-            <^> txt ident
-            <^> txt """[");"""
+            let format = 
+                sprintf "\\n\\t\\t\\t\\t%s" tabs
+                + ident
+                + "["
+            cCodePrintf format []
+            |> txt
         let closeArray =
-            txt <| sprintf "printf(\"\\n\\t\\t\\t\\t%s]" tabs
-            //<^> if isLast then empty else txt ","
-            <^> if level = 0 && isLast then
-                    txt """%s", strcmp(prefix, "")? "," : "" """ // prefix empty means we are at top level and this is the last line - do not add a comma
-                elif isLast then txt "\""
-                else txt ",\""
-            <^> txt ");"
+            let format =
+                sprintf "\\n\\t\\t\\t\\t%s]" tabs
+                + if level = 0 && isLast then
+                    "%s"
+                  elif isLast then ""
+                  else ","
+            let args =
+                if level = 0 && isLast then
+                    [cCodeCommaIfNotTopLevel] // prefix empty means we are at top level and this is the last line - do not add a comma
+                else 
+                    []
+            cCodePrintf format args
+            |> txt
         let intsize = (int)size // an array with max_int many entries is at least 2GB large, so before we run into casting problems here the trace printing would already be intractable
         let arrayContents =
             [for i in 0 .. intsize - 2 -> printTml (level + 1) lut false (tml.AddArrayAccess (mkIdxOf i)) pos]
@@ -176,20 +224,7 @@ let rec printTml level lut isLast tml (pos: range) =
         |> dpBlock
     | _ -> failwith "Only value types implemented."
 
-let printLocal lut isLast (local: ParamDecl) =
-    //txt """printf("\n\t\t\t\t\"%s%s""" 
-    //<^> txt local.name.basicId <^> txt ("_line" + string(local.pos.StartLine))
-    //<^> txt """\": """
-    //<^> txt (getFormatStrForArithmetic local.datatype)
-    //<^> if isLast then txt "%s" else txt ","
-    //<^> txt "\", prefix" // here we use the prefix parameter of _printX
-    //<^> txt """, strcmp(prefix, "")? "." : "", """
-    //<^> renderCName Current lut local.name
-    //<^> if isLast then
-    //        txt """, strcmp(prefix, "")? "," : "" """ // prefix empty means we are at top level and this is the last line - do not add a comma
-    //    else
-    //        empty
-    //<^> txt ");"
+let private printLocal lut isLast (local: ParamDecl) =
     printTml 0 lut isLast (TypedMemLoc.Loc local.name) local.pos
 
 let private genStatePrinter lut compilation amIentryPoint =
@@ -202,7 +237,7 @@ let private genStatePrinter lut compilation amIentryPoint =
         let pcPrinterBody =
             let callPrintersRecursively =
                 actctx.subcontexts
-                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) "_printPcs")
+                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) printPcSuffix)
                 |> dpBlock
 
             let printThisInstancePcs =
@@ -215,19 +250,19 @@ let private genStatePrinter lut compilation amIentryPoint =
                 |> List.rev
                 |> dpBlock
 
-            [ txt "char buffer[10000];"
+            [ txt BUFFER_DECL
               callPrintersRecursively
               printThisInstancePcs ]
             |> dpBlock
 
         let printPcs =
-            printerTemplate lut name "_printPcs" pcPrinterBody [] []
+            printerTemplate lut name printPcSuffix pcPrinterBody [] []
 
         // generate print function for variables
         let varsPrinterBody = 
             let callPrintersRecursively =
                 actctx.subcontexts
-                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) "_printLocals")
+                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) printLocalsSuffix)
                 |> dpBlock
 
             let printThisInstanceLocals =
@@ -243,7 +278,7 @@ let private genStatePrinter lut compilation amIentryPoint =
                 |> List.rev
                 |> dpBlock
 
-            [ txt "char buffer[10000];"
+            [ txt BUFFER_DECL
               callPrintersRecursively
               printThisInstanceLocals ]
             |> dpBlock
@@ -251,7 +286,7 @@ let private genStatePrinter lut compilation amIentryPoint =
         let printVars =
             let ins = if amIentryPoint then compilation.inputs else []
             let outs = if amIentryPoint then compilation.outputs else []
-            printerTemplate lut name "_printLocals" varsPrinterBody ins outs
+            printerTemplate lut name printLocalsSuffix varsPrinterBody ins outs
         
         [printPcs; empty; printVars]
         |> vsep
