@@ -25,6 +25,7 @@
     <Compile Include="BlechLexer.fs" />
     <Compile Include="ParsePkg.fs" />
     <Compile Include="SymbolTable.fs" />
+    <Compile Include="Export.fs" />
     <Compile Include="NameChecking.fs" />
     <Compile Include="SignaturePrinter.fs" />
     <Compile Include="TyChkErrors.fs" />
