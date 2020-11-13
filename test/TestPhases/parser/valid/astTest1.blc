@@ -3,7 +3,7 @@ module
 unit s
 unit m
 
-type myRename = float64[m]
+typealias myRename = float64[m]
 
 struct MyStruct 
     var field1: int32[s]

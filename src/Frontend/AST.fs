@@ -309,12 +309,12 @@ and StructTypeDecl =
         member this.Range = this.range
         member this.name = this.name
 
-and NewTypeDecl = 
+and OpaqueTypeDecl = 
     { 
         range: range
         isReference: bool
         name: Name
-        representation: DataType option
+        //representation: DataType option
         members: Member list
         annotations: Annotation list
     }
@@ -322,7 +322,7 @@ and NewTypeDecl =
         member this.Range = this.range
         member this.name = this.name
     
-and TypeDecl = 
+and TypeAliasDecl = 
     { 
         range: range
         isReference: bool
@@ -472,8 +472,8 @@ and Member =
     | Import of Import
     | EnumType of EnumTypeDecl
     | StructType of StructTypeDecl
-    | NewType of NewTypeDecl
-    | Type of TypeDecl
+    | OpaqueType of OpaqueTypeDecl
+    | TypeAlias of TypeAliasDecl
     | Unit of UnitDecl
     | Clock of ClockDecl
     | Var of VarDecl
@@ -487,8 +487,8 @@ and Member =
         | Import i -> i.range
         | EnumType m -> m.range
         | StructType m -> m.range
-        | NewType m -> m.range
-        | Type m -> m.range
+        | OpaqueType m -> m.range
+        | TypeAlias m -> m.range
         | Unit m -> m.range
         | Clock m -> m.range
         | Var m -> m.range
@@ -515,7 +515,6 @@ and Member =
     //    match m with
     //    | EnumType _ 
     //    | StructType _
-    //    | NewType _
     //    | TypeAlias _ ->
     //        true
     //    | _ ->
@@ -1032,8 +1031,8 @@ let typeDeclRange (annos: Annotation list) modifiers startRange endRange =
 
     unionRanges fstRng endRange 
 
-let typeNameRange (annos: Annotation list) modifiers startRange (dt: DataType) =
-    typeDeclRange annos modifiers startRange (dt.Range)
+//let opaqueTypeRange (annos: Annotation list) modifiers startRange (dt: DataType) =
+//    typeAliasDeclRange annos modifiers startRange (dt.Range)
     
 
 let tagDeclRange (name: Name) (optRawExpr: Expr option) optDefaultRange =
@@ -1146,7 +1145,15 @@ let prototypeRange (annos: Annotation list) singleton startRange inputsRange opt
     | hd::_, _ ->
         unionRanges hd.Range endRange
 
- 
+
+let opaqueSingletonRange (annos: Annotation list) singleton nameRange =
+    match annos with
+    | [] -> 
+        unionRanges singleton nameRange
+    | hd::_ ->
+        unionRanges hd.Range nameRange
+
+
 let vardeclRange (annos: Annotation list) keywordRange endRange =
     match annos with
     | [] ->
@@ -1184,8 +1191,8 @@ type ASTNode =
     | EnumTypeDecl' of EnumTypeDecl
     | TagDecl of TagDecl
     | StructTypeDecl' of StructTypeDecl
-    | NewTypeDecl' of NewTypeDecl
-    | TypeDecl' of TypeDecl
+    | OpaqueTypeDecl' of OpaqueTypeDecl
+    | TypeAliasDecl' of TypeAliasDecl
     | Receiver of Receiver
     | Lexpr' of LhsInAssignment
     | Expr' of Expr
@@ -1198,8 +1205,8 @@ type ASTNode =
 // end of AST data structures
 
 /// Postorder (i.e. bottom-up) AST walker.
-let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
+let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
     match treeNode with
     | Package p -> 
         let result = List.map (fun m -> recurse (ASTNode.Member' m)) p.members
@@ -1218,10 +1225,10 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
             fPackageMember (recurse (ASTNode.EnumTypeDecl' e))
         | Member.StructType s ->
             fPackageMember (recurse (ASTNode.StructTypeDecl' s))
-        | Member.NewType t ->
-            fPackageMember (recurse (ASTNode.NewTypeDecl' t))
-        | Member.Type t ->
-            fPackageMember (recurse (ASTNode.TypeDecl' t))
+        | Member.OpaqueType t ->
+            fPackageMember (recurse (ASTNode.OpaqueTypeDecl' t))
+        | Member.TypeAlias t ->
+            fPackageMember (recurse (ASTNode.TypeAliasDecl' t))
         | Member.Unit u ->
             fPackageMember (recurse (ASTNode.UnitDecl u))
         | Member.Clock c ->
@@ -1363,16 +1370,16 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
         let resMembers = List.map (ASTNode.Member' >> recurse) s.members
         let resAtt = List.map (ASTNode.Annotation' >> recurse) s.annotations
         fStructTypeDecl (s.range, s.isReference, s.name, resFields, resMembers, resAtt)
-    | NewTypeDecl' t -> 
-        let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.representation
+    | OpaqueTypeDecl' t -> 
+        // let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.representation
         let resMembers = List.map (ASTNode.Member' >> recurse) t.members
         let resAtt = List.map (fun a -> recurse (ASTNode.Annotation' a)) t.annotations
-        fNewTypeDecl (t.range, t.isReference, t.name, resDat, resMembers, resAtt)
-    | TypeDecl' t -> 
+        fOpaqueTypeDecl (t.range, t.isReference, t.name, resMembers, resAtt)
+    | TypeAliasDecl' t -> 
         let resDat = recurse (ASTNode.DataType' t.aliasfor)
         //let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.aliasfor
         let resAtt = List.map (fun a -> recurse (ASTNode.Annotation' a)) t.annotations
-        fTypeDecl (t.range, t.name, resDat, resAtt) 
+        fTypeAliasDecl (t.range, t.name, resDat, resAtt) 
     | Receiver r -> 
         fReceiver r
     | Lexpr' l ->

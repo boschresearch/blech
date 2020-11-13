@@ -58,23 +58,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             importedEnvs = importedEnvs
         }
 
-    //let initialise logger moduleName envs : NameCheckContext =
-    //    Env.init moduleName envs 
-    //    |> function
-    //        | Ok env ->
-    //            { env = env
-    //              logger = logger }
-    //        | Error err ->
-    //            Logger.logError logger Diagnostics.Phase.Naming err
-    //            { env = SymbolTable.Environment.empty
-    //              logger = logger }
-    
-    //let initialiseEmpty logger moduleName : NameCheckContext =
-    //    initialise logger moduleName []
-    //    //{ 
-    //    //    env = Env.initEmptyTable moduleName
-    //    //    logger = logger  // this will be create at blechc started and handed over
-    //    //}
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -121,8 +104,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     /// adds the optional exposed scope to the name check context
-    let private addExposing (ctx: NameCheckContext) =
-        { ctx with env = Env.addExposed ctx.env}
+    //let private addExposing (ctx: NameCheckContext) =
+    //    { ctx with env = Env.addExposed ctx.env}
         
 
     let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
@@ -187,7 +170,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let private addExposedNameBefore (ctx: NameCheckContext) name =
-        match Env.declareExposedName ctx.env name with
+        match Env.addExposedNameBefore ctx.env name with
         | Ok env ->
             { ctx with env = env }
         | Error err ->
@@ -195,15 +178,21 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
 
     let private addExposedNameAfter (ctx: NameCheckContext) name = 
-        match Env.defineExposedName ctx.env name with
+        match Env.addExposedNameAfter ctx.env name with
         | Ok env ->
             { ctx with env = env }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err       
             ctx
 
-    let private enterModuleScope (ctx: NameCheckContext) =
+    let private addModuleScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterModuleScope ctx.env }
+
+    //let private enterModuleScope (ctx: NameCheckContext) =
+    //    { ctx with env = Env.enterModuleScope ctx.env }
+
+    let private addSignature (ctx: NameCheckContext) =
+        { ctx with env = Env.addSignature ctx.env }
 
     let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
         { ctx with env = Env.exportModuleScope ctx.env }
@@ -221,7 +210,23 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     //    let name = List.head typeName.names
     //    { ctx with env = Env.exportImplicitlyExposedName ctx.env name }  // TODO: check for explicit export in case of constants/params
 
-    
+    let private exportExposedDecl ctx name =
+        if Env.isExposedName ctx.env name then
+            { ctx with env = Env.exportName ctx.env name true
+                             |> Env.exportScope <| name }
+        else
+            ctx
+
+    let private exportHiddenDecl ctx name isCode =
+        if isCode then
+            failwith "Must be exposed to be exported"
+        elif Env.isExposedName ctx.env name then
+            ctx // already exported
+        else // is an opaque type
+            { ctx with env = Env.exportName ctx.env name true }
+            
+        
+
     let private exportTypeDecl ctx name =
         { ctx with env = Env.exportName ctx.env name true
                          |> Env.exportScope <| name }
@@ -597,16 +602,16 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> exportTypeDecl <| std.name
 
 
-        and checkNewType ctx (ntd: AST.NewTypeDecl) =
+        and checkOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
             addTypeDecl ctx ntd                 // open, named, non-recursive scope 
             // |> checkDataType <| ntd.representation    // check representation first, before typename becomes visible
-            |> Option.fold checkDataType <| ntd.representation
+            // |> Option.fold checkDataType <| ntd.representation
             |> enableRecursion                         
             |> List.fold checkMember <| ntd.members
             |> exitSubScope
             |> exportTypeDecl <| ntd.name
 
-        and checkTypeAlias ctx (tad: AST.TypeDecl) =
+        and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
             addTypeDecl ctx tad                 // open, named, non-recursive scope  
             |> checkDataType <| tad.aliasfor          // check alias first, before new typename becomes visible
             |> enableRecursion
@@ -621,9 +626,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkEnumType ctx et
             | Member.StructType st ->
                 checkStructType ctx st
-            | Member.NewType nt ->
-                checkNewType ctx nt
-            | Member.Type ta -> 
+            | Member.OpaqueType nt ->
+                checkOpaqueType ctx nt
+            | Member.TypeAlias ta -> 
                 checkTypeAlias ctx ta
             | Member.Var vdecl ->
                 checkStaticVarDecl ctx vdecl
@@ -643,33 +648,18 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkImport ctx i
 
     
-    //let collectExposing ctx (exposing: AST.Exposing) =
-    //    match exposing with
-    //    | Few (names, _) ->
-    //        List.fold addExposedId ctx names 
-    //    | All _ ->
-    //        addExposedAll ctx
-
-
-    //let checkExposedNameBefore ctx exposedName = 
-    //    addExposedNameBefore ctx exposedName 
-       
-
     let checkExposingBefore ctx (exposing: AST.Exposing) =
         match exposing with
         | Few (names, _) ->
-            addExposing ctx
-            |> List.fold addExposedNameBefore <| names
+            List.fold addExposedNameBefore ctx names
         | All _ ->
             ctx
 
-    let checkModuleSpecBefore ctx (modSpec: AST.ModuleSpec) =
-        Option.fold checkExposingBefore ctx modSpec.exposing
-        |> enterModuleScope   // add an additional module scope, from which identifiers are exposed
-                              // imports cannot be exposed therefore the global scope is not suitable
 
-    //let checkExposedNameAfter ctx exposedName =
-    //    addExposedNameAfter ctx exposedName
+    let checkModuleSpecBefore ctx (modSpec: AST.ModuleSpec) =
+        addSignature ctx
+        |> Option.fold checkExposingBefore <| modSpec.exposing
+
 
     let checkExposingAfter (ctx: NameCheckContext) (exposing: AST.Exposing) = 
         match exposing with
@@ -689,10 +679,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkMember ctx cu.imports
+        |> addModuleScope  // all compilation units get a module scope
         |> Option.fold checkModuleSpecBefore <| cu.spec
         |> List.fold checkMember <| cu.members
         |> Option.fold checkModuleSpecAfter <| cu.spec     // check exposes <identifiers> last 
-        
+    
+    
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
     let checkDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
         let ncc = checkCompilationUnit ctx ast
@@ -709,13 +701,4 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Ok (ast, ncc.env)
     
 
-    /// This function ist just for testing compiler phases. It ignores imports
-    /// It does not need a package context
-    //let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) =
-    //    let ncc = List.fold checkMember ctx ast.members
-    //    if Diagnostics.Logger.hasErrors ncc.logger then
-    //        Error ncc.logger
-    //    else
-    //        Ok (ast, ncc.env.lookupTable)
-    
     // end ============================================================

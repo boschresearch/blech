@@ -59,8 +59,8 @@ let tokenTagToString token =
     | TOKEN_FLOAT32 -> "float32"
     | TOKEN_FLOAT64 -> "float64"
     (* --- user-defined types --- *)
+    | TOKEN_TYPEALIAS -> "typealias"
     | TOKEN_TYPE -> "type"
-    | TOKEN_NEWTYPE -> "newtype"
     | TOKEN_ENUM -> "enum"
     | TOKEN_STRUCT -> "struct"
     | TOKEN_SIGNAL -> "signal"

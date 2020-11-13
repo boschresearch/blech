@@ -179,8 +179,8 @@ rule Token = parse
 
     (* --- user-defined types --- *)
 
+    | "typealias"           { TYPEALIAS (getRange lexbuf) }
     | "type"                { TYPE (getRange lexbuf) }
-    | "newtype"             { NEWTYPE (getRange lexbuf) }
     | "enum"                { ENUM (getRange lexbuf) }
     | "struct"              { STRUCT (getRange lexbuf) }
 

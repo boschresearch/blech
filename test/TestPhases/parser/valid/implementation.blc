@@ -1,7 +1,7 @@
 module
 
 
-type blabla = int32 // exposes method
+typealias blabla = int32 // exposes method
 // // with
 // //     mutating function b:method() returns int32
 // //         return 42
