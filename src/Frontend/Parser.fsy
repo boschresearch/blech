@@ -362,21 +362,6 @@ OpaqueTypeDecl
                                             { logParserError $3;
                                               Member.Nothing }
 
-/*
-OpaqueTypeDef
-    : OptAnnotations OptModifiers TYPE Name      
-                                            { Member.OpaqueType { OpaqueTypeDecl.range = typeDeclRange $1 $2 $3 $4.Range
-                                                                  isReference = $2 <> Option.None
-                                                                  name = $4
-                                                                  // representation = Some $6 
-                                                                  members = []
-                                                                  annotations = $1 } }
-
-    | OptAnnotations OptModifiers TYPE ErrorBeforeEOL EOL  
-                                            { logParserError $3;
-                                              Member.Nothing }
-*/
-
 OptExtension
     :                                       { [] }
     | EXTENSION ExtensionMembers                 { $2 |> filterOutNothingMembers }
@@ -1412,8 +1397,7 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : SIGNATURE                                 { // TODO: Check signature import from .blh
-                                                  { ModuleSpec.range = $1 
+    : SIGNATURE                                 { { ModuleSpec.range = $1 
                                                     exposing = Option.None } }
 
 SignatureMember
@@ -1421,8 +1405,8 @@ SignatureMember
     | Unit                                      { $1 }
     | EnumDecl                                  { $1 }
     | StructDecl                                { $1 }
-    | OpaqueSingleton                           { $1 }
     | OpaqueTypeDecl                            { $1 }
+    | OpaqueSingleton                           { $1 }
     | ExtensionMemberDecl                       { $1 }
     | ExtensionDecl                             { $1 }
 
