@@ -52,6 +52,7 @@ type Block =
                 | GuardLocation -> "guard"
                 | CobeginLocation _ -> "cobegin"
                 | JoinLocation _ -> "join"
+                | AbortBegin _ -> "abortBegin"
                 | AbortEnd _ -> "abortEnd"
             pos + " _|" + threadid + "|_" + ", " + typ + "\\n"
             
@@ -120,16 +121,17 @@ let rec private bfs context (queue: ResizeArray<Node>) (visited: HashSet<Node>) 
                                                                                                  // also do not add nodes that are already in the queue once again
             |> Seq.toList // strangely this is needed since otherwise after adding the elements to the queue newSuccs is empty
         newSuccs |> Seq.iter (fun succ -> queue.Insert(0,succ))
-        if Seq.isEmpty newSuccs || Seq.length allSuccs > 1 then //if we found no new successor or more than one successor
+        if Seq.isEmpty newSuccs || Seq.length allSuccs > 1 then // if we found no new successor or more than one successor
+            closeBlock context theBlock
+            bfs context queue visited (Block.Empty())
+        elif head.Payload.Typ.hasAbortBegin then // if current node is an abort head
             closeBlock context theBlock
             bfs context queue visited (Block.Empty())
         else
             // continue with curBlock UNLESS the successor is a StartFromAwaitLocation node
-            //                            or an AbortEnd node
             let theSuccessor = Seq.tryHead newSuccs |> Option.defaultValue (Seq.head allSuccs)
             match theSuccessor.Payload.Typ with
-            | StartFromAwaitLocation _
-            | AbortEnd _ ->
+            | StartFromAwaitLocation _ ->
                 closeBlock context theBlock
                 bfs context queue visited (Block.Empty())
             | _ ->
@@ -208,14 +210,24 @@ let buildFromPG (pg: ProgramGraph) =
             | CobeginLocation joinNode ->
                 // find the "joinBlock" that contains this joinNode
                 // and add link from block to joinBlock
-                endOfT
-                |> List.tryFind (fun joinBlock -> joinBlock.Payload.innerNodes.[0] = joinNode)
+                context.blockGraph.Nodes 
+                |> Seq.tryFind (fun someBlock -> someBlock.Payload.innerNodes.[0] = joinNode)
                 |> function
                     | Some joinBlock -> 
                         context.blockGraph.AddEdge Edge block joinBlock // add edge
                     | None ->
                         // impossible, by construction, if a thread has an ancestor there should be a corresponding parent thread join
                         failwith "No ancestor join block was found!"
+            | AbortBegin (_, decisionNode) ->
+                // make sure abort decision is done before anything in the body
+                context.blockGraph.Nodes 
+                |> Seq.tryFind (fun someBlock -> someBlock.Payload.innerNodes.[0] = decisionNode)
+                |> function
+                    | Some decisionBlock -> 
+                        context.blockGraph.AddEdge Edge decisionBlock block // add edge
+                    | None ->
+                        // impossible, by construction, if a thread has an ancestor there should be a corresponding parent thread join
+                        failwith "No ancestor decision block was found!"
             | _ -> failwith "A fork node must contain a CobeginLocation payload."
     context
 

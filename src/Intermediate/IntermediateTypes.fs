@@ -107,10 +107,18 @@ type LocationType =
     | CallInit of range * QName * TypedLhs option * TypedRhs list * TypedLhs list * QName
     | CallNode of range * QName * TypedLhs option * TypedRhs list * TypedLhs list * QName
         // Location that represents an activity call which is NOT an atomic statement and thus not covered by Action
-    | AbortEnd of HashSet<GenericGraph.Node<Location, Transition>>
+    | AbortBegin of GenericGraph.Node<Location, Transition> * GenericGraph.Node<Location, Transition> 
+        // Marks control flow point when the abort block is first entered. Contains entry node into body and decision point 
+    | AbortEnd of GenericGraph.Node<Location, Transition>
+        // Marks control flow point where body is terminated. Contains exit node of body
     | GuardLocation
     | CobeginLocation of GenericGraph.Node<Location, Transition>
     | JoinLocation of QName
+
+    member this.hasAbortBegin =
+        match this with
+        | AbortBegin _ -> true
+        | _ -> false
 
 
 /// Locations represent statements or parts thereof
@@ -155,6 +163,9 @@ with
             | ActionLocation _ -> // TODO: show abbreviated guard or action
                 "label = \"" + line + " _|" 
                 + this.Thread.ID.ToString() + "|_" + "\""
+            | AbortBegin _ -> 
+                "shape = egg, style = filled, fillcolor = burlywood3, fontcolor = black, label = \""
+                + line + " _|" + this.Thread.ID.ToString() + "|_ abort begin\""
             | AbortEnd _ -> 
                 "shape = egg, style = filled, fillcolor = burlywood3, fontcolor = black, label = \""
                 + line + " _|" + this.Thread.ID.ToString() + "|_ abort end\""

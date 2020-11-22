@@ -209,7 +209,9 @@ let private assignPc (pcDecl: ParamDecl) newVal =
 
 let private advancePC (ctx: TranslationContext) comp source target =
     let newVal = ctx.bgs.[comp.name].node2BlockNode.[target].Payload.Priority
-    let tree = findTreeFor comp source
+    let tree = findTreeFor comp target // the pc is selected by the target because a transition may cross
+                                       // block boundaries: from a sub-thread to its enclosing abort-end
+                                       // in this case it is the enclosing pc that needs to be advanced
     // note that for priority i, the pc is set to 2i
     assignPc tree.mainpc (2 * newVal)
 
@@ -387,8 +389,19 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 match edge.Payload with 
                 | ControlFlow (Some (_, guard)) -> // translate transitions
                     let target = edge.Target
+                    let possiblyTerminateAbortBody =
+                        // in case the target is an abort-end, make sure we set the body's pc
+                        // to 0 so no block that is scheduled between this node and the abort node
+                        // can make progress
+                        // clean up eventually!
+                        match target.Payload.Typ with
+                        | AbortEnd bodyEnd -> endThread !curComp bodyEnd
+                        | _ -> empty
                     let {prereqStmts=prereqStmts; cExpr=transCond} = cpExpr ctx.tcc guard
-                    let transBody = advancePC ctx !curComp node target
+                    let transBody = 
+                        [ advancePC ctx !curComp node target
+                          possiblyTerminateAbortBody ]
+                        |> dpBlock
                     Some (prereqStmts |> dpBlock, (transCond.Render, transBody))
                 | ReturnFlow (_, guard) ->
                     let target = edge.Target
@@ -485,36 +498,41 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
           nextStep ]
         |> dpBlock
                 
-    | AbortEnd innerDelayNodes -> // stop all subthreads and continue like a normal location
-        // there should be one control flow successor
-        let nextNode = getUniqueSuccNode node
-        // test termination condition
-        let thisThreadID = node.Payload.Thread.ID
-        let prePCs =
-            innerDelayNodes
-            |> Seq.choose (fun n -> 
-                if not (n.Payload.Thread.ID = thisThreadID) then Some n //(pc4node n)
-                else None
-                )
-            |> Seq.distinct
+    | AbortBegin (waitNode,_) ->
+        let succ = getUniqueSuccNode node
+        let startBody = advancePC ctx !curComp succ succ // this effectively initialises the subprograms pc to its first block
+        let gotoSleep = advancePC ctx !curComp node waitNode
+        [ startBody; gotoSleep ]
+        |> dpBlock
         
-        // set all sub thread's pcs to 0 (to deactive them for future reactions)
-        //         and proceed with next node
-        let codeDoc =
-            let deactivate = 
-                prePCs 
-                |> Seq.map (fun pc -> endThread !curComp pc)
-                |> dpBlock
-            
-            let transSucc = 
-                if areInSameBlock ctx (!curComp).name node nextNode then
-                    // if one unguarded transition, leading a node inside the same block, translate that node
-                    processNode ctx compilations curComp nextNode
-                else
-                    // if one unguarded transition, that leaves block, advance pc
-                    advancePC ctx !curComp node nextNode
-            [deactivate; transSucc] |> dpBlock
-        codeDoc </> txt @"/* abort subthreads and carry on */"
+    | AbortEnd bodyExit ->
+        let abortBody =
+            endThread !curComp bodyExit </> txt @"/* terminate abort body */"
+        let proceedToSucc =
+            match Seq.length (ProgramGraph.cfSucc node) with
+            | 0 -> // dead end, e.g. end of an activity, set pc = 0
+                endThread !curComp node <+> txt @"/* end */"
+            | 1 ->
+                let edge = 
+                    node.Outgoing
+                    |> Seq.filter ProgramGraph.isImmediateTransition
+                    |> Seq.head 
+                match edge.Payload with
+                | ControlFlow None -> 
+                    let target = edge.Target
+                    if areInSameBlock ctx (!curComp).name node target then
+                        // if one unguarded transition, leading a node inside the same block, translate that node
+                        processNode ctx compilations curComp target
+                    else
+                        // if one unguarded transition, that leaves block, advance pc
+                        advancePC ctx !curComp node target
+                | TerminateThread _ -> // terminate thread
+                    endThread !curComp node <+> txt @"/* term */"
+                | _ -> failwith "expected UNguarded transition" // Dataflow transitions are excluded by construction since they never emanate from nor point to simple Locations.
+            | _ ->
+                failwith "An AbortEnd location must have no more than one transition."
+        [ abortBody; proceedToSucc ]
+        |> dpBlock
 
     | Location ->
         // an exit node
@@ -806,6 +824,7 @@ let private collectVarsToPrev2 pg =
         | HitAwaitLocation 
         | StartFromAwaitLocation
         | Location 
+        | AbortBegin _
         | AbortEnd _
         | GuardLocation
         | CobeginLocation _
