@@ -6,9 +6,10 @@ module Export =
 
     module Env = SymbolTable.Environment
 
+
     type Visibility =
-        | Transparent         // types, constants
-        | Opaque              // types, functions, activitities  
+        | Hidden
+        | Exposed
 
     type private IsSimple = bool
     [<Literal>]
@@ -16,46 +17,40 @@ module Export =
     [<Literal>]
     let isNotSimple: IsSimple = false
 
-    // Required Imports
-    type Imports = Set<Name>
-    
-    // Exposed constants, parameters, functions, activities
-    type Code = Set<Name>
-    
-    // Exposed types and implicitly exported oqaque tpyes
-    type Types = Map<Name, Visibility>
-    
-    // exposed and and implicitly exported opaque singletons
-    // the names are functions and activities
-    type Singletons = Map<Name, Visibility * List<Name>>
 
-    type Signature = 
-        { 
-            imports: Set<Name>
-            simpleTypes: Map<Name, IsSimple>
-            members: Map<Name, Visibility>
-            types: Map<Name, Visibility>
-            singletons: Map<Name, Set<Name>>
-        }
-    
-    let initialiseSignature () : Signature = 
-        { 
-            imports = Set.empty
-            simpleTypes = Map.empty
-            members = Map.empty
-            types = Map.empty
-            singletons = Map.empty 
+    type Declared =
+    | Import                                  // all imported names
+    | Type of Visibility * isSimple: IsSimple // all type declarations
+    | Constant of Visibility                  // const and param
+    | Singleton of Visibility                 // all declared singletons
+
+
+    type Defined =
+    | RequiredImport
+    | OpaqueType of isSimple: IsSimple
+    | TransparentType 
+    | TransparentConstant
+    | OpaqueSingleton 
+    | PublicRoutine of calledSingletons: Name list
+
+
+    type ExportContext = 
+        {
+            lookupTable : SymbolTable.LookupTable
+            declarations : Map<Name, Declared> 
+            definitions : Map<Name, Defined>
         }
 
+        static member initialise (lut: SymbolTable.LookupTable) = 
+            { 
+                lookupTable = lut
+                declarations = Map.empty
+                definitions = Map.empty
+            }
 
-    type NameAccessibility =
-    | Open
-    | SemiOpen 
-    | Closed
 
-    
-    let private checkCompilationUnit ctx (cu: AST.CompilationUnit) =
-        if not cu.IsModule  then 
+    let private checkCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
+        if cu.IsModule  then 
             ctx
         else
             ctx 

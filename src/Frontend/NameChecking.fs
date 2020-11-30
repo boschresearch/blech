@@ -49,7 +49,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             env: Environment
             logger: Diagnostics.Logger
             importedEnvs: Map<TranslationUnitPath, Environment>
-            signature: Export.Signature
+            // signature: Export.Signature
         }
 
     let initialise logger moduleName importedEnvs : NameCheckContext =
@@ -57,7 +57,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             env = Env.init moduleName
             logger = logger  // this will be create at blechc started and handed over
             importedEnvs = importedEnvs
-            signature = Export.initialiseSignature()
+            // signature = Export.initialiseSignature()
         }
 
 
