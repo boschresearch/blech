@@ -32,9 +32,6 @@ module SyntaxErrors =
         | UnexpectedEOF of range: Range.range * expectedTokens: string list * start: Range.range
         | UnexpectedEndOfInput of range: Range.range * start: Range.range
         | UnexpectedToken of token: string * range: Range.range * expectedTokens: string list * start: Range.range
-        | UnexpectedSignatureMember of implementation: Range.range // * signatureHead: Range.range
-        | UnexpectedModuleMember of prototype: Range.range // * moduleHead: Range.range
-        | UnexpectedExposure of exposing: Range.range // * signatureHead: Range.range
                 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
@@ -60,18 +57,6 @@ module SyntaxErrors =
                     { range = range
                       message = sprintf "syntax error '%s'." token }
 
-                | UnexpectedSignatureMember implementation ->
-                    { range = implementation
-                      message = "unexpected implementation in interface file." }
-
-                | UnexpectedModuleMember prototype ->
-                    { range = prototype
-                      message = "unexpected prototype in implementation file." }
-    
-                | UnexpectedExposure exposing ->
-                    { range = exposing
-                      message = "unexpected exposing in signature file." }
-                
                 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
@@ -104,18 +89,6 @@ module SyntaxErrors =
                     <| [ "or other token." ] 
                     <| expectedTokens
                 
-                | UnexpectedModuleMember _ ->
-                    [ "source is implementation file."
-                      "prototype is not allowed." ]
-                
-                | UnexpectedSignatureMember _ ->
-                    [ "source is interface file."
-                      "implementation is not allowed." ]
-                
-                | UnexpectedExposure _ ->
-                    [ "source is interface file."
-                      "an interface file exposes everything." ]
-
                 | _  ->
                     []
 
@@ -328,7 +301,7 @@ module ParserUtils =
             parserContext.errorTokenAccepted <- bool
 
         let getModuleName () = parserContext.currentModuleName
-        let getLoadWhat () = parserContext.currentLoadWhat
+        // let getLoadWhat () = parserContext.currentLoadWhat
         //let isSignature () = parserContext.packageHead.isSignature
         let isInterface () = parserContext.currentLoadWhat = CompilationUnit.Interface
         let isImplementation () = parserContext.currentLoadWhat = CompilationUnit.Implementation
@@ -517,10 +490,10 @@ module ParserUtils =
 
 
     /// Checks the absence of exposing clauses in an interface context 
-    let checkExposing (exposing: AST.Exposing option) =
-        if ParserContext.isInterface () then
-            if Option.isSome exposing then
-                reportError <| UnexpectedExposure (Option.get exposing).Range       
+    //let checkExposing (exposing: AST.Exposing option) =
+    //    if ParserContext.isInterface () then
+    //        if Option.isSome exposing then
+    //            reportError <| UnexpectedExposure (Option.get exposing).Range       
 
        
     /// Logs the last stored parser error
