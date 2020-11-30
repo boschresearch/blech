@@ -469,7 +469,7 @@ and Exposing =
 and Member = 
     | Nothing                   // just for the moment to enable parsing, tolerating pattern matching warnings
     | Pragma of Annotation
-    | Import of Import
+    //| Import of Import
     | EnumType of EnumTypeDecl
     | StructType of StructTypeDecl
     | OpaqueType of OpaqueTypeDecl
@@ -484,7 +484,7 @@ and Member =
         match m with
         | Nothing -> Range.rangeStartup
         | Pragma anno -> anno.Range
-        | Import i -> i.range
+        //| Import i -> i.range
         | EnumType m -> m.range
         | StructType m -> m.range
         | OpaqueType m -> m.range
@@ -539,7 +539,7 @@ and CompilationUnit =
     {
         range: range
         moduleName: TranslationUnitPath
-        imports: Member list
+        imports: Import list
         spec: ModuleSpec option
         members: Member list 
     }
@@ -922,6 +922,7 @@ let filterOutNothingStmts stmts =
 let filterOutNothingMembers members = 
     List.filter (isNot Member.Nothing) members
 
+
 /// Given a list of Names, create a proper static named path value
 let mkStaticNamedPath (names, dots) : StaticNamedPath = 
     {
@@ -1104,23 +1105,22 @@ let importRange importRng pathRng (optExposing : Exposing option) =
     | Some exp -> unionRanges importRng exp.Range 
 
 
-let compilationUnitRange (imports: Member list) defaultRange (members: Member list) =
-
+let compilationUnitRange (imports: Import list) defaultRange (members: Member list) =
     let membersRange (members: Member list) =
-        assert not (List.isEmpty members)
-        let fst = List.head members
-        let lst = List.last members
-        unionRanges (fst.Range) (lst.Range) 
+        unionRanges (List.head members).Range (List.last members).Range 
 
+    let importsRange (imports: Import list) = 
+        unionRanges (List.head imports).Range (List.last imports).Range 
+        
     match imports, members with
     | [], [] ->
         defaultRange
     | [],  _ ->
-        unionRanges defaultRange  (membersRange members)
+        unionRanges defaultRange  (membersRange  members)
     | _,  [] -> 
-        unionRanges (membersRange imports) defaultRange
+        unionRanges (importsRange imports) defaultRange
     | _, _ ->
-        unionRanges (membersRange imports) (membersRange members)
+        unionRanges (importsRange imports) (membersRange members)
     
 
 let externalFunctionRange (annos: Annotation list) externRange inputsRange  optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option) =
@@ -1191,7 +1191,7 @@ let DummyRange = range.Zero
 
 type ASTNode = 
     | Package of CompilationUnit
-    //| Import of Import
+    | Import' of Import
     | Member' of Member
     | Subprogram of SubProgram
     | Prototype of Prototype
@@ -1224,16 +1224,16 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
     | Package p -> 
         let result = List.map (fun m -> recurse (ASTNode.Member' m)) p.members
         fPackage (p.range, p.spec, result)
-    //| Import i ->
-    //    fImport i
+    | Import' i ->
+        fImport i
     | Member' m -> 
         match m with
         | Member.Nothing ->
             fNothing
         | Member.Pragma anno ->
             fPragma anno
-        | Member.Import i->
-            fImport i
+        //| Member.Import i->
+        //    fImport i
         | Member.EnumType e ->
             fPackageMember (recurse (ASTNode.EnumTypeDecl' e))
         | Member.StructType s ->

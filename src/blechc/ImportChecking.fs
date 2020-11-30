@@ -171,23 +171,15 @@ let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) (imports
 
 
 // Check one import
-let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (imports: Imports) (import: AST.Member) : Imports = 
-    match import with
-    | AST.Member.Import i ->
-        let returnImports = function 
-            | Ok updatedImports -> updatedImports
-            | Error _ -> imports
+let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (imports: Imports) (import: AST.Import) : Imports = 
+    let returnImports = function 
+        | Ok updatedImports -> updatedImports
+        | Error _ -> imports
 
-        checkCyclicImport i.modulePath logger imports
-        |> Result.bind (compileImportedModule pkgCtx logger i.modulePath)
-        |> returnImports 
+    checkCyclicImport import.modulePath logger imports
+    |> Result.bind (compileImportedModule pkgCtx logger import.modulePath)
+    |> returnImports 
     
-    | AST.Member.Pragma _ ->
-        imports
-    
-    | _ ->
-        failwith "This should never happen"
-
 
 // Check all imports one after another
 // go on even if an import is not compilable

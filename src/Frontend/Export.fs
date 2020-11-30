@@ -55,7 +55,7 @@ module Export =
 
     
     let private checkCompilationUnit ctx (cu: AST.CompilationUnit) =
-        if Option.isNone cu.spec  then 
+        if not cu.IsModule  then 
             ctx
         else
             ctx 

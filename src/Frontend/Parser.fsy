@@ -1280,6 +1280,8 @@ ModuleMember
     | StructDef                                 { $1 }
     | ExtensionMember                           { $1 }
     | Extension                                 { $1 }
+    | Pragma                                    { Member.Pragma $1 }  // TODO: Add pragma to AST
+    
     
 ExtensionMember
     : Subprogram                                { $1 }
@@ -1295,7 +1297,6 @@ DynamicMember /* a struct field */
 ModuleMembers
     :                                           { [] }      
     | ModuleMember ModuleMembers                { $1::$2 }
-    | Pragma ModuleMembers                      { Member.Pragma $1 :: $2 }  // TODO: Add pragma to AST
     | SEMICOLON ModuleMembers                   { $2 }
 
 ExtensionMembers
@@ -1351,16 +1352,15 @@ ModulePath
                                                   { ModulePath.range = snd $1
                                                     path = fromPath } }
 Import
-    : IMPORT Name ModulePath Exposing           { Member.Import  { Import.range = importRange $1 $3.Range $4
-                                                                   localName = $2
-                                                                   modulePath = $3
-                                                                   exposing = $4 } } 
-    | IMPORT ErrorBeforeEOL EOL                          
-                                                { logParserError $1
-                                                  Member.Import  { Import.range = unionRanges $1 $3
-                                                                   localName = Name.Empty
-                                                                   modulePath = ModulePath.Empty
-                                                                   exposing = None } }
+    : IMPORT Name ModulePath Exposing           { { Import.range = importRange $1 $3.Range $4
+                                                    localName = $2
+                                                    modulePath = $3
+                                                    exposing = $4 } } 
+    | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
+                                                  { Import.range = unionRanges $1 $3
+                                                    localName = Name.Empty
+                                                    modulePath = ModulePath.Empty
+                                                    exposing = None } }
 
 
 NameList
@@ -1371,14 +1371,13 @@ NameList
 ImportList
     :                                           { [] } 
     | Import ImportList                         { $1::$2 }
-    | Pragma ImportList                         { Member.Pragma $1 :: $2 }  // TODO: Add pragma to AST
     | SEMICOLON ImportList                      { $2 }
 
 
 Module
     : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    imports = $1 |> filterOutNothingMembers
+                                                    imports = $1
                                                     spec = Option.Some $2
                                                     members = $3 |> filterOutNothingMembers } }
 
@@ -1390,7 +1389,7 @@ Module
 Program    
     : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    imports = $1 |> filterOutNothingMembers 
+                                                    imports = $1 
                                                     spec = Option.None
                                                     members = $2::$3 |> filterOutNothingMembers } }
  
@@ -1441,9 +1440,10 @@ Signature
     : ImportList SignatureHead SignatureMembers 
                                                 { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    imports = $1 |> filterOutNothingMembers
+                                                    imports = $1
                                                     spec = Some $2
                                                     members = $3 |> filterOutNothingMembers } }
+
 
 /* --------------------------
    --- Parser Entry Point --- 

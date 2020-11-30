@@ -1312,8 +1312,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
             typedMembers.GetEntryPoint
         | m::ms ->
             match m with
-            | AST.Member.Nothing 
-            | AST.Member.Import _ ->
+            | AST.Member.Nothing ->
                 () // ignore these members
             | AST.Member.Pragma p ->
                 do typedMembers.AddMemberPragma (Annotation.checkMemberPragma lut p)
@@ -1385,7 +1384,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
     
     let funacts, funPrototypes, variables, externalVariables, types, memberPragmas, entryPoint = 
         let typedMembers = ProcessedMembers.Empty ()
-        processMembers typedMembers (pack.imports @ pack.members)
+        processMembers typedMembers pack.members
     
     let moduleName = pack.moduleName
 

@@ -620,8 +620,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx 
             | Member.Nothing -> 
                 ctx
-            | Member.Import i ->
-                checkImport ctx i
 
     
     let checkExposingBefore ctx (exposing: AST.Exposing) =
@@ -653,7 +651,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkCompilationUnit (ctx: NameCheckContext) (cu: AST.CompilationUnit) : NameCheckContext =
         // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
         // this should create an intermediate scope after the imports, lets call it module scope
-        List.fold checkMember ctx cu.imports
+        List.fold checkImport ctx cu.imports
         |> addModuleScope  // all compilation units get a module scope
         |> Option.fold checkModuleSpecBefore <| cu.spec
         |> List.fold checkMember <| cu.members

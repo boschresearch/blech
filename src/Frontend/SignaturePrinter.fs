@@ -559,7 +559,10 @@ module SignaturePrinter =
             | _ ->
                 empty
 
-        let imports = List.map (psMember lut) ast.imports
+        let psImport lut (imp: AST.Import) = 
+            empty
+
+        let imports = List.map (psImport lut) ast.imports
         let spec = Option.get ast.spec |> psSpec lut
         let members = List.map (psMember lut) ast.members
         
