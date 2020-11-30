@@ -495,9 +495,7 @@ module SignaturePrinter =
 
     /// Prints the blech source code for a signature file from namechecking lookuptable and an AST
     let printSignature (lut: SymbolTable.LookupTable) (ast: AST.CompilationUnit) =
-        assert (Option.isSome ast.spec )                // only modules have signatures
-        assert (ast.loadWhat = CompilationUnit.Implementation)  // interfaces do not have signatures 
-
+        assert ast.IsModule // only modules have signatures
 
         // ----------------------------------------------
         // Functions for printing signature code form an AST    

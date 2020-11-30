@@ -1324,7 +1324,8 @@ Extension
 ModuleHead 
     : MODULE Exposing                           { // TODO: Check module import from .blc
                                                   let rng = moduleHeadRange $1 $2
-                                                  { ModuleSpec.range = rng  
+                                                  { ModuleSpec.range = rng
+                                                    isSignature = false
                                                     exposing = $2 } }
 
     | MODULE ErrorBeforeEOL EOL                 { logParserError $1
@@ -1377,7 +1378,6 @@ ImportList
 Module
     : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
                                                     spec = Option.Some $2
                                                     members = $3 |> filterOutNothingMembers } }
@@ -1390,7 +1390,6 @@ Module
 Program    
     : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers 
                                                     spec = Option.None
                                                     members = $2::$3 |> filterOutNothingMembers } }
@@ -1401,7 +1400,8 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : SIGNATURE                                 { { ModuleSpec.range = $1 
+    : SIGNATURE                                 { { ModuleSpec.range = $1
+                                                    isSignature = true
                                                     exposing = Option.None } }
 
 SignatureMember
@@ -1441,7 +1441,6 @@ Signature
     : ImportList SignatureHead SignatureMembers 
                                                 { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
                                                     imports = $1 |> filterOutNothingMembers
                                                     spec = Some $2
                                                     members = $3 |> filterOutNothingMembers } }
@@ -1457,7 +1456,6 @@ Compilation
     | error EOF                                 { logParserError (getStartOfFile $2);
                                                   { CompilationUnit.range = $2
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
                                                     imports = []
                                                     spec = Option.None
                                                     members = [] } }

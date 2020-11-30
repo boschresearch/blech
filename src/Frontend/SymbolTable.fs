@@ -348,6 +348,11 @@ module SymbolTable =
             Scope.containsSymbol importScope name.id
 
 
+        let isToplevelName env (name: Name) =
+            let moduleScope = getModuleScope env
+            Scope.containsSymbol moduleScope name.id
+
+
         let private currentScope (env: Environment) = 
             List.head env.path 
 
@@ -533,7 +538,7 @@ module SymbolTable =
 
         /// Add the export scope of an imported module in the top level scope of the importing module. 
         /// Name it with the id of the import name.
-        /// Combine the the lookup tables of both
+        /// Combine the lookup tables of both
         let addModuleEnv env (name: Name) (modEnv: Environment) : Environment = 
             match env.path with
             | [globalscope ] ->

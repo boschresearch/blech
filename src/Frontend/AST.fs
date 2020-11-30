@@ -524,12 +524,14 @@ and Member =
 and ModuleSpec = 
     {
         range: range
+        isSignature: bool
         exposing: Exposing option
     }
     member modspec.Range = modspec.range
 
     static member Nothing = 
         { range = range.Zero
+          isSignature = false
           exposing = Option.None }
 
 /// Blech implementation or interface file
@@ -537,14 +539,25 @@ and CompilationUnit =
     {
         range: range
         moduleName: TranslationUnitPath
-        loadWhat: CompilationUnit.ImplOrIface
         imports: Member list
         spec: ModuleSpec option
         members: Member list 
     }
     member this.Range = this.range
-    member this.IsLibrary = Option.isSome this.spec
-    member this.IsProgram = Option.isNone this.spec
+    member this.IsModule = 
+        match this.spec with
+        | Some modSpec ->
+            not modSpec.isSignature
+        | None ->
+            false
+    member this.IsProgram = 
+        Option.isNone this.spec
+    member this.IsSignature =
+        match this.spec with
+        | Some modSpec ->
+            modSpec.isSignature
+        | None ->
+            false
         
 
 // Unit expressions //////////////////////////////////////////////////////

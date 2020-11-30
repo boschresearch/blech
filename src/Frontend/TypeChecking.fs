@@ -1268,9 +1268,9 @@ type private ProcessedMembers =
                 Some (Ok ep)   
             | Some ep, Some (Ok epFst) when pack.IsProgram ->
                 Some (Error [MultipleEntryPoints (epFst.pos, ep.pos)])
-            | Some ep, None when pack.IsLibrary ->
+            | Some ep, None when pack.IsModule ->
                 Some (Error [IllegalEntryPoint (ep.pos, pack)])
-            | Some ep, Some (Error err) when pack.IsLibrary ->
+            | Some ep, Some (Error err) when pack.IsModule ->
                 Some (Error (err @ [IllegalEntryPoint (ep.pos, pack)]))   
             | _, ep ->
                 ep

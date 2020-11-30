@@ -571,7 +571,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         and checkStructType ctx (std: AST.StructTypeDecl) =
             addTypeDecl ctx std                  // add non-recursive sub scope
             |> addSubScope                             // separate anonymous scope for fields, prevents open access
-            |> List.fold checkFieldDecl <| std.fields  // check fields without, before typename becomes visible  
+            |> List.fold checkFieldDecl <| std.fields  // check fields first, before typename becomes visible  
             |> exitSubScope      
             |> enableRecursion                         
             |> List.fold checkMember <| std.members
@@ -586,9 +586,10 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> exitSubScope
             |> exportTypeDecl <| ntd.name
 
+
         and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
             addTypeDecl ctx tad                 // open, named, non-recursive scope  
-            |> checkDataType <| tad.aliasfor          // check alias first, before new typename becomes visible
+            |> checkDataType <| tad.aliasfor          // check alias first, before typename becomes visible
             |> enableRecursion
             |> List.fold checkMember <| tad.members
             |> exitSubScope
