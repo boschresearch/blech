@@ -2,7 +2,8 @@
 signature
 
 singleton hidden // opaque singleton
-singleton hidden activity visible ()
+
+singleton[hidden] activity visible ()
 
 
 type IntStack  // opaque type

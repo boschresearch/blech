@@ -1054,10 +1054,14 @@ OptSingletonDef
 
 OptSingletonDecl 
     :                                   { (None, []) }
-    | SINGLETON PointedNameList         { (Some $1, $2) }
+    | SINGLETON OptSingletonUsage       { (Some $1, $2) }
+
+OptSingletonUsage
+    :                                   { [] }  
+    | LBRACKET PointedNameList RBRACKET { $2 }
 
 PointedNameList
-    :                                   { [] }
+    : PointedName                       { [ $1 ] }
     | PointedName COMMA PointedNameList { $1::$3 }
 
 OptPartial
@@ -1409,6 +1413,7 @@ SignatureMember
     | OpaqueSingleton                           { $1 }
     | ExtensionMemberDecl                       { $1 }
     | ExtensionDecl                             { $1 }
+
 
 SignatureMembers
     :                                           { [] }
