@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Backend\Backend.fsproj" />
+    <ProjectReference Include="..\Visualization\Visualization.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
