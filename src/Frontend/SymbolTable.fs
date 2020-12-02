@@ -150,9 +150,12 @@ module SymbolTable =
         let rewriteId scope id : Scope = // this is used for imports to rewrite imported scope with local id
             {scope with id = id}
 
+    type Visibility =
+        | Exposed
+        | Hidden
 
     type private NameInfo =
-        | Decl of QName  // declaration of a name, points to the fully qualified name
+        | Decl of QName * Visibility // declaration of a name, points to the fully qualified name
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
@@ -175,20 +178,30 @@ module SymbolTable =
             [for pair in this.lookupTable -> pair.Key.id + " -> " + pair.Value.ToString()]
             |> String.concat "\n"
 
-        member private lt.getQname name =
+        member private lt.TryGetQname name =
             let ok, info = lt.lookupTable.TryGetValue name
             if ok then 
                 match info with
-                | Decl qname -> Some qname
-                | Use declName -> lt.getQname declName
-                | Expose declName -> lt.getQname declName
+                | Decl (qname, _) -> Some qname
+                | Use declName -> lt.TryGetQname declName
+                | Expose declName -> lt.TryGetQname declName
+             else 
+                None
+
+        member private lt.TryGetIsExposed name = 
+            let ok, info = lt.lookupTable.TryGetValue name
+            if ok then 
+                match info with
+                | Decl (_, isExposed) -> Some isExposed
+                | Use declName -> lt.TryGetIsExposed declName
+                | Expose declName -> lt.TryGetIsExposed declName
              else 
                 None
 
         // should be invisible outside this file
-        member internal nqt.addDecl name qname =
-            // printfn "addDecl: name: %A qname: %A" name qname
-            nqt.lookupTable.Add (name, Decl qname)
+        member internal nqt.addDecl name qname isExposed =
+            // printfn "addDecl: name: %A qname: %A isExposed: %A" name qname isExposed
+            nqt.lookupTable.Add (name, Decl (qname, isExposed))
 
         // should be invisible outside this file
         // assumes declare before use        
@@ -205,7 +218,7 @@ module SymbolTable =
             Seq.fold (fun s (k, v) -> s + string k + ": " + string v + "\n" ) "" pairs
 
         member this.nameToQname name = 
-            match this.getQname name with
+            match this.TryGetQname name with
             | Some qname -> qname
             | None -> failwithf "failed to make QName for %A" name
 
@@ -216,7 +229,7 @@ module SymbolTable =
             this.lastNameToQname path.path
 
         member private this.getNamePart (path: AST.DynamicAccessPath) =
-            let pred name = match this.getQname name with Some _ -> true | None -> false
+            let pred name = match this.TryGetQname name with Some _ -> true | None -> false
             path.leadingNames
             |> List.takeWhile pred
 
@@ -227,9 +240,16 @@ module SymbolTable =
             let namePart = this.getNamePart path
             let subExprPart = path.path.[namePart.Length..] // empty, if namePart = path.path
             this.lastNameToQname namePart, subExprPart
-            
-            
-        
+
+        member this.getDeclName name = 
+            match this.lookupTable.[name] with
+            | Decl _ -> 
+                name
+            | Use declName 
+            | Expose declName ->
+                declName
+
+
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name
         | NoDeclaration of usage: Name                                            // uname
@@ -307,6 +327,9 @@ module SymbolTable =
             exports : Scope
         }
 
+        member this.GetLookupTable =
+            this.lookupTable
+
     [<RequireQualifiedAccess>]        
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Environment =
@@ -342,6 +365,8 @@ module SymbolTable =
         let isExposedName env (name: Name) = 
             Scope.containsSymbol env.exposing name.id
 
+        let getVisibility env name = 
+            if isExposedName env name then Exposed else Hidden
 
         let isImportedName env (name: Name) =
             let importScope = getGlobalScope env
@@ -418,13 +443,13 @@ module SymbolTable =
                 shadows (currentOuter env) id
 
 
-        let private insertSymbol env (name: Name) (label: IdLabel) isScope =
+        let private insertSymbol env (name: Name) (label: IdLabel) (visibility: Visibility) isScope =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
                 // printfn "Qname: %A" qname
                 try
-                    do env.lookupTable.addDecl name qname
+                    do env.lookupTable.addDecl name qname visibility
                     // printfn "Name: %A, QName: %A" name qname
                 with exp ->
                     printfn "%A" exp
@@ -436,25 +461,32 @@ module SymbolTable =
                 Error <| ShadowingDeclaration (name, shadowed.name)
          
 
-        let insertName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label  false
+        let insertHiddenName env (name: Name) (label: IdLabel) =
+            insertSymbol env name label Hidden false
+
+        let insertExposedName env (name: Name) (label: IdLabel) =
+            insertSymbol env name label Exposed false
 
 
         let insertSubProgramName env (name: Name) =
-            insertSymbol env name IdLabel.Static true
+            let visibility = getVisibility env name
+            insertSymbol env name IdLabel.Static visibility true
 
 
-        let insertImportName env (name: Name) =
-            insertSymbol env name IdLabel.Static true
+        let insertModuleName env (name: Name) =
+            insertSymbol env name IdLabel.Static Hidden true
 
 
         let insertTypeName env (name: Name) =
-            insertSymbol env name IdLabel.Static true
+            let visibility = getVisibility env name
+            insertSymbol env name IdLabel.Static visibility true
  
  
         let insertConstOrParamName env (name: Name) = 
-            insertSymbol env name IdLabel.Static false
+            let visibility = getVisibility env name
+            insertSymbol env name IdLabel.Static visibility false
 
+        let insertUnitName = insertConstOrParamName
         
         // Fill the export scope
 

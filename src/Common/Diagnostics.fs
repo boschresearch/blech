@@ -63,6 +63,7 @@ module Diagnostics =
         | Parsing
         | Importing
         | Naming
+        | Exports
         | Typing
         | Causality
         | CodeGeneration
@@ -73,6 +74,7 @@ module Diagnostics =
             | Importing -> "importing"
             | Parsing -> "parsing"
             | Naming -> "name resolution"
+            | Exports -> "export inference"
             | Typing -> "typing"
             | Causality -> "causality"
             | CodeGeneration -> "code generation"
