@@ -85,6 +85,10 @@ module Main =
     let private runImportCompilation packageContext logger importChain moduleName fileName ast = 
         Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
+
+    let private runExportInference logger lookupTable fileName ast = 
+        Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
+        ExportInference.inferExports logger lookupTable ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -154,7 +158,7 @@ module Main =
     //let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: TranslationUnitPath) fileName fileContents =
 
     let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
-        // always run lexer, parser, import compilation, name resolution, type check and causality checks
+        // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
         
         let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
         
@@ -221,6 +225,10 @@ module Main =
                 let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
                 runNameResolution logger moduleName fileName importedEnvs ast
         
+            let inferredExportRes = 
+                astAndSymTableRes
+                |> Result.bind (fun (ast, env) -> runExportInference logger env.GetLookupTable fileName ast)
+            
             let lutAndPackRes = 
                 let otherLuts = imports.GetTypeCheckContexts
                 astAndSymTableRes 
@@ -230,8 +238,8 @@ module Main =
                 lutAndPackRes 
                 |> Result.bind (runCausalityCheck logger fileName)
             
-            match astAndSymTableRes, lutAndPackRes, pgsRes with    
-            | Ok (ast, env), Ok (lut, blechModule), Ok pgs ->
+            match astAndSymTableRes, inferredExportRes, lutAndPackRes, pgsRes with    
+            | Ok (ast, env), Ok exports, Ok (lut, blechModule), Ok pgs ->
                 // generate block graphs for all activities
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
@@ -266,6 +274,8 @@ module Main =
                     Logging.log2 "Main" ("writing C code for " + fileName)
 
                     let importedMods = imports.GetTypedModules
+
+                    do printfn "write signature file here: %A" exports
                     // TODO: Add otherMods to writeImplementation
                     // implementation should also include headers of imported modules, fjg. 19.10.20
                     do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
@@ -278,7 +288,7 @@ module Main =
                 Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule translationContext
 
             | _ ->
-                // Error during name checking or-else type checking or-else causality checking
+                // Error during name checking or-else export inference or-else type checking or-else causality checking
                 Error <| logger
         | _ ->
             // Error during parsing or else import compilation

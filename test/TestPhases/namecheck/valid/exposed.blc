@@ -1,0 +1,18 @@
+
+module exposes p, c, f, a 
+
+param p: bits8 = 0x8F
+param p2: bits8 = 0x8F
+
+const c = 42 : nat8
+const c2 = 42 : nat8
+
+function f () end
+function f2 () end
+
+activity a ()
+    await true
+end
+activity a2 ()
+    await true
+end

@@ -44,6 +44,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
     type private Environment = SymbolTable.Environment
 
+    type Exposed =
+    | None          // non-exposed entities  
+    | Type of Name  // type declaration 
+    | Data of Name  // const, param, unit
+    | Code of Name  // function, activity
+
     type NameCheckContext = 
         {
             env: Environment
@@ -110,9 +116,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     //    { ctx with env = Env.addExposed ctx.env}
         
 
-    let private addImportNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
+    let private addModuleNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
         let name = import.localName
-        match Env.insertImportName ctx.env name with // check for shadowing
+        match Env.insertModuleName ctx.env name with // check for shadowing
         | Ok env ->
             { ctx with env = env }
         | Error err ->
@@ -120,15 +126,23 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
      
 
-    let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
+    let private addHiddenDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
         let name = decl.name
-        match Env.insertName ctx.env name label with
+        match Env.insertHiddenName ctx.env name label with
         | Ok env -> 
             { ctx with env = env }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+    let private addExposedDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
+        let name = decl.name
+        match Env.insertExposedName ctx.env name label with
+        | Ok env -> 
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx
 
     let private addConstOrParamDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) =
         let name = decl.name
@@ -139,6 +153,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+    let private addUnitDecl = addConstOrParamDecl
 
     let private addTypeDecl (ctx: NameCheckContext) (sd: AST.IDeclarable) = 
         let name = sd.name
@@ -362,7 +377,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkParamDecl ctx (pd: AST.ParamDecl) = 
         List.fold identifyNameInCurrentScope ctx pd.sharing
         |> checkDataType <| pd.datatype
-        |> addDecl <| pd <| IdLabel.Dynamic // added to scope last, not visible for sharing constraints and types
+        |> addHiddenDecl <| pd <| IdLabel.Dynamic // added to scope last, not visible for sharing constraints and types
 
 
     let checkReturnDecl ctx (rd: AST.ReturnDecl) = 
@@ -373,7 +388,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkVarDecl ctx (vd: AST.VarDecl) =
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
-        |> addDecl <| vd <| IdLabel.Dynamic // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        |> addHiddenDecl <| vd <| IdLabel.Dynamic // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
 
 
     let checkStaticVarDecl ctx (vd: AST.VarDecl) = 
@@ -389,7 +404,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             checkDynamicAccessPath ctx l
         | AST.FreshLocation vd ->
             Option.fold checkDataType ctx vd.datatype
-            |> addDecl <| vd <| IdLabel.Dynamic 
+            |> addHiddenDecl <| vd <| IdLabel.Dynamic 
         | _ ->
             ctx
 
@@ -533,14 +548,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let checkUnitDecl ctx (ud: AST.UnitDecl) =
-        addDecl ctx ud IdLabel.Static
+        addUnitDecl ctx ud
         |> exportCodeDecl <| ud.name
 
  
  
     let checkTagDecl ctx (td: AST.TagDecl) =
         Option.fold checkExpr ctx td.rawvalue
-        |> addDecl <| td <| IdLabel.Static
+        |> addHiddenDecl <| td <| IdLabel.Static
 
 
     // all field names are syntactically var decls
@@ -549,12 +564,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | Member.Var fdecl ->    
             Option.fold checkDataType ctx fdecl.datatype
             |> Option.fold checkExpr <| fdecl.initialiser
-            |> addDecl <| fdecl <| IdLabel.Static
+            |> addHiddenDecl <| fdecl <| IdLabel.Static
         | _ -> // other members do no occur as fields
             ctx
 
     let checkImport ctx (import: AST.Import) = 
-        addImportNameDecl ctx import
+        addModuleNameDecl ctx import
         |> addModuleEnv <| import
 
 
@@ -637,7 +652,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkExposingAfter (ctx: NameCheckContext) (exposing: AST.Exposing) = 
         match exposing with
         | Few (names, _) ->
-            List.iter (fun n -> printfn "Exposes: %s" <| string n) names
+            // List.iter (fun n -> printfn "Exposes: %s" <| string n) names
             List.fold addExposedNameAfter ctx names 
         | All _ ->
             printfn "Exposes: All toplevel identifiers"
@@ -664,7 +679,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            //printfn "end of checkDeclardness %A" ncc.env.lookupTable
+            // printfn "end of checkDeclardness %A" ncc.env.GetLookupTable
             // printfn "Exports: %A" <| Env.getExports ncc.env.exports
             // printfn "Globals: %A" <| Env.getGlobalScope ncc.env
             Ok (ast, ncc.env)
