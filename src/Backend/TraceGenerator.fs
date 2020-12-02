@@ -223,7 +223,7 @@ let private genStatePrinter lut compilation amIentryPoint =
         let pcPrinterBody =
             let callPrintersRecursively =
                 actctx.subcontexts
-                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) printPcSuffix)
+                |> Seq.map (fun subctx -> callSubPrinter (fst subctx) (snd subctx) printPcSuffix)
                 |> dpBlock
 
             let printThisInstancePcs =
@@ -250,7 +250,7 @@ let private genStatePrinter lut compilation amIentryPoint =
         let varsPrinterBody = 
             let callPrintersRecursively =
                 actctx.subcontexts
-                |> Seq.map (fun kvp -> callSubPrinter (fst kvp.Key) (snd kvp.Key) printLocalsSuffix)
+                |> Seq.map (fun subctx -> callSubPrinter (fst subctx) (snd subctx) printLocalsSuffix)
                 |> punctuate (txt cCodeAddComma <.> txt "retcode = 0;")
                 |> dpBlock
 

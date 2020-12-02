@@ -66,7 +66,7 @@ type ActivityContext =
         locals: ParamDecl list
         pcs: PCtree // tree for THIS activity only
         // Sub-context is identified by a program counter name and a callee name
-        subcontexts: Map<string * QName, ActivityContext>
+        subcontexts: Set<string * QName>
     }
 
 
@@ -155,14 +155,14 @@ module PCtree =
 module ActivityContext =
     
     let internal mkNew thread mainpc = 
-        {locals = []; pcs = PCtree.mkNew thread mainpc; subcontexts = Map.empty}
+        {locals = []; pcs = PCtree.mkNew thread mainpc; subcontexts = Set.empty}
     
     let internal addLocal local ctx = 
         {ctx with ActivityContext.locals = addUniqueParam local ctx.locals}
     
-    let internal addSubContext ctx pcName calleName subctx = 
+    let internal addSubContext ctx pcName calleName = 
         {ctx with ActivityContext.subcontexts = 
-                  ctx.subcontexts.Add((pcName, calleName), subctx)} // keep in order
+                  ctx.subcontexts.Add(pcName, calleName)} // keep in order
 
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -187,9 +187,9 @@ module Compilation =
                     |> (ActivityContext.addLocal local) 
                     |> Some }
 
-    let internal addSubContext comp pcName calleName subctx =
+    let internal addSubContext comp pcName calleName =
         { comp with Compilation.actctx = 
-                    ActivityContext.addSubContext comp.GetActCtx pcName calleName subctx 
+                    ActivityContext.addSubContext comp.GetActCtx pcName calleName 
                     |> Some }
 
     /// Add program counter to this computation's activity context

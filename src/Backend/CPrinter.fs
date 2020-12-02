@@ -188,8 +188,8 @@ let internal cpContextTypeDeclaration (comp: Compilation) =
         let subctx =
             comp.GetActCtx.subcontexts
             |> Seq.map (fun subctx -> txt "struct" 
-                                    <+> cpStaticName (snd subctx.Key) // C type name
-                                    <+> txt (fst subctx.Key) <^> txt "_" <^> cpStaticName (snd subctx.Key) // field name
+                                    <+> cpStaticName (snd subctx) // C type name
+                                    <+> txt (fst subctx) <^> txt "_" <^> cpStaticName (snd subctx) // field name
                                     <^> semi)
             |> dpBlock
         let fields = // we do this little detour to remove empty lines
