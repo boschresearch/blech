@@ -573,13 +573,12 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 // if one unguarded transition, that leaves block, advance pc
                 advancePC ctx !curComp node succ
         
-        // select callee's pcs from activity context and initialise them
-        let callee = findCompilationByName ctx compilations whoToCall
         // add the PCs and locals of subprogram to this instance
-        curComp := Compilation.addSubContext !curComp thisNodePc whoToCall callee.GetActCtx
-                
+        curComp := Compilation.addSubContext !curComp thisNodePc whoToCall
+        
+        // select callee's pcs from activity context and initialise them
         let initCalleesPCs =
-            cpInitActivityCall thisNodePc callee.name
+            cpInitActivityCall thisNodePc whoToCall
 
         let retcodeVarDoc =
             renderCName Current ctx.tcc retcodeVar
