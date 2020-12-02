@@ -34,16 +34,16 @@ type ModuleInfo =
         nameCheck: Environment
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
-        translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
+        //translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
     }
 
-    static member Make imports symbolTable typecheckContext blechModule translationContext =
+    static member Make imports symbolTable typecheckContext blechModule =
         { 
             dependsOn = imports
             nameCheck = symbolTable
             typeCheck = typecheckContext
             typedModule = blechModule
-            translation = translationContext
+            //translation = translationContext
         }
 
     member this.IsCompiledProgram = 
@@ -116,10 +116,6 @@ type Imports =
     member this.GetTypedModules = 
         this.GetImports
         |> List.map (fun i -> i.typedModule)
-
-    member this.GetTranslationContexts = 
-        this.GetImports
-        |> List.map (fun i -> i.translation)
 
 
 // check if there is a cylic module imported, i.e. 
