@@ -112,7 +112,7 @@ let public translate ctx (pack: BlechModule) =
     pack.funacts
     |> List.fold (fun compilations funact ->
         if funact.isFunction then FunctionTranslator.translate ctx funact
-        else ActivityTranslator.translate ctx compilations funact
+        else ActivityTranslator.translate ctx funact
         |> List.singleton
         |> List.append compilations) []
 

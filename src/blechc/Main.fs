@@ -243,13 +243,11 @@ module Main =
                 // generate block graphs for all activities
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
-                let preTranslationContexts = imports.GetTranslationContexts
-                let preCompilations = preTranslationContexts |> List.collect (fun ctx -> ctx.compilations)
                 let translationContext: TranslationContext =
                     { tcc = lut
                       pgs = pgs
                       bgs = blockGraphContext 
-                      compilations = preCompilations
+                      compilations = []
                       cliContext = cliArgs }
                         
                 let compilations = CodeGeneration.translate translationContext blechModule
@@ -285,7 +283,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule translationContext
+                Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule
 
             | _ ->
                 // Error during name checking or-else export inference or-else type checking or-else causality checking
