@@ -368,6 +368,13 @@ module SymbolTable =
         let getVisibility env name = 
             if isExposedName env name then Exposed else Hidden
 
+        //let tryGetExposedName env (name: Name) =
+        //    if Scope.containsSymbol env.exposing name.id then
+        //        Some name
+        //    else 
+        //        None
+            
+
         let isImportedName env (name: Name) =
             let importScope = getGlobalScope env
             Scope.containsSymbol importScope name.id
@@ -461,8 +468,12 @@ module SymbolTable =
                 Error <| ShadowingDeclaration (name, shadowed.name)
          
 
+        let insertName env name label visibility =
+            insertSymbol env name label visibility false
+
         let insertHiddenName env (name: Name) (label: IdLabel) =
             insertSymbol env name label Hidden false
+
 
         let insertExposedName env (name: Name) (label: IdLabel) =
             insertSymbol env name label Exposed false
