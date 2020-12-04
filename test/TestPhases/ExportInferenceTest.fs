@@ -70,7 +70,7 @@ type Test() =
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
+        // Assert.True (Result.isOk astAndEnv)  // TODO: currently no invalid export inference test, that go beyond name checking
 
         let inferredExportRes = 
             astAndEnv
