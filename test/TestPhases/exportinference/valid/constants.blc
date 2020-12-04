@@ -1,0 +1,7 @@
+module exposes MyInt, c1, c2
+
+typealias MyInt = int8
+
+const c1: MyInt = 42 
+
+const c2 = (c1 + 42) : int32

@@ -633,7 +633,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
-            // setExposure ctx etd.name
             addTypeDecl ctx etd                           // open, named, non-recursive
             |> Option.fold checkDataType <| etd.rawtype   // check rawtype first 
             |> enableRecursion                            
@@ -644,7 +643,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
         and checkStructType ctx (std: AST.StructTypeDecl) =
-            addTypeDecl ctx std                  // add non-recursive sub scope
+            addTypeDecl ctx std                        // add non-recursive sub scope
             |> addSubScope                             // separate anonymous scope for fields, prevents open access
             |> List.fold checkFieldDecl <| std.fields  // check fields first, before typename becomes visible  
             |> exitSubScope      
@@ -663,9 +662,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
         and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
-            // setExposure ctx tad.name
             addTypeDecl ctx tad                 // open, named, non-recursive scope
-            // |> disableExposure 
             |> checkDataType <| tad.aliasfor          // check alias first, before typename becomes visible
             |> enableRecursion
             |> List.fold checkMember <| tad.members

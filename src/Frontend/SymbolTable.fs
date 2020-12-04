@@ -155,7 +155,8 @@ module SymbolTable =
     //    | Hidden
 
     type private NameInfo =
-        | Decl of QName * isExposed: bool // declaration of a name, points to the fully qualified name
+        | Decl of QName * isExposed: bool // declaration of a name, points to the fully qualified name, 
+                                          // and indicates if the declaration is exposed in a module
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
@@ -194,15 +195,15 @@ module SymbolTable =
              else 
                 None
 
-        member private lt.TryGetIsExposed name = 
-            let ok, info = lt.lookupTable.TryGetValue name
-            if ok then 
-                match info with
-                | Decl (_, isExposed) -> Some isExposed
-                | Use declName -> lt.TryGetIsExposed declName
-                | Expose declName -> lt.TryGetIsExposed declName
-             else 
-                None
+        //member private lt.TryGetIsExposed name = 
+        //    let ok, info = lt.lookupTable.TryGetValue name
+        //    if ok then 
+        //        match info with
+        //        | Decl (_, isExposed) -> Some isExposed
+        //        | Use declName -> lt.TryGetIsExposed declName
+        //        | Expose declName -> lt.TryGetIsExposed declName
+        //     else 
+        //        None
 
         // should be invisible outside this file
         member internal nqt.addDecl name qname isExposed =
@@ -264,9 +265,11 @@ module SymbolTable =
                 this.IsExposed declName
 
         member this.ShowExposedDeclNames =
+            printfn "Exposed declaration names"
             for kv in this.lookupTable do
                 if kv.Value.IsExposedDecl then 
                     printfn "Exposed: %s" kv.Key.id
+            
 
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name
@@ -510,10 +513,8 @@ module SymbolTable =
 
 
         let insertSubProgramName env (name: Name) =
-            let isExposed = isExposedName env name
-            insertSymbol env name IdLabel.Static isExposed true
-
-
+            insertName env name IdLabel.Static
+            
         let insertModuleName env (name: Name) =
             insertSymbol env name IdLabel.Static false true
 
@@ -735,14 +736,12 @@ module SymbolTable =
                 | [] ->
                     decls, true
                 | [name] ->
-                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls, false
                     | Some symbol ->
                         decls @ [symbol.name], true
                 | name :: tail ->
-                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None ->
                         decls, false

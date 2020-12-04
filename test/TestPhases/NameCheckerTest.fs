@@ -39,7 +39,6 @@ type Test() =
         
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
-            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
 
         match astAndEnv with
@@ -66,7 +65,7 @@ type Test() =
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
+
         match astAndEnv with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
