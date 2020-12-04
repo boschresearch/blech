@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module NameCheckerTest
+module ExportInferenceTest
 
 open NUnit.Framework
 
@@ -26,7 +26,7 @@ type Test() =
 
     /// load test cases for nameCheckValidFiles test
     static member validFiles =
-        TestFiles.validFiles TestFiles.Namecheck
+        TestFiles.validFiles TestFiles.ExportInference
         
     /// run nameCheckValidFiles
     [<Test>]
@@ -41,12 +41,16 @@ type Test() =
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
 
-        match astAndEnv with
+        let inferredExportRes = 
+            astAndEnv
+            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env.GetLookupTable ast)
+
+        match inferredExportRes with
         | Error logger ->
+            printfn "Did not expect to find errors!\n" 
             Diagnostics.Emitter.printDiagnostics logger
-            Assert.False true
-        | Ok (ast, env) ->
-            printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
+            Assert.True false
+        | Ok _ ->
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test
@@ -66,13 +70,15 @@ type Test() =
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
 
-        match astAndEnv with
+        let inferredExportRes = 
+            astAndEnv
+            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env.GetLookupTable ast)
+
+        match inferredExportRes with
         | Error logger ->
+            printfn "Discovered Errors:\n" 
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        | Ok (ast, env) ->
-            printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
-            Assert.False true
-
-        
-    
+        | Ok _ ->
+            Assert.True false
+            

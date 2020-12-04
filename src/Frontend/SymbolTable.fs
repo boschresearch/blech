@@ -150,15 +150,22 @@ module SymbolTable =
         let rewriteId scope id : Scope = // this is used for imports to rewrite imported scope with local id
             {scope with id = id}
 
-    type Visibility =
-        | Exposed
-        | Hidden
+    //type Visibility =
+    //    | Exposed
+    //    | Hidden
 
     type private NameInfo =
-        | Decl of QName * Visibility // declaration of a name, points to the fully qualified name
+        | Decl of QName * isExposed: bool // declaration of a name, points to the fully qualified name, 
+                                          // and indicates if the declaration is exposed in a module
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
+        member this.IsExposedDecl =
+            match this with
+            | Decl (_, isExposed) ->
+                isExposed
+            | _ ->
+                false
 
     type LookupTable = 
         private { 
@@ -188,15 +195,15 @@ module SymbolTable =
              else 
                 None
 
-        member private lt.TryGetIsExposed name = 
-            let ok, info = lt.lookupTable.TryGetValue name
-            if ok then 
-                match info with
-                | Decl (_, isExposed) -> Some isExposed
-                | Use declName -> lt.TryGetIsExposed declName
-                | Expose declName -> lt.TryGetIsExposed declName
-             else 
-                None
+        //member private lt.TryGetIsExposed name = 
+        //    let ok, info = lt.lookupTable.TryGetValue name
+        //    if ok then 
+        //        match info with
+        //        | Decl (_, isExposed) -> Some isExposed
+        //        | Use declName -> lt.TryGetIsExposed declName
+        //        | Expose declName -> lt.TryGetIsExposed declName
+        //     else 
+        //        None
 
         // should be invisible outside this file
         member internal nqt.addDecl name qname isExposed =
@@ -249,6 +256,20 @@ module SymbolTable =
             | Expose declName ->
                 declName
 
+        member this.IsExposed name = 
+            match this.lookupTable.[name] with
+            | Decl (_, isExposed) -> 
+                isExposed
+            | Use declName 
+            | Expose declName ->
+                this.IsExposed declName
+
+        member this.ShowExposedDeclNames =
+            printfn "Exposed declaration names"
+            for kv in this.lookupTable do
+                if kv.Value.IsExposedDecl then 
+                    printfn "Exposed: %s" kv.Key.id
+            
 
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name
@@ -361,22 +382,6 @@ module SymbolTable =
             assert (len >= 1)
             List.item (len-2) env.path
 
-        
-        let isExposedName env (name: Name) = 
-            Scope.containsSymbol env.exposing name.id
-
-        let getVisibility env name = 
-            if isExposedName env name then Exposed else Hidden
-
-        let isImportedName env (name: Name) =
-            let importScope = getGlobalScope env
-            Scope.containsSymbol importScope name.id
-
-
-        let isToplevelName env (name: Name) =
-            let moduleScope = getModuleScope env
-            Scope.containsSymbol moduleScope name.id
-
 
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -388,6 +393,39 @@ module SymbolTable =
 
         let private currentOuter env = 
             List.tail env.path
+
+        
+        let isExposedName env (name: Name) = 
+            Scope.containsSymbol env.exposing name.id
+
+
+        let currentScopeIsExposed env =
+            let cs = currentScope env
+            let isOpen = cs.access = Accessibility.Open
+            let isExposed = Scope.containsSymbol env.exposing cs.id
+            isOpen && isExposed
+
+
+        //let getVisibility env name = 
+        //    if isExposedName env name then Exposed else Hidden
+
+        //let tryGetExposedName env (name: Name) =
+        //    if Scope.containsSymbol env.exposing name.id then
+        //        Some name
+        //    else 
+        //        None
+            
+
+        let isImportedName env (name: Name) =
+            let importScope = getGlobalScope env
+            Scope.containsSymbol importScope name.id
+
+
+        let isToplevelName env (name: Name) =
+            let moduleScope = getModuleScope env
+            Scope.containsSymbol moduleScope name.id
+
+
 
 
         //let private parentOuter env = 
@@ -443,13 +481,13 @@ module SymbolTable =
                 shadows (currentOuter env) id
 
 
-        let private insertSymbol env (name: Name) (label: IdLabel) (visibility: Visibility) isScope =
+        let private insertSymbol env (name: Name) (label: IdLabel) isExposed isScope =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
                 // printfn "Qname: %A" qname
                 try
-                    do env.lookupTable.addDecl name qname visibility
+                    do env.lookupTable.addDecl name qname isExposed
                     // printfn "Name: %A, QName: %A" name qname
                 with exp ->
                     printfn "%A" exp
@@ -461,30 +499,34 @@ module SymbolTable =
                 Error <| ShadowingDeclaration (name, shadowed.name)
          
 
+        let insertName env name label =
+            let isExposed = isExposedName env name || currentScopeIsExposed env
+            insertSymbol env name label isExposed false
+
+
         let insertHiddenName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label Hidden false
+            insertSymbol env name label false false
+
 
         let insertExposedName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label Exposed false
+            insertSymbol env name label true false
 
 
         let insertSubProgramName env (name: Name) =
-            let visibility = getVisibility env name
-            insertSymbol env name IdLabel.Static visibility true
-
-
+            insertName env name IdLabel.Static
+            
         let insertModuleName env (name: Name) =
-            insertSymbol env name IdLabel.Static Hidden true
+            insertSymbol env name IdLabel.Static false true
 
 
         let insertTypeName env (name: Name) =
-            let visibility = getVisibility env name
-            insertSymbol env name IdLabel.Static visibility true
+            let isExposed = isExposedName env name
+            insertSymbol env name IdLabel.Static isExposed true
  
  
         let insertConstOrParamName env (name: Name) = 
-            let visibility = getVisibility env name
-            insertSymbol env name IdLabel.Static visibility false
+            let isExposed = isExposedName env name
+            insertSymbol env name IdLabel.Static isExposed false
 
         let insertUnitName = insertConstOrParamName
         
@@ -694,14 +736,12 @@ module SymbolTable =
                 | [] ->
                     decls, true
                 | [name] ->
-                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None -> 
                         decls, false
                     | Some symbol ->
                         decls @ [symbol.name], true
                 | name :: tail ->
-                    // printfn "Partial path component: %s" name.id
                     match Scope.tryFindSymbol scope name.id with
                     | None ->
                         decls, false

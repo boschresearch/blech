@@ -44,17 +44,23 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
     type private Environment = SymbolTable.Environment
 
-    type Exposed =
-    | None          // non-exposed entities  
-    | Type of Name  // type declaration 
-    | Data of Name  // const, param, unit
-    | Code of Name  // function, activity
+    //type private Access =
+    //| Private of Name    // non-exposed entities  
+    //| Public of Name        // exposed type declaration 
+    //| Data of Name  // exposed const, param, unit, initialisers
+    ////| Code of Name  // function, activity
 
+    //type NameExposure =
+    //    | Active of Name
+    //    | Inactive of Name
+    //    | Off
+    
     type NameCheckContext = 
         {
             env: Environment
             logger: Diagnostics.Logger
             importedEnvs: Map<TranslationUnitPath, Environment>
+            // currentMemberExposure: NameExposure  // indicates the expostion of the current member definition
             // signature: Export.Signature
         }
 
@@ -63,9 +69,49 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             env = Env.init moduleName
             logger = logger  // this will be create at blechc started and handed over
             importedEnvs = importedEnvs
+            // currentMemberExposure = Off
             // signature = Export.initialiseSignature()
         }
 
+    
+    //let private hasLessVisibility (ctx: NameCheckContext) name = 
+    //    match ctx. currentExposedMember with
+    //    | Some name 
+
+    //let private setExposure (ctx: NameCheckContext) name =
+    //    if Env.isExposedName ctx.env name then
+    //        { ctx with currentMemberExposure = Active name }
+    //    else
+    //        { ctx with currentMemberExposure = Off }
+
+
+    //let private resumeExposure (ctx: NameCheckContext) = 
+    //    match ctx.currentMemberExposure with
+    //    | Inactive name ->
+    //        { ctx with currentMemberExposure = Active name }
+    //    | Off -> 
+    //        ctx
+    //    | Active name ->
+    //        failwith "Cannot resume active visibility checking"
+
+
+    //let private disableExposure (ctx: NameCheckContext) = 
+    //    match ctx.currentMemberExposure with
+    //    | Active name ->
+    //        { ctx with currentMemberExposure = Inactive name }
+    //    | Off -> 
+    //        ctx
+    //    | Inactive name ->
+    //        failwith "Cannot disabel inactive visibility checking"
+
+
+    //let private getRequiredVisibility (ctx: NameCheckContext) =
+    //    match ctx.currentMemberExposure with
+    //    | Active _ -> 
+    //        SymbolTable.Exposed
+    //    | Inactive _ 
+    //    | Off ->
+    //        SymbolTable.Hidden
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -124,8 +170,18 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
+    
      
-
+    let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
+        let name = decl.name
+        match Env.insertName ctx.env name label  with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            do Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx     
+        
+        
     let private addHiddenDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
         let name = decl.name
         match Env.insertHiddenName ctx.env name label with
@@ -363,7 +419,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | FloatType (unit = uexp) ->
             Option.fold checkUnitExpr ctx uexp
         | ArrayType (size = expr; elem = dty) ->
+            // resumeExposure ctx
             checkExpr ctx expr
+            // |> disableExposure
             |> checkDataType <| dty
         | SliceType (elem = dty) ->
             checkDataType ctx dty
@@ -555,7 +613,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
     let checkTagDecl ctx (td: AST.TagDecl) =
         Option.fold checkExpr ctx td.rawvalue
-        |> addHiddenDecl <| td <| IdLabel.Static
+        |> addDecl <| td <| IdLabel.Static
+        // |> addHiddenDecl <| td <| IdLabel.Static
 
 
     // all field names are syntactically var decls
@@ -574,7 +633,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
-            addTypeDecl ctx etd                     // open, named, non-recursive                          
+            addTypeDecl ctx etd                           // open, named, non-recursive
             |> Option.fold checkDataType <| etd.rawtype   // check rawtype first 
             |> enableRecursion                            
             |> List.fold checkTagDecl <| etd.tags
@@ -584,7 +643,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
         and checkStructType ctx (std: AST.StructTypeDecl) =
-            addTypeDecl ctx std                  // add non-recursive sub scope
+            addTypeDecl ctx std                        // add non-recursive sub scope
             |> addSubScope                             // separate anonymous scope for fields, prevents open access
             |> List.fold checkFieldDecl <| std.fields  // check fields first, before typename becomes visible  
             |> exitSubScope      
@@ -603,7 +662,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
         and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
-            addTypeDecl ctx tad                 // open, named, non-recursive scope  
+            addTypeDecl ctx tad                 // open, named, non-recursive scope
             |> checkDataType <| tad.aliasfor          // check alias first, before typename becomes visible
             |> enableRecursion
             |> List.fold checkMember <| tad.members
@@ -679,7 +738,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            // printfn "end of checkDeclardness %A" ncc.env.GetLookupTable
+            do ctx.env.GetLookupTable.ShowExposedDeclNames
+            // printfn "end of checkDeclardness\n %A" ncc.env.GetLookupTable
             // printfn "Exports: %A" <| Env.getExports ncc.env.exports
             // printfn "Globals: %A" <| Env.getGlobalScope ncc.env
             Ok (ast, ncc.env)

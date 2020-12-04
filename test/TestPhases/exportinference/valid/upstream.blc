@@ -1,0 +1,15 @@
+
+module exposes T, f, A
+
+struct T 
+    var x: int32
+end
+
+function f(x: T) returns int32
+    return 42
+end
+
+activity A (x: T) (y: T) returns int32
+    await true
+    return 42
+end

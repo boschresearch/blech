@@ -147,15 +147,15 @@ module ExportInference =
             List.fold inferImport ctx cu.imports
             |> Option.fold inferModuleSpec <| cu.spec
         else
-            // ctx
-            logExportError ctx <| Dummy (cu.Range, "Test error for non-module")
+            ctx
+            //logExportError ctx <| Dummy (cu.Range, "Test error for non-module")
 
 
     let inferExports logger lookupTable (cu: AST.CompilationUnit) = 
         let ctx = ExportContext.initialise logger lookupTable
         let exports = inferCompilationUnit ctx cu
         // just for debugging
-        show exports
+        // show exports
         if Diagnostics.Logger.hasErrors exports.logger then
             Error exports.logger
         else

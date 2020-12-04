@@ -26,12 +26,14 @@ open Blech.Common.TranslationUnitPath
 type Phase =
     | Parser 
     | Namecheck
+    | ExportInference
     | Typechecker
     | Causality
     member p.Directory =
         match p with
         | Parser -> "parser"
         | Namecheck -> "namecheck"
+        | ExportInference -> "exportinference"
         | Typechecker -> "typechecker"
         | Causality -> "causality"
 
