@@ -146,8 +146,8 @@ let private isInFunction tcc name =
     | prefix ->
         let prefixAsName = QName.Create name.moduleName [] prefix.Head IdLabel.Static
         match tcc.nameToDecl.[prefixAsName] with
-        | Declarable.SubProgramDecl spd ->
-            spd.isFunction
+        | Declarable.ProcedureImpl spd ->
+            spd.IsFunction
         | _ -> failwithf "Cannot find code capsule for variable %s" (name.ToString())
 
 let private isInActivity tcc name =
@@ -156,8 +156,8 @@ let private isInActivity tcc name =
     | prefix ->
         let prefixAsName = QName.Create name.moduleName [] prefix.Head IdLabel.Static
         match tcc.nameToDecl.[prefixAsName] with
-        | Declarable.SubProgramDecl spd ->
-            not spd.isFunction
+        | Declarable.ProcedureImpl spd ->
+            not spd.IsFunction
         | _ -> failwithf "Cannot find code capsule for variable %s" (name.ToString())
 
 /// Whenever a name has to be printed as C code this function does it

@@ -89,8 +89,8 @@ type TyCheckError =
     | ConstArrayRequiresConstIndex of range
     | ParameterMustHaveStaticInit of Name * TypedRhs
     // calls
-    | FunCallToAct of range * FunctionPrototype
-    | RunAFun of range * FunctionPrototype
+    | FunCallToAct of range * ProcedurePrototype
+    | RunAFun of range * ProcedurePrototype
     
     // simple types
     | ExpectedBoolExpr of range * TypedRhs
@@ -201,8 +201,8 @@ type TyCheckError =
     | UnknownPragma of range
     
     // --- result receivers ---
-    | ReceiverForVoidReturn of range * FunctionPrototype
-    | MissingReceiver of range * FunctionPrototype
+    | ReceiverForVoidReturn of range * ProcedurePrototype
+    | MissingReceiver of range * ProcedurePrototype
 
     // --- Dummy error, just for development purposes ---
     | Dummy of range * string

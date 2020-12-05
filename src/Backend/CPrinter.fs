@@ -282,7 +282,7 @@ let internal cpExternFunction tcc docs name iface (returns: ValueTypes) =
     <| prototype
 
 
-let internal cpDirectCCall tcc (fp: FunctionPrototype) =
+let internal cpDirectCCall tcc (fp: ProcedurePrototype) =
     let args =
         List.map (fun (p: ParamDecl) -> (cpName (Some Current) tcc p.name).Render) (fp.inputs @ fp.outputs) 
     let cbinding = fp.annotation.TryGetCBinding

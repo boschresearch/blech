@@ -110,7 +110,7 @@ module Main =
         let code = 
             match modul.entryPoint with
             | Some ep ->
-                CodeGeneration.emitMainCode translationContext modul importedModules compilations ep.name
+                CodeGeneration.emitMainCode translationContext modul importedModules compilations ep.Name
             | None ->
                 CodeGeneration.emitCode translationContext modul importedModules compilations
         do writeFile codeFile code
@@ -121,7 +121,7 @@ module Main =
         let header = 
             match modul.entryPoint with
             | Some ep ->
-                CodeGeneration.emitMainHeader translationContext modul importedModules compilations ep.name
+                CodeGeneration.emitMainHeader translationContext modul importedModules compilations ep.Name
             | None ->
                 CodeGeneration.emitHeader translationContext modul importedModules compilations
         do writeFile headerFile header
@@ -131,7 +131,7 @@ module Main =
         match cliArgs.appName, modul.entryPoint with
         | Some an, Some ep ->
             let appFile = Path.Combine(cliArgs.outDir, TranslatePath.appNameToCFile an)
-            let app = CodeGeneration.emitApp translationContext modul compilations ep.name
+            let app = CodeGeneration.emitApp translationContext modul compilations ep.Name
             do FileInfo(appFile).Directory.Create()
             do File.WriteAllText(appFile, app)
         | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20

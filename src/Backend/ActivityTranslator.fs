@@ -116,8 +116,8 @@ let rec private cpAction ctx curComp action =
                 let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
                 let typ =
                     match ctx.tcc.nameToDecl.[(!curComp).name] with
-                    | FunctionPrototype p -> p.returns
-                    | SubProgramDecl d -> d.returns
+                    | ProcedurePrototype p -> p.returns
+                    | ProcedureImpl d -> d.Returns
                     | _ -> failwith "expected subprogram, got something else"
                 { lhs = LhsCur (TypedMemLoc.Loc name)
                   typ = ValueTypes typ
@@ -251,14 +251,14 @@ let private getUniqueSuccNode node =
 let private makeActCall ctx (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
     let hasCalleeRetVal, calleeRetType =
         match ctx.tcc.nameToDecl.[whoToCall] with
-        | SubProgramDecl s -> 
-            match s.returns with
-            | ValueTypes.Void -> false, ValueTypes s.returns
-            | _ -> true, ValueTypes s.returns
+        | ProcedureImpl s -> 
+            match s.Returns with
+            | ValueTypes.Void -> false, ValueTypes s.Returns
+            | _ -> true, ValueTypes s.Returns
         | ParamDecl _ 
         | Declarable.VarDecl _ 
         | Declarable.ExternalVarDecl _ 
-        | Declarable.FunctionPrototype _ -> 
+        | Declarable.ProcedurePrototype _ -> 
             failwith "Expected to find subprogram (activity) declaration here."
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
@@ -850,7 +850,7 @@ let private collectVarsToPrev2 pg =
     @ (pg.Graph.Edges |> Seq.toList |> List.map processEdge |> List.concat)
     |> List.distinct
 
-let private translateActivity ctx curComp (subProgDecl: SubProgramDecl) =
+let private translateActivity ctx curComp (subProgDecl: ProcedureImpl) =
     let addPc _ (node : Node) =
         let pc =
             { name = mkAuxQNameFrom <| render None (createPcName4node node)
@@ -860,7 +860,7 @@ let private translateActivity ctx curComp (subProgDecl: SubProgramDecl) =
               allReferences = HashSet() }
         curComp := Compilation.addPc !curComp node.Payload.Thread pc
         false
-    let name = subProgDecl.name
+    let name = subProgDecl.Name
     curComp := { !curComp with varsToPrev = collectVarsToPrev2 ctx.pgs.[name] }
     // build pc tree by traversing the program graph and create a pc per thread
     let progGraph = ctx.pgs.[name]
@@ -894,27 +894,27 @@ let internal mainPCinit ctx (entryCompilation: Compilation) =
 
 /// Given a translation context, a list of produced compilations so far,
 /// and an activity, produce a Compilation for that activity.
-let internal translate ctx (subProgDecl: SubProgramDecl) =
+let internal translate ctx (subProgDecl: ProcedureImpl) =
     // for an activity, translate its graph
     // while doing so collect all local variables, pcs
     // wrap code in function that expects values for all
     // ins, outs, globals, locals, pcs
-    let name = subProgDecl.name
+    let name = subProgDecl.Name
     // generate a retvar if the activity is non-void
     let retvar =
-        if subProgDecl.returns = Void then
+        if subProgDecl.Returns = Void then
             None
         else
-            let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
+            let qname = QName.Create subProgDecl.Name.moduleName (subProgDecl.Name.prefix @ [subProgDecl.Name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.Returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v
     
-    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
+    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.Inputs; outputs = subProgDecl.Outputs; retvar = retvar}
         
     let code = translateActivity ctx curComp subProgDecl
 

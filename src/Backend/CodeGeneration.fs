@@ -111,7 +111,7 @@ let public translate ctx (pack: BlechModule) =
     // translate all subprograms in order
     pack.funacts
     |> List.fold (fun compilations funact ->
-        if funact.isFunction then FunctionTranslator.translate ctx funact
+        if funact.IsFunction then FunctionTranslator.translate ctx funact
         else ActivityTranslator.translate ctx funact
         |> List.singleton
         |> List.append compilations) []
@@ -211,13 +211,13 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
     // Translate function prototypes to direct C calls
     let functionPrototypes = 
         ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.FunctionPrototype f -> Some f | _ -> None)
+        |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
     
     let cCalls =
-        Seq.filter (fun (fp: FunctionPrototype) -> fp.isDirectCCall) functionPrototypes
+        Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
 
     let cHeaders = 
-        let cCalls = Seq.choose (fun (fp: FunctionPrototype) -> fp.annotation.TryGetCHeader) cCalls
+        let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
         let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
         let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
@@ -317,17 +317,18 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
     // Translate function prototypes to extern functions and direct C calls
     let functionPrototypes = 
         ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.FunctionPrototype f -> Some f | _ -> None)
+        |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
     
     let cCalls =
-        Seq.filter (fun (fp: FunctionPrototype) -> fp.isDirectCCall) functionPrototypes
+        Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
 
     let cWrappers = 
         Seq.except cCalls functionPrototypes
 
     let cCallHeaders = 
         let hfiles =
-            Seq.choose(fun fp -> fp.annotation.TryGetCHeader) cCalls
+            cCalls
+            |> Seq.choose(fun fp -> fp.annotation.TryGetCHeader) 
             |> Seq.distinct
         
         let includeHfile hfile = 
@@ -349,7 +350,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
         |> dpBlock
 
     let externFunctions =
-        let ifaceOf (fp: FunctionPrototype) =
+        let ifaceOf (fp: ProcedurePrototype) =
             {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
         cWrappers
         |> Seq.toList // change to List for eager evaluation since ctx.tcc may be updated during the map iteration

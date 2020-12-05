@@ -32,45 +32,45 @@ type Declarable =
     | ParamDecl of ParamDecl
     | VarDecl of VarDecl
     | ExternalVarDecl of ExternalVarDecl
-    | SubProgramDecl of SubProgramDecl
-    | FunctionPrototype of FunctionPrototype
+    | ProcedureImpl of ProcedureImpl
+    | ProcedurePrototype of ProcedurePrototype
     
     member this.GetQName() =
         match this with
         | ParamDecl {name = x}
         | VarDecl {name = x} 
         | ExternalVarDecl {name = x}
-        | SubProgramDecl {name = x}
-        | FunctionPrototype {name = x} -> x
+        | ProcedurePrototype {name = x} -> x
+        | ProcedureImpl i -> i.Name
     
     member this.GetLn() =
         match this with
         | ParamDecl {pos = x}
         | VarDecl {pos = x}
         | ExternalVarDecl {pos = x}
-        | SubProgramDecl {pos = x} 
-        | FunctionPrototype {pos = x} -> x
+        | ProcedureImpl {pos = x} 
+        | ProcedurePrototype {pos = x} -> x
     
     member this.TryGetDefault() =
         match this with
         | VarDecl {initValue = x} -> Some x
         | ExternalVarDecl _ // externals have no default value
         | ParamDecl _
-        | SubProgramDecl _
-        | FunctionPrototype _ -> None
+        | ProcedureImpl _
+        | ProcedurePrototype _ -> None
 
     member this.TryGetMutability =
         match this with
         | VarDecl {mutability = x}
         | ExternalVarDecl {mutability = x} -> Some x
         | ParamDecl {isMutable = x} -> if x then Some Mutability.Variable else Some Mutability.Immutable
-        | SubProgramDecl _
-        | FunctionPrototype _ -> None
+        | ProcedureImpl _
+        | ProcedurePrototype _ -> None
 
     member this.TryGetReturnType =
         match this with
-        | FunctionPrototype {returns = x}
-        | SubProgramDecl {returns = x} -> Some x
+        | ProcedurePrototype {returns = x} -> Some x
+        | ProcedureImpl i -> Some i.Returns
         | VarDecl _
         | ParamDecl _
         | ExternalVarDecl _ -> None
@@ -80,8 +80,8 @@ type Declarable =
         | ParamDecl {allReferences = ar}
         | VarDecl {allReferences = ar}
         | ExternalVarDecl {allReferences = ar}
-        | SubProgramDecl {allReferences = ar}
-        | FunctionPrototype {allReferences = ar} ->
+        | ProcedureImpl {allReferences = ar}
+        | ProcedurePrototype {allReferences = ar} ->
             ar.Add pos
 
 
@@ -115,18 +115,8 @@ type TypeCheckContext =
 
 module TypeCheckContext =
     let private tryGetSubProgramDeclAsPrototype = function
-        | FunctionPrototype p -> Some p
-        | SubProgramDecl d -> Some {
-                FunctionPrototype.pos = d.pos
-                isFunction = d.isFunction
-                isSingleton = d.IsSingleton
-                name = d.name
-                inputs = d.inputs
-                outputs = d.outputs
-                returns = d.returns
-                annotation = Attribute.FunctionPrototype.Empty
-                allReferences = d.allReferences
-            }
+        | ProcedurePrototype p -> Some p
+        | ProcedureImpl d -> Some d.prototype
         | ParamDecl _
         | VarDecl _ 
         | ExternalVarDecl _ -> None
@@ -195,8 +185,8 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype |> Ok
             | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
-            | Declarable.SubProgramDecl _ 
-            | Declarable.FunctionPrototype _ -> Error [IllegalAccessOfTypeInfo (name.ToString())]
+            | Declarable.ProcedureImpl _ 
+            | Declarable.ProcedurePrototype _ -> Error [IllegalAccessOfTypeInfo (name.ToString())]
         else
             Error [NotInLUTPrevError (name.ToString())]
 
@@ -208,8 +198,8 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype 
             | Declarable.ExternalVarDecl v -> v.datatype
             | Declarable.ParamDecl a -> a.datatype
-            | Declarable.SubProgramDecl _ 
-            | Declarable.FunctionPrototype _ -> failwith "TML cannot point to a subprogram!"
+            | Declarable.ProcedureImpl _ 
+            | Declarable.ProcedurePrototype _ -> failwith "TML cannot point to a subprogram!"
         | FieldAccess (tml, ident) ->
             match getDatatypeFromTML lut tml with
             | ValueTypes (ValueTypes.StructType (_, name, fields))
@@ -236,11 +226,19 @@ module TypeCheckContext =
 
     // Setters ====================================================================
     let addDeclToLut (lut: TypeCheckContext) name decl =
-        //if lut.nameToDecl.ContainsKey(name) then
-        //    failwith <| sprintf "Fatal error: tried to add the name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
-        //else
-        //    lut.nameToDecl.Add(name, decl)
-        ignore <| lut.nameToDecl.TryAdd(name, decl)
+        // for a procedure implementation a name is always added twice: first for the prototype and then for the implementation
+        // last one wins, so we can access the extra information
+        if lut.nameToDecl.ContainsKey name then
+            match lut.nameToDecl.[name] with
+            | Declarable.ProcedurePrototype _ ->
+                //update
+                lut.nameToDecl.[name] <- decl
+            | Declarable.ProcedureImpl _ -> 
+                () // nothing to do
+            | _ -> failwith "what the heck? why is a non-procedure declaration added twice?"
+        else
+            //adding for the first time
+            lut.nameToDecl.Add(name, decl)
             
 
     let addTypeToLut (lut: TypeCheckContext) name typ =

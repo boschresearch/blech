@@ -62,8 +62,8 @@ let internal isLhsMutable lut lhs =
             | Declarable.VarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
             | Declarable.ParamDecl p -> p.isMutable, p.datatype
             | Declarable.ExternalVarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
-            | Declarable.SubProgramDecl _
-            | Declarable.FunctionPrototype _ ->
+            | Declarable.ProcedureImpl _
+            | Declarable.ProcedurePrototype _ ->
                 failwith "Asking for mutability of a subprogram. That cannot be right."
         else
             failwith <| sprintf "Lhs %s not in nameToDecl" (qname.ToString())
@@ -1453,8 +1453,8 @@ and internal checkExpr (lut: TypeCheckContext) expr =
                             Error [PrevOnImmutable(expr.Range, qname)]
                     | Declarable.ParamDecl _ -> //Error
                         Error [PrevOnParam(expr.Range, qname)]
-                    | Declarable.SubProgramDecl _
-                    | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
+                    | Declarable.ProcedureImpl _
+                    | Declarable.ProcedurePrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
                 | Any
                 | AnyComposite 
@@ -1612,8 +1612,8 @@ and internal checkAssignLExpr lut lhs =
 /// A function call can either appear as a statement and then must call a void function.
 /// Or a function call can be part of an expression and then the called function must return a non-void, first class value.
 and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code) (inputs: Result<_,_> list) (outputs: Result<_,_> list) =
-    let checkIsFunction decl =
-        if decl.isFunction then Ok()
+    let checkIsFunction (decl: ProcedurePrototype) =
+        if decl.IsFunction then Ok()
         else Error [FunCallToAct(pos, decl)]
 
     let checkReturnType declName declReturns =

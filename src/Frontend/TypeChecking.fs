@@ -313,7 +313,11 @@ let private determineGlobalOutputs lut bodyRes =
         // aggregate globals used in subactivities
         | ActivityCall (_, name, _, _, _) ->
             match lut.nameToDecl.[name] with
-            | SubProgramDecl spd -> [], [], spd.globalOutputsAccumulated
+            | ProcedureImpl spd -> [], [], spd.globalOutputsAccumulated
+            | ProcedurePrototype _ -> [], [], [] // TODO: we may hit this if the prototype of the callee checked out but its body failed (previous typing error)
+                                                 // or if we loaded the activity from a signature file
+                                                 // in the latter case the external inputs outputs are missing in the current design
+                                                 // decide, do we actually need to keep track of them? for causality? for better error messages?
             | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
@@ -345,10 +349,8 @@ let private determineGlobalOutputs lut bodyRes =
 let private determineCalledSingletons lut bodyRes =
     let rec processFunCall name inputs outputs =
         match lut.nameToDecl.[name] with
-        | SubProgramDecl spd -> 
-            if spd.IsSingleton then [spd.name] else []
-            @ spd.singletons
-        | FunctionPrototype fp -> if fp.isSingleton then [fp.name] else []
+        | ProcedureImpl spd -> spd.Singletons
+        | ProcedurePrototype fp -> fp.singletons
         | Declarable.VarDecl _ 
         | Declarable.ExternalVarDecl _ 
         | Declarable.ParamDecl _ -> failwith "Expected to check a function declaration for singletons."
@@ -411,9 +413,9 @@ let private determineCalledSingletons lut bodyRes =
         | ActivityCall (_, name, receiverOpt, inputs, outputs) ->
             let recSingletons = 
                 match lut.nameToDecl.[name] with
-                | SubProgramDecl spd -> 
-                    if spd.IsSingleton then [spd.name] else []
-                    @ spd.singletons
+                | ProcedureImpl spd -> spd.Singletons
+                | ProcedurePrototype p -> p.singletons // TODO: we may hit this if the prototype of the callee checked out but its body failed (previous typing error)
+                                                       // or if we loaded the activity from a signature file, which is fine here
                 | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
             let resInputs = List.collect singletonCalls inputs
             // let resReceiver = receiverOpt |> Option.toList |> checkLhs
@@ -629,13 +631,13 @@ let private fParamDecl lut pos name mutableFlag dtyRes =
 
 
 /// Type check a function prototype
-let private fFunPrototype lut pos name isSingleton inputs outputs retType annotation =
+let private fFunPrototype lut kind pos name isSingleton inputs outputs retType annotation =
     let createFunPrototype ((((qname, ins), outs), ret), annotation) = 
         let funPrototype =
             {
-                FunctionPrototype.pos = pos
-                isFunction = true
-                isSingleton = isSingleton
+                ProcedurePrototype.pos = pos
+                kind = kind
+                singletons = if isSingleton then [qname] else []
                 name = qname
                 inputs = ins
                 outputs = outs
@@ -643,7 +645,7 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
                 annotation = annotation
                 allReferences = HashSet()
             }
-        do addDeclToLut lut qname (Declarable.FunctionPrototype funPrototype)
+        do addDeclToLut lut qname (Declarable.ProcedurePrototype funPrototype)
         funPrototype
 
     // check that it is a first class type
@@ -667,24 +669,20 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name isSingleton inputs outputs retType body annotation =
-    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons) (((((qname, ins), outs), ret), stmts), annotation) = 
+    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons) ((((qname, prototype),_), stmts), annotation) = 
+        let prototype = {prototype with singletons = prototype.singletons @ singletons |> List.distinct}
         let funact =
             {
-                SubProgramDecl.isFunction = isFunction
+                ProcedureImpl.prototype = prototype
                 pos = pos
-                name = qname
-                inputs = ins
-                outputs = outs
                 globalInputs = globalInputs
                 globalOutputsInScope = localGlobalOutputs
                 globalOutputsAccumulated = allGlobalOutputs
-                singletons = singletons
                 body = stmts
-                returns = ret
                 annotation = annotation
                 allReferences = HashSet()
             }
-        do addDeclToLut lut qname (Declarable.SubProgramDecl funact)
+        do addDeclToLut lut qname (Declarable.ProcedureImpl funact)
         funact
     // check that there is only one return value and it is a first class type
     let checkReturn rets bodyContractionRes =
@@ -718,9 +716,11 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
         else []
         @ determineCalledSingletons lut contractedBody
 
+    let kind = if isFunction then LocalFunction else Activity
+    let checkedPrototype = fFunPrototype lut kind pos name isSingleton inputs outputs retType (Ok Attribute.FunctionPrototype.Empty)
+
     Ok (lut.ncEnv.nameToQname name)
-    |> combine <| contract inputs
-    |> combine <| contract outputs
+    |> combine <| checkedPrototype
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
@@ -910,8 +910,8 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
 /// An activity may return a value that is stored in resStorage upon termination.
 /// This is different to a function call
 let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
-    let checkIsActivity decl =
-        if not decl.isFunction then Ok()
+    let checkIsActivity (decl: ProcedurePrototype) =
+        if not decl.IsFunction then Ok()
         else Error [RunAFun(pos, decl)]
     
     let createCall name (((_, ins), outs), retvar) =
@@ -1235,13 +1235,13 @@ let private recReturnDecl lut (a: AST.ReturnDecl) =
 
 type private ProcessedMembers =
     {
-        funacts: Collections.ResizeArray<Result<SubProgramDecl, TyCheckError list>>
-        funPrototypes: Collections.ResizeArray<Result<FunctionPrototype, TyCheckError list>>
+        funacts: Collections.ResizeArray<Result<ProcedureImpl, TyCheckError list>>
+        funPrototypes: Collections.ResizeArray<Result<ProcedurePrototype, TyCheckError list>>
         variables: Collections.ResizeArray<Result<VarDecl, TyCheckError list>>
         externalVariables: Collections.ResizeArray<Result<ExternalVarDecl, TyCheckError list>>
         types: Collections.ResizeArray<Result<Types, TyCheckError list>>
         memberPragmas: ResizeArray<Result<Attribute.MemberPragma, TyCheckError list>>
-        mutable entryPoint: Result<SubProgramDecl, TyCheckError list> option
+        mutable entryPoint: Result<ProcedureImpl, TyCheckError list> option
     }
     member this.AddFunAct fa = this.funacts.Add fa
     member this.AddFunPrototype fp = this.funPrototypes.Add fp
@@ -1251,7 +1251,7 @@ type private ProcessedMembers =
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
     // TODO: Simplify this, fjg 19.01.19
-    member this.UpdateEntryPoint (pack: AST.CompilationUnit) (act: Result<SubProgramDecl, _>) =
+    member this.UpdateEntryPoint (pack: AST.CompilationUnit) (act: Result<ProcedureImpl, _>) =
         let optEp = 
             match act with
             | Ok subprog ->
@@ -1360,7 +1360,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
                 let funPrototype =
-                    fFunPrototype lut f.range f.name f.isSingleton
+                    fFunPrototype lut ProcedureKind.ExternFunction f.range f.name f.isSingleton
                     <| List.map (recParamDecl lut) f.inputs
                     <| List.map (recParamDecl lut) f.outputs
                     <| Option.map (recReturnDecl lut) f.result

@@ -144,8 +144,8 @@ module IntermediateContext =
         // and determine the list of singletons downstream
         let names =
             match context.lut.nameToDecl.[whoToCall] with
-            | SubProgramDecl s -> s.singletons
-            | FunctionPrototype f -> if f.isSingleton then [f.name] else []
+            | ProcedureImpl s -> s.Singletons
+            | ProcedurePrototype p -> p.singletons
             | Declarable.VarDecl _ 
             | Declarable.ExternalVarDecl _ 
             | Declarable.ParamDecl _ -> failwith "Expected whoToCall to be a a function or activity or prototype declaration."
@@ -399,7 +399,7 @@ module ProgramGraph =
             |> List.map createNewLhs
             |> List.iter (fun lhs -> addNameWritten context pg.Entry lhs; addNameWritten context callNode lhs)
         match context.lut.nameToDecl.[name] with
-        | SubProgramDecl spd ->
+        | ProcedureImpl spd ->
             addGlobalOutputs spd.globalOutputsAccumulated
             addSingletonCalls context line pg.Entry name
             addSingletonCalls context line callNode name
@@ -603,9 +603,9 @@ module ProgramGraph =
     let private createPGofActivity (context: IntermediateContext) thread subProg =
         let context = context.ReInitNodeDicts()
         let pg = createPGofBody context Range.range0 thread subProg.body
-        do context.pgs.Add(subProg.name, pg)
-        do context.subprogReadNodes.Add(subProg.name, context.tempNameReadByNodes)
-        do context.subprogWrittenNodes.Add(subProg.name, context.tempNameWrittenByNodes)
+        do context.pgs.Add(subProg.Name, pg)
+        do context.subprogReadNodes.Add(subProg.Name, context.tempNameReadByNodes)
+        do context.subprogWrittenNodes.Add(subProg.Name, context.tempNameWrittenByNodes)
         
     /// Given a package, translates all its activities to program graphs
     /// and populates an intermediateContext
@@ -615,7 +615,7 @@ module ProgramGraph =
             let thread = Thread.newThread()
             // filter away functions, since their prog graph is useless, 
             // and causes spurious causality errors
-            if not subProg.isFunction then
+            if not subProg.IsFunction then
                 do createPGofActivity context thread subProg
         context
 
