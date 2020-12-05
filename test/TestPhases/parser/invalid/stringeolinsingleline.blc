@@ -7,7 +7,7 @@ extern function f()
 
 @[CFunction (binding ="abc
 def
-ghi")]
+ ghi")]
 extern function g()
     
 
