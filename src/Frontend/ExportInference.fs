@@ -38,16 +38,16 @@ module ExportInference =
 
     type ExportContext = 
         private {
-            LookupTable : SymbolTable.LookupTable
+            Environment : SymbolTable.Environment
             Logger : Diagnostics.Logger
             AbstractTypes : Map<Name, AbstractType> 
             Singletons : Map<Name, Singleton>
             ExportScope : SymbolTable.Scope
         }
 
-        static member Initialise (logger: Diagnostics.Logger) (lut: SymbolTable.LookupTable) = 
+        static member Initialise (logger: Diagnostics.Logger) (env: SymbolTable.Environment) = 
             { 
-                LookupTable = lut
+                Environment = env
                 Logger = logger
                 AbstractTypes = Map.empty
                 Singletons = Map.empty
@@ -59,6 +59,9 @@ module ExportInference =
 
         member this.TryGetSingleton name = 
             this.Singletons.TryFind name
+
+        member this.IsExposed name = 
+            Env.isExposedName this.Environment name
 
         member this.GetExports = 
             this.ExportScope
@@ -118,8 +121,16 @@ module ExportInference =
     let private exportCodeDecl ctx (name: Name) =
         ctx
 
-    let private exportTypeDecl ctx (name: Name) =
-        ctx
+    let private exportTypeDecl (ctx: ExportContext) (name: Name) =
+        match ctx.IsExposed name, ctx.TryGetAbstractType name with
+        | false, Some _ -> // add abstract type to export scope
+            ctx
+        | true, None -> // add concrete type to export scope
+            ctx
+        | false, None ->
+            ctx
+        | true, Some _ -> 
+            failwith "Exposed type can never become an abstract type"
 
     let rec private inferUnitExpr ctx (ue: AST.UnitExpr) = 
         match ue with
@@ -136,7 +147,7 @@ module ExportInference =
             inferUnitExpr ctx uel 
             |> inferUnitExpr <| uer
  
-
+    
     let private inferLiteral ctx (lit: AST.Literal) = // infered because of units
         match lit with
         | Literal.Float (unit = ue)
@@ -514,8 +525,8 @@ module ExportInference =
 
     // end =========================================
 
-    let inferExports logger lookupTable (cu: AST.CompilationUnit) = 
-        let ctx = ExportContext.Initialise logger lookupTable
+    let inferExports logger (env: SymbolTable.Environment) (cu: AST.CompilationUnit) = 
+        let ctx = ExportContext.Initialise logger env
         let exports = inferCompilationUnit ctx cu
         // just for debugging
         // show exports

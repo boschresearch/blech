@@ -44,7 +44,7 @@ type Test() =
 
         let inferredExportRes = 
             astAndEnv
-            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env.GetLookupTable ast)
+            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env ast)
 
         match inferredExportRes with
         | Error logger ->
@@ -74,7 +74,7 @@ type Test() =
 
         let inferredExportRes = 
             astAndEnv
-            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env.GetLookupTable ast)
+            |> Result.bind (fun (ast, env) -> ExportInference.inferExports logger env ast)
 
         match inferredExportRes with
         | Error logger ->
