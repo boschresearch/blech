@@ -24,6 +24,7 @@ module ExportInference =
     open CommonTypes
     open AST
 
+    module Env = SymbolTable.Environment
 
     type Singleton = 
     | OpaqueSingleton
