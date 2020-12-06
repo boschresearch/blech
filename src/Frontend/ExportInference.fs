@@ -38,37 +38,37 @@ module ExportInference =
 
     type ExportContext = 
         private {
-            lookupTable : SymbolTable.LookupTable
-            logger : Diagnostics.Logger
-            abstractTypes : Map<Name, AbstractType> 
-            singletons : Map<Name, Singleton>
-            exportScope : SymbolTable.Scope
+            LookupTable : SymbolTable.LookupTable
+            Logger : Diagnostics.Logger
+            AbstractTypes : Map<Name, AbstractType> 
+            Singletons : Map<Name, Singleton>
+            ExportScope : SymbolTable.Scope
         }
 
-        static member initialise (logger: Diagnostics.Logger) (lut: SymbolTable.LookupTable) = 
+        static member Initialise (logger: Diagnostics.Logger) (lut: SymbolTable.LookupTable) = 
             { 
-                lookupTable = lut
-                logger = logger
-                abstractTypes = Map.empty
-                singletons = Map.empty
-                exportScope = SymbolTable.Scope.createExportScope ()
+                LookupTable = lut
+                Logger = logger
+                AbstractTypes = Map.empty
+                Singletons = Map.empty
+                ExportScope = SymbolTable.Scope.createExportScope ()
             }
 
         member this.TryGetAbstractType name =
-            this.abstractTypes.TryFind name
+            this.AbstractTypes.TryFind name
 
         member this.TryGetSingleton name = 
-            this.singletons.TryFind name
+            this.Singletons.TryFind name
 
         member this.GetExports = 
-            this.exportScope
+            this.ExportScope
 
         member this.Show = 
-            for n in this.singletons do
+            for n in this.Singletons do
                 printfn "Singleton: %A Info: %A" n.Key n.Value
-            for n in this.abstractTypes do
+            for n in this.AbstractTypes do
                 printfn "Abstract Type : %A Value: %A" n.Key n.Value
-            printfn "Exports: %A" this.exportScope
+            printfn "Exports: %A" this.ExportScope
             
 
     type ExportError = 
@@ -92,7 +92,7 @@ module ExportInference =
     // Helpers
 
     let private logExportError ctx err  = 
-        do Diagnostics.Logger.logError ctx.logger Diagnostics.Phase.Exports err
+        do Diagnostics.Logger.logError ctx.Logger Diagnostics.Phase.Exports err
         ctx
 
 
@@ -515,11 +515,11 @@ module ExportInference =
     // end =========================================
 
     let inferExports logger lookupTable (cu: AST.CompilationUnit) = 
-        let ctx = ExportContext.initialise logger lookupTable
+        let ctx = ExportContext.Initialise logger lookupTable
         let exports = inferCompilationUnit ctx cu
         // just for debugging
         // show exports
-        if Diagnostics.Logger.hasErrors exports.logger then
-            Error exports.logger
+        if Diagnostics.Logger.hasErrors exports.Logger then
+            Error exports.Logger
         else
             Ok exports

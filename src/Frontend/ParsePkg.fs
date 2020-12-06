@@ -19,7 +19,7 @@ module Blech.Frontend.ParsePkg
 open System
     
 open Blech.Common
-open Blech.Common.TranslationUnitPath
+open TranslationUnitPath
 
 open SyntaxUtils
 open SyntaxUtils.ParserUtils

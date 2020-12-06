@@ -21,7 +21,7 @@ module SymbolTable =
     open System.Collections.Generic
     
     open Blech.Common
-    open Blech.Common.TranslationUnitPath
+    open TranslationUnitPath
     
     open CommonTypes
     
