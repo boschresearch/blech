@@ -66,9 +66,9 @@ module Main =
         ParsePkg.parseModuleFromStr logger implOrIface moduleName fileName contents
 
 
-    let private runNameResolution logger moduleName inputFile importedEnvs ast =
+    let private runNameResolution logger moduleName inputFile importedLookupTables importedExportScopes ast =
         Logging.log2 "Main" ("performing name resolution on " + inputFile)
-        NameChecking.initialise logger moduleName importedEnvs
+        NameChecking.initialise logger moduleName importedLookupTables importedExportScopes
         |> NameChecking.checkDeclaredness <| ast
 
 
@@ -222,8 +222,10 @@ module Main =
         | Ok ast, Ok imports -> 
             
             let astAndSymTableRes =
-                let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
-                runNameResolution logger moduleName fileName importedEnvs ast
+                // let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
+                let lookupTables = imports.GetLookupTables
+                let exportScopes = imports.GetExportScopes
+                runNameResolution logger moduleName fileName lookupTables exportScopes ast
         
             let inferredExportRes = 
                 astAndSymTableRes
@@ -273,7 +275,7 @@ module Main =
 
                     let importedMods = imports.GetTypedModules
 
-                    do printfn "write signature file here: %A" exports
+                    do printfn "write signature file here" // : %A" exports
                     // TODO: Add otherMods to writeImplementation
                     // implementation should also include headers of imported modules, fjg. 19.10.20
                     do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
@@ -283,7 +285,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                Ok <| ImportChecking.ModuleInfo.Make importedModules env lut blechModule
+                Ok <| ImportChecking.ModuleInfo.Make importedModules env exports lut blechModule
 
             | _ ->
                 // Error during name checking or-else export inference or-else type checking or-else causality checking

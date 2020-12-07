@@ -44,74 +44,24 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
     type private Environment = SymbolTable.Environment
 
-    //type private Access =
-    //| Private of Name    // non-exposed entities  
-    //| Public of Name        // exposed type declaration 
-    //| Data of Name  // exposed const, param, unit, initialisers
-    ////| Code of Name  // function, activity
 
-    //type NameExposure =
-    //    | Active of Name
-    //    | Inactive of Name
-    //    | Off
-    
     type NameCheckContext = 
         {
             env: Environment
             logger: Diagnostics.Logger
-            importedEnvs: Map<TranslationUnitPath, Environment>
-            // currentMemberExposure: NameExposure  // indicates the expostion of the current member definition
-            // signature: Export.Signature
+            importedLookupTables: Map<TranslationUnitPath, SymbolTable.LookupTable>
+            importedExportScopes: Map<TranslationUnitPath, SymbolTable.Scope>
         }
 
-    let initialise logger moduleName importedEnvs : NameCheckContext =
+
+    let initialise logger moduleName importedLookupTables importedExportScopes : NameCheckContext =
         { 
             env = Env.init moduleName
             logger = logger  // this will be create at blechc started and handed over
-            importedEnvs = importedEnvs
-            // currentMemberExposure = Off
-            // signature = Export.initialiseSignature()
+            importedLookupTables = importedLookupTables
+            importedExportScopes = importedExportScopes
         }
 
-    
-    //let private hasLessVisibility (ctx: NameCheckContext) name = 
-    //    match ctx. currentExposedMember with
-    //    | Some name 
-
-    //let private setExposure (ctx: NameCheckContext) name =
-    //    if Env.isExposedName ctx.env name then
-    //        { ctx with currentMemberExposure = Active name }
-    //    else
-    //        { ctx with currentMemberExposure = Off }
-
-
-    //let private resumeExposure (ctx: NameCheckContext) = 
-    //    match ctx.currentMemberExposure with
-    //    | Inactive name ->
-    //        { ctx with currentMemberExposure = Active name }
-    //    | Off -> 
-    //        ctx
-    //    | Active name ->
-    //        failwith "Cannot resume active visibility checking"
-
-
-    //let private disableExposure (ctx: NameCheckContext) = 
-    //    match ctx.currentMemberExposure with
-    //    | Active name ->
-    //        { ctx with currentMemberExposure = Inactive name }
-    //    | Off -> 
-    //        ctx
-    //    | Inactive name ->
-    //        failwith "Cannot disabel inactive visibility checking"
-
-
-    //let private getRequiredVisibility (ctx: NameCheckContext) =
-    //    match ctx.currentMemberExposure with
-    //    | Active _ -> 
-    //        SymbolTable.Exposed
-    //    | Inactive _ 
-    //    | Off ->
-    //        SymbolTable.Hidden
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -149,18 +99,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     
     /// adds an imported module to the name check context
-    let private addModuleEnv (ctx: NameCheckContext) (import: AST.Import) = 
-        //let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
-        //{ctx with env = env}
+    let private addImportedModule (ctx: NameCheckContext) (import: AST.Import) = 
         let localName = import.localName
-        let modEnv = ctx.importedEnvs.[import.modulePath.path]
-        { ctx with env = Env.addModuleEnv ctx.env localName modEnv }
+        let lookupTable = ctx.importedLookupTables.[import.modulePath.path]
+        let exportScope = ctx.importedExportScopes.[import.modulePath.path]
+        { ctx with env = Env.addImportedModule ctx.env localName lookupTable exportScope }
 
-
-    /// adds the optional exposed scope to the name check context
-    //let private addExposing (ctx: NameCheckContext) =
-    //    { ctx with env = Env.addExposed ctx.env}
-        
 
     let private addModuleNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
         let name = import.localName
@@ -260,35 +204,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let private addModuleScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterModuleScope ctx.env }
-
-    let private exportModuleScope (ctx: NameCheckContext) : NameCheckContext =
-        { ctx with env = Env.exportModuleScope ctx.env }
-
-
-    //let private exportExposedDecl ctx name =
-    //    if Env.isExposedName ctx.env name then
-    //        { ctx with env = Env.exportName ctx.env name true
-    //                         |> Env.exportScope <| name }
-    //    else
-    //        ctx
-
-    //let private exportHiddenDecl ctx name isCode =
-    //    if isCode then
-    //        failwith "Must be exposed to be exported"
-    //    elif Env.isExposedName ctx.env name then
-    //        ctx // already exported
-    //    else // is an opaque type
-    //        { ctx with env = Env.exportName ctx.env name true }
-            
-        
-    // TODO: Preliminary
-    let private exportTypeDecl ctx name =
-        { ctx with env = Env.exportName ctx.env name true
-                         |> Env.exportScope <| name }
-
-    let private exportCodeDecl ctx name =
-        { ctx with env = Env.exportName ctx.env name false
-                         |> Env.exportScope <| name }
 
 
     // begin ==========================================================
@@ -453,7 +368,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
         |> addConstOrParamDecl <| vd // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
-        |> exportCodeDecl <| vd.name
+        // |> exportCodeDecl <| vd.name
 
 
     let checkLocation ctx (lhs: AST.Receiver) =
@@ -593,7 +508,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         |> Option.fold checkReturnDecl <| sp.result
         |> List.fold checkStatement <| sp.body
         |> exitSubScope
-        |> exportCodeDecl <| sp.name
+        // |> exportCodeDecl <| sp.name
 
 
     let checkFunctionPrototype ctx (fp: Prototype) =
@@ -602,12 +517,12 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         |> List.fold checkParamDecl <| fp.outputs
         |> Option.fold checkReturnDecl <| fp.result
         |> exitSubScope
-        |> exportCodeDecl <| fp.name
+        // |> exportCodeDecl <| fp.name
 
 
     let checkUnitDecl ctx (ud: AST.UnitDecl) =
         addUnitDecl ctx ud
-        |> exportCodeDecl <| ud.name
+        // |> exportCodeDecl <| ud.name
 
  
  
@@ -629,7 +544,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let checkImport ctx (import: AST.Import) = 
         addModuleNameDecl ctx import
-        |> addModuleEnv <| import
+        |> addImportedModule <| import
 
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
@@ -639,7 +554,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> List.fold checkTagDecl <| etd.tags
             |> List.fold checkMember <| etd.members
             |> exitSubScope
-            |> exportTypeDecl <| etd.name
+            // |> exportTypeDecl <| etd.name
 
 
         and checkStructType ctx (std: AST.StructTypeDecl) =
@@ -650,7 +565,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> enableRecursion                         
             |> List.fold checkMember <| std.members
             |> exitSubScope
-            |> exportTypeDecl <| std.name
+            // |> exportTypeDecl <| std.name
 
 
         and checkOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
@@ -658,7 +573,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> enableRecursion                         
             |> List.fold checkMember <| ntd.members
             |> exitSubScope
-            |> exportTypeDecl <| ntd.name
+            // |> exportTypeDecl <| ntd.name
 
 
         and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
@@ -667,7 +582,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> enableRecursion
             |> List.fold checkMember <| tad.members
             |> exitSubScope
-            |> exportTypeDecl <| tad.name
+            // |> exportTypeDecl <| tad.name
 
 
         and checkMember ctx (m: AST.Member) =
@@ -714,8 +629,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             // List.iter (fun n -> printfn "Exposes: %s" <| string n) names
             List.fold addExposedNameAfter ctx names 
         | All _ ->
-            printfn "Exposes: All toplevel identifiers"
-            exportModuleScope ctx
+            do printfn "Exposed: ... (all)"
+            ctx
 
 
     let checkModuleSpecAfter (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
@@ -738,10 +653,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            do ctx.env.GetLookupTable.ShowExposedDeclNames
-            // printfn "end of checkDeclardness\n %A" ncc.env.GetLookupTable
-            // printfn "Exports: %A" <| Env.getExports ncc.env.exports
-            // printfn "Globals: %A" <| Env.getGlobalScope ncc.env
+            // do ctx.env.GetLookupTable.ShowExposedDeclNames
             Ok (ast, ncc.env)
     
 

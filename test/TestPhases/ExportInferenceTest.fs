@@ -38,7 +38,7 @@ type Test() =
         Assert.True (Result.isOk ast)
         
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
 
@@ -68,7 +68,7 @@ type Test() =
         Assert.True (Result.isOk ast)
 
         let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty
+            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
         // Assert.True (Result.isOk astAndEnv)  // TODO: currently no invalid export inference test, that go beyond name checking
 

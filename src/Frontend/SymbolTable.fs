@@ -108,9 +108,12 @@ module SymbolTable =
         let tryFindInnerScope scope id : Scope option=
             scope.innerscopes.TryFind id
 
+        let isOpen scope = 
+            scope.access = Accessibility.Open
+            
         let allowsShadowing scope =
             scope.access = Accessibility.Open
-
+            
         let create id access recursion =
             { Scope.id = id
               access = access
@@ -150,22 +153,20 @@ module SymbolTable =
         let rewriteId scope id : Scope = // this is used for imports to rewrite imported scope with local id
             {scope with id = id}
 
-    //type Visibility =
-    //    | Exposed
-    //    | Hidden
 
+    // TODO: isExposed can be removed again from name info because export inference needs the whole environment, fjg 7.12.20
     type private NameInfo =
         | Decl of QName * isExposed: bool // declaration of a name, points to the fully qualified name, 
                                           // and indicates if the declaration is exposed in a module
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
-        member this.IsExposedDecl =
-            match this with
-            | Decl (_, isExposed) ->
-                isExposed
-            | _ ->
-                false
+        //member this.IsExposedDecl =
+        //    match this with
+        //    | Decl (_, isExposed) ->
+        //        isExposed
+        //    | _ ->
+        //        false
 
     type LookupTable = 
         private { 
@@ -194,16 +195,6 @@ module SymbolTable =
                 | Expose declName -> lt.TryGetQname declName
              else 
                 None
-
-        //member private lt.TryGetIsExposed name = 
-        //    let ok, info = lt.lookupTable.TryGetValue name
-        //    if ok then 
-        //        match info with
-        //        | Decl (_, isExposed) -> Some isExposed
-        //        | Use declName -> lt.TryGetIsExposed declName
-        //        | Expose declName -> lt.TryGetIsExposed declName
-        //     else 
-        //        None
 
         // should be invisible outside this file
         member internal nqt.addDecl name qname isExposed =
@@ -264,11 +255,11 @@ module SymbolTable =
             | Expose declName ->
                 this.IsExposed declName
 
-        member this.ShowExposedDeclNames =
-            printfn "Exposed declaration names"
-            for kv in this.lookupTable do
-                if kv.Value.IsExposedDecl then 
-                    printfn "Exposed: %s" kv.Key.id
+        //member this.ShowExposedDeclNames =
+        //    printfn "Exposed declaration names"
+        //    for kv in this.lookupTable do
+        //        if kv.Value.IsExposedDecl then 
+        //            printfn "Exposed: %s" kv.Key.id
             
 
     type NameCheckError = 
@@ -373,11 +364,11 @@ module SymbolTable =
             List.last env.path
         
 
-        let replaceExports env moduleScope =
-            { env with exports = moduleScope}
+        //let replaceExports env moduleScope =
+        //    { env with exports = moduleScope}
  
 
-        let getModuleScope env=
+        let getModuleScope env =
             let len = List.length env.path
             assert (len >= 1)
             List.item (len-2) env.path
@@ -406,16 +397,6 @@ module SymbolTable =
             isOpen && isExposed
 
 
-        //let getVisibility env name = 
-        //    if isExposedName env name then Exposed else Hidden
-
-        //let tryGetExposedName env (name: Name) =
-        //    if Scope.containsSymbol env.exposing name.id then
-        //        Some name
-        //    else 
-        //        None
-            
-
         let isImportedName env (name: Name) =
             let importScope = getGlobalScope env
             Scope.containsSymbol importScope name.id
@@ -426,7 +407,25 @@ module SymbolTable =
             Scope.containsSymbol moduleScope name.id
 
 
-
+        // 
+        
+        let exportName env (name: Name) exportScope =
+            let moduleScope = getModuleScope env
+            match Scope.tryFindSymbol moduleScope name.id with
+            | Some symbol ->
+                Scope.addSymbol exportScope symbol
+            | None ->
+                failwith "exported name should always exist"
+            
+        let exportScope env (name: Name) exportScope = 
+            let moduleScope = getModuleScope env
+            match Scope.tryFindInnerScope moduleScope name.id with
+            | Some scope ->
+                assert Scope.isOpen scope
+                Scope.addInnerScope exportScope scope
+            | _ -> 
+                failwith "exported scope should always exist"
+            
 
         //let private parentOuter env = 
         //    List.tail (List.tail env.path)   // this is safe because of the global scope initialisation
@@ -530,28 +529,6 @@ module SymbolTable =
 
         let insertUnitName = insertConstOrParamName
         
-        // Fill the export scope
-
-        let exportScope env (name: Name) = 
-            let moduleScope = getModuleScope env
-            match Scope.tryFindInnerScope moduleScope name.id with
-            | Some scope when isExposedName env name -> // non-exposed types are exported abstractly - without their inner scope
-                { env  with exports = Scope.addInnerScope env.exports scope }
-            | _ -> 
-                env
-            
-
-        let exportName env (name: Name) isType =
-            let moduleScope = getModuleScope env
-            match Scope.tryFindSymbol moduleScope name.id with
-            | Some symbol when isType ->  // type names are always exported
-                { env with exports = Scope.addSymbol env.exports symbol }
-            | Some symbol when isExposedName env name ->
-                { env with exports = Scope.addSymbol env.exports symbol }
-            | _ ->
-                env
-            
-
         ////////////////////
         // TODO: meaningful error messages
         // TODO: handle wild card name '_', e.g import _ "mymodule" or import _ "mymodule" exposes ...
@@ -584,8 +561,6 @@ module SymbolTable =
             | None -> 
                 Error <| Dummy (exposedName.Range, sprintf "Exported id '%s' not found" exposedName.id)
                 
-        /////////////////
-        
 
 
         let private enterInnerScope env id access recursion =
@@ -598,31 +573,20 @@ module SymbolTable =
             let scope = Scope.createAnonymous ()
             // printfn "Enter Scope: %s" scope.id
             scope :: env.path
-        
-        /// exports the whole module scope, i.e. exposes ...
-        let exportModuleScope env : Environment =
-            // assert hasSignature env             // has Some exports
-            match env.path with
-            | [moduleScope; globalScope] ->
-                replaceExports env moduleScope
-            | scopes -> 
-                // printfn "Scopes: %A" scopes
-                failwith "this should be called when the module scope is fully namechecked"
 
 
         /// Add the export scope of an imported module in the top level scope of the importing module. 
         /// Name it with the id of the import name.
         /// Combine the lookup tables of both
-        let addModuleEnv env (name: Name) (modEnv: Environment) : Environment = 
+        let addImportedModule env (name: Name) lookupTable exportScope : Environment = 
             match env.path with
             | [globalscope ] ->
-                let expFromMod = modEnv.exports
-                let renamedScope = Scope.rewriteId expFromMod name.id
+                let renamedScope = Scope.rewriteId exportScope name.id
                 // printfn "Renamed import Scope: \n %A" renamedScope
-                let joinedLoookupTable = env.lookupTable.AddLookupTable modEnv.lookupTable
+                let joinedLookupTable = env.lookupTable.AddLookupTable lookupTable 
                 // printfn "Joined Lookup Table: %A" joinedLoookupTable
                 { env with path = [ Scope.addInnerScope globalscope renamedScope ] 
-                           lookupTable = joinedLoookupTable }
+                           lookupTable = joinedLookupTable }
             | _ ->
                 failwith "Adding the module scope should always work"
 

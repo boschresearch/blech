@@ -28,8 +28,7 @@ module ExportInference =
 
     type Singleton = 
     | OpaqueSingleton
-    | Singleton
-    | Caller of calledSingletons: Name list
+    | Singleton of calledSingletons: Name list
 
 
     type AbstractType =
@@ -101,8 +100,8 @@ module ExportInference =
 
 
 
-    // begin =========================================
-    // recursively descend the AST for name infering
+    // begin ==========================================
+    // recursively descend the AST for export inference
 
     let private inferStaticNamedPath ctx (snp: AST.StaticNamedPath) = 
         ctx
@@ -116,22 +115,40 @@ module ExportInference =
     let private inferNameInCurrentScope ctx (sharing: Name) = 
         ctx
 
-    let private exportValueDecl ctx (name: Name) =
-        ctx
 
-    let private exportCodeDecl ctx (name: Name) =
-        ctx
+    let private exportValueDecl (ctx: ExportContext) (name: Name) =
+        if ctx.IsExposed name then
+            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
+            { ctx with ExportScope = expScp }
+        else
+            ctx
+
+
+    let private exportProcedureDecl (ctx: ExportContext) (name: Name) =
+        if ctx.IsExposed name then
+            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
+            { ctx with ExportScope = expScp }
+        else
+            ctx
+
 
     let private exportTypeDecl (ctx: ExportContext) (name: Name) =
         match ctx.IsExposed name, ctx.TryGetAbstractType name with
         | false, Some _ -> // add abstract type to export scope
-            ctx
+            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
+            { ctx with ExportScope = expScp }
         | true, None -> // add concrete type to export scope
-            ctx
+            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
+                         |> Env.exportScope ctx.Environment name
+            { ctx with ExportScope = expScp }
         | false, None ->
             ctx
         | true, Some _ -> 
             failwith "Exposed type can never become an abstract type"
+
+    let private exportModuleScope (ctx: ExportContext) =
+        let modScp = Env.getModuleScope ctx.Environment
+        { ctx with ExportScope = modScp }
 
     let rec private inferUnitExpr ctx (ue: AST.UnitExpr) = 
         match ue with
@@ -406,18 +423,18 @@ module ExportInference =
         |> List.fold inferParamDecl <| sp.outputs
         |> Option.fold inferReturnDecl <| sp.result
         |> List.fold inferStatement <| sp.body
-        |> exportCodeDecl <| sp.name
+        |> exportProcedureDecl <| sp.name
 
 
     let private inferFunctionPrototype ctx (fp: Prototype) =
         List.fold inferParamDecl ctx fp.inputs
         |> List.fold inferParamDecl <| fp.outputs
         |> Option.fold inferReturnDecl <| fp.result
-        |> exportCodeDecl <| fp.name
+        |> exportProcedureDecl <| fp.name
 
 
     let private inferUnitDecl ctx (ud: AST.UnitDecl) =
-        exportCodeDecl ctx ud.name
+        exportValueDecl ctx ud.name
 
  
     let private inferTagDecl ctx (td: AST.TagDecl) =
@@ -488,15 +505,16 @@ module ExportInference =
     
     
     // ModuleSpec 
-    //let private inferExportExposing ctx (exposing: AST.Exposing) = 
-    //    match exposing with
-    //    | AST.Few (names, _) ->
-    //        List.fold addExposed ctx names
-    //    | AST.All _ ->
-    //        failwith "Remove wildcard 'module exposes ...' completely"
+    let private inferExposingAll ctx (exposing: AST.Exposing) = 
+        match exposing with
+        | AST.Few _->
+            ctx
+        | AST.All _ ->
+            exportModuleScope ctx
 
-    //let private inferModuleSpec ctx (modSpec: AST.ModuleSpec) = 
-    //    Option.fold inferExportExposing ctx modSpec.exposing
+
+    let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
+        Option.fold inferExposingAll ctx modSpec.exposing
 
 
     // Imports
@@ -517,9 +535,9 @@ module ExportInference =
     // Compilation Unit
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
-            List.fold inferMember ctx cu.members
             //List.fold inferImport ctx cu.imports
-            //|> Option.fold inferModuleSpec <| cu.spec
+            List.fold inferMember ctx cu.members
+            |> Option.fold inferModuleSpecLast <| cu.spec  // export all after 
         else
             ctx
             // logExportError ctx <| Dummy (cu.Range, "Test error for non-module")

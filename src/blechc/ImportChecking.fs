@@ -27,20 +27,23 @@ open Blech.Frontend
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 type private Environment = SymbolTable.Environment
+type private ExportContext = ExportInference.ExportContext
 
 type ModuleInfo = 
     {
         dependsOn: TranslationUnitPath list
         nameCheck: Environment
+        exportInference: ExportContext
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
         //translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
     }
 
-    static member Make imports symbolTable typecheckContext blechModule =
+    static member Make imports symbolTable exportContext typecheckContext blechModule =
         { 
             dependsOn = imports
             nameCheck = symbolTable
+            exportInference = exportContext
             typeCheck = typecheckContext
             typedModule = blechModule
             //translation = translationContext
@@ -106,14 +109,20 @@ type Imports =
     member this.GetImports : ModuleInfo list = 
         Seq.toList this.compiledImports.Values
 
-    member this.GetNameCheckEnvironments : Map<TranslationUnitPath, Environment> =
-        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv) ]
-        
-    member this.GetTypeCheckContexts =
+    //member this.GetNameCheckEnvironments : Map<TranslationUnitPath, Environment> =
+    //    Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv) ]
+
+    member this.GetLookupTables : Map<TranslationUnitPath, SymbolTable.LookupTable> = 
+        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv.GetLookupTable) ]
+
+    member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
+        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.exportInference.GetExports) ]
+
+    member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports
         |> List.map (fun i -> i.typeCheck)
 
-    member this.GetTypedModules = 
+    member this.GetTypedModules : BlechTypes.BlechModule list = 
         this.GetImports
         |> List.map (fun i -> i.typedModule)
 
