@@ -1,0 +1,8 @@
+
+module
+
+struct S 
+    var x: bool
+end
+
+const c: S = {x = true}
