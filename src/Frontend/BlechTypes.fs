@@ -398,7 +398,6 @@ and ProcedureImpl =
         prototype: ProcedurePrototype
         globalInputs: ExternalVarDecl list
         globalOutputsInScope: ExternalVarDecl list // for code generation
-        globalOutputsAccumulated: ExternalVarDecl list // for causality checking
         body: Stmt list // TODO: maybe turn into stmt?
         annotation: Attribute.SubProgram
         allReferences: HashSet<range>
@@ -445,93 +444,6 @@ and ProcedureImpl =
     member this.IsEntryPoint =
         Option.isSome this.annotation.entryPoint
 
-/// Declaration of an activity or a function (discerned by isFunction field).
-//and SubProgramDecl = 
-//    {
-//        isFunction: bool // true if a function is declared, false for activities
-//        pos: range
-//        name: QName
-//        inputs: ParamDecl list
-//        outputs: ParamDecl list
-//        globalInputs: ExternalVarDecl list
-//        globalOutputsInScope: ExternalVarDecl list // for code generation
-//        globalOutputsAccumulated: ExternalVarDecl list // for causality checking
-//        singletons: QName list // Singletons called from this subprogram. Includes its own name iff declared as singleton.
-//        body: Stmt list // TODO: maybe turn into stmt?
-//        returns: ValueTypes
-//        annotation: Attribute.SubProgram
-//        allReferences: HashSet<range>
-//    }
-
-//    member this.ToDoc =
-//        let ins = this.inputs |> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-//        let outs = this.outputs|> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-//        let spdoc = 
-//            if this.isFunction then txt "function" else txt "activity"
-//            <+> txt (this.name.ToString())
-//            <^> ( ins
-//                  <..> outs
-//                  <.> match this.returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.returns.ToDoc
-//                  |> align
-//                  |> group )
-//            <.> (this.body |> List.map(fun s -> s.ToDoc) |> vsep |> indent dpTabsize)
-//            <.> txt "end"
-//        let spdoc =
-//            if this.IsSingleton then 
-//                let singletonsBlock = 
-//                    List.map (fun n -> txt (n.ToString())) this.singletons
-//                    |> dpCommaSeparatedInBrackets
-//                txt "singleton"
-//                <+> singletonsBlock
-//                <+> spdoc 
-//            else spdoc
-
-//        this.annotation.ToDoc @ [spdoc]
-//        |> dpToplevelClose
-
-//    override this.ToString() = 
-//        render None <| this.ToDoc
-
-//    member this.IsEntryPoint =
-//        Option.isSome this.annotation.entryPoint
-
-//    member this.IsSingleton =
-//        not this.singletons.IsEmpty
-
-///// Declaration of an externally declared C function
-//and FunctionPrototype =
-//    {
-//        isFunction: bool // TODO: apart from weird technicalities, why do we need this field? It must always be true, there are no external activities.
-//        isSingleton: bool
-//        pos: range
-//        name: QName
-//        inputs: ParamDecl list
-//        outputs: ParamDecl list
-//        returns: ValueTypes
-//        annotation: Attribute.FunctionPrototype
-//        allReferences: HashSet<range>
-//    }
-
-//    member this.ToDoc =
-//        let ins = this.inputs |> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-//        let outs = this.outputs|> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-//        let fpdoc = 
-//            txt "extern function"
-//            <+> txt (this.name.ToString())
-//            <^> ( ins
-//                  <..> outs
-//                  <.> match this.returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.returns.ToDoc
-//                  |> align
-//                  |> group )
-//        let fpdoc = if this.isSingleton then txt "singleton" <+> fpdoc else fpdoc
-//        this.annotation.ToDoc @ [fpdoc]
-//        |> dpToplevelClose
-
-//    override this.ToString() = 
-//        render None <| this.ToDoc
-    
-//    member this.isDirectCCall = 
-//        this.annotation.isDirectCCall
 
 /// A Blech module corresponds to a file    
 and BlechModule =

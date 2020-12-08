@@ -389,23 +389,9 @@ module ProgramGraph =
         outputs |> List.iter (addNameWritten context callNode)
         retvar |> Option.iter (addNameWritten context callNode)
 
-        // add locally declared external (output) variables
-        let addGlobalOutputs extVarDecls =
-            let createNewLhs (extVarDecl: ExternalVarDecl) =
-                { lhs = LhsCur (Loc extVarDecl.name)
-                  typ = extVarDecl.datatype
-                  range = pos } // use calling activity's source pos instead of declaration's
-            extVarDecls
-            |> List.map createNewLhs
-            |> List.iter (fun lhs -> addNameWritten context pg.Entry lhs; addNameWritten context callNode lhs)
-        match context.lut.nameToDecl.[name] with
-        | ProcedureImpl spd ->
-            addGlobalOutputs spd.globalOutputsAccumulated
-            addSingletonCalls context line pg.Entry name
-            addSingletonCalls context line callNode name
-        | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
-        
-        
+        addSingletonCalls context line pg.Entry name
+        addSingletonCalls context line callNode name
+                
         let pgActCall = { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 
         match optReceiver with
