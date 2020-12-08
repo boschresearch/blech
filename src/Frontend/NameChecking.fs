@@ -135,14 +135,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
-    let private addExposedDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
-        let name = decl.name
-        match Env.insertExposedName ctx.env name label with
-        | Ok env -> 
-            { ctx with env = env }
-        | Error err ->
-            Logger.logError ctx.logger Diagnostics.Phase.Naming err
-            ctx
+    //let private addExposedDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
+    //    let name = decl.name
+    //    match Env.insertExposedName ctx.env name label with
+    //    | Ok env -> 
+    //        { ctx with env = env }
+    //    | Error err ->
+    //        Logger.logError ctx.logger Diagnostics.Phase.Naming err
+    //        ctx
 
     let private addConstOrParamDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) =
         let name = decl.name

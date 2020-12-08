@@ -1,4 +1,4 @@
-module exposes Buffer, Index
+module exposes Buffer //, Index
 
 typealias Index = nat32   // must not be abstract
 

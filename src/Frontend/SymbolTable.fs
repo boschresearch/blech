@@ -386,8 +386,12 @@ module SymbolTable =
             List.tail env.path
 
         
-        let isExposedName env (name: Name) = 
+        let isExposedToplevelMember env (name: Name) = 
             Scope.containsSymbol env.exposing name.id
+
+
+        let isExposedName env (name: Name) = 
+            env.lookupTable.IsExposed name
 
 
         let currentScopeIsExposed env =
@@ -499,7 +503,7 @@ module SymbolTable =
          
 
         let insertName env name label =
-            let isExposed = isExposedName env name || currentScopeIsExposed env
+            let isExposed = isExposedToplevelMember env name || currentScopeIsExposed env
             insertSymbol env name label isExposed false
 
 
@@ -519,12 +523,12 @@ module SymbolTable =
 
 
         let insertTypeName env (name: Name) =
-            let isExposed = isExposedName env name
+            let isExposed = isExposedToplevelMember env name
             insertSymbol env name IdLabel.Static isExposed true
  
  
         let insertConstOrParamName env (name: Name) = 
-            let isExposed = isExposedName env name
+            let isExposed = isExposedToplevelMember env name
             insertSymbol env name IdLabel.Static isExposed false
 
         let insertUnitName = insertConstOrParamName
