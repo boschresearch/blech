@@ -300,29 +300,19 @@ let private checkStmtsWillPause p name stmts =
         | false -> Error [ActivityHasInstantaneousPath(p, name)]
 
 
-let private determineGlobalOutputs lut bodyRes =
+let private determineExternals lut bodyRes =
     let rec searchExternalVarDecl oneStmt =
         let searchUnzipAndCollect xs = 
-            let ll = xs |> List.map searchExternalVarDecl 
-            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat |> List.distinct, 
-            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat |> List.distinct,
-            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat |> List.distinct
+            let (ins, outs) = xs |> List.map searchExternalVarDecl |> List.unzip
+            ins |> List.concat |> List.distinct, 
+            outs |> List.concat |> List.distinct
         match oneStmt with
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v],[v] // add v to this scope for code generation and to overall list for causality checking
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[],[]
-        // aggregate globals used in subactivities
-        | ActivityCall (_, name, _, _, _) ->
-            match lut.nameToDecl.[name] with
-            | ProcedureImpl spd -> [], [], spd.globalOutputsAccumulated
-            | ProcedurePrototype _ -> [], [], [] // TODO: we may hit this if the prototype of the callee checked out but its body failed (previous typing error)
-                                                 // or if we loaded the activity from a signature file
-                                                 // in the latter case the external inputs outputs are missing in the current design
-                                                 // decide, do we actually need to keep track of them? for causality? for better error messages?
-            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v] // add v to this scope for code generation
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[]
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
-        | Await _ -> [],[],[]
+        | Await _ | ActivityCall _ -> [],[]
         // note that since external variables cannot appear inside functions, we ignore function calls
         // on the statement level AND all expressions that could call functions
         // statements containing statements
@@ -342,7 +332,7 @@ let private determineGlobalOutputs lut bodyRes =
             |> searchUnzipAndCollect
 
     match bodyRes with
-    | Error _ -> [],[],[]
+    | Error _ -> [],[]
     | Ok body -> searchExternalVarDecl (StmtSequence body)
 
 
@@ -414,11 +404,9 @@ let private determineCalledSingletons lut bodyRes =
             let recSingletons = 
                 match lut.nameToDecl.[name] with
                 | ProcedureImpl spd -> spd.Singletons
-                | ProcedurePrototype p -> p.singletons // TODO: we may hit this if the prototype of the callee checked out but its body failed (previous typing error)
-                                                       // or if we loaded the activity from a signature file, which is fine here
+                | ProcedurePrototype p -> p.singletons
                 | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
             let resInputs = List.collect singletonCalls inputs
-            // let resReceiver = receiverOpt |> Option.toList |> checkLhs
             let resReceiver = checkOptReceiver receiverOpt 
             let resOutputs = outputs |> checkLhs
             recSingletons @ resReceiver @ resInputs @ resOutputs
@@ -669,7 +657,7 @@ let private fFunPrototype lut kind pos name isSingleton inputs outputs retType a
 
 /// Type check a sub program
 let private fSubProgram lut pos isFunction name isSingleton inputs outputs retType body annotation =
-    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons) ((((qname, prototype),_), stmts), annotation) = 
+    let createSubProgram (globalInputs, localGlobalOutputs, singletons) ((((qname, prototype),_), stmts), annotation) = 
         let prototype = {prototype with singletons = prototype.singletons @ singletons |> List.distinct}
         let funact =
             {
@@ -677,7 +665,6 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
                 pos = pos
                 globalInputs = globalInputs
                 globalOutputsInScope = localGlobalOutputs
-                globalOutputsAccumulated = allGlobalOutputs
                 body = stmts
                 annotation = annotation
                 allReferences = HashSet()
@@ -710,9 +697,9 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
-    let globalInputs, localGlobalOutputs, allGlobalOutputs = determineGlobalOutputs lut contractedBody
+    let externalInputs, externalOutputs = determineExternals lut contractedBody
     let singletons = 
-        if isSingleton then [lut.ncEnv.nameToQname name]
+        if isSingleton || not (List.isEmpty externalOutputs) then [lut.ncEnv.nameToQname name]
         else []
         @ determineCalledSingletons lut contractedBody
 
@@ -724,7 +711,7 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons))
+    |> Result.map (createSubProgram (externalInputs, externalOutputs, singletons))
 
 
 //=============================================================================
@@ -911,7 +898,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
 /// This is different to a function call
 let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
     let checkIsActivity (decl: ProcedurePrototype) =
-        if not decl.IsFunction then Ok()
+        if decl.IsActivity then Ok()
         else Error [RunAFun(pos, decl)]
     
     let createCall name (((_, ins), outs), retvar) =
@@ -926,7 +913,6 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
             checkIsActivity decl
             |> combine <| checkInputs pos inputs decl.name decl.inputs
             |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-            //|> combine <| checkReturnType resStorage decl.name decl.returns
             |> combine <| checkAssignReceiver pos lut rcv decl
             |> Result.map (createCall decl.name)
             )
@@ -1050,61 +1036,6 @@ let private fPreempt range preemption moment conds body =
 let private fSubScope _ stmts =
     contract stmts
     |> Result.map StmtSequence
-
-
-//let private fActCall lut pos actp resStorage inputs outputs =
-//    let checkIsActivity decl =
-//        if not decl.isFunction then Ok()
-//        else Error [RunAFun(pos, decl)]
-//    let checkReturnType storage declName declReturns =
-//        match storage with
-//        | None ->
-//            match declReturns with
-//            | Void -> Ok None
-//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
-//        | Some (Ok (FreshLoc vdecl)) -> // Receiver declaration disabled after type check: delete this case to enable 
-//            unsupported1 "Receiver declaration in run statement" vdecl.pos
-//        | Some receiverRes ->
-//            receiverRes 
-//            |> Result.bind ( 
-//                fun (receiver: Receiver) -> 
-//                match receiver.Typ with 
-//                | Any -> // wildcard
-//                    Ok None
-//                | ValueTypes _ ->
-//                    Ok (Some receiver) 
-//                | _ -> Error [ ValueMustBeOfValueType (receiver) ]
-//                )
-//        |> Result.bind (
-//            function
-//            | None -> Ok None
-//            | Some rcvr ->
-//                let typ = rcvr.Typ
-//                if isReceiverMutable lut rcvr then
-//                    if rcvr.Typ.IsAssignable then
-//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-//                            Ok (Some rcvr) 
-//                        else 
-//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
-//                    else
-//                        Error [AssignmentToLetFields (pos, rcvr.ToString())]
-//                else Error [AssignmentToImmutable (pos, rcvr.ToString())]
-//            )
-//    let createCall name (((_, ins), outs), retvar) =
-//        ActivityCall (pos, name, retvar, ins, outs)
-    
-//    match actp with
-//    | AST.Procedure dname ->
-//        ensureCurrent dname
-//        |> Result.map lut.ncEnv.dpathToQname
-//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-//        |> Result.bind (fun decl ->
-//            checkIsActivity decl
-//            |> combine <| checkInputs pos inputs decl.name decl.inputs
-//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-//            |> combine <| checkReturnType resStorage decl.name decl.returns
-//            |> Result.map (createCall decl.name)
-//            )
 
 
 let private fFunCall lut pos fp inputs outputs =
@@ -1359,8 +1290,21 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddFunAct funact
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
+                // determine if this is a external function prototype
+                // or an opaque singleton
+                let kind = 
+                    if f.isOpaque then
+                        ProcedureKind.Opaque
+                    elif f.isExtern && f.isFunction then
+                        ProcedureKind.ExternFunction
+                    elif not f.isExtern && f.isFunction then
+                        ProcedureKind.LocalFunction
+                    elif not f.isExtern && not f.isFunction then
+                        ProcedureKind.Activity
+                    else
+                        failwith "Inconsistent prototype AST generated by parser"
                 let funPrototype =
-                    fFunPrototype lut ProcedureKind.ExternFunction f.range f.name f.isSingleton
+                    fFunPrototype lut kind f.range f.name f.isSingleton
                     <| List.map (recParamDecl lut) f.inputs
                     <| List.map (recParamDecl lut) f.outputs
                     <| Option.map (recReturnDecl lut) f.result
