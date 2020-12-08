@@ -60,12 +60,14 @@ type ProcedureKind =
     | Activity
     | LocalFunction
     | ExternFunction
+    | Opaque
 
     override this.ToString() =
         match this with
         | Activity -> "activity"
         | LocalFunction -> "function"
         | ExternFunction -> "extern function"
+        | Opaque -> ""
 
     member this.ToDoc = txt <| this.ToString()
 
@@ -361,13 +363,18 @@ and ProcedurePrototype =
 
     member this.IsFunction =
         match this.kind with
-        | Activity -> false
+        | Activity | Opaque -> false
         | LocalFunction | ExternFunction -> true
 
-    member this.IsExtern =
+    member this.IsActivity =
         match this.kind with
-        | Activity | LocalFunction -> false
-        | ExternFunction -> true
+        | Activity -> true
+        | Opaque | LocalFunction | ExternFunction -> false
+
+    //member this.IsExtern =
+    //    match this.kind with
+    //    | Activity | LocalFunction -> false
+    //    | ExternFunction -> true
 
     member this.IsSingleton = not this.singletons.IsEmpty
 
@@ -410,6 +417,7 @@ and ProcedureImpl =
     member this.Returns = this.prototype.returns
     
     member this.IsFunction = this.prototype.IsFunction
+    member this.IsActivity = this.prototype.IsActivity
     member this.IsSingleton = this.prototype.IsSingleton
 
     member this.ToDoc =

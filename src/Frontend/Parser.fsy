@@ -1091,6 +1091,7 @@ ExternalFunction
                                                              isSingleton = $3 <> Option.None
                                                              singletons = []
                                                              isFunction = true
+                                                             isOpaque = false
                                                              name = $5
                                                              inputs = fst $6
                                                              outputs = fst $7
@@ -1109,6 +1110,7 @@ OpaqueSingleton:
                                                              isSingleton = true
                                                              singletons = []
                                                              isFunction = false
+                                                             isOpaque = true
                                                              name = $3
                                                              inputs = []
                                                              outputs = []
@@ -1123,6 +1125,7 @@ Prototype
                                                              isSingleton = fst $2 <> Option.None
                                                              singletons = snd $2
                                                              isFunction = fst $3
+                                                             isOpaque = false
                                                              name = $4
                                                              inputs = fst $5
                                                              outputs = fst $6

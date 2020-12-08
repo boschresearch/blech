@@ -409,6 +409,7 @@ and Prototype =
         isSingleton: bool
         singletons: StaticNamedPath list
         isFunction: bool
+        isOpaque: bool // to distinguish from prototypes of local procedures with empty parameter lists
         name: Name
         inputs: ParamDecl list
         outputs: ParamDecl list
