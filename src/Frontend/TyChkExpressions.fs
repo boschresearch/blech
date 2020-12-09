@@ -71,7 +71,7 @@ let internal isLhsMutable lut lhs =
         let ism, typ = isTmlMutable tml
         if ism then
             match typ with
-            | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+            | ValueTypes (ValueTypes.StructType (typname, typfields))
             | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                 typfields
                 |> List.tryFind (fun f -> f.name.basicId = ident)
@@ -578,7 +578,7 @@ and getInitValueForTml lut tml =
                     | Some e -> snd e |> Ok // found an initialiser, return that
                     | None ->               // nope, get default value for that field
                         match v.typ with
-                        | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
+                        | ValueTypes (ValueTypes.StructType (_, fields)) ->
                             fields 
                             |> List.find (fun vdecl -> vdecl.name.basicId = ident)
                             |> (fun vdecl -> getInitValueWithoutZeros Range.range0 "" vdecl.datatype)
@@ -1340,7 +1340,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 tmlAndType
                 |> Result.bind (fun (tml,typ) ->
                     match typ with
-                    | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+                    | ValueTypes (ValueTypes.StructType (typname, typfields))
                     | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                         typfields
                         |> List.tryFind (fun f -> f.name.basicId = name.id)

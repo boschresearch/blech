@@ -755,7 +755,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
             Ok qname
             |> combine <| checkValueFields std.fields
             |> Result.map (
-                fun (q, f) -> (std.name.Range, q, f)
+                fun (q, f) -> (q, f)
                 >> ValueTypes.StructType >> ValueTypes )
     // add type declaration to lookup table
     match newType with
@@ -1292,7 +1292,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
             | AST.Member.Prototype f ->
                 let kind = 
                     if f.isOpaque then
-                        ProcedureKind.Opaque
+                        ProcedureKind.OpaqueProcedure
                     elif f.isExtern && f.isFunction then
                         ProcedureKind.ExternFunction
                     elif not f.isExtern && f.isFunction then

@@ -154,7 +154,7 @@ let rec private printTml level lut isLast tml (pos: range) =
             ((cpTml Current lut tml).Render |> render None)
         cCodePrintf format [args]
         |> txt
-    | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
+    | ValueTypes (ValueTypes.StructType (_, fields)) ->
         // access each field and call recursively
         let structContents =
             fields

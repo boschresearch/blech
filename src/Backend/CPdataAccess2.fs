@@ -269,7 +269,7 @@ let rec internal cpType typ =
         match size with
         | FloatType.Float32 -> txt "blc_float32"
         | FloatType.Float64 -> txt "blc_float64"
-    | ValueTypes (ValueTypes.StructType (_, typeName, _))
+    | ValueTypes (ValueTypes.StructType (typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
         txt "struct" <+> (cpStaticName typeName)
     | ValueTypes (ArrayType _) ->

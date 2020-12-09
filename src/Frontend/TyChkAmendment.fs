@@ -128,7 +128,7 @@ let rec getDefaultValueFor pos name dty =
         | BitsType size -> Ok {rhs = BitsConst <| Constant.Zero size; typ = dty; range = pos}
         | NatType size -> Ok {rhs = NatConst <| Constant.Zero size; typ = dty; range = pos}
         | FloatType size ->Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
-        | ValueTypes.StructType (_, _, fields) ->
+        | ValueTypes.StructType (_, fields) ->
             let defaultValues =
                 fields
                 |> List.map (fun f -> f.name.basicId, f.initValue)
@@ -137,6 +137,7 @@ let rec getDefaultValueFor pos name dty =
             getDefaultValueFor pos name (ValueTypes elemDty)
             |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
             |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
+       
     | ReferenceTypes s ->
         Error [NoDefaultValueForSecondClassType (pos, name, s)]
 
@@ -403,7 +404,7 @@ and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
         // note that we do overwrite let fields but we do so with the default value which essentially has no effect
         getInitValueWithoutZeros rExpr.Range "" lTyp
     // structs
-    | ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
+    | ValueTypes (ValueTypes.StructType (name, fields)), StructConst assignments ->
         amendStruct inInitMode lTyp rExpr.Range name fields assignments 
     // arrays
     | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->

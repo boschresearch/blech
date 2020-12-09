@@ -68,7 +68,7 @@ let cpOptDocComments (docs: Attribute.Attribute list) =
 //=============================================================================
 let internal cpUserType typ =
     match typ with
-    | ValueTypes (ValueTypes.StructType (_, typeName, fields)) -> 
+    | ValueTypes (ValueTypes.StructType (typeName, fields)) -> 
         let cpField (field: VarDecl) =
             match field.datatype with
             | ValueTypes (ArrayType _ ) ->
