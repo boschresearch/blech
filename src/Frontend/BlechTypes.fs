@@ -85,8 +85,8 @@ type ValueTypes =
     | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
     | StructType of name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
-    | OpaqueSimple
-    | OpaqueComplex
+    | OpaqueSimple of name:QName
+    | OpaqueComplex of name:QName
     
     member this.ToDoc = txt <| this.ToString()
     
@@ -100,13 +100,13 @@ type ValueTypes =
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
         | StructType (q, _) -> q.ToString()
-        | OpaqueComplex -> "type"
-        | OpaqueSimple -> "simpletype"
+        | OpaqueComplex n -> sprintf "type %s" (n.ToString())
+        | OpaqueSimple n -> sprintf "simpletype %s" (n.ToString())
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple -> true
-        | ArrayType _ | StructType _ | OpaqueComplex -> false
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple _ -> true
+        | ArrayType _ | StructType _ | OpaqueComplex _ -> false
 
     
 /// Reference Types are not used anywhere as of the first release 2019/2020
@@ -176,42 +176,6 @@ and Types =
         match this with
         | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
-
-    /// true iff data blob may be assigned (or reset) as a whole
-    /// relevant for value typed structs and arrays
-    /// which contain structs with `let` fields
-    member this.IsAssignable =
-        let isFieldMutable (field: VarDecl) =
-            // if a field has been declared immutable
-            // it is also not assignable as a whole
-            field.mutability.Equals Mutability.Variable
-            && field.datatype.IsAssignable
-
-        match this with
-        // only "any" literal on the lhs is wildcard
-        | Any -> true
-        | AnyInt
-        | AnyBits
-        | AnyFloat
-        | AnyComposite
-        | ReferenceTypes _ -> false
-        // the relevant case
-        | ValueTypes vt ->
-            match vt with
-            // primitives are assignable (if they are mutable)
-            | Void
-            | BoolType
-            | IntType _
-            | NatType _
-            | BitsType _
-            | FloatType _ 
-            | OpaqueSimple
-            | OpaqueComplex -> true
-            // check structs and arrays recursively
-            | ValueTypes.StructType (_,fields) ->
-                List.forall isFieldMutable fields
-            | ValueTypes.ArrayType (_,dty) ->
-                (ValueTypes dty).IsAssignable
 
 
 //=============================================================================

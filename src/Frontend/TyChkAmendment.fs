@@ -318,13 +318,12 @@ let tryPromotePrimitiveAny ltyp (rexpr: TypedRhs) =
 //=============================================================================
 
 /// Amends a struct literal depending on the lhs type
-/// inInitMode - true iff lhs and rhs a parts of a declaration (initialisation)
 /// lTyp - type of the lhs
 /// pos - range of the literal we are trying to amend
 /// name - struct's type name, only needed for error messages
 /// fields - list of VarDecls inside a struct
 /// kvps - list of key-value pairs in the rhs struct literal
-let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps =
+let rec private amendStruct lTyp pos name (fields: VarDecl list) kvps =
     let merge checkedUserInput = 
         getInitValueWithoutZeros pos name.basicId lTyp
         |> Result.map (fun r -> unsafeMergeCompositeLiteral r.rhs (StructConst checkedUserInput))
@@ -341,13 +340,10 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
         |> function
             | None -> // no
                 Error [FieldNotAMember2(pos, name, fst kvp)]
-            | Some idx -> // yes, do the checks, take the RhsExpr
-                if fields.[idx].mutability.Equals Mutability.Variable || inInitMode then // check mutability of the field
-                    // recursively check and amend the rhs expr
-                    amendRhsExpr inInitMode fields.[idx].datatype (snd kvp)
-                    |> Result.map (fun amendedRhs -> (fst kvp, amendedRhs))
-                else // writing to let field
-                    Error [AssignmentToImmutable(pos, fields.[idx].name.basicId)]
+            | Some idx -> // take the RhsExpr
+                // recursively check and amend the rhs expr
+                amendRhsExpr fields.[idx].datatype (snd kvp)
+                |> Result.map (fun amendedRhs -> (fst kvp, amendedRhs))
     
     kvps                   // type checked key value pairs as given by the programmer
     |> List.map processKvp // check that each kvp belongs to this struct
@@ -365,7 +361,7 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
 /// size - array's length
 /// datatype - array's elements' type
 /// kvps - list of index-value pairs in the rhs array literal
-and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * TypedRhs) list) =
+and private amendArray lTyp pos (size: Size) datatype (kvps: (Size * TypedRhs) list) =
     let merge checkedUserInput = 
         getInitValueWithoutZeros Range.range0 "" lTyp // TODO: this is a hacky use of API, fg 16.04.19
         |> Result.map (fun r -> unsafeMergeCompositeLiteral r.rhs (ArrayConst checkedUserInput))
@@ -382,7 +378,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
             let indices, values = kvps |> List.unzip
                      
             values 
-            |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
+            |> List.map (amendRhsExpr (ValueTypes datatype))
             |> contract
             |> Result.map (
                 List.zip indices
@@ -395,7 +391,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
         | :? System.OverflowException ->  
             failwith "Array literal with more elements than an int can represent" // this will certainly never happen
 
-and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
+and internal amendCompoundLiteral lTyp (rExpr: TypedRhs) =
     match lTyp, rExpr.rhs with
     // resetting
     | ValueTypes (ValueTypes.StructType _), ResetConst
@@ -405,10 +401,10 @@ and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
         getInitValueWithoutZeros rExpr.Range "" lTyp
     // structs
     | ValueTypes (ValueTypes.StructType (name, fields)), StructConst assignments ->
-        amendStruct inInitMode lTyp rExpr.Range name fields assignments 
+        amendStruct lTyp rExpr.Range name fields assignments 
     // arrays
     | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
-        amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
+        amendArray lTyp rExpr.Range size datatype idxValPairs
     // all sorts of mismatches
     | ValueTypes (ArrayType _), StructConst _ ->
         Error [TypeMismatchArrStruct(lTyp, rExpr)]
@@ -426,11 +422,9 @@ and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
  
 /// With structured literals we may need to "fill them up" since a user may 
 /// provide only some of the structure or array fields.
-/// inInitMode - true if this function is called from an initialisation
-///              here also immutable fields may be set
 /// lTyp       - type of the left hand side that we write the literal to
 /// rExpr      - the given (partial) literal
-and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
+and internal amendRhsExpr lTyp (rExpr: TypedRhs) =
     // if rhs type is at least as concrete as on the lhs, we are satisfied
     if isLeftSupertypeOfRight lTyp rExpr.typ then
         // if left hand side is _, its type is any and we need to keep the rhs type
@@ -448,7 +442,7 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
     // this is the case with struct literals or reset literals, array literals
     // these have to be filled up and their type needs to be updated
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
-        amendCompoundLiteral inInitMode lTyp rExpr
+        amendCompoundLiteral lTyp rExpr
     else
         Error [TypeMismatch(lTyp, rExpr)]
 
@@ -485,7 +479,7 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
     | Some dtyRes, Some vRes ->
         combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
-            amendRhsExpr true dty v
+            amendRhsExpr dty v
             |> Result.map (fun amendedV -> (dty, amendedV))
         )
 

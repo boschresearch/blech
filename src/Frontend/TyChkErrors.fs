@@ -74,7 +74,6 @@ type TyCheckError =
     | IndexMustBeInteger of range * TypedRhs * TypedMemLoc
     | StaticArrayOutOfBounds of range * TypedRhs * TypedMemLoc * Size
     | AssignmentToImmutable of range * Identifier
-    | AssignmentToLetFields of range * Identifier
     | ImmutableOutArg of range * TypedLhs
     | ConditionHasSideEffect of TypedRhs
     | InitialisationHasSideEffect of TypedRhs
@@ -251,7 +250,6 @@ type TyCheckError =
             | IndexMustBeInteger (r, idx, dPath) -> r, sprintf "The array access [%s] in %s must evaluate to an integer." (idx.ToString()) (dPath.ToBasicString())
             | StaticArrayOutOfBounds (r, idx, dPath, maxIdx) -> r, sprintf "The array access [%s] in %s is out of bounds [0..%s]." (idx.ToString()) (dPath.ToBasicString()) (string maxIdx)
             | AssignmentToImmutable (p, l) -> p, sprintf "%s is immutable and cannot be assigned any value" (l.ToString())
-            | AssignmentToLetFields (p, l) -> p, sprintf "%s contains substructures with immutable fields. It therefore cannot be overwritten as a whole." (l.ToString())
             | ImmutableOutArg(p, l) -> p, sprintf "Read-only location %s cannot be passed as an output argument." (l.ToString())
             | ConditionHasSideEffect cond -> cond.Range, sprintf "The condition %s has a side-effect. This is not allowed." (cond.ToString())
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())

@@ -850,13 +850,10 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Some (UsedLoc tlhs) ->
                 let typ = tlhs.typ
                 if isLhsMutable lut tlhs.lhs then
-                    if typ.IsAssignable then  // TODO: This will always be true if we assign structs with let fields, fjg 30.06.20
-                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                            Ok storage 
-                        else 
-                            Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
-                    else
-                        Error [AssignmentToLetFields (pos, tlhs.ToString())]
+                    if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                        Ok storage 
+                    else 
+                        Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
                 else Error [AssignmentToImmutable (pos, tlhs.ToString())]
             )
     
@@ -926,17 +923,14 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
 
 let private fAssign lut pos lhs rhs =
     let createAssign myleft (myright: TypedRhs) =
-        amendRhsExpr false myleft.typ myright
+        amendRhsExpr myleft.typ myright
         |> Result.map (fun amendedRight -> Assign (pos, myleft, amendedRight))
     
     lhs
     |> combine <| rhs
     |> Result.bind (fun (l, r) -> 
         if isLhsMutable lut l.lhs then
-            if l.typ.IsAssignable then
-                createAssign l r
-            else
-                Error [AssignmentToLetFields (pos, l.ToString())]
+            createAssign l r
         else Error [AssignmentToImmutable (pos, l.ToString())]
         )
 
@@ -1054,7 +1048,7 @@ let private fReturn retTypOpt pos exprOpt =
     | None, None -> Return (pos, None) |> Ok
     | Some retTyp, Some expr ->
         combine retTyp expr 
-        |> Result.bind (fun (r, e) -> amendRhsExpr true r e)
+        |> Result.bind (fun (r, e) -> amendRhsExpr r e)
         |> Result.bind (fun (e: TypedRhs) -> match e.typ with | ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
         |> Result.map (fun e -> Return (pos, Some e))
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]

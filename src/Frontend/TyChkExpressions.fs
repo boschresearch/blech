@@ -994,7 +994,7 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
 let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
     let expr = 
         if checkedExpr.typ.IsCompoundLiteral then
-            amendCompoundLiteral false checkedType checkedExpr
+            amendCompoundLiteral checkedType checkedExpr
         else 
             tryAmendPrimitiveAny checkedType checkedExpr        
     expr
@@ -1208,10 +1208,7 @@ let internal checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> l
                     Error [ExprMustBeALocationL (pos, argExpr)] :: typecheckOutputs ls
                 else
                     if isLhsMutable lut argExpr.lhs then
-                        if argExpr.typ.IsAssignable then
-                            Ok argExpr :: typecheckOutputs ls
-                        else
-                            Error [AssignmentToLetFields (pos, argExpr.ToString())] :: typecheckOutputs ls
+                        Ok argExpr :: typecheckOutputs ls
                     else
                         Error [ImmutableOutArg(pos, argExpr)] :: typecheckOutputs ls
             else
@@ -1229,7 +1226,7 @@ let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams
     let rec typecheckInputs = function
         | [] -> []
         | ((argDecl: ParamDecl), (expr: TypedRhs))::ls -> 
-            match amendRhsExpr true argDecl.datatype expr with // this behaves like an initialisation
+            match amendRhsExpr argDecl.datatype expr with // this behaves like an initialisation
             | Ok amendedExpr ->
                 if argDecl.datatype.IsValueType() || isExprALocation amendedExpr then
                     Ok amendedExpr :: typecheckInputs ls
