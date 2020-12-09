@@ -1290,8 +1290,6 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddFunAct funact
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
-                // determine if this is a external function prototype
-                // or an opaque singleton
                 let kind = 
                     if f.isOpaque then
                         ProcedureKind.Opaque

@@ -216,7 +216,7 @@ module CompilationUnit =
                     let sigFile = searchInterface ctx.blechPath requiredModule 
                     match sigFile with
                     | Ok blh ->
-                        ctx.loader ctx logger importChain Implementation requiredModule blh
+                        ctx.loader ctx logger importChain Interface requiredModule blh
                     | Error triedBlhs ->
                         Diagnostics.Logger.logFatalError 
                         <| logger
