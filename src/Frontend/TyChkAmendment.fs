@@ -103,7 +103,9 @@ let internal isLeftSupertypeOfRight typL typR =
     | ValueTypes (NatType _), AnyBits
     | ValueTypes (FloatType _), AnyFloat -> true
     | Any, _ -> true      // wildcard hast type Any which is supertype of any other type
-    | a, b when (a = b) -> true
+    | a, b when (a = b) -> true // meaning opaque types with same name
+                                // structs with same name and recursively the same fields
+                                // arrays of same length and element type (recursively)
     | _, _ -> false // this includes the cases that integers shall not 
                     // implicitly be promoted to floats
 
@@ -127,7 +129,7 @@ let rec getDefaultValueFor pos name dty =
         | IntType size -> Ok {rhs = IntConst <| Constant.Zero size; typ = dty; range = pos}
         | BitsType size -> Ok {rhs = BitsConst <| Constant.Zero size; typ = dty; range = pos}
         | NatType size -> Ok {rhs = NatConst <| Constant.Zero size; typ = dty; range = pos}
-        | FloatType size ->Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
+        | FloatType size -> Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
         | ValueTypes.StructType (_, fields) ->
             let defaultValues =
                 fields
@@ -137,6 +139,9 @@ let rec getDefaultValueFor pos name dty =
             getDefaultValueFor pos name (ValueTypes elemDty)
             |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
             |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
+        | OpaqueSimple _
+        | OpaqueComplex _ ->
+            Error [NoDefaultValueForOpaque (pos, name)]
        
     | ReferenceTypes s ->
         Error [NoDefaultValueForSecondClassType (pos, name, s)]
@@ -460,10 +465,7 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         | AnyInt 
         | AnyBits
         | AnyFloat ->
-            Error [VarDeclRequiresExplicitType (pos, name)]    
-        //| ( ValueTypes (IntType _) 
-        //  | ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
-        //    Error [VarDeclRequiresExplicitType (pos, name)]
+            Error [VarDeclRequiresExplicitType (pos, name)]
         | _ ->
             Ok (expr.typ, expr)
 
@@ -472,7 +474,7 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         Error [VarDeclMissingTypeOrValue (pos, name)]
     | None, Some vRes -> 
         vRes |> Result.bind inferFromRhs
-    | Some dtyRes, None ->
+    | Some dtyRes, None -> // TODO: will crash for opaque types
         dtyRes 
         |> Result.map (getInitValueWithoutZeros pos name)
         |> Result.bind (combine dtyRes)

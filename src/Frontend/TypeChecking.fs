@@ -491,7 +491,7 @@ let private unsupported9 str r _ _ _ _ _ _ _ _ = Error [UnsupportedFeature (r, s
 //=============================================================================
 
 /// Check a type annotation
-let rec private fDataType  = checkDataType
+let rec private fDataType = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
@@ -803,7 +803,7 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | None -> Ok rhsTyp  // if no datatype is given take the activity return type as the location type
             | Some lhsTypRes -> lhsTypRes    
         dtyRes
-        |> Result.map (getInitValueWithoutZeros Range.range0 "")
+        |> Result.map (getInitValueWithoutZeros Range.range0 "") // TODO: will crash for opaque types
         |> Result.bind (combine dtyRes)
         
 

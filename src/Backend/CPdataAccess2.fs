@@ -272,6 +272,8 @@ let rec internal cpType typ =
     | ValueTypes (ValueTypes.StructType (typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
         txt "struct" <+> (cpStaticName typeName)
+    | ValueTypes (OpaqueSimple typeName)
+    | ValueTypes (OpaqueComplex typeName) -> cpStaticName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | Any
@@ -659,7 +661,9 @@ and cpExpr tcc expr : PrereqExpression =
         | AnyComposite 
         | AnyInt 
         | AnyBits
-        | AnyFloat -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
+        | AnyFloat
+        | ValueTypes (OpaqueSimple _)
+        | ValueTypes (OpaqueComplex _) -> failwith "Error in type checker. Trying to compare void, opaque or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     // arithmetic
     | Add (s1, s2) -> binExpr tcc s1 s2 "+"
@@ -835,12 +839,16 @@ let rec cpAssign tcc left right =
         | _ -> // x = y needs no rewriting, assign directly
             let a, b = directAssignment rightRE
             mkRenderedStmt a b 
+    | ValueTypes (OpaqueComplex _) -> // treat like an array, memcpy
+        let a, b = directArrayAssignment rightRE
+        mkRenderedStmt a b 
     | ValueTypes Void 
     | ValueTypes BoolType 
     | ValueTypes (IntType _)
     | ValueTypes (NatType _)
     | ValueTypes (BitsType _) 
-    | ValueTypes (FloatType _) ->
+    | ValueTypes (FloatType _) 
+    | ValueTypes (OpaqueSimple _) ->
         // assign primitives
         let a, b = directAssignment rightRE
         mkRenderedStmt a b

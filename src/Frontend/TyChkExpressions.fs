@@ -1549,14 +1549,6 @@ and internal checkDataType lut utyDataType =
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
-        //let ensurePositiveSize num =
-        //    if num > Constants.SizeZero then Ok num
-        //    else Error [PositiveSizeExpected(pos, num)]
-        //let checkSize =
-        //    checkExpr lut 
-        //    >> Result.bind (evalCompTimeSize lut)
-        //    //>> Result.bind ensurePositiveSize
-        //checkSize size
         checkExpr lut size
         |> Result.bind (evalCompTimeSize lut)
         |> Result.bind(fun checkedSize ->
