@@ -27,51 +27,108 @@ module ExportInference =
     module Env = SymbolTable.Environment
 
     type Singleton = 
-    | OpaqueSingleton
-    | Singleton of calledSingletons: Name list
+        | OpaqueSingleton
+        | Singleton of calledSingletons: Name list
 
 
-    type AbstractType =
-    | Type
-    | SimpleType
+    type ToplevelType =
+        | Complex
+        | Simple
 
+
+    //type Visibility = 
+    //    | Transparent of Name
+    //    | Opaque of Name
+    //    | Hidden
+
+    //    member this.GetName = 
+    //        match this with
+    //        | Transparent n -> n
+    //        | Opaque n -> n
+    //        | Hidden -> failwith "this should only be called if a name is available"
+
+
+    type ToplevelMember =
+        | Empty
+        | Value of Name
+        | Procedure of Name
+        | Type of Name
+ 
+        member this.TryGetName =
+            match this with
+            | Empty -> 
+                None          
+            | Value n | Procedure n | Type n -> 
+                Some n
+
+        member this.GetName = 
+            match this.TryGetName with
+            | Some n -> n
+            | None -> failwith "this should only be called if a name is available"
+
+
+    type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 
     type ExportContext = 
         private {
-            Environment : SymbolTable.Environment
-            Logger : Diagnostics.Logger
-            AbstractTypes : Map<Name, AbstractType> 
-            Singletons : Map<Name, Singleton>
-            ExportScope : SymbolTable.Scope
+            environment : SymbolTable.Environment
+            logger : Diagnostics.Logger
+            currentMember : ToplevelMember
+            // currentVisibility : Visibility 
+            abstractTypes : Map<Name, ToplevelType> 
+            singletons : Map<Name, Singleton>
+            exportScope : SymbolTable.Scope
         }
 
         static member Initialise (logger: Diagnostics.Logger) (env: SymbolTable.Environment) = 
             { 
-                Environment = env
-                Logger = logger
-                AbstractTypes = Map.empty
-                Singletons = Map.empty
-                ExportScope = SymbolTable.Scope.createExportScope ()
+                environment = env
+                logger = logger
+                currentMember = Empty
+                // currentVisibility = Hidden
+                abstractTypes = Map.empty // TODO: initialise with imported abstract types, fjg. 8.12.20
+                singletons = Map.empty  // TODO: initialise with imported singletons, fjg. 8.12.20
+                exportScope = SymbolTable.Scope.createExportScope ()
             }
 
+        member this.AddAbstractType name abstype = 
+            { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
+
         member this.TryGetAbstractType name =
-            this.AbstractTypes.TryFind name
+            this.abstractTypes.TryFind name
 
         member this.TryGetSingleton name = 
-            this.Singletons.TryFind name
+            this.singletons.TryFind name
 
-        member this.IsExposed name = 
-            Env.isExposedName this.Environment name
+        member this.IsExposedToplevelMember name = 
+            Env.isExposedToplevelMember this.environment name
+
+        member this.IsExposedName name = 
+            Env.isExposedName this.environment name
 
         member this.GetExports = 
-            this.ExportScope
+            this.exportScope
+
+        //member this.SetCurrentVisiblity visibility =  
+        //    { this with currentVisibility = visibility }
+
+        member this.SetToplevelMember toplevelMember = 
+            match toplevelMember with
+            | Value name ->
+                if this.IsExposedName name then
+                    { this with currentMember = toplevelMember }
+                else // Nothing to do for hidden constant
+                    { this with currentMember = Empty}
+            | _ -> // TODO: complete this, fjg. 8.12.20
+                { this with currentMember = toplevelMember }
+         
 
         member this.Show = 
-            for n in this.Singletons do
+            for n in this.singletons do
                 printfn "Singleton: %A Info: %A" n.Key n.Value
-            for n in this.AbstractTypes do
+            for n in this.abstractTypes do
                 printfn "Abstract Type : %A Value: %A" n.Key n.Value
-            printfn "Exports: %A" this.ExportScope
+            printfn "Exports: %A" this.exportScope
             
 
     type ExportError = 
@@ -95,7 +152,7 @@ module ExportInference =
     // Helpers
 
     let private logExportError ctx err  = 
-        do Diagnostics.Logger.logError ctx.Logger Diagnostics.Phase.Exports err
+        do Diagnostics.Logger.logError ctx.logger Diagnostics.Phase.Exports err
         ctx
 
 
@@ -103,11 +160,29 @@ module ExportInference =
     // begin ==========================================
     // recursively descend the AST for export inference
 
+    let private checkTransparentVisibility (ctx: ExportContext) (name: Name) = 
+        let declName = ctx.environment.GetLookupTable.getDeclName name
+        if ctx.IsExposedName declName then
+            ctx
+        else
+            Dummy (name.Range, sprintf "Value '%s' is less accessible than value '%s'" name.id ctx.currentMember.GetName.id)
+            |> logExportError ctx 
+
     let private inferStaticNamedPath ctx (snp: AST.StaticNamedPath) = 
-        ctx
+        let lastName = List.last snp.names
+        match ctx.currentMember with
+        | Value _ ->
+            checkTransparentVisibility ctx lastName
+        | _ ->
+            ctx
 
     let private inferDynamicNamePath ctx (dap: AST.DynamicAccessPath) =
-        ctx
+        let lastName = List.last dap.leadingNames
+        match ctx.currentMember with
+        | Value _ ->
+            checkTransparentVisibility ctx lastName
+        | _ ->
+            ctx
 
     let private inferImplicitMember ctx (snp: AST.StaticNamedPath) = 
         ctx
@@ -117,38 +192,37 @@ module ExportInference =
 
 
     let private exportValueDecl (ctx: ExportContext) (name: Name) =
-        if ctx.IsExposed name then
-            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
-            { ctx with ExportScope = expScp }
+        if ctx.IsExposedToplevelMember name then
+            let expScp = Env.exportName ctx.environment name ctx.exportScope
+            { ctx with exportScope = expScp }
         else
             ctx
 
 
     let private exportProcedureDecl (ctx: ExportContext) (name: Name) =
-        if ctx.IsExposed name then
-            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
-            { ctx with ExportScope = expScp }
+        if ctx.IsExposedToplevelMember name then
+            let expScp = Env.exportName ctx.environment name ctx.exportScope
+            { ctx with exportScope = expScp }
         else
             ctx
 
+    let private exportAbstractType (ctx: ExportContext) (name: Name) =
+        let expScp = Env.exportName ctx.environment name ctx.exportScope
+        { ctx with exportScope = expScp }
+        
 
-    let private exportTypeDecl (ctx: ExportContext) (name: Name) =
-        match ctx.IsExposed name, ctx.TryGetAbstractType name with
-        | false, Some _ -> // add abstract type to export scope
-            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
-            { ctx with ExportScope = expScp }
-        | true, None -> // add concrete type to export scope
-            let expScp = Env.exportName ctx.Environment name ctx.ExportScope
-                         |> Env.exportScope ctx.Environment name
-            { ctx with ExportScope = expScp }
-        | false, None ->
-            ctx
-        | true, Some _ -> 
-            failwith "Exposed type can never become an abstract type"
-
+    let private exportTypeDecl topLevelType (ctx: ExportContext) (name: Name) =
+        if ctx.IsExposedToplevelMember name then 
+            let expScp = Env.exportName ctx.environment name ctx.exportScope
+                         |> Env.exportScope ctx.environment name
+            { ctx with exportScope = expScp }
+        else
+            printfn "Add abstract type: %s" name.id
+            ctx.AddAbstractType name topLevelType // will be exported if needed
+        
     let private exportModuleScope (ctx: ExportContext) =
-        let modScp = Env.getModuleScope ctx.Environment
-        { ctx with ExportScope = modScp }
+        let modScp = Env.getModuleScope ctx.environment
+        { ctx with exportScope = modScp }
 
     let rec private inferUnitExpr ctx (ue: AST.UnitExpr) = 
         match ue with
@@ -275,9 +349,7 @@ module ExportInference =
         | FloatType (unit = uexp) ->
             Option.fold inferUnitExpr ctx uexp
         | ArrayType (size = expr; elem = dty) ->
-            // resumeExposure ctx
             inferExpr ctx expr
-            // |> disableExposure
             |> inferDataType <| dty
         | SliceType (elem = dty) ->
             inferDataType ctx dty
@@ -303,7 +375,7 @@ module ExportInference =
         |> Option.fold inferExpr <| vd.initialiser
 
 
-    let private inferStaticVarDecl ctx (vd: AST.VarDecl) = 
+    let private inferStaticVarDecl ctx (vd: AST.VarDecl) =
         Option.fold inferDataType ctx vd.datatype
         |> Option.fold inferExpr <| vd.initialiser
         |> exportValueDecl <| vd.name
@@ -450,59 +522,72 @@ module ExportInference =
         | _ -> // other members do no occur as fields
             ctx
 
-    let private inferImport ctx (import: AST.Import) = 
-        ctx
-
     let rec private inferEnumType ctx (etd: AST.EnumTypeDecl) =
         Option.fold inferDataType ctx etd.rawtype   // infer rawtype first 
         |> List.fold inferTagDecl <| etd.tags
         |> List.fold inferMember <| etd.members
-        |> exportTypeDecl <| etd.name
+        |> exportTypeDecl Complex <| etd.name
 
 
     and private inferStructType ctx (std: AST.StructTypeDecl) =
         List.fold inferFieldDecl ctx std.fields  // infer fields first, before typename becomes visible  
         |> List.fold inferMember <| std.members
-        |> exportTypeDecl <| std.name
+        |> exportTypeDecl Complex <| std.name
 
 
     and private inferOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
         List.fold inferMember ctx ntd.members
-        |> exportTypeDecl <| ntd.name
+        |> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
 
 
     and private inferTypeAlias ctx (tad: AST.TypeAliasDecl) =
-        inferDataType ctx tad.aliasfor          // infer alias first, before typename becomes visible
+        let topLevelType = 
+            match tad.aliasfor with
+            | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> Simple
+            | _ -> Complex
+
+        inferDataType ctx tad.aliasfor
         |> List.fold inferMember <| tad.members
-        |> exportTypeDecl <| tad.name
+        |> exportTypeDecl topLevelType <| tad.name
 
 
     and private inferMember ctx (m: AST.Member) =
         match m with
         | Member.EnumType et ->
+            let ctx = ctx.SetToplevelMember (Type et.name)
             inferEnumType ctx et
         | Member.StructType st ->
+            let ctx = ctx.SetToplevelMember (Type st.name)
             inferStructType ctx st
-        | Member.OpaqueType nt ->
-            inferOpaqueType ctx nt
-        | Member.TypeAlias ta -> 
+        | Member.OpaqueType ot ->
+            let ctx = ctx.SetToplevelMember (Type ot.name)
+            inferOpaqueType ctx ot
+        | Member.TypeAlias ta ->
+            let ctx = ctx.SetToplevelMember (Type ta.name)
             inferTypeAlias ctx ta
         | Member.Var vdecl ->
+            let ctx = ctx.SetToplevelMember (Value vdecl.name)
             inferStaticVarDecl ctx vdecl
         | Member.Subprogram sp ->
+            let ctx = ctx.SetToplevelMember (Procedure sp.name)
             inferSubprogram ctx sp
         | Member.Prototype fp ->
+            let ctx = ctx.SetToplevelMember (Procedure fp.name)
             inferFunctionPrototype ctx fp
         | Member.Unit u ->
-            inferUnitDecl ctx u
+            // inferUnitDecl ctx u
+            ctx.SetToplevelMember Empty
         | Member.Clock _ ->
-            ctx //TODO
+            ctx.SetToplevelMember Empty
         | Member.Pragma _->
-            ctx 
+            ctx.SetToplevelMember Empty 
         | Member.Nothing -> 
-            ctx
+            failwith "this should have been removed"
     
-    
+
+    // Import
+    let private inferImport ctx (import: AST.Import) = 
+        ctx
     
     // ModuleSpec 
     let private inferExposingAll ctx (exposing: AST.Exposing) = 
@@ -515,21 +600,6 @@ module ExportInference =
 
     let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
         Option.fold inferExposingAll ctx modSpec.exposing
-
-
-    // Imports
-    //let private inferImportExposing ctx (exposing: AST.Exposing) = 
-    //    match exposing with
-    //    | AST.Few (names, _) ->
-    //        List.fold (addDeclaration Import) ctx names
-    //    | AST.All _ -> // TODO: add all exposed names from imported modules
-    //        failwith "Remove wildcard '...' completely"
-            
-    //let private inferImport ctx (import: AST.Import) = 
-    //    ctx
-
-        //addDeclaration Import ctx import.localName
-        //|> Option.fold inferImportExposing <| import.exposing
 
 
     // Compilation Unit
@@ -549,7 +619,7 @@ module ExportInference =
         let exports = inferCompilationUnit ctx cu
         // just for debugging
         // show exports
-        if Diagnostics.Logger.hasErrors exports.Logger then
-            Error exports.Logger
+        if Diagnostics.Logger.hasErrors exports.logger then
+            Error exports.logger
         else
             Ok exports

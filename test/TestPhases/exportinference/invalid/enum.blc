@@ -1,13 +1,15 @@
-module exposes T, Color
+module exposes Color, c
 
 typealias T = int32
+
+const c = 42 : T
 
 enum Color : T
     Red = 1
     Blue = 2 default
 extension // Thats bad because internal structure and methods are either hidden or exposed together 
     function Init () returns Color
-        return Color.Red
+        return Red
     end
 end
 
