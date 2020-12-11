@@ -22,6 +22,7 @@ module Blech.Backend.ProgramGenerator
 
 open Blech.Common
 open Blech.Common.PPrint
+open Blech.Common.Range
 
 open Blech.Frontend.Constants
 open Blech.Frontend.CommonTypes
@@ -61,12 +62,13 @@ let private cpMainOutputParam tcc (output: ParamDecl) =
     | _ -> cpType output.datatype <+> cpDeref paramName
         
 
-// translates the interface of the EntryPoint activity to C function interface for 'tick' and 'init'
+// translates the interface of the EntryPoint activity to C function interface for 'tick' and 'print'
 let private cpMainIface tcc scalarPassByPointer (iface: Compilation) =
     let cargs = 
         List.concat [
             iface.inputs |> List.map (cpMainInputParam tcc scalarPassByPointer)
             iface.outputs |> List.map (cpMainOutputParam tcc)
+            iface.retvar |> Option.toList |> List.map (cpMainOutputParam tcc)
         ]
     (if List.isEmpty cargs then [txt "void"] else cargs)
     |> dpCommaSeparatedInParens
@@ -93,7 +95,7 @@ let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
         else
             iface.inputs |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
         iface.outputs |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
-        iface.retvar |> Option.toList |> List.map (paramAsInput >> cpInputArg tcc >> getCExpr >> (fun x -> x.Render))
+        iface.retvar |> Option.toList |> List.map (paramAsOutput >> cpOutputArg tcc >> getCExpr >> (fun x -> x.Render))
     ]
     |> List.concat
     |> dpCommaSeparatedInParens
@@ -119,10 +121,39 @@ let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
     let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = entryPointIface.inputs |> List.map (paramAsInput >> (fun i -> i.typ, cpInputArg tcc i))
     let renderedOutputs = entryPointIface.outputs |> List.map (paramAsOutput >> (fun o -> o.typ, cpOutputArg tcc o))
+    // create dummy receiver for return value if entry point returns something
+    let receiverPrereqStmt, renderedReceiver =
+        match entryPointIface.retvar with
+        | None ->
+            [empty], []
+        | Some r ->
+            // calle does return something but no receiver var has been specified (_)
+            // create dummy receiver variable
+            let lhsName = mkIndexedAuxQNameFrom "receiverVar"
+            let lhsTyp = r.datatype
+            let tmpDecl = cpArrayDeclDoc (renderCName Current tcc lhsName) lhsTyp <^> semi
+            let v = 
+                { 
+                    VarDecl.pos = range0
+                    name = lhsName
+                    datatype = lhsTyp
+                    mutability = Mutability.Variable
+                    initValue = {rhs = NatConst <| Nat.Zero8; typ = ValueTypes (NatType Nat8); range = range0} // that is a dummy/garbage
+                    annotation = Blech.Frontend.Attribute.VarDecl.Empty
+                    allReferences = System.Collections.Generic.HashSet() 
+                }
+            Blech.Frontend.TypeCheckContext.addDeclToLut tcc lhsName (Blech.Frontend.Declarable.VarDecl v)
+            let tmpLhs = 
+                {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
+                |> (fun o -> o.typ, cpOutputArg tcc o)
+            [tmpDecl], [tmpLhs]
+        
+        
     let actCall = 
         [
             renderedInputs |> List.map (procIn >> (fun x -> x.Render))
             renderedOutputs |> List.map (procOut >> (fun x -> x.Render))
+            renderedReceiver |> List.map (procOut >> (fun x -> x.Render))
         ]
         |> List.concat
         |> dpCommaSeparatedInParens
@@ -131,6 +162,7 @@ let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
         [
             renderedInputs |> List.collect (snd >> getPrereq)
             renderedOutputs |> List.collect (snd >> getPrereq)
+            receiverPrereqStmt
         ]
         |> List.concat
     prereqStmts @ [actCall <^> semi]
