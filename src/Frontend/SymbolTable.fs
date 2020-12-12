@@ -156,8 +156,7 @@ module SymbolTable =
 
     // TODO: isExposed can be removed again from name info because export inference needs the whole environment, fjg 7.12.20
     type private NameInfo =
-        | Decl of QName * isExposed: bool // declaration of a name, points to the fully qualified name, 
-                                          // and indicates if the declaration is exposed in a module
+        | Decl of QName  // declaration of a name, points to the fully qualified name, 
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
@@ -190,16 +189,16 @@ module SymbolTable =
             let ok, info = lt.lookupTable.TryGetValue name
             if ok then 
                 match info with
-                | Decl (qname, _) -> Some qname
+                | Decl qname -> Some qname
                 | Use declName -> lt.TryGetQname declName
                 | Expose declName -> lt.TryGetQname declName
              else 
                 None
 
         // should be invisible outside this file
-        member internal nqt.addDecl name qname isExposed =
+        member internal nqt.addDecl name qname =
             // printfn "addDecl: name: %A qname: %A isExposed: %A" name qname isExposed
-            nqt.lookupTable.Add (name, Decl (qname, isExposed))
+            nqt.lookupTable.Add (name, Decl qname)
 
         // should be invisible outside this file
         // assumes declare before use        
@@ -247,13 +246,13 @@ module SymbolTable =
             | Expose declName ->
                 declName
 
-        member this.IsExposed name = 
-            match this.lookupTable.[name] with
-            | Decl (_, isExposed) -> 
-                isExposed
-            | Use declName 
-            | Expose declName ->
-                this.IsExposed declName
+        //member this.IsExposed name = 
+        //    match this.lookupTable.[name] with
+        //    | Decl (_, isExposed) -> 
+        //        isExposed
+        //    | Use declName 
+        //    | Expose declName ->
+        //        this.IsExposed declName
 
         //member this.ShowExposedDeclNames =
         //    printfn "Exposed declaration names"
@@ -385,13 +384,29 @@ module SymbolTable =
         let private currentOuter env = 
             List.tail env.path
 
-        
+        // Functions for export inference
+
         let isExposedToplevelMember env (name: Name) = 
             Scope.containsSymbol env.exposing name.id
 
+        let isHiddenToplevelMember env (name: Name) = 
+            let modScp = getModuleScope env
+            let isTopLevel = Scope.containsSymbol modScp name.id
+            let isHidden = not <| Scope.containsSymbol env.exposing name.id
+            isHidden && isTopLevel
 
-        let isExposedName env (name: Name) = 
-            env.lookupTable.IsExposed name
+        let getDeclName env (name: Name) = 
+            env.lookupTable.getDeclName name
+
+        let isHiddenImplicitMember env (name: Name) =
+            let modScp = getModuleScope env
+            let openInnerScopes = Map.filter (fun id (scope: Scope) -> Scope.isOpen scope) modScp.innerscopes
+            let declScpId = Map.pick (fun id scp -> if Scope.containsSymbol scp name.id then Some id else None) openInnerScopes
+            not <| Scope.containsSymbol env.exposing declScpId            
+            
+
+        //let isExposedName env (name: Name) = 
+        //    env.lookupTable.IsExposed name
 
 
         let currentScopeIsExposed env =
@@ -484,13 +499,13 @@ module SymbolTable =
                 shadows (currentOuter env) id
 
 
-        let private insertSymbol env (name: Name) (label: IdLabel) isExposed isScope =
+        let private insertSymbol env (name: Name) (label: IdLabel) isScope =
             match tryFindShadowedSymbol env name.id with
             | None ->
                 let qname = QName.Create env.moduleName (getQNamePrefix env) name.id label
                 // printfn "Qname: %A" qname
                 try
-                    do env.lookupTable.addDecl name qname isExposed
+                    do env.lookupTable.addDecl name qname
                     // printfn "Name: %A, QName: %A" name qname
                 with exp ->
                     printfn "%A" exp
@@ -503,33 +518,22 @@ module SymbolTable =
          
 
         let insertName env name label =
-            let isExposed = isExposedToplevelMember env name || currentScopeIsExposed env
-            insertSymbol env name label isExposed false
-
-
-        let insertHiddenName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label false false
-
-
-        let insertExposedName env (name: Name) (label: IdLabel) =
-            insertSymbol env name label true false
+            insertSymbol env name label false
 
 
         let insertSubProgramName env (name: Name) =
             insertName env name IdLabel.Static
             
         let insertModuleName env (name: Name) =
-            insertSymbol env name IdLabel.Static false true
+            insertSymbol env name IdLabel.Static true
 
 
         let insertTypeName env (name: Name) =
-            let isExposed = isExposedToplevelMember env name
-            insertSymbol env name IdLabel.Static isExposed true
+            insertSymbol env name IdLabel.Static true
  
  
         let insertConstOrParamName env (name: Name) = 
-            let isExposed = isExposedToplevelMember env name
-            insertSymbol env name IdLabel.Static isExposed false
+            insertSymbol env name IdLabel.Static false
 
         let insertUnitName = insertConstOrParamName
         

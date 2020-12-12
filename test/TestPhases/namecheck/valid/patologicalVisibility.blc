@@ -1,0 +1,17 @@
+module exposes ElementBuffer
+
+typealias Index = nat32   // must not be abstract
+
+typealias Element = bool  // abstract
+
+typealias ElementBuffer = [4: Index] Element // Index must not be abstact
+
+// Error: 'Index' is less accessible than 'ElementBuffer' is more visible than 'Index'
+// Hint : Module should expose 'Index'
+
+typealias MyInt = int8
+
+const c1: MyInt = 42 
+
+const c2 = (c1 + 42) : int32
+

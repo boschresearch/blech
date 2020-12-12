@@ -36,45 +36,63 @@ module ExportInference =
         | Simple
 
 
-    //type Visibility = 
-    //    | Transparent of Name
-    //    | Opaque of Name
-    //    | Hidden
-
-    //    member this.GetName = 
-    //        match this with
-    //        | Transparent n -> n
-    //        | Opaque n -> n
-    //        | Hidden -> failwith "this should only be called if a name is available"
-
-
-    type ToplevelMember =
-        | Empty
-        | Value of Name
-        | Procedure of Name
-        | Type of Name
- 
-        member this.TryGetName =
+    type private  Visibility =   
+        | Invisible
+        | Semitransparent
+        | Transparent
+        
+        // needed for types that contain exposed expressions
+        member this.Strengthen = 
             match this with
-            | Empty -> 
-                None          
-            | Value n | Procedure n | Type n -> 
-                Some n
+            | Transparent -> Transparent
+            | Semitransparent -> Transparent
+            | Invisible -> Invisible // once invisible always invisible
 
-        member this.GetName = 
-            match this.TryGetName with
-            | Some n -> n
-            | None -> failwith "this should only be called if a name is available"
+        // needed for functions that only expose the prototype
+        member this.Weaken = 
+            match this with
+            | Transparent -> Transparent // once transparent always transparent
+            | Semitransparent -> Invisible
+            | Invisible -> Invisible
 
+ 
+    type private Exposing =
+        private { 
+            topLevelMember : Name
+            // prev_visibility : Visibility 
+            visibility : Visibility
+            calledSingletons : Name list 
+        }
 
-    type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
+        /// Exposing state for const, param, clock, unit
+        static member Value env name  = 
+            let vb = if Env.isExposedToplevelMember env name then Transparent else Invisible
+            { topLevelMember = name 
+              visibility = vb 
+              calledSingletons = [] }
+                   
+        /// Exposing state for types, functions, activities, prototypes
+        static member Type env name =
+            let vb = if Env.isExposedToplevelMember env name then Semitransparent else Invisible
+            { topLevelMember = name 
+              visibility = vb 
+              calledSingletons = [] }
+            
+        member this.StrengthenVisibility =
+            { this with visibility = this.visibility.Strengthen }
+        //    { this with visibility = visibility    | 
+
+        member this.WeakenVisibility = 
+            { this with visibility = this.visibility.Weaken }
+
+        member this.AddCalledSingleton name = 
+            { this with calledSingletons = name :: this.calledSingletons }
+        
 
     type ExportContext = 
         private {
             environment : SymbolTable.Environment
             logger : Diagnostics.Logger
-            currentMember : ToplevelMember
-            // currentVisibility : Visibility 
             abstractTypes : Map<Name, ToplevelType> 
             singletons : Map<Name, Singleton>
             exportScope : SymbolTable.Scope
@@ -84,9 +102,10 @@ module ExportInference =
             { 
                 environment = env
                 logger = logger
-                currentMember = Empty
+                // currentMember = Internal
+                // state = State.Empty
                 // currentVisibility = Hidden
-                abstractTypes = Map.empty // TODO: initialise with imported abstract types, fjg. 8.12.20
+                abstractTypes = Map.empty 
                 singletons = Map.empty  // TODO: initialise with imported singletons, fjg. 8.12.20
                 exportScope = SymbolTable.Scope.createExportScope ()
             }
@@ -103,26 +122,23 @@ module ExportInference =
         member this.IsExposedToplevelMember name = 
             Env.isExposedToplevelMember this.environment name
 
-        member this.IsExposedName name = 
-            Env.isExposedName this.environment name
+        member this.IsHiddenToplevelMember name = 
+            Env.isHiddenToplevelMember this.environment name
+
+        member this.IsHiddenImplicitMember name =
+            Env.isHiddenImplicitMember this.environment name
+
+        member this.GetDeclName name =
+            Env.getDeclName this.environment name
+
+        //member this.IsExposedName name = 
+        //    Env.isExposedName this.environment name
 
         member this.GetExports = 
             this.exportScope
 
-        //member this.SetCurrentVisiblity visibility =  
-        //    { this with currentVisibility = visibility }
 
-        member this.SetToplevelMember toplevelMember = 
-            match toplevelMember with
-            | Value name ->
-                if this.IsExposedName name then
-                    { this with currentMember = toplevelMember }
-                else // Nothing to do for hidden constant
-                    { this with currentMember = Empty}
-            | _ -> // TODO: complete this, fjg. 8.12.20
-                { this with currentMember = toplevelMember }
-         
-
+       
         member this.Show = 
             for n in this.singletons do
                 printfn "Singleton: %A Info: %A" n.Key n.Value
@@ -155,41 +171,15 @@ module ExportInference =
         do Diagnostics.Logger.logError ctx.logger Diagnostics.Phase.Exports err
         ctx
 
-
-
+    let private strengthenVisibility (exp: Exposing) someAst =
+        exp.StrengthenVisibility
+    
+    let private weakenVisibility (exp: Exposing) someAst =
+        exp.WeakenVisibility
+    
+        
     // begin ==========================================
     // recursively descend the AST for export inference
-
-    let private checkTransparentVisibility (ctx: ExportContext) (name: Name) = 
-        let declName = ctx.environment.GetLookupTable.getDeclName name
-        if ctx.IsExposedName declName then
-            ctx
-        else
-            Dummy (name.Range, sprintf "Value '%s' is less accessible than value '%s'" name.id ctx.currentMember.GetName.id)
-            |> logExportError ctx 
-
-    let private inferStaticNamedPath ctx (snp: AST.StaticNamedPath) = 
-        let lastName = List.last snp.names
-        match ctx.currentMember with
-        | Value _ ->
-            checkTransparentVisibility ctx lastName
-        | _ ->
-            ctx
-
-    let private inferDynamicNamePath ctx (dap: AST.DynamicAccessPath) =
-        let lastName = List.last dap.leadingNames
-        match ctx.currentMember with
-        | Value _ ->
-            checkTransparentVisibility ctx lastName
-        | _ ->
-            ctx
-
-    let private inferImplicitMember ctx (snp: AST.StaticNamedPath) = 
-        ctx
-
-    let private inferNameInCurrentScope ctx (sharing: Name) = 
-        ctx
-
 
     let private exportValueDecl (ctx: ExportContext) (name: Name) =
         if ctx.IsExposedToplevelMember name then
@@ -206,10 +196,6 @@ module ExportInference =
         else
             ctx
 
-    let private exportAbstractType (ctx: ExportContext) (name: Name) =
-        let expScp = Env.exportName ctx.environment name ctx.exportScope
-        { ctx with exportScope = expScp }
-        
 
     let private exportTypeDecl topLevelType (ctx: ExportContext) (name: Name) =
         if ctx.IsExposedToplevelMember name then 
@@ -224,82 +210,147 @@ module ExportInference =
         let modScp = Env.getModuleScope ctx.environment
         { ctx with exportScope = modScp }
 
-    let rec private inferUnitExpr ctx (ue: AST.UnitExpr) = 
+
+    let private exportIfAbstractType (ctx: ExportContext) (name: Name) =
+        let declName = ctx.GetDeclName name
+        match ctx.TryGetAbstractType declName with
+        | Some _ ->
+            let expScp = Env.exportName ctx.environment declName ctx.exportScope
+            { ctx with exportScope = expScp }
+        | _ ->
+            ctx
+
+
+    let private checkTransparentStaticName exp (ctx: ExportContext) (name: Name) = 
+        let declName = ctx.GetDeclName name
+        if ctx.IsHiddenToplevelMember declName then
+            Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id )
+            |> logExportError ctx 
+        else 
+            ctx
+
+    let private checkTransparentDynamicName exp (ctx: ExportContext) (name: Name) = 
+        let declName = ctx.GetDeclName name
+        if ctx.IsHiddenToplevelMember declName then
+            Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
+            |> logExportError ctx 
+        else 
+            ctx
+        
+    let private checkTransparentImplicitName exp (ctx: ExportContext) (name: Name) =
+        let declName = ctx.GetDeclName name
+        if ctx.IsHiddenImplicitMember declName then
+            Dummy (name.Range, sprintf "Implicit name '.%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
+            |> logExportError ctx 
+        else 
+            ctx
+
+
+    let private inferStaticNamedPath exp ctx (snp: AST.StaticNamedPath) = 
+        let firstName = List.head snp.names
+        match exp.visibility with
+        | Transparent ->
+            checkTransparentStaticName exp ctx firstName
+        | Semitransparent ->
+            exportIfAbstractType ctx firstName
+        | _ ->
+            ctx
+
+    let private inferDynamicNamePath exp ctx (dap: AST.DynamicAccessPath) =
+        let firstName = List.head dap.leadingNames
+        match exp.visibility with
+        | Transparent ->
+            checkTransparentDynamicName exp ctx firstName
+        | _ ->
+            ctx
+
+    let private inferImplicitMember exp ctx (snp: AST.StaticNamedPath) = 
+        let firstName = List.head snp.names
+        match exp.visibility with
+        | Transparent ->
+            checkTransparentImplicitName exp ctx firstName
+        | _ ->
+            ctx
+
+    let private inferNameInCurrentScope exp ctx (sharing: Name) = 
+        ctx
+    
+    let rec private inferUnitExpr exp ctx (ue: AST.UnitExpr) = 
         match ue with
         | UnitExpr.One _ ->
             ctx
         | UnitExpr.Parens (ue, _) ->
-            inferUnitExpr ctx ue
+            inferUnitExpr exp ctx ue
         | UnitExpr.Unit sname ->
-            inferStaticNamedPath ctx sname 
+            inferStaticNamedPath exp ctx sname 
         | UnitExpr.UnitExp (ue, _, _) ->
-            inferUnitExpr ctx ue
+            inferUnitExpr exp ctx ue
         | UnitExpr.UnitDiv (uel, uer)
         | UnitExpr.UnitMul (uel, uer) ->
-            inferUnitExpr ctx uel 
-            |> inferUnitExpr <| uer
+            inferUnitExpr exp ctx uel 
+            |> inferUnitExpr exp <| uer
  
     
-    let private inferLiteral ctx (lit: AST.Literal) = // infered because of units
+    let private inferLiteral exp ctx (lit: AST.Literal) = // infered because of units
         match lit with
         | Literal.Float (unit = ue)
         | Literal.Int (unit = ue) ->
-            Option.fold inferUnitExpr ctx ue
+            Option.fold (inferUnitExpr exp) ctx ue
         | _ ->
             ctx
 
 
-    let rec private inferCode ctx (c: AST.Code) =
+    let rec private inferCode exp ctx (c: AST.Code) =
         match c with
         | Code.Procedure fp   // will be dynamic with function pointers
-            -> inferDynamicAccessPath ctx fp
+            -> inferDynamicAccessPath exp ctx fp
 
 
-    and private inferStructField ctx field = 
-        inferExpr ctx field.expr
+    and private inferStructField exp ctx field = 
+        inferExpr exp ctx field.expr
 
 
-    and private inferArrayField ctx field =
-        Option.fold inferExpr ctx field.index
-        |> inferExpr <| field.value
+    and private inferArrayField exp ctx field =
+        Option.fold (inferExpr exp) ctx field.index
+        |> inferExpr exp <| field.value
 
 
-    and private inferAccess ctx (acc: AST.Access) =
+    and private inferAccess exp ctx (acc: AST.Access) =
         match acc with
         | Index (index = e)
         | StaticIndex (index = e) ->
-            inferExpr ctx e
+            inferExpr exp ctx e
         | _ ->
             ctx    
 
 
-    and private inferDynamicAccessPath ctx (dPath: AST.DynamicAccessPath) =
-        List.fold inferAccess ctx dPath.path
-        |> inferDynamicNamePath <| dPath
+    and private inferDynamicAccessPath exp ctx (dPath: AST.DynamicAccessPath) =
+        List.fold (inferAccess exp) ctx dPath.path
+        |> inferDynamicNamePath exp <| dPath
 
 
-    and private inferExpr ctx (exp: AST.Expr) =
-        match exp with
+    and private inferExpr exp ctx (expr: AST.Expr) =
+        match expr with
         | Expr.Const lit ->
-            inferLiteral ctx lit
+            inferLiteral exp ctx lit
         | Expr.AggregateConst (fieldExpr, _) ->
             match fieldExpr with
             | ResetFields -> ctx
-            | StructFields fields -> List.fold inferStructField ctx fields
-            | ArrayFields fields -> List.fold inferArrayField ctx fields
+            | StructFields fields -> List.fold (inferStructField exp) ctx fields
+            | ArrayFields fields -> List.fold (inferArrayField exp) ctx fields
         | Expr.SliceConst _ ->
             ctx
         | Expr.ImplicitMember name ->
-            inferImplicitMember ctx name
+            inferImplicitMember exp ctx name
         | Expr.Var pname ->
-            inferDynamicAccessPath ctx pname
+            inferDynamicAccessPath exp ctx pname
         | Expr.Not (e, _) 
         | Expr.Bnot (e, _)
         | Expr.Unm (e, _) 
         | Expr.Len (e, _)
         | Expr.Cap (e, _)
         | Expr.Parens (e, _) ->
-            inferExpr ctx e
+            inferExpr exp ctx e
         | Expr.And (s1, s2) 
         | Expr.Or (s1, s2)
         | Expr.Band (s1, s2) 
@@ -325,21 +376,21 @@ module ExportInference =
         | Expr.Mod (s1, s2)
         | Expr.Pow (s1, s2) ->
             ctx
-            |> inferExpr <| s1 
-            |> inferExpr <| s2
+            |> inferExpr exp <| s1 
+            |> inferExpr exp <| s2
         | Convert (expr, dty, _) 
         | HasType (expr, dty) ->
             ctx 
-            |> inferExpr <| expr
-            |> inferDataType <| dty
+            |> inferExpr exp <| expr
+            |> inferDataType exp <| dty
         | Expr.FunctionCall (fp, inputs, outputs, _) ->
             ctx
-            |> inferCode <| fp
-            |> List.fold inferExpr <| inputs
-            |> List.fold inferDynamicAccessPath <| outputs
+            |> inferCode exp <| fp
+            |> List.fold (inferExpr exp) <| inputs
+            |> List.fold (inferDynamicAccessPath exp) <| outputs
 
 
-    and private inferDataType ctx (dt: AST.DataType) =
+    and private inferDataType exp ctx (dt: AST.DataType) =
         match dt with
         | BoolType _
         | BitvecType _ ->
@@ -347,64 +398,65 @@ module ExportInference =
         | NaturalType (unit = uexp)
         | IntegerType (unit = uexp) 
         | FloatType (unit = uexp) ->
-            Option.fold inferUnitExpr ctx uexp
+            Option.fold (inferUnitExpr exp) ctx uexp
         | ArrayType (size = expr; elem = dty) ->
-            inferExpr ctx expr
-            |> inferDataType <| dty
+            strengthenVisibility exp expr // always strength visibility for expr - a compile-time value-dependent type
+            |> inferExpr <| ctx <| expr
+            |> inferDataType exp <| dty
         | SliceType (elem = dty) ->
-            inferDataType ctx dty
+            inferDataType exp ctx dty
         | TypeName snp ->
-            inferStaticNamedPath ctx snp
+            inferStaticNamedPath exp ctx snp
         | Signal (value = dt) ->
-            Option.fold inferDataType ctx dt
+            Option.fold (inferDataType exp) ctx dt
   
   
 
-    let private inferParamDecl ctx (pd: AST.ParamDecl) = 
-        List.fold inferNameInCurrentScope ctx pd.sharing
-        |> inferDataType <| pd.datatype
+    let private inferParamDecl exp ctx (pd: AST.ParamDecl) = 
+        List.fold (inferNameInCurrentScope exp) ctx pd.sharing
+        |> inferDataType exp <| pd.datatype
 
 
-    let private inferReturnDecl ctx (rd: AST.ReturnDecl) = 
-        List.fold inferNameInCurrentScope ctx rd.sharing
-        |> inferDataType <| rd.datatype
+    let private inferReturnDecl exp ctx (rd: AST.ReturnDecl) = 
+        List.fold (inferNameInCurrentScope exp) ctx rd.sharing
+        |> inferDataType  exp <| rd.datatype
  
  
-    let private inferVarDecl ctx (vd: AST.VarDecl) =
-        Option.fold inferDataType ctx vd.datatype
-        |> Option.fold inferExpr <| vd.initialiser
+    let private inferVarDecl exp ctx (vd: AST.VarDecl) =
+        Option.fold (inferDataType exp) ctx vd.datatype
+        |> Option.fold (inferExpr exp) <| vd.initialiser
 
 
-    let private inferStaticVarDecl ctx (vd: AST.VarDecl) =
-        Option.fold inferDataType ctx vd.datatype
-        |> Option.fold inferExpr <| vd.initialiser
+    let private inferStaticVarDecl exp ctx (vd: AST.VarDecl) =
+        Option.fold (inferDataType exp) ctx vd.datatype
+        |> Option.fold (inferExpr exp) <| vd.initialiser
         |> exportValueDecl <| vd.name
 
 
-    let private inferLocation ctx (lhs: AST.Receiver) =
+    let private inferLocation exp ctx (lhs: AST.Receiver) =
         match lhs with
         | AST.Location (Loc l) -> 
-            inferDynamicAccessPath ctx l
+            inferDynamicAccessPath exp ctx l
         | AST.FreshLocation vd ->
-            Option.fold inferDataType ctx vd.datatype
+            Option.fold (inferDataType exp) ctx vd.datatype
         | _ ->
             ctx
 
 
-    let private inferCondition ctx (cond: AST.Condition) =
+    let private inferCondition exp ctx (cond: AST.Condition) =
         match cond with
         | Condition.Cond e ->
-            inferExpr ctx e
+            inferExpr exp ctx e
         | Condition.SignalBinding ob ->
-            inferVarDecl ctx ob 
+            inferVarDecl exp ctx ob 
         | Condition.Tick (spath, _) ->
-            inferStaticNamedPath ctx spath
+            inferStaticNamedPath exp ctx spath
   
   
-    let rec private inferStatement ctx (stmt: AST.Stmt) =
+    let rec private inferStatement exp ctx (stmt: AST.Stmt) =
         match stmt with
         | LocalVar vdecl ->
-            inferVarDecl ctx vdecl
+            inferVarDecl exp ctx vdecl
             //Option.fold inferDataType ctx vdecl.datatype
             //|> Option.fold inferExpr <| vdecl.initialiser
             //|> addDecl <| vdecl
@@ -412,183 +464,200 @@ module ExportInference =
         | Assign (_, lhs, rhs) ->
             match lhs with
             | AST.Wildcard _ -> ctx
-            | AST.Loc l -> inferDynamicAccessPath ctx l
+            | AST.Loc l -> inferDynamicAccessPath exp ctx l
             
-            |> inferExpr <| rhs
+            |> inferExpr exp <| rhs
 
         | Assert (_, conds, msg) ->
-            List.fold inferCondition ctx conds
-            |> Option.fold inferExpr <| msg
+            List.fold (inferCondition exp) ctx conds
+            |> Option.fold (inferExpr exp) <| msg
 
         | Assume (_, conds, msg) ->
-            List.fold inferCondition ctx conds
-            |> Option.fold inferExpr <| msg
+            List.fold (inferCondition exp) ctx conds
+            |> Option.fold (inferExpr exp) <| msg
 
         | Await (_, conds) ->
-            List.fold inferCondition ctx conds
+            List.fold (inferCondition exp) ctx conds
 
         // TODO: Rather inelegant, can this be improved in the AST, fjg 02.08.2018 
         | ITE (_, conds, bodyIf, (bodyElse, isElseIf)) ->
-            List.fold inferCondition ctx conds
-            |> List.fold inferStatement <| bodyIf
-            |> List.fold inferStatement <| bodyElse
+            List.fold (inferCondition exp)  ctx conds
+            |> List.fold (inferStatement exp) <| bodyIf
+            |> List.fold (inferStatement exp) <| bodyElse
 
         | Cobegin (_, blockList) ->
-            let chkBlock ctx (_, stmts) =           // ignore strength
-                List.fold inferStatement ctx stmts
-            List.fold chkBlock ctx blockList
+            let chkBlock exp ctx (_, stmts) =           // ignore strength
+                List.fold (inferStatement exp) ctx stmts
+            List.fold (chkBlock exp) ctx blockList
 
         | WhileRepeat (_, conds, body) ->
-            List.fold inferCondition ctx conds
-            |> List.fold inferStatement <| body
+            List.fold (inferCondition exp) ctx conds
+            |> List.fold (inferStatement exp) <| body
 
         | RepeatUntil (_, body, conds) ->
-            List.fold inferStatement ctx body
-            |> List.fold inferCondition <| conds    // options bindings only visible in 'until' conditions
+            List.fold (inferStatement exp) ctx body
+            |> List.fold (inferCondition exp)  <| conds    // options bindings only visible in 'until' conditions
 
         | NumericFor (_, var, init, limit, step, body) ->
-            inferExpr ctx init
-            |> inferExpr <| limit
-            |> Option.fold inferExpr <| step
-            |> inferVarDecl <| var                  // loop var only visible inside loop
-            |> List.fold inferStatement <| body 
+            inferExpr exp ctx init
+            |> inferExpr exp <| limit
+            |> Option.fold (inferExpr exp) <| step
+            |> inferVarDecl exp <| var                  // loop var only visible inside loop
+            |> List.fold (inferStatement exp) <| body 
 
         | IteratorFor (_, var, _, iterable, body) -> 
-            inferExpr ctx iterable
-            |> inferVarDecl <| var                  // loop var only visible inside loop
-            |> List.fold inferStatement <| body 
+            inferExpr exp ctx iterable
+            |> inferVarDecl exp <| var                  // loop var only visible inside loop
+            |> List.fold (inferStatement exp) <| body 
 
         | Preempt (_, _, conds, _, body) ->            
-            List.fold inferCondition ctx conds      // option bindings not visible inside body
-            |> List.fold inferStatement <| body
+            List.fold (inferCondition exp) ctx conds      // option bindings not visible inside body
+            |> List.fold (inferStatement exp) <| body
 
         | Stmt.SubScope (_, body) ->
-            List.fold inferStatement ctx body
+            List.fold (inferStatement exp) ctx body
 
         | ActivityCall (_, optReceiver, ap, inputs, outputs) -> 
             // fresh location added to scope last, 'run let x = Activity(x)' should be wrong
-            inferCode ctx ap
-            |> List.fold inferExpr <| inputs
-            |> List.fold inferDynamicAccessPath <| outputs
-            |> Option.fold inferLocation <| optReceiver 
+            inferCode exp ctx ap
+            |> List.fold (inferExpr exp) <| inputs
+            |> List.fold (inferDynamicAccessPath exp) <| outputs
+            |> Option.fold (inferLocation exp) <| optReceiver 
 
         | FunctionCall (_, fp, inputs, outputs) ->
-            inferCode ctx fp
-            |> List.fold inferExpr <| inputs
-            |> List.fold inferDynamicAccessPath <| outputs
+            inferCode exp ctx fp
+            |> List.fold (inferExpr exp) <| inputs
+            |> List.fold (inferDynamicAccessPath exp) <| outputs
 
         | Emit (_, receiver, optExpr) ->
             // fresh location added to scope last, 'emit let x = x + 1' should be wrong
-            Option.fold inferExpr ctx optExpr 
-            |> inferLocation <| receiver
+            Option.fold (inferExpr exp) ctx optExpr 
+            |> inferLocation exp <| receiver
 
         | Return (_, expr) ->
-            Option.fold inferExpr ctx expr 
+            Option.fold (inferExpr exp) ctx expr 
         
         | Pragma _ 
         | Nothing ->
             ctx
  
  
-    let private inferSubprogram ctx (sp: AST.SubProgram) =
-        List.fold inferParamDecl ctx sp.inputs
-        |> List.fold inferParamDecl <| sp.outputs
-        |> Option.fold inferReturnDecl <| sp.result
-        |> List.fold inferStatement <| sp.body
+    let private inferSubprogram (exp: Exposing) ctx (sp: AST.SubProgram) =
+        let bodyExp = weakenVisibility exp sp
+        List.fold (inferParamDecl exp) ctx sp.inputs
+        |> List.fold (inferParamDecl exp) <| sp.outputs
+        |> Option.fold (inferReturnDecl exp) <| sp.result
+        |> List.fold (inferStatement bodyExp) <| sp.body   // do not weaken for compile-time functions
         |> exportProcedureDecl <| sp.name
 
 
-    let private inferFunctionPrototype ctx (fp: Prototype) =
-        List.fold inferParamDecl ctx fp.inputs
-        |> List.fold inferParamDecl <| fp.outputs
-        |> Option.fold inferReturnDecl <| fp.result
+    let private inferFunctionPrototype exp ctx (fp: Prototype) =
+        List.fold (inferParamDecl exp) ctx fp.inputs
+        |> List.fold (inferParamDecl exp) <| fp.outputs
+        |> Option.fold (inferReturnDecl exp) <| fp.result
         |> exportProcedureDecl <| fp.name
 
 
-    let private inferUnitDecl ctx (ud: AST.UnitDecl) =
+    let private inferUnitDecl exp ctx (ud: AST.UnitDecl) =
         exportValueDecl ctx ud.name
 
  
-    let private inferTagDecl ctx (td: AST.TagDecl) =
-        Option.fold inferExpr ctx td.rawvalue
+    let private inferTagDecl exp ctx (td: AST.TagDecl) =
+        Option.fold (inferExpr exp) ctx td.rawvalue
         
 
     // all field names are syntactically var decls
-    let private inferFieldDecl ctx (field: AST.Member) =
+    let private inferFieldDecl exp ctx (field: AST.Member) =
         match field with
-        | Member.Var fdecl ->    
-            Option.fold inferDataType ctx fdecl.datatype
-            |> Option.fold inferExpr <| fdecl.initialiser
+        | Member.Var fdecl ->  
+            let exp = Option.fold strengthenVisibility exp fdecl.initialiser // strengthen only if initialiser is present    
+            Option.fold (inferDataType exp) ctx fdecl.datatype
+            |> Option.fold (inferExpr exp) <| fdecl.initialiser
         | _ -> // other members do no occur as fields
             ctx
 
-    let rec private inferEnumType ctx (etd: AST.EnumTypeDecl) =
-        Option.fold inferDataType ctx etd.rawtype   // infer rawtype first 
-        |> List.fold inferTagDecl <| etd.tags
-        |> List.fold inferMember <| etd.members
+    let rec private inferEnumType exp ctx (etd: AST.EnumTypeDecl) =
+        Option.fold (inferDataType exp) ctx etd.rawtype   // infer rawtype first 
+        |> List.fold (inferTagDecl exp) <| etd.tags
+        |> List.fold (inferExtensionMember exp)  <| etd.members
         |> exportTypeDecl Complex <| etd.name
 
 
-    and private inferStructType ctx (std: AST.StructTypeDecl) =
-        List.fold inferFieldDecl ctx std.fields  // infer fields first, before typename becomes visible  
-        |> List.fold inferMember <| std.members
+    and private inferStructType exp ctx (std: AST.StructTypeDecl) =
+        List.fold (inferFieldDecl exp) ctx std.fields  // infer fields first, before typename becomes visible  
+        |> List.fold (inferExtensionMember exp) <| std.members
         |> exportTypeDecl Complex <| std.name
 
 
-    and private inferOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
-        List.fold inferMember ctx ntd.members
+    and private inferOpaqueType exp ctx (ntd: AST.OpaqueTypeDecl) =
+        List.fold (inferExtensionMember exp)  ctx ntd.members
         |> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
 
 
-    and private inferTypeAlias ctx (tad: AST.TypeAliasDecl) =
+    and private inferTypeAlias exp ctx (tad: AST.TypeAliasDecl) =
         let topLevelType = 
             match tad.aliasfor with
             | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> Simple
             | _ -> Complex
 
-        inferDataType ctx tad.aliasfor
-        |> List.fold inferMember <| tad.members
+        inferDataType exp ctx tad.aliasfor
+        |> List.fold (inferExtensionMember exp) <| tad.members  // TODO: change this to something like inferMethod
         |> exportTypeDecl topLevelType <| tad.name
 
 
-    and private inferMember ctx (m: AST.Member) =
+    and private inferExtensionMember exp ctx (em: AST.Member) = 
+        match em with
+        | Member.TypeAlias ta ->
+            inferTypeAlias exp ctx ta
+        | Member.Var svd ->
+            inferStaticVarDecl exp ctx svd
+        | Member.Subprogram sp ->
+            inferSubprogram exp ctx sp
+        | Member.Prototype fp ->
+            inferFunctionPrototype exp ctx fp
+        | _ ->
+            failwith "îllegal member in extension, this should have been excluded by the parser"
+
+
+    let private inferTopLevelMember (ctx: ExportContext) (m: AST.Member) =
         match m with
         | Member.EnumType et ->
-            let ctx = ctx.SetToplevelMember (Type et.name)
-            inferEnumType ctx et
+            let exp = Exposing.Type ctx.environment et.name
+            inferEnumType exp ctx et
         | Member.StructType st ->
-            let ctx = ctx.SetToplevelMember (Type st.name)
-            inferStructType ctx st
+            let exp = Exposing.Type ctx.environment st.name
+            inferStructType exp ctx st
         | Member.OpaqueType ot ->
-            let ctx = ctx.SetToplevelMember (Type ot.name)
-            inferOpaqueType ctx ot
+            let exp = Exposing.Type ctx.environment ot.name
+            inferOpaqueType exp ctx ot
         | Member.TypeAlias ta ->
-            let ctx = ctx.SetToplevelMember (Type ta.name)
-            inferTypeAlias ctx ta
-        | Member.Var vdecl ->
-            let ctx = ctx.SetToplevelMember (Value vdecl.name)
-            inferStaticVarDecl ctx vdecl
+            let exp = Exposing.Type ctx.environment ta.name
+            inferTypeAlias exp ctx ta
+        | Member.Var svd -> 
+            let exp = Exposing.Value ctx.environment svd.name
+            inferStaticVarDecl exp ctx svd
         | Member.Subprogram sp ->
-            let ctx = ctx.SetToplevelMember (Procedure sp.name)
-            inferSubprogram ctx sp
+            let exp = Exposing.Type ctx.environment sp.name
+            inferSubprogram exp ctx sp
         | Member.Prototype fp ->
-            let ctx = ctx.SetToplevelMember (Procedure fp.name)
-            inferFunctionPrototype ctx fp
+            let exp = Exposing.Type ctx.environment fp.name
+            inferFunctionPrototype exp ctx fp
         | Member.Unit u ->
             // inferUnitDecl ctx u
-            ctx.SetToplevelMember Empty
+            ctx
         | Member.Clock _ ->
-            ctx.SetToplevelMember Empty
+            ctx
         | Member.Pragma _->
-            ctx.SetToplevelMember Empty 
+            ctx 
         | Member.Nothing -> 
             failwith "this should have been removed"
-    
+        
 
     // Import
     let private inferImport ctx (import: AST.Import) = 
         ctx
-    
+
+
     // ModuleSpec 
     let private inferExposingAll ctx (exposing: AST.Exposing) = 
         match exposing with
@@ -606,7 +675,7 @@ module ExportInference =
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
             //List.fold inferImport ctx cu.imports
-            List.fold inferMember ctx cu.members
+            List.fold inferTopLevelMember ctx cu.members
             |> Option.fold inferModuleSpecLast <| cu.spec  // export all after 
         else
             ctx

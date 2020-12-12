@@ -1,4 +1,4 @@
-module exposes T, Color
+module exposes T, Color, RED, BLUE
 
 typealias T = int32
 
@@ -11,4 +11,6 @@ extension // Thats bad because internal structure and methods are either hidden 
     end
 end
 
-// const RED: Color = Color.Red
+const RED : Color = Color.Red
+
+const BLUE : Color = .Blue

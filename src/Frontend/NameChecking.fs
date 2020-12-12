@@ -126,14 +126,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx     
         
         
-    let private addHiddenDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
-        let name = decl.name
-        match Env.insertHiddenName ctx.env name label with
-        | Ok env -> 
-            { ctx with env = env }
-        | Error err ->
-            Logger.logError ctx.logger Diagnostics.Phase.Naming err
-            ctx
+    //let private addHiddenDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
+    //    let name = decl.name
+    //    match Env.insertHiddenName ctx.env name label with
+    //    | Ok env -> 
+    //        { ctx with env = env }
+    //    | Error err ->
+    //        Logger.logError ctx.logger Diagnostics.Phase.Naming err
+    //        ctx
 
     //let private addExposedDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
     //    let name = decl.name
@@ -350,7 +350,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkParamDecl ctx (pd: AST.ParamDecl) = 
         List.fold identifyNameInCurrentScope ctx pd.sharing
         |> checkDataType <| pd.datatype
-        |> addHiddenDecl <| pd <| IdLabel.Dynamic // added to scope last, not visible for sharing constraints and types
+        |> addDecl <| pd <| IdLabel.Dynamic // added to scope last, not visible for sharing constraints and types
 
 
     let checkReturnDecl ctx (rd: AST.ReturnDecl) = 
@@ -361,7 +361,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkVarDecl ctx (vd: AST.VarDecl) =
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
-        |> addHiddenDecl <| vd <| IdLabel.Dynamic // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        |> addDecl <| vd <| IdLabel.Dynamic // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
 
 
     let checkStaticVarDecl ctx (vd: AST.VarDecl) = 
@@ -377,7 +377,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             checkDynamicAccessPath ctx l
         | AST.FreshLocation vd ->
             Option.fold checkDataType ctx vd.datatype
-            |> addHiddenDecl <| vd <| IdLabel.Dynamic 
+            |> addDecl <| vd <| IdLabel.Dynamic 
         | _ ->
             ctx
 
@@ -538,7 +538,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | Member.Var fdecl ->    
             Option.fold checkDataType ctx fdecl.datatype
             |> Option.fold checkExpr <| fdecl.initialiser
-            |> addHiddenDecl <| fdecl <| IdLabel.Static
+            |> addDecl <| fdecl <| IdLabel.Static
         | _ -> // other members do no occur as fields
             ctx
 

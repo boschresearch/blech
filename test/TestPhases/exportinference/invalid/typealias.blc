@@ -1,0 +1,7 @@
+module exposes Buffer
+
+typealias Index = nat32   // must not be abstract
+
+typealias Element = bool  // abstract
+
+typealias Buffer = [4: Index] Element // Index must not be abstact

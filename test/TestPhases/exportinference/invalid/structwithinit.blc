@@ -1,4 +1,4 @@
-module exposes S, MyInt, MY_VALUE
+module exposes S, MY_VALUE
 
 
 typealias MyInt = int32  // must not be abstract

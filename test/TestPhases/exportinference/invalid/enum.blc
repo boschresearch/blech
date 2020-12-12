@@ -13,4 +13,4 @@ extension // Thats bad because internal structure and methods are either hidden 
     end
 end
 
-// const RED: Color = Color.Red
+const RED: Color = .Red
