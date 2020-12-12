@@ -491,7 +491,7 @@ let private unsupported9 str r _ _ _ _ _ _ _ _ = Error [UnsupportedFeature (r, s
 //=============================================================================
 
 /// Check a type annotation
-let rec private fDataType  = checkDataType
+let rec private fDataType = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
@@ -755,7 +755,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
             Ok qname
             |> combine <| checkValueFields std.fields
             |> Result.map (
-                fun (q, f) -> (std.name.Range, q, f)
+                fun (q, f) -> (q, f)
                 >> ValueTypes.StructType >> ValueTypes )
     // add type declaration to lookup table
     match newType with
@@ -803,7 +803,7 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | None -> Ok rhsTyp  // if no datatype is given take the activity return type as the location type
             | Some lhsTypRes -> lhsTypRes    
         dtyRes
-        |> Result.map (getInitValueWithoutZeros Range.range0 "")
+        |> Result.map (getInitValueWithoutZeros Range.range0 "") // TODO: will crash for opaque types
         |> Result.bind (combine dtyRes)
         
 
@@ -850,13 +850,10 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Some (UsedLoc tlhs) ->
                 let typ = tlhs.typ
                 if isLhsMutable lut tlhs.lhs then
-                    if typ.IsAssignable then  // TODO: This will always be true if we assign structs with let fields, fjg 30.06.20
-                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                            Ok storage 
-                        else 
-                            Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
-                    else
-                        Error [AssignmentToLetFields (pos, tlhs.ToString())]
+                    if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                        Ok storage 
+                    else 
+                        Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
                 else Error [AssignmentToImmutable (pos, tlhs.ToString())]
             )
     
@@ -926,17 +923,14 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
 
 let private fAssign lut pos lhs rhs =
     let createAssign myleft (myright: TypedRhs) =
-        amendRhsExpr false myleft.typ myright
+        amendRhsExpr myleft.typ myright
         |> Result.map (fun amendedRight -> Assign (pos, myleft, amendedRight))
     
     lhs
     |> combine <| rhs
     |> Result.bind (fun (l, r) -> 
         if isLhsMutable lut l.lhs then
-            if l.typ.IsAssignable then
-                createAssign l r
-            else
-                Error [AssignmentToLetFields (pos, l.ToString())]
+            createAssign l r
         else Error [AssignmentToImmutable (pos, l.ToString())]
         )
 
@@ -1054,7 +1048,7 @@ let private fReturn retTypOpt pos exprOpt =
     | None, None -> Return (pos, None) |> Ok
     | Some retTyp, Some expr ->
         combine retTyp expr 
-        |> Result.bind (fun (r, e) -> amendRhsExpr true r e)
+        |> Result.bind (fun (r, e) -> amendRhsExpr r e)
         |> Result.bind (fun (e: TypedRhs) -> match e.typ with | ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
         |> Result.map (fun e -> Return (pos, Some e))
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
@@ -1290,11 +1284,9 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddFunAct funact
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
-                // determine if this is a external function prototype
-                // or an opaque singleton
                 let kind = 
                     if f.isOpaque then
-                        ProcedureKind.Opaque
+                        ProcedureKind.OpaqueProcedure
                     elif f.isExtern && f.isFunction then
                         ProcedureKind.ExternFunction
                     elif not f.isExtern && f.isFunction then

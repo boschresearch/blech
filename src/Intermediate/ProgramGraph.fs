@@ -112,7 +112,7 @@ module IntermediateContext =
         | Some t -> [ t ]
         | None ->
             match TypeCheckContext.getDatatypeFromTML context.lut tml with
-            | ValueTypes (ValueTypes.StructType (_, _, fields))
+            | ValueTypes (ValueTypes.StructType (_, fields))
             | ReferenceTypes (ReferenceTypes.StructType (_, _, fields)) ->
                 [
                     for field in fields do

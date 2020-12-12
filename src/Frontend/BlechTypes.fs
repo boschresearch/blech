@@ -60,14 +60,14 @@ type ProcedureKind =
     | Activity
     | LocalFunction
     | ExternFunction
-    | Opaque
+    | OpaqueProcedure
 
     override this.ToString() =
         match this with
         | Activity -> "activity"
         | LocalFunction -> "function"
         | ExternFunction -> "extern function"
-        | Opaque -> ""
+        | OpaqueProcedure -> ""
 
     member this.ToDoc = txt <| this.ToString()
 
@@ -83,8 +83,10 @@ type ValueTypes =
     | FloatType of FloatType
     //structured
     | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
-    | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
+    | StructType of name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
+    | OpaqueSimple of name:QName
+    | OpaqueComplex of name:QName
     
     member this.ToDoc = txt <| this.ToString()
     
@@ -97,17 +99,14 @@ type ValueTypes =
         | BitsType b -> b.ToString()    
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
-        | StructType (_, q, _) -> q.ToString()
+        | StructType (q, _) -> q.ToString()
+        | OpaqueComplex n -> sprintf "type %s" (n.ToString())
+        | OpaqueSimple n -> sprintf "simpletype %s" (n.ToString())
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ -> true
-        | ArrayType _ | StructType _ -> false
-
-    member this.TryRange =
-        match this with
-        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
-        | StructType (r,_,_) -> Some r
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple _ -> true
+        | ArrayType _ | StructType _ | OpaqueComplex _ -> false
 
     
 /// Reference Types are not used anywhere as of the first release 2019/2020
@@ -177,47 +176,6 @@ and Types =
         match this with
         | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
-
-    /// true iff data blob may be assigned (or reset) as a whole
-    /// relevant for value typed structs and arrays
-    /// which contain structs with `let` fields
-    member this.IsAssignable =
-        let isFieldMutable (field: VarDecl) =
-            // if a field has been declared immutable
-            // it is also not assignable as a whole
-            field.mutability.Equals Mutability.Variable
-            && field.datatype.IsAssignable
-
-        match this with
-        // only "any" literal on the lhs is wildcard
-        | Any -> true
-        | AnyInt
-        | AnyBits
-        | AnyFloat
-        | AnyComposite
-        | ReferenceTypes _ -> false
-        // the relevant case
-        | ValueTypes vt ->
-            match vt with
-            // primitives are assignable (if they are mutable)
-            | Void
-            | BoolType
-            | IntType _
-            | NatType _
-            | BitsType _
-            | FloatType _ -> true
-            // check structs and arrays recursively
-            | ValueTypes.StructType (_,_,fields) ->
-                List.forall isFieldMutable fields
-            | ValueTypes.ArrayType (_,dty) ->
-                (ValueTypes dty).IsAssignable
-                
-    
-    member this.TryRange =
-        match this with
-        | ValueTypes v -> v.TryRange
-        | ReferenceTypes r -> r.TryRange
-        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> None
 
 
 //=============================================================================
@@ -363,13 +321,13 @@ and ProcedurePrototype =
 
     member this.IsFunction =
         match this.kind with
-        | Activity | Opaque -> false
+        | Activity | OpaqueProcedure -> false
         | LocalFunction | ExternFunction -> true
 
     member this.IsActivity =
         match this.kind with
         | Activity -> true
-        | Opaque | LocalFunction | ExternFunction -> false
+        | OpaqueProcedure | LocalFunction | ExternFunction -> false
 
     //member this.IsExtern =
     //    match this.kind with

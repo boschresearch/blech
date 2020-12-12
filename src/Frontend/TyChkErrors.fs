@@ -52,6 +52,7 @@ type TyCheckError =
     | VarDeclMissingTypeOrValue of range * Identifier
     | VarDeclRequiresExplicitType of range * Identifier
     | NoDefaultValueForSecondClassType of range * Identifier * ReferenceTypes
+    | NoDefaultValueForOpaque of range * Identifier
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
     // expressions
     | InvalidFloat of range * string
@@ -74,7 +75,6 @@ type TyCheckError =
     | IndexMustBeInteger of range * TypedRhs * TypedMemLoc
     | StaticArrayOutOfBounds of range * TypedRhs * TypedMemLoc * Size
     | AssignmentToImmutable of range * Identifier
-    | AssignmentToLetFields of range * Identifier
     | ImmutableOutArg of range * TypedLhs
     | ConditionHasSideEffect of TypedRhs
     | InitialisationHasSideEffect of TypedRhs
@@ -228,6 +228,7 @@ type TyCheckError =
             | VarDeclMissingTypeOrValue (p, n) -> p, sprintf "The declaration of variable %s needs either a type annotation or an initialisation." (string n)
             | VarDeclRequiresExplicitType (p, n) -> p, sprintf "Could not infer type of %s. Please provide explicit type information." (string n)
             | NoDefaultValueForSecondClassType (p, n, typ) -> p, sprintf "Internal error: tried to determine a default value for %s which has type %s." (string n) (typ.ToString())
+            | NoDefaultValueForOpaque (pos, name) -> pos, sprintf "Internal error: tried to determine a default value for %s which is opaque." name
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
             
             // expressions
@@ -251,7 +252,6 @@ type TyCheckError =
             | IndexMustBeInteger (r, idx, dPath) -> r, sprintf "The array access [%s] in %s must evaluate to an integer." (idx.ToString()) (dPath.ToBasicString())
             | StaticArrayOutOfBounds (r, idx, dPath, maxIdx) -> r, sprintf "The array access [%s] in %s is out of bounds [0..%s]." (idx.ToString()) (dPath.ToBasicString()) (string maxIdx)
             | AssignmentToImmutable (p, l) -> p, sprintf "%s is immutable and cannot be assigned any value" (l.ToString())
-            | AssignmentToLetFields (p, l) -> p, sprintf "%s contains substructures with immutable fields. It therefore cannot be overwritten as a whole." (l.ToString())
             | ImmutableOutArg(p, l) -> p, sprintf "Read-only location %s cannot be passed as an output argument." (l.ToString())
             | ConditionHasSideEffect cond -> cond.Range, sprintf "The condition %s has a side-effect. This is not allowed." (cond.ToString())
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())

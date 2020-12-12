@@ -71,7 +71,7 @@ let internal isLhsMutable lut lhs =
         let ism, typ = isTmlMutable tml
         if ism then
             match typ with
-            | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+            | ValueTypes (ValueTypes.StructType (typname, typfields))
             | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                 typfields
                 |> List.tryFind (fun f -> f.name.basicId = ident)
@@ -578,7 +578,7 @@ and getInitValueForTml lut tml =
                     | Some e -> snd e |> Ok // found an initialiser, return that
                     | None ->               // nope, get default value for that field
                         match v.typ with
-                        | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
+                        | ValueTypes (ValueTypes.StructType (_, fields)) ->
                             fields 
                             |> List.find (fun vdecl -> vdecl.name.basicId = ident)
                             |> (fun vdecl -> getInitValueWithoutZeros Range.range0 "" vdecl.datatype)
@@ -994,7 +994,7 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
 let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
     let expr = 
         if checkedExpr.typ.IsCompoundLiteral then
-            amendCompoundLiteral false checkedType checkedExpr
+            amendCompoundLiteral checkedType checkedExpr
         else 
             tryAmendPrimitiveAny checkedType checkedExpr        
     expr
@@ -1208,10 +1208,7 @@ let internal checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> l
                     Error [ExprMustBeALocationL (pos, argExpr)] :: typecheckOutputs ls
                 else
                     if isLhsMutable lut argExpr.lhs then
-                        if argExpr.typ.IsAssignable then
-                            Ok argExpr :: typecheckOutputs ls
-                        else
-                            Error [AssignmentToLetFields (pos, argExpr.ToString())] :: typecheckOutputs ls
+                        Ok argExpr :: typecheckOutputs ls
                     else
                         Error [ImmutableOutArg(pos, argExpr)] :: typecheckOutputs ls
             else
@@ -1229,7 +1226,7 @@ let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams
     let rec typecheckInputs = function
         | [] -> []
         | ((argDecl: ParamDecl), (expr: TypedRhs))::ls -> 
-            match amendRhsExpr true argDecl.datatype expr with // this behaves like an initialisation
+            match amendRhsExpr argDecl.datatype expr with // this behaves like an initialisation
             | Ok amendedExpr ->
                 if argDecl.datatype.IsValueType() || isExprALocation amendedExpr then
                     Ok amendedExpr :: typecheckInputs ls
@@ -1340,7 +1337,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 tmlAndType
                 |> Result.bind (fun (tml,typ) ->
                     match typ with
-                    | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+                    | ValueTypes (ValueTypes.StructType (typname, typfields))
                     | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                         typfields
                         |> List.tryFind (fun f -> f.name.basicId = name.id)
@@ -1552,14 +1549,6 @@ and internal checkDataType lut utyDataType =
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
-        //let ensurePositiveSize num =
-        //    if num > Constants.SizeZero then Ok num
-        //    else Error [PositiveSizeExpected(pos, num)]
-        //let checkSize =
-        //    checkExpr lut 
-        //    >> Result.bind (evalCompTimeSize lut)
-        //    //>> Result.bind ensurePositiveSize
-        //checkSize size
         checkExpr lut size
         |> Result.bind (evalCompTimeSize lut)
         |> Result.bind(fun checkedSize ->
