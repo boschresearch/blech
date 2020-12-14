@@ -144,7 +144,7 @@ let internal cpFunctionIface tcc (iface: Compilation) =
 // Note no initialisation takes places here, this is done in the entry point
 // activity in the surface.
 let internal cpMainStateAsStatics (iface: Compilation) =
-    let typename = txt "struct" <+> cpStaticName iface.name
+    let typename = txt "static struct" <+> cpStaticName iface.name
     let ctxname = txt CTX
     typename <+> ctxname <^> semi
 
