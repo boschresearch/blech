@@ -117,14 +117,14 @@ module ExportInference =
         member this.AddAbstractType name abstype = 
             { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
     
-        member this.AddRequiredImports name =
-            if Env.isImportedName this.environment name.id then
-                match Env.tryGetImportForMember this.environment name.id with
+        member this.AddRequiredImports (id: Identifier) =
+            if Env.isImportedName this.environment id then
+                match Env.tryGetImportForMember this.environment id with
                 | Some moduleId ->
                     { this with requiredImports = Map.add moduleId None this.requiredImports 
-                                                  |> Map.add name.id (Some moduleId) }
+                                                  |> Map.add id (Some moduleId) }
                 | None ->
-                    { this with requiredImports = Map.add name.id None this.requiredImports }
+                    { this with requiredImports = Map.add id None this.requiredImports }
             else
                 this
 
@@ -136,12 +136,7 @@ module ExportInference =
             let declName = Env.getDeclName this.environment name
             this.singletons.TryFind declName
 
-        //member this.GetDeclName name =
-        //    Env.getDeclName this.environment name
-
-        //member this.IsExposedName name = 
-        //    Env.isExposedName this.environment name
-
+        
         member this.GetExports = 
             this.exportScope
 
@@ -153,6 +148,8 @@ module ExportInference =
                 printfn "Abstract Type : %A Value: %A" n.Key n.Value
             printfn "Exports: %A" this.exportScope
             
+        member this.ShowRequiredImports =
+            printfn "Required imports: %A" this.requiredImports
 
     type ExportError = 
         | Dummy of range: Range.range * msg: string   // just for development purposes
@@ -218,7 +215,20 @@ module ExportInference =
         { ctx with exportScope = modScp }
 
 
-    let private exportIfAbstractType (ctx: ExportContext) (name: Name) =
+    let private requireImportForMemberIfImported (ctx: ExportContext) (name: Name) =
+        // printfn "try get import for member: %A" name
+        match Env.tryGetImportForMember ctx.environment name.id with
+        | Some declScopeId ->
+            ctx.AddRequiredImports declScopeId
+        | None ->
+            ctx
+
+    let private requireImportIfImported (ctx: ExportContext) (name: Name) =
+        // printfn "require import for: %s" name.id
+        ctx.AddRequiredImports name.id
+
+
+    let private exportNameIfAbstractType (ctx: ExportContext) (name: Name) =
         match ctx.TryGetAbstractType name with
         | Some _ ->
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
@@ -226,8 +236,6 @@ module ExportInference =
         | _ ->
             ctx
 
-    let private requireIfImported (ctx: ExportContext) (name: Name) = 
-        ctx.AddRequiredImports name
     
 
     let private checkTransparentStaticName exp (ctx: ExportContext) (name: Name) = 
@@ -257,8 +265,10 @@ module ExportInference =
         match exp.visibility with
         | Transparent ->
             checkTransparentStaticName exp ctx firstName
+            |> requireImportIfImported <| firstName
         | Semitransparent ->
-            exportIfAbstractType ctx firstName
+            exportNameIfAbstractType ctx firstName
+            |> requireImportIfImported <| firstName
         | _ ->
             ctx
 
@@ -267,6 +277,7 @@ module ExportInference =
         match exp.visibility with
         | Transparent ->
             checkTransparentDynamicName exp ctx firstName
+            |> requireImportIfImported <| firstName
         | _ ->
             ctx
 
@@ -275,6 +286,7 @@ module ExportInference =
         match exp.visibility with
         | Transparent ->
             checkTransparentImplicitName exp ctx firstName
+            |> requireImportForMemberIfImported <| firstName
         | _ ->
             ctx
 
@@ -695,11 +707,13 @@ module ExportInference =
 
     // end =========================================
 
-    let inferExports logger (env: SymbolTable.Environment) (cu: AST.CompilationUnit) = 
-        let ctx = ExportContext.Initialise logger env
-        let exports = inferCompilationUnit ctx cu
+    let inferExports logger (env: SymbolTable.Environment) (cu: AST.CompilationUnit) =
+        let exports =
+            ExportContext.Initialise logger env
+            |> inferCompilationUnit <| cu
         // just for debugging
         // show exports
+        exports.ShowRequiredImports 
         if Diagnostics.Logger.hasErrors exports.logger then
             Error exports.logger
         else

@@ -406,15 +406,15 @@ module SymbolTable =
 
 
         let isHiddenImplicitMember env id =
+            // printfn "check implicit member: '%s'" id
             let modScp = getModuleScope env
             let openInnerScopes = Map.filter (fun _ scp -> Scope.isOpen scp) modScp.innerscopes
-            let declScpId = Map.pick (fun scpId scp -> if Scope.containsSymbol scp id then Some scpId else None) openInnerScopes
-            not <| Scope.containsSymbol env.exposing declScpId            
-            
+            match Map.tryPick (fun scpId scp -> if Scope.containsSymbol scp id then Some scpId else None) openInnerScopes with
+            | Some declScpId ->
+                not <| Scope.containsSymbol env.exposing declScpId            
+            | None ->
+                false
         
-        //let isImported env id = 
-        //    let globScp = getGlobalScope env 
-        //    Scope.containsSymbol globScp id
 
         let isImportedName env id =
             let importScope = getGlobalScope env
@@ -423,13 +423,16 @@ module SymbolTable =
 
         let tryGetImportForMember env id =
             let globScp = getGlobalScope env
-            let openInnerScopes = Map.filter (fun _ (scope: Scope) -> Scope.isOpen scope) globScp.innerscopes
-            let declScpId = Map.pick (fun _ scp -> if Scope.containsSymbol scp id then Some id else None) openInnerScopes
-            if Scope.containsSymbol globScp declScpId then
-                Some declScpId  
-            else
+            let openInnerScopes = Map.filter (fun _ scp -> Scope.isOpen scp) globScp.innerscopes
+            match Map.tryPick (fun scpId scp -> if Scope.containsSymbol scp id then Some scpId else None) openInnerScopes with
+            | Some declScpId -> 
+                // printfn "Decl Scope Id: %s member id: %s" declScpId id
+                if Scope.containsSymbol globScp declScpId 
+                    then Some declScpId  
+                    else None
+            | None ->
+                // printfn "No decl scope for: %s" id
                 None
-
 
         let currentScopeIsExposed env =
             let cs = currentScope env

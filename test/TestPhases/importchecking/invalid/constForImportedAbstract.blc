@@ -2,4 +2,4 @@ import AT "imports/abstracttype"
 
 module exposes c
 
-const c: AT.S = {x = true}
+const c: AT.S = {x = true}  // This should fail during type checking
