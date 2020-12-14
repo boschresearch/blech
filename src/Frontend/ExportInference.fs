@@ -66,14 +66,14 @@ module ExportInference =
 
         /// Exposing state for const, param, clock, unit
         static member Value env name  = 
-            let vb = if Env.isExposedToplevelMember env name then Transparent else Invisible
+            let vb = if Env.isExposedToplevelMember env name.id then Transparent else Invisible
             { topLevelMember = name 
               visibility = vb 
               calledSingletons = [] }
                    
         /// Exposing state for types, functions, activities, prototypes
         static member Type env name =
-            let vb = if Env.isExposedToplevelMember env name then Semitransparent else Invisible
+            let vb = if Env.isExposedToplevelMember env name.id then Semitransparent else Invisible
             { topLevelMember = name 
               visibility = vb 
               calledSingletons = [] }
@@ -93,50 +93,57 @@ module ExportInference =
         private {
             environment : SymbolTable.Environment
             logger : Diagnostics.Logger
+            
             abstractTypes : Map<Name, ToplevelType> 
-            singletons : Map<Name, Singleton>
+            singletons : Map<Name, Singleton> 
+            
             exportScope : SymbolTable.Scope
+            requiredImports: Map<Identifier, Identifier option> // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
         }
 
         static member Initialise (logger: Diagnostics.Logger) (env: SymbolTable.Environment) = 
             { 
                 environment = env
                 logger = logger
-                // currentMember = Internal
-                // state = State.Empty
-                // currentVisibility = Hidden
-                abstractTypes = Map.empty 
+                
+                abstractTypes = Map.empty // TODO: initialse with imported abstract types for inference of simple opaque types
                 singletons = Map.empty  // TODO: initialise with imported singletons, fjg. 8.12.20
+                
                 exportScope = SymbolTable.Scope.createExportScope ()
+                requiredImports = Map.empty
+                
             }
 
         member this.AddAbstractType name abstype = 
             { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
+    
+        member this.AddRequiredImports name =
+            if Env.isImportedName this.environment name.id then
+                match Env.tryGetImportForMember this.environment name.id with
+                | Some moduleId ->
+                    { this with requiredImports = Map.add moduleId None this.requiredImports 
+                                                  |> Map.add name.id (Some moduleId) }
+                | None ->
+                    { this with requiredImports = Map.add name.id None this.requiredImports }
+            else
+                this
 
         member this.TryGetAbstractType name =
-            this.abstractTypes.TryFind name
+            let declName = Env.getDeclName this.environment name
+            this.abstractTypes.TryFind declName
 
         member this.TryGetSingleton name = 
-            this.singletons.TryFind name
+            let declName = Env.getDeclName this.environment name
+            this.singletons.TryFind declName
 
-        member this.IsExposedToplevelMember name = 
-            Env.isExposedToplevelMember this.environment name
-
-        member this.IsHiddenToplevelMember name = 
-            Env.isHiddenToplevelMember this.environment name
-
-        member this.IsHiddenImplicitMember name =
-            Env.isHiddenImplicitMember this.environment name
-
-        member this.GetDeclName name =
-            Env.getDeclName this.environment name
+        //member this.GetDeclName name =
+        //    Env.getDeclName this.environment name
 
         //member this.IsExposedName name = 
         //    Env.isExposedName this.environment name
 
         member this.GetExports = 
             this.exportScope
-
 
        
         member this.Show = 
@@ -182,25 +189,25 @@ module ExportInference =
     // recursively descend the AST for export inference
 
     let private exportValueDecl (ctx: ExportContext) (name: Name) =
-        if ctx.IsExposedToplevelMember name then
-            let expScp = Env.exportName ctx.environment name ctx.exportScope
+        if Env.isExposedToplevelMember ctx.environment name.id then
+            let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
         else
             ctx
 
 
     let private exportProcedureDecl (ctx: ExportContext) (name: Name) =
-        if ctx.IsExposedToplevelMember name then
-            let expScp = Env.exportName ctx.environment name ctx.exportScope
+        if Env.isExposedToplevelMember ctx.environment name.id then
+            let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
         else
             ctx
 
 
     let private exportTypeDecl topLevelType (ctx: ExportContext) (name: Name) =
-        if ctx.IsExposedToplevelMember name then 
-            let expScp = Env.exportName ctx.environment name ctx.exportScope
-                         |> Env.exportScope ctx.environment name
+        if Env.isExposedToplevelMember ctx.environment name.id then 
+            let expScp = Env.exportName ctx.environment name.id ctx.exportScope
+                         |> Env.exportScope ctx.environment name.id
             { ctx with exportScope = expScp }
         else
             printfn "Add abstract type: %s" name.id
@@ -212,34 +219,33 @@ module ExportInference =
 
 
     let private exportIfAbstractType (ctx: ExportContext) (name: Name) =
-        let declName = ctx.GetDeclName name
-        match ctx.TryGetAbstractType declName with
+        match ctx.TryGetAbstractType name with
         | Some _ ->
-            let expScp = Env.exportName ctx.environment declName ctx.exportScope
+            let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
         | _ ->
             ctx
 
+    let private requireIfImported (ctx: ExportContext) (name: Name) = 
+        ctx.AddRequiredImports name
+    
 
     let private checkTransparentStaticName exp (ctx: ExportContext) (name: Name) = 
-        let declName = ctx.GetDeclName name
-        if ctx.IsHiddenToplevelMember declName then
+        if Env.isHiddenToplevelMember ctx.environment name.id then
             Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id )
             |> logExportError ctx 
         else 
             ctx
 
     let private checkTransparentDynamicName exp (ctx: ExportContext) (name: Name) = 
-        let declName = ctx.GetDeclName name
-        if ctx.IsHiddenToplevelMember declName then
+        if Env.isHiddenToplevelMember ctx.environment name.id then
             Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
             |> logExportError ctx 
         else 
             ctx
         
     let private checkTransparentImplicitName exp (ctx: ExportContext) (name: Name) =
-        let declName = ctx.GetDeclName name
-        if ctx.IsHiddenImplicitMember declName then
+        if Env.isHiddenImplicitMember ctx.environment name.id then
             Dummy (name.Range, sprintf "Implicit name '.%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
             |> logExportError ctx 
         else 
@@ -596,6 +602,8 @@ module ExportInference =
 
     and private inferTypeAlias exp ctx (tad: AST.TypeAliasDecl) =
         let topLevelType = 
+            // TODO this is wrong, needs to take into account simple opaque types
+            // this requires to add imported abstract types to the ctx.abstractTypes
             match tad.aliasfor with
             | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> Simple
             | _ -> Complex
@@ -654,8 +662,12 @@ module ExportInference =
         
 
     // Import
-    let private inferImport ctx (import: AST.Import) = 
-        ctx
+    //let private inferImportExposing ctx (exposing: AST.Exposing) =
+    //    // TODO: implement this here and in name checking
+    //    ctx 
+
+    //let private inferImport (ctx: ExportContext) (import: AST.Import) = 
+    //    Option.fold inferImportExposing ctx import.exposing
 
 
     // ModuleSpec 
@@ -674,8 +686,8 @@ module ExportInference =
     // Compilation Unit
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
-            //List.fold inferImport ctx cu.imports
-            List.fold inferTopLevelMember ctx cu.members
+            ctx // List.fold inferImport ctx cu.imports
+            |> List.fold inferTopLevelMember <| cu.members
             |> Option.fold inferModuleSpecLast <| cu.spec  // export all after 
         else
             ctx

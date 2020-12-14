@@ -1,0 +1,5 @@
+import c "imports/constant"
+
+module 
+
+const incr42 = .FortyTwo + 1

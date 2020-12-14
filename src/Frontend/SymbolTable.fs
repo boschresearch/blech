@@ -384,29 +384,51 @@ module SymbolTable =
         let private currentOuter env = 
             List.tail env.path
 
+
+        
+
         // Functions for export inference
+        // these functions only work for modules
+        // TODO: Change parameters from name to identifier if sufficient
 
-        let isExposedToplevelMember env (name: Name) = 
-            Scope.containsSymbol env.exposing name.id
-
-        let isHiddenToplevelMember env (name: Name) = 
-            let modScp = getModuleScope env
-            let isTopLevel = Scope.containsSymbol modScp name.id
-            let isHidden = not <| Scope.containsSymbol env.exposing name.id
-            isHidden && isTopLevel
 
         let getDeclName env (name: Name) = 
             env.lookupTable.getDeclName name
 
-        let isHiddenImplicitMember env (name: Name) =
+        let isExposedToplevelMember env id = 
+            Scope.containsSymbol env.exposing id
+
+        let isHiddenToplevelMember env id = 
             let modScp = getModuleScope env
-            let openInnerScopes = Map.filter (fun id (scope: Scope) -> Scope.isOpen scope) modScp.innerscopes
-            let declScpId = Map.pick (fun id scp -> if Scope.containsSymbol scp name.id then Some id else None) openInnerScopes
+            let isTopLevel = Scope.containsSymbol modScp id
+            let isHidden = not <| Scope.containsSymbol env.exposing id
+            isHidden && isTopLevel
+
+
+        let isHiddenImplicitMember env id =
+            let modScp = getModuleScope env
+            let openInnerScopes = Map.filter (fun _ scp -> Scope.isOpen scp) modScp.innerscopes
+            let declScpId = Map.pick (fun scpId scp -> if Scope.containsSymbol scp id then Some scpId else None) openInnerScopes
             not <| Scope.containsSymbol env.exposing declScpId            
             
+        
+        //let isImported env id = 
+        //    let globScp = getGlobalScope env 
+        //    Scope.containsSymbol globScp id
 
-        //let isExposedName env (name: Name) = 
-        //    env.lookupTable.IsExposed name
+        let isImportedName env id =
+            let importScope = getGlobalScope env
+            Scope.containsSymbol importScope id
+
+
+        let tryGetImportForMember env id =
+            let globScp = getGlobalScope env
+            let openInnerScopes = Map.filter (fun _ (scope: Scope) -> Scope.isOpen scope) globScp.innerscopes
+            let declScpId = Map.pick (fun _ scp -> if Scope.containsSymbol scp id then Some id else None) openInnerScopes
+            if Scope.containsSymbol globScp declScpId then
+                Some declScpId  
+            else
+                None
 
 
         let currentScopeIsExposed env =
@@ -416,10 +438,7 @@ module SymbolTable =
             isOpen && isExposed
 
 
-        let isImportedName env (name: Name) =
-            let importScope = getGlobalScope env
-            Scope.containsSymbol importScope name.id
-
+        
 
         let isToplevelName env (name: Name) =
             let moduleScope = getModuleScope env
@@ -428,24 +447,24 @@ module SymbolTable =
 
         // 
         
-        let exportName env (name: Name) exportScope =
+        let exportName env id exportScope =
             let moduleScope = getModuleScope env
-            match Scope.tryFindSymbol moduleScope name.id with
+            match Scope.tryFindSymbol moduleScope id with
             | Some symbol ->
                 Scope.addSymbol exportScope symbol
             | None ->
                 failwith "exported name should always exist"
             
-        let exportScope env (name: Name) exportScope = 
+        let exportScope env id exportScope = 
             let moduleScope = getModuleScope env
-            match Scope.tryFindInnerScope moduleScope name.id with
+            match Scope.tryFindInnerScope moduleScope id with
             | Some scope ->
                 assert Scope.isOpen scope
                 Scope.addInnerScope exportScope scope
             | _ -> 
                 failwith "exported scope should always exist"
-            
 
+        
         //let private parentOuter env = 
         //    List.tail (List.tail env.path)   // this is safe because of the global scope initialisation
         
