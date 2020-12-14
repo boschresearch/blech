@@ -88,6 +88,8 @@ module ExportInference =
         member this.AddCalledSingleton name = 
             { this with calledSingletons = name :: this.calledSingletons }
         
+    type AbstractTypes = Map<Name, ToplevelType>
+    type Singletons = Map<Name, Singleton> 
 
     type ExportContext = 
         private {
@@ -101,7 +103,10 @@ module ExportInference =
             requiredImports: Map<Identifier, Identifier option> // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
         }
 
-        static member Initialise (logger: Diagnostics.Logger) (env: SymbolTable.Environment) = 
+        static member Initialise (logger: Diagnostics.Logger) 
+                                 (env: SymbolTable.Environment) 
+                                 (importedAbstractTypes : AbstractTypes list)
+                                 (importedSingeltons: Singletons list) = 
             { 
                 environment = env
                 logger = logger
@@ -111,11 +116,11 @@ module ExportInference =
                 
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
-                
             }
 
         member this.AddAbstractType name abstype = 
             { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
+
     
         member this.AddRequiredImports (id: Identifier) =
             if Env.isImportedName this.environment id then
@@ -140,6 +145,11 @@ module ExportInference =
         member this.GetExports = 
             this.exportScope
 
+        member this.GetAbstractTypes = 
+            this.abstractTypes
+
+        member this.GetSingletons = 
+            this.singletons
        
         member this.Show = 
             for n in this.singletons do
@@ -612,13 +622,19 @@ module ExportInference =
         |> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
 
 
-    and private inferTypeAlias exp ctx (tad: AST.TypeAliasDecl) =
+    and private inferTypeAlias exp (ctx: ExportContext) (tad: AST.TypeAliasDecl) =
         let topLevelType = 
             // TODO this is wrong, needs to take into account simple opaque types
             // this requires to add imported abstract types to the ctx.abstractTypes
             match tad.aliasfor with
-            | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> Simple
-            | _ -> Complex
+            | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> 
+                Simple
+            | TypeName snp ->
+                match ctx.TryGetAbstractType (List.last snp.names) with
+                | Some topLvTyp -> topLvTyp
+                | None -> Complex
+            | _ -> 
+                Complex
 
         inferDataType exp ctx tad.aliasfor
         |> List.fold (inferExtensionMember exp) <| tad.members  // TODO: change this to something like inferMethod
@@ -707,13 +723,17 @@ module ExportInference =
 
     // end =========================================
 
-    let inferExports logger (env: SymbolTable.Environment) (cu: AST.CompilationUnit) =
+    let inferExports logger (env: SymbolTable.Environment) 
+                            (importedAbtractTypes : AbstractTypes list)
+                            (importedSingletons : Singletons list)
+                            (cu: AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env
+            ExportContext.Initialise logger env importedAbtractTypes importedSingletons
             |> inferCompilationUnit <| cu
         // just for debugging
         // show exports
-        exports.ShowRequiredImports 
+        // exports.ShowRequiredImports 
+        printfn "Abstract Types: \n %A" exports.abstractTypes
         if Diagnostics.Logger.hasErrors exports.logger then
             Error exports.logger
         else

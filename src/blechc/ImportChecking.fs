@@ -118,6 +118,14 @@ type Imports =
     member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.exportInference.GetExports) ]
 
+    member this.GetAbstractTypes : ExportInference.AbstractTypes list = 
+        this.GetImports
+        |> List.map (fun import -> import.exportInference.GetAbstractTypes)
+        
+    member this.GetSingletons : ExportInference.Singletons list = 
+        this.GetImports
+        |> List.map (fun import -> import.exportInference.GetSingletons)
+
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports
         |> List.map (fun i -> i.typeCheck)

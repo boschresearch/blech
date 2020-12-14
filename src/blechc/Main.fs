@@ -86,9 +86,9 @@ module Main =
         Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
 
-    let private runExportInference logger symboltableEnv fileName ast = 
+    let private runExportInference logger symboltableEnv fileName importedAbstractTypes importedSingletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
-        ExportInference.inferExports logger symboltableEnv ast 
+        ExportInference.inferExports logger symboltableEnv importedAbstractTypes importedSingletons ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -228,8 +228,10 @@ module Main =
                 runNameResolution logger moduleName fileName lookupTables exportScopes ast
         
             let inferredExportRes = 
+                let importedAbstractTypes = imports.GetAbstractTypes
+                let importedSingletons = imports.GetSingletons
                 astAndSymTableRes
-                |> Result.bind (fun (ast, env) -> runExportInference logger env fileName ast)
+                |> Result.bind (fun (ast, env) -> runExportInference logger env fileName importedAbstractTypes importedSingletons ast)
             
             let lutAndPackRes = 
                 let otherLuts = imports.GetTypeCheckContexts
