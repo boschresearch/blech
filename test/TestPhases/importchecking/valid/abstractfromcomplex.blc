@@ -1,0 +1,9 @@
+import ac "imports/abstracttype"
+
+module
+
+typealias T = ac.S  
+
+function init() returns T
+    return ac.init()
+end

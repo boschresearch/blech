@@ -59,6 +59,13 @@ module Pair =
                   if res1 <> 0 then res1 else compare2.Compare (a2, aa2) }
 
 
+module Map = 
+    let concatWithOverride (maps: Map<'a, 'b> list) : Map<'a, 'b> =
+        List.map Map.toSeq maps
+        |> Seq.concat
+        |> Map.ofSeq
+
+
 // --------------------------------------------------------------------------
 //  String
 // --------------------------------------------------------------------------

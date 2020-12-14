@@ -160,12 +160,6 @@ module SymbolTable =
         | Use of Name    // usage of a name that has been declared before, points to the declaration name
         | Expose of Name // exposing of a name that is declared in a module, points to the declaration name
 
-        //member this.IsExposedDecl =
-        //    match this with
-        //    | Decl (_, isExposed) ->
-        //        isExposed
-        //    | _ ->
-        //        false
 
     type LookupTable = 
         private { 
@@ -246,20 +240,6 @@ module SymbolTable =
             | Expose declName ->
                 declName
 
-        //member this.IsExposed name = 
-        //    match this.lookupTable.[name] with
-        //    | Decl (_, isExposed) -> 
-        //        isExposed
-        //    | Use declName 
-        //    | Expose declName ->
-        //        this.IsExposed declName
-
-        //member this.ShowExposedDeclNames =
-        //    printfn "Exposed declaration names"
-        //    for kv in this.lookupTable do
-        //        if kv.Value.IsExposedDecl then 
-        //            printfn "Exposed: %s" kv.Key.id
-            
 
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name

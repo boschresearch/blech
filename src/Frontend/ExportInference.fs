@@ -96,8 +96,8 @@ module ExportInference =
             environment : SymbolTable.Environment
             logger : Diagnostics.Logger
             
-            abstractTypes : Map<Name, ToplevelType> 
-            singletons : Map<Name, Singleton> 
+            abstractTypes : AbstractTypes
+            singletons : Singletons 
             
             exportScope : SymbolTable.Scope
             requiredImports: Map<Identifier, Identifier option> // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
@@ -111,8 +111,8 @@ module ExportInference =
                 environment = env
                 logger = logger
                 
-                abstractTypes = Map.empty // TODO: initialse with imported abstract types for inference of simple opaque types
-                singletons = Map.empty  // TODO: initialise with imported singletons, fjg. 8.12.20
+                abstractTypes = Map.concatWithOverride importedAbstractTypes 
+                singletons = Map.concatWithOverride importedSingeltons
                 
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
