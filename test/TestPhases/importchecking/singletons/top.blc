@@ -1,0 +1,10 @@
+import m "middle"  // required 
+import b "bottom"  // required
+
+module exposes f
+
+singleton [b.s, b.t, m.f]
+function f () // singleton [b.s, b.t, m.f] function f ()
+    m.f()
+end
+

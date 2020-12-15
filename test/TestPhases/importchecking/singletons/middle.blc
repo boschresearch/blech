@@ -1,0 +1,9 @@
+import b "bottom" // required import
+
+module exposes f
+
+singleton [b.s, b.t] function f ()   // singleton [b.s, b.t] function f ()
+    b.f()
+end
+
+

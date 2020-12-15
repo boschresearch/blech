@@ -390,6 +390,7 @@ and SubProgram =
     {
         range: range
         isSingleton: bool
+        singletons: StaticNamedPath list
         isFunction: bool
         name: Name
         inputs: ParamDecl list

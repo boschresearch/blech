@@ -1,0 +1,7 @@
+import b "bottom"
+
+signature 
+
+singleton [b.s, b.t] function f ()
+
+

@@ -1054,7 +1054,10 @@ OptSingletonDef
 
 OptSingletonDecl 
     :                                   { (None, []) }
-    | SINGLETON OptSingletonUsage       { (Some $1, $2) }
+    | SingletonDecl                     { (Some (fst $1), snd $1) }
+
+SingletonDecl
+    : SINGLETON OptSingletonUsage       { ($1, $2) }
 
 OptSingletonUsage
     :                                   { [] }  
@@ -1069,9 +1072,10 @@ OptPartial
     | QUEST                             { Some $1 }
 
 Subprogram                              /* TODO: Add OptPartial and OptThrows to AST, fjg 24.09.19 */
-    : OptAnnotations OptSingletonDef FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows OptOnClock Block END
-                                        { Member.Subprogram { range = subprogramRange $1 $2 (snd $3) $12
-                                                              isSingleton = $2 <> Option.None
+    : OptAnnotations OptSingletonDecl FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows OptOnClock Block END
+                                        { Member.Subprogram { range = subprogramRange $1 (fst $2) (snd $3) $12
+                                                              isSingleton = fst $2 <> Option.None
+                                                              singletons = snd $2
                                                               isFunction = fst $3
                                                               name = $4
                                                               inputs = fst $6 
@@ -1080,7 +1084,7 @@ Subprogram                              /* TODO: Add OptPartial and OptThrows to
                                                               body = $11 
                                                               annotations = $1 } }   
 
-    | OptAnnotations OptSingletonDef FunOrAct error END
+    | OptAnnotations OptSingletonDecl FunOrAct error END
                                         { logParserError (snd $3);
                                           Member.Nothing }
 
@@ -1105,10 +1109,11 @@ ExternalFunction
 
 // TODO: This should not be a prototype because it is not callable, just for the time being, fjg. 12.11.20
 OpaqueSingleton:
-    | OptAnnotations SINGLETON Name     { Member.Prototype { Prototype.range = opaqueSingletonRange $1 $2 $3.range
+    | OptAnnotations SingletonDecl Name     
+                                        { Member.Prototype { Prototype.range = opaqueSingletonRange $1 (fst $2) $3.range
                                                              isExtern = false
                                                              isSingleton = true
-                                                             singletons = []
+                                                             singletons = snd $2
                                                              isFunction = false
                                                              isOpaque = true
                                                              name = $3

@@ -1,0 +1,8 @@
+
+signature
+
+singleton s
+
+singleton [s] t
+
+singleton [s, t] function f () 
