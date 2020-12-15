@@ -3,12 +3,16 @@ module Blech.Visualization.SctxGenerator
     open Blech.Common.GenericGraph
     open Blech.Visualization.BlechVisGraph
     open System.Collections.Generic
+    open Blech.Frontend.CommonTypes
 
     /// Constant for whitespaces.
     let private blank : string = " "
 
     /// Constant for line breaks.
     let private lnbreak : string = "\n"
+
+    /// Concats string with commata to be used in a fold.
+    let commaConcatination = fun elm acc -> acc + "," + elm
 
     /// Converts a single param to a string.
     let private listParam (param : param) (isInput : bool) : string =
@@ -24,17 +28,17 @@ module Blech.Visualization.SctxGenerator
     /// Method that converts a list of params to a string (sctx style).
     let rec private listParams (paramList : paramList) (isInput : bool) (accumulator : string) : string =
         match paramList with 
-            | head :: tail -> listParam head isInput |> listParams tail isInput
+            | head :: tail -> (accumulator + (listParam head isInput)) |> listParams tail isInput
             | [] -> accumulator
 
     /// Construct a string representing a single edge.
     let private singleEdge(edge : Edge<nodePayload, edgePayload>) (target : int): string =
         match edge.Payload.property with 
-            | IsAwait ->  blank + "if true go to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
-            | IsConditional ->  blank + "immediate if true go to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
-            | IsImmediate -> blank + "immediate go to s" + string target + lnbreak
-            | IsAbort -> blank + "if true abort to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
-            | IsTerminal -> blank + "join to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
+            | IsAwait ->  "if true go to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
+            | IsConditional ->  "immediate if true go to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
+            | IsImmediate -> "immediate go to s" + string target + lnbreak
+            | IsAbort -> "if true abort to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
+            | IsTerminal -> "join to s" + string target + " label \"" + edge.Payload.label + "\"" + lnbreak
 
     /// Folding function that is used to fold a set of edges into their corresponding sctx strings.
     let rec foldEdges (accumulator : edgeAccumulator) (edge : Edge<nodePayload, edgePayload>) : edgeAccumulator =
@@ -57,6 +61,32 @@ module Blech.Visualization.SctxGenerator
         // Put together the pieces and return ist.
         fst edgesAndRecursiveAccumulator + snd edgesAndRecursiveAccumulator
 
+    /// Transforms a single cobegin branch to a string.
+    and private cobeginBranchToString (branch :  VisGraph * Strength) : string =
+        let final = match snd branch with
+                        | Strong -> ""
+                        | Weak -> "final" + blank
+        
+        final + "region" + blank + "{" + lnbreak + bodyToSctx (fst branch) + lnbreak + "}"
+
+    /// Iterates recursevily over cobegin branches and transforms them to a .sctx string.
+    and private cobeginBranchesToString (branchList : cobeginPayload) : string =
+        match branchList with 
+            | head :: [] -> cobeginBranchToString head
+            | head :: tail -> cobeginBranchToString head + lnbreak + cobeginBranchesToString tail
+            | [] -> ""
+
+    /// Constructs a sctx string for an activity call.
+    and private actCallToString (input : string list) (output : string list) (actName : string) : string =
+        let concat = List.append input output
+        
+        let arguments = match concat.Length with 
+                        | 0 -> "" // TODO should not happen?
+                        | 1 -> "(" + List.head concat + ")"
+                        | _ -> "(" + List.fold commaConcatination (List.head concat) (List.tail concat) + ")"
+
+        "is" + blank + actName + arguments
+        
 
     /// Adds nodes and edges recursively to a string, sctx conform. Returns a tuple where the first string is the sctx and the second string the state count.
     and private addNodesAndEdges (node : Node<nodePayload, edgePayload>) : string =
@@ -68,7 +98,7 @@ module Blech.Visualization.SctxGenerator
                 | Final -> blank + "final"
                 | Neither -> ""
 
-        let stateString = blank + initOrFinal + " state s" + string node.Payload.stateCount + stateLabel + lnbreak 
+        let stateString = blank + initOrFinal + " state s" + string node.Payload.stateCount + stateLabel 
         node.Payload.visualize
 
         // Hierarchical states. Check if it is hierarchical, then match for regular body or activity.
@@ -77,6 +107,8 @@ module Blech.Visualization.SctxGenerator
                                                                 | IsActivity _ -> "{"  + lnbreak + activityToSctx node.Payload  + lnbreak + "}" + lnbreak
                                                                 | IsNotActivity -> "{"  + lnbreak + bodyToSctx cmplx.body  + lnbreak + "}" + lnbreak
                                         | IsSimple -> "" // Ok. Do nothing.
+                                        | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn + lnbreak + "}" + lnbreak
+                                        | IsActivityCall (input, output) -> actCallToString input output node.Payload.label
         
         // If the node is a final node, we are finished.
         match node.Payload.isInitOrFinal with
@@ -105,8 +137,8 @@ module Blech.Visualization.SctxGenerator
         // Safety assert. Init with empty Payload.
         let complexNode = match(activityNode.isComplex) with
                             | IsComplex a -> a
-                            | IsSimple -> failwith("Can not continue. Expected a complex state.")
-        
+                            | _ -> failwith("Can not continue, expected an activity.")
+                            
         let activityProps = match(complexNode.isActivity) with
                             | IsActivity a -> a
                             | IsNotActivity -> failwith("Can not continue. Expected an activity.")
@@ -118,11 +150,13 @@ module Blech.Visualization.SctxGenerator
                   + listParams activityProps.inputParams true "" 
                   + listParams activityProps.outputParams false ""
                   + bodyToSctx complexNode.body
-                  + "}"
+                  + "}" + lnbreak + lnbreak
 
 
     /// Generate sctx file content.
-    let generate (activity : Node<nodePayload, edgePayload>) : string = 
-        // Node should contain the inner code and input output variables. Start with the outermost activity. Activity in own method due do potential recursive calls.
+    let rec generate (activities : Node<nodePayload, edgePayload> list) : string = 
+        // Generates activities one by one and concats the single strings together
         // TODO We need to add variables in the beginning. Right now working with conditions as labels. In "if elses", we lose the information which comes first.
-        activityToSctx activity.Payload
+        match activities with 
+            | head :: tail -> activityToSctx head.Payload + generate tail
+            | [] -> ""

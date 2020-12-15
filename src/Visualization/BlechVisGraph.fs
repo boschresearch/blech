@@ -3,6 +3,7 @@ module Blech.Visualization.BlechVisGraph
     open Blech.Common
     open Blech.Frontend.BlechTypes
     open Blech.Common.GenericGraph
+    open Blech.Frontend.CommonTypes
 
     /// Specifies a (input or output parameter). First String specifies the type of the Parameter, second String specifies the name.
     type param = { typeName: string; name: string}
@@ -11,10 +12,6 @@ module Blech.Visualization.BlechVisGraph
     let frst (a,_,_) = a
     let scnd (_,b,_) = b
     let thrd (_,_,c) = c  
-
-    /// Functions for transforming Blech paremters to my own parameter type.    
-    let paramToParam = fun (paramDec : ParamDecl) -> {typeName = paramDec.datatype.ToString(); name = paramDec.name.basicId}
-    let extParamToParam = fun (extVarDecl : ExternalVarDecl) -> {typeName = extVarDecl.datatype.ToString(); name = extVarDecl.name.basicId}
 
     /// List of params. Might need some operations?                
     type paramList = param list
@@ -25,14 +22,18 @@ module Blech.Visualization.BlechVisGraph
     /// Payload to enter in an activity graph.
     and activityPayload = {inputParams : paramList; outputParams : paramList}
 
+    /// Payload to fill into a cobegin node.
+    and cobeginPayload = (VisGraph * Strength) list
+
     /// Shows if activity payload is present
     and isActivity = IsActivity of activityPayload | IsNotActivity
     
     /// Content of a complex node.
     and complexNode = {body : VisGraph; isActivity : isActivity}
     
-    /// Type to match whether a node is simple or complex.
-    and complexOrSimple = IsComplex of complexNode | IsSimple
+    /// Type to match whether a node is simple or complex or a cobegin node. Cobegin nodes are very different from others due to their concurrenc nature.
+    /// IsActivityCall consists of the input and outpur variablenames
+    and complexOrSimpleOrCobegin = IsComplex of complexNode | IsSimple | IsCobegin of cobeginPayload | IsActivityCall of (string list * string list)
 
     /// Determines whether something is "Initial" or "Final".
     and InitOrFinalOrNeither = Init | Final | Neither
@@ -44,7 +45,7 @@ module Blech.Visualization.BlechVisGraph
     and wasVisualized = Visualized | NotVisualized
 
     /// Payload for a node.
-    and nodePayload = {label : string; isComplex : complexOrSimple ; isInitOrFinal : InitOrFinalOrNeither; stateCount : StateCount; mutable wasVisualized : wasVisualized}
+    and nodePayload = {label : string; isComplex : complexOrSimpleOrCobegin ; isInitOrFinal : InitOrFinalOrNeither; stateCount : StateCount; mutable wasVisualized : wasVisualized}
         with member x.visualize = x.wasVisualized <- Visualized
 
     /// Determines what kind of edge the edge ist.
