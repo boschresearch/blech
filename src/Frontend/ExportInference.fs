@@ -192,30 +192,6 @@ module ExportInference =
             ctx
 
 
-    //let private exportProcedureDecl (ctx: ExportContext) (proc: AST.SubProgram) =
-    //    let id = proc.name.id
-    //    let isSingleton = proc.isSingleton
-    //    if Env.isExposedToplevelMember ctx.environment id then
-    //        let expScp = Env.exportName ctx.environment id ctx.exportScope
-    //        { ctx with exportScope = expScp }
-    //    elif isSingleton then
-    //        printfn "Add singleton: %s" id
-    //        ctx
-    //    else
-    //        ctx
-
-    //let private exportPrototypeDecl (ctx: ExportContext) (proto: AST.Prototype) =
-    //    let id = proto.name.id
-    //    let isSingleton = proto.isSingleton
-    //    if Env.isExposedToplevelMember ctx.environment id then
-    //        let expScp = Env.exportName ctx.environment id ctx.exportScope
-    //        { ctx with exportScope = expScp }
-    //    elif isSingleton then
-    //        printfn "Add singleton: %s" id
-    //        ctx
-    //    else
-    //        ctx
-
     let private exportTypeDecl topLevelType (ctx: ExportContext) (name: Name) =
         if Env.isExposedToplevelMember ctx.environment name.id then 
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope

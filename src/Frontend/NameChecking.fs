@@ -71,6 +71,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+
     let private identifyStatic (ctx: NameCheckContext) (spath: AST.StaticNamedPath) =
         match Env.findCompletePath ctx.env spath with
         | Ok env ->            
@@ -78,6 +79,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
+
 
     let private identifyDynamic (ctx: NameCheckContext) (dpath: AST.DynamicAccessPath) =
         // let candidatePath = dpath.leadingNames
@@ -125,24 +127,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             do Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx     
         
-        
-    //let private addHiddenDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
-    //    let name = decl.name
-    //    match Env.insertHiddenName ctx.env name label with
-    //    | Ok env -> 
-    //        { ctx with env = env }
-    //    | Error err ->
-    //        Logger.logError ctx.logger Diagnostics.Phase.Naming err
-    //        ctx
-
-    //let private addExposedDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
-    //    let name = decl.name
-    //    match Env.insertExposedName ctx.env name label with
-    //    | Ok env -> 
-    //        { ctx with env = env }
-    //    | Error err ->
-    //        Logger.logError ctx.logger Diagnostics.Phase.Naming err
-    //        ctx
 
     let private addConstOrParamDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) =
         let name = decl.name
@@ -555,8 +539,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> List.fold checkTagDecl <| etd.tags
             |> List.fold checkMember <| etd.members
             |> exitSubScope
-            // |> exportTypeDecl <| etd.name
-
+            
 
         and checkStructType ctx (std: AST.StructTypeDecl) =
             addTypeDecl ctx std                        // add non-recursive sub scope
@@ -566,16 +549,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> enableRecursion                         
             |> List.fold checkMember <| std.members
             |> exitSubScope
-            // |> exportTypeDecl <| std.name
-
+            
 
         and checkOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
             addTypeDecl ctx ntd                 // open, named, non-recursive scope 
             |> enableRecursion                         
             |> List.fold checkMember <| ntd.members
             |> exitSubScope
-            // |> exportTypeDecl <| ntd.name
-
+            
 
         and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
             addTypeDecl ctx tad                 // open, named, non-recursive scope
@@ -583,8 +564,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> enableRecursion
             |> List.fold checkMember <| tad.members
             |> exitSubScope
-            // |> exportTypeDecl <| tad.name
-
+            
 
         and checkMember ctx (m: AST.Member) =
             match m with
@@ -654,7 +634,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            // do ctx.env.GetLookupTable.ShowExposedDeclNames
             Ok (ast, ncc.env)
     
 

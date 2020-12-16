@@ -421,13 +421,6 @@ module SymbolTable =
             isOpen && isExposed
 
 
-        
-
-        let isToplevelName env (name: Name) =
-            let moduleScope = getModuleScope env
-            Scope.containsSymbol moduleScope name.id
-
-
         // 
         
         let exportName env id exportScope =
