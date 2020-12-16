@@ -503,6 +503,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
     let checkSubprogram ctx (sp: AST.SubProgram) =
         addSubprogramDecl ctx sp.name
+        |> List.fold identifyStatic <| sp.singletons
         |> List.fold checkParamDecl <| sp.inputs
         |> List.fold checkParamDecl <| sp.outputs
         |> Option.fold checkReturnDecl <| sp.result

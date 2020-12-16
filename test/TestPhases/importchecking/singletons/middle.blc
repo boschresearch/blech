@@ -2,7 +2,11 @@ import b "bottom" // required import
 
 module exposes f
 
-singleton [b.s, b.t] function f ()   // singleton [b.s, b.t] function f ()
+singleton function u() 
+end
+
+singleton [b.s, b.t, u] function f ()   // singleton [b.s, b.t] function f ()
+    u()
     b.f()
 end
 

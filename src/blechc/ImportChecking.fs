@@ -122,7 +122,7 @@ type Imports =
         this.GetImports
         |> List.map (fun import -> import.exportInference.GetAbstractTypes)
         
-    member this.GetSingletons : ExportInference.Singletons list = 
+    member this.GetSingletons : ExportInference.OpaqueSingletons list = 
         this.GetImports
         |> List.map (fun import -> import.exportInference.GetSingletons)
 
