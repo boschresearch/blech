@@ -257,6 +257,10 @@ let rec private checkAbsenceOfSyncStmts stmts =
     applyToList checkAbsenceOfSyncStmt stmts
 
 
+type StmtDuration =
+    | Delay
+    | Instantaneous
+    | ReturnImmediately
 /// An activity must have some synchronous delay statement on every possible 
 /// execution path through its body.
 /// This can be an await or a run statement.
@@ -265,25 +269,44 @@ let rec private checkAbsenceOfSyncStmts stmts =
 // Here we throw an error if that is the only statement in the activity.
 // In causality analysis we throw an error any way.
 let private checkStmtsWillPause p name stmts =
+    let hasImmediateReturn = List.exists (fun x -> x = ReturnImmediately)
+    let hasInstantaneous = List.exists (fun x -> x = Instantaneous)
+    let allDelay = List.forall (fun x -> x = Delay)
+    let checkAll l =
+        if hasImmediateReturn l then ReturnImmediately
+        elif hasInstantaneous l then Instantaneous
+        else assert allDelay l; Delay
     /// Given a statement (which may actually span a tree of statements),
     /// check that on every path we must hit a delaying statement.
     let rec areAllPathsWithDelay oneStmt =
         match oneStmt with
         // immediate statements
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _ 
-        | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | WhileRepeat _ -> Instantaneous // a while could be skipped over (we do not try to evaluate the condition)
+        // return ends control flow immediately
+        | Return _ -> ReturnImmediately
         // delay statements
-        | Await _ | ActivityCall _ -> true
+        | Await _ | ActivityCall _ -> Delay
         // statements containing statements
         | RepeatUntil (_, stmts, _, _)
         | Preempt (_,_,_,_,stmts) ->
             areAllPathsWithDelay (StmtSequence stmts)
         | ITE (_, _, ifBranch, elseBranch) ->
-            areAllPathsWithDelay (StmtSequence ifBranch)
-            && areAllPathsWithDelay (StmtSequence elseBranch)
-        | StmtSequence stmts -> 
-            List.exists areAllPathsWithDelay stmts // false for empty list
+            [
+                areAllPathsWithDelay (StmtSequence ifBranch)
+                areAllPathsWithDelay (StmtSequence elseBranch)
+            ]
+            |> checkAll
+        | StmtSequence stmts ->
+            let folder prev succ =
+                match prev, succ with
+                | Delay, _ -> Delay
+                | Instantaneous, x -> x
+                | ReturnImmediately, _ -> ReturnImmediately
+            stmts
+            |> List.map areAllPathsWithDelay
+            |> List.fold folder Instantaneous // Instantaneous is the neutral element regarding activity termination,
+                                              // and is also the correct result for an empty list
         | Cobegin (_,blocks) ->
             // we could allow instantaneous blocks whenever there is at least one
             // strong block which delays - but this is complex to check and explain 
@@ -292,12 +315,13 @@ let private checkStmtsWillPause p name stmts =
             |> List.unzip
             |> snd
             |> List.map (StmtSequence >> areAllPathsWithDelay)
-            |> List.forall id // cobegin delays if every block delays
+            |> checkAll // cobegin delays if every block delays
 
     areAllPathsWithDelay (StmtSequence stmts)
     |> function
-        | true -> Ok ()
-        | false -> Error [ActivityHasInstantaneousPath(p, name)]
+        | Delay -> Ok ()
+        | Instantaneous
+        | ReturnImmediately -> Error [ActivityHasInstantaneousPath(p, name)]
 
 
 let private determineGlobalOutputs lut bodyRes =
