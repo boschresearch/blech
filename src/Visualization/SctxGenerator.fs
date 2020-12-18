@@ -26,10 +26,20 @@ module Blech.Visualization.SctxGenerator
         blank + inOrOut + " host \"" + param.typeName + "\" " + param.name + lnbreak            
 
     /// Method that converts a list of params to a string (sctx style).
-    let rec private listParams (paramList : paramList) (isInput : bool) (accumulator : string) : string =
+    let rec private listParams (paramList : paramList) (isInput : bool): string =
         match paramList with 
-            | head :: tail -> (accumulator + (listParam head isInput)) |> listParams tail isInput
-            | [] -> accumulator
+            | head :: tail ->(listParam head isInput) + listParams tail isInput
+            | [] -> ""
+    
+    /// Converts a single local variable to .sctx.
+    let private listLocalVar (var : string) : string =
+        "host \"localVar\" " + var + lnbreak
+
+    /// Converts a list of local variables to a .sctx string.
+    let rec private listLocalVars (vars : string list ) : string = 
+        match vars with
+            | head :: tail -> listLocalVar head + listLocalVars tail
+            | [] -> ""
 
     /// Construct a string representing a single edge.
     let private singleEdge(edge : Edge<nodePayload, edgePayload>) (target : int): string =
@@ -143,12 +153,12 @@ module Blech.Visualization.SctxGenerator
                             | IsActivity a -> a
                             | IsNotActivity -> failwith("Can not continue. Expected an activity.")
 
-        
         // Construct the resulting string..
         "scchart" + blank + activityNode.label + blank
                   + "{" + lnbreak
-                  + listParams activityProps.inputParams true "" 
-                  + listParams activityProps.outputParams false ""
+                  + listParams activityProps.inputParams true
+                  + listParams activityProps.outputParams false
+                  + listLocalVars activityProps.localVars
                   + bodyToSctx complexNode.body
                   + "}" + lnbreak + lnbreak
 

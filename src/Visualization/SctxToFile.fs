@@ -5,5 +5,5 @@ module Blech.Visualization.SctxToFile
     /// Prints the given string to a file with a .sctx-prefix.
     let putToFile (stringToPrint : string) =
         let fileName = "generatedGraph.sctx"
-        printf "Printing the a string to a file called %s."  fileName
+        printf "Printing to file %s."  fileName
         File.WriteAllText(fileName, stringToPrint)
