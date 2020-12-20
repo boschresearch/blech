@@ -1,0 +1,8 @@
+import init "imported" exposes init
+
+@[EntryPoint]
+activity Main()
+    // var s : i.S = init()
+    await true
+end
+

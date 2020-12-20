@@ -30,7 +30,8 @@ module SymbolTable =
     type Symbol = 
         private {
             name: Name
-            isScope: bool
+            isScope: bool  // this is necessary for partial access path checking, see example namechecking/invalid/structs.blc
+                           // can be removed if types do not have optional extensions
         }
         static member Create name isScope =
             { name = name; isScope = isScope }
@@ -105,7 +106,7 @@ module SymbolTable =
         let addInnerScope scope innerscope : Scope =
             { scope with innerscopes = scope.innerscopes.Add (innerscope.id, innerscope) }
 
-        let tryFindInnerScope scope id : Scope option=
+        let tryFindInnerScope scope id : Scope option =
             scope.innerscopes.TryFind id
 
         let isOpen scope = 
@@ -201,7 +202,7 @@ module SymbolTable =
             // therefore it is possible that a key already exists
             ignore <| lt.lookupTable.TryAdd (usageName,  Use declName)
 
-        member lt.addExposed exposedName declName =
+        member internal lt.addExposed exposedName declName =
             lt.lookupTable.Add (exposedName, Expose declName)
 
         member lt.Show = 
@@ -352,6 +353,46 @@ module SymbolTable =
             assert (len >= 1)
             List.item (len-2) env.path
 
+        
+        let private getImportedModuleScope env importedModuleId =
+            let importScope = getGlobalScope env
+            match Scope.tryFindInnerScope importScope importedModuleId with 
+            | Some ims ->
+                ims
+            | None ->
+                failwith "Imported Module Scope should always exist"
+
+        let exposeImportedMember env (moduleName: Name) (exposedName: Name) = 
+            let globalScope = getGlobalScope env    
+            let impModScp = getImportedModuleScope env moduleName.id
+            
+            let checkShadowing env =
+                match Scope.tryFindSymbol globalScope exposedName.id with
+                | Some decl ->
+                    Error <| ShadowingDeclaration (exposedName, decl.name)  // Todo: ShadowingExposition
+                | None ->
+                    Ok env
+            
+            let addImportedExposedMemberToGlobalScope env =
+                match Scope.tryFindSymbol impModScp exposedName.id with
+                | Some declSymbol ->
+                    let globScp = 
+                        match Scope.tryFindInnerScope impModScp exposedName.id with
+                        | Some impInnerScp -> 
+                            Scope.addInnerScope globalScope impInnerScp
+                            |> Scope.addSymbol <| Symbol.Create exposedName true 
+                        | None -> 
+                            Scope.addSymbol globalScope <| Symbol.Create exposedName false
+                    do env.lookupTable.addExposed exposedName declSymbol.name  // TODO: this is a side effect make it functional
+                    Ok { env with path = [globScp] }
+                | None ->
+                    // TODO: Error: ExpositionNotExported
+                    Error <| Dummy (exposedName.Range, sprintf "Member '%s' is not accessible in module '%s'" exposedName.id moduleName.id)
+            
+              
+            checkShadowing env
+            |> Result.bind addImportedExposedMemberToGlobalScope
+            
 
         let private currentScope (env: Environment) = 
             List.head env.path 
@@ -554,8 +595,6 @@ module SymbolTable =
 
 
         let addExposedNameAfter env (exposedName: Name) =
-            // assert hasSignature env
-            
             let moduleScope = getModuleScope env        
             match Scope.tryFindSymbol moduleScope exposedName.id with // lookup the top-level declaration
             | Some declSymbol ->
@@ -716,6 +755,8 @@ module SymbolTable =
                         match Scope.tryFindInnerScope scope name.id with
                         | None ->
                             if symbol.isScope then 
+                                printfn "ProbeInnerDecls: Symbol: %A" symbol
+                                printfn "findPartialPath for: %A" path
                                 decls, false
                             else
                                 decls @ [symbol.name], true

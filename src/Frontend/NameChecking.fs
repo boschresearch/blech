@@ -117,6 +117,13 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
     
+    let private addExposedImportedMember (importedModule: Name) (ctx: NameCheckContext) (exposedImportedMember: Name) =
+        match Env.exposeImportedMember ctx.env importedModule exposedImportedMember with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx
      
     let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
         let name = decl.name
@@ -527,9 +534,19 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | _ -> // other members do no occur as fields
             ctx
 
+
+    let checkImportExposes moduleName ctx (exposing: AST.Exposing) =
+        match exposing with
+        | Few (names, _) ->
+            List.fold (addExposedImportedMember moduleName) ctx names
+        | All _ ->
+            failwith "Currently not supported"
+        
+
     let checkImport ctx (import: AST.Import) = 
         addModuleNameDecl ctx import
         |> addImportedModule <| import
+        |> Option.fold (checkImportExposes import.localName) <| import.exposing
 
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =

@@ -675,7 +675,7 @@ module ExportInference =
 
     // Import
     //let private inferImportExposing ctx (exposing: AST.Exposing) =
-    //    // TODO: implement this here and in name checking
+    //    // TODO: implement this here
     //    ctx 
 
     //let private inferImport (ctx: ExportContext) (import: AST.Import) = 
