@@ -1342,8 +1342,8 @@ ModuleHead
 
 Exposing
     :                                           { Option.None }
-    | EXPOSES ELLIPSIS                          { Option.Some <| Exposing.All ( unionRanges $1 $2 )  }
-    | EXPOSES NameList                          { Option.Some <| Exposing.Few ( $2, unionRanges $1 (List.last $2).Range )  }
+    | EXPOSES NameList                          { Option.Some { Exposing.names = $2 
+                                                                range = unionRanges $1 (List.last $2).Range } }
     | EXPOSES ErrorBeforeEOL EOL                { logParserError $1;
                                                   Option.None }
 
@@ -1359,17 +1359,24 @@ ModulePath
                                                                         failwithf "makeFromPath failed:\n%A" strlist
                                                   { ModulePath.range = snd $1
                                                     path = fromPath } }
+
 Import
-    : IMPORT Name ModulePath Exposing           { { Import.range = importRange $1 $3.Range $4
+    : IMPORT NameOrWildcard ModulePath Exposing 
+                                                { { Import.range = importRange $1 $3.Range $4
                                                     localName = $2
                                                     modulePath = $3
                                                     exposing = $4 } } 
+    
     | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
                                                   { Import.range = unionRanges $1 $3
                                                     localName = Name.Empty
                                                     modulePath = ModulePath.Empty
                                                     exposing = None } }
 
+NameOrWildcard
+    : Name                                      { $1 }
+    | WILDCARD                                  { { Name.id = ParserContext.mkAuxIdentifierFromWildCard <| fst $1
+                                                    range = snd $1 } }
 
 NameList
     : Name                                      { [$1] }

@@ -202,9 +202,9 @@ module ExportInference =
             ctx.AddAbstractType name abstractType // will only be exported if actually used
 
         
-    let private exportAllTypesAndValues (ctx: ExportContext) =
-        let modScp = Env.getModuleScope ctx.environment
-        { ctx with exportScope = modScp }
+    //let private exportAllTypesAndValues (ctx: ExportContext) =
+    //    let modScp = Env.getModuleScope ctx.environment
+    //    { ctx with exportScope = modScp }
 
 
     let private requireImportForMemberIfImported (ctx: ExportContext) (name: Name) =
@@ -683,30 +683,24 @@ module ExportInference =
 
 
     // ModuleSpec 
-    let private inferExposingAll ctx (exposing: AST.Exposing) = 
-        match exposing with
-        | AST.Few _->
-            ctx
-        | AST.All _ ->
-            exportAllTypesAndValues ctx
+    //let private inferExposing ctx (exposing: AST.Exposing) = 
+    //    ctx 
+        
 
-
-    let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
-        Option.fold inferExposingAll ctx modSpec.exposing
+    //let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
+    //    Option.fold inferExposing ctx modSpec.exposing
 
 
     // Compilation Unit
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
-            ctx // List.fold inferImport ctx cu.imports
-            |> List.fold inferTopLevelMember <| cu.members
-            |> Option.fold inferModuleSpecLast <| cu.spec  // export all after 
+            List.fold inferTopLevelMember ctx cu.members
         else
             ctx
-            // logExportError ctx <| Dummy (cu.Range, "Test error for non-module")
 
     // end =========================================
-
+    
+    
     let inferExports logger (env: SymbolTable.Environment) 
                             (importedAbtractTypes : AbstractTypes list)
                             (importedSingletons : OpaqueSingletons list)

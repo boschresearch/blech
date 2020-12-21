@@ -265,6 +265,7 @@ module ParserUtils =
             mutable errorTokenAccepted: bool
             mutable errorInfo : ParserErrorInfo option
             mutable diagnosticsLogger: Diagnostics.Logger 
+            mutable auxIdIndex : int
         }
 
         static member Default = {
@@ -274,6 +275,7 @@ module ParserUtils =
                 errorTokenAccepted = false
                 errorInfo = None
                 diagnosticsLogger = Diagnostics.Logger.create()
+                auxIdIndex = 0
             }
     
             
@@ -290,7 +292,8 @@ module ParserUtils =
                   // packageHead = { PackageHead.Default with currentModuleName = moduleName } 
                   errorTokenAccepted = false
                   errorInfo = None
-                  diagnosticsLogger = diagnosticsLogger }
+                  diagnosticsLogger = diagnosticsLogger 
+                  auxIdIndex = 0 }
     
 
         let getDiagnosticsLogger () = parserContext.diagnosticsLogger, Diagnostics.Phase.Parsing
@@ -322,6 +325,13 @@ module ParserUtils =
             parserContext.errorInfo <- None
             lpe
         
+        /// This never clashes with a Blech identifier
+        /// Starts with '<wildcard>0' for every parsed file during a recursive compilation
+        let mkAuxIdentifierFromWildCard wildcard =
+            let cur = parserContext.auxIdIndex
+            parserContext.auxIdIndex <- cur + 1
+            sprintf "%s%s" wildcard (string cur) 
+
 
     /// strips '_' from number, e.g. 100_000 -> 100000
     let private strip_ s =
@@ -463,37 +473,6 @@ module ParserUtils =
             ()
         | _ ->
             reportError <| NotUnitOne (nat, r)
-
-    /// Checks the correct module in the package head
-    let checkModuleName (name: AST.StaticNamedPath) =
-        if not (name.identifiers = ParserContext.getModuleName().AsList) then
-            reportError <| InconsistentModuleName name 
-      
-    /// Checks the 
-
-    /// Checks if the static member appears in an implementation or interface context
-    // no longer needed, fjg 11.12.19
-    //let checkSourceContext (staticMember: AST.Member) =
-    //    if ParserContext.isInterface () then
-    //        if not staticMember.isInterface then
-    //            Diagnostics.Logger.logError
-    //            <|| ParserContext.getDiagnosticsLogger ()
-    //            <| UnexpectedSignatureMember staticMember.Range
-                
-    //    else
-    //        if staticMember.isInterface then
-    //            Diagnostics.Logger.logError
-    //            <|| ParserContext.getDiagnosticsLogger ()
-    //            <| UnexpectedModuleMember staticMember.Range 
-                
-    //    staticMember
-
-
-    /// Checks the absence of exposing clauses in an interface context 
-    //let checkExposing (exposing: AST.Exposing option) =
-    //    if ParserContext.isInterface () then
-    //        if Option.isSome exposing then
-    //            reportError <| UnexpectedExposure (Option.get exposing).Range       
 
        
     /// Logs the last stored parser error

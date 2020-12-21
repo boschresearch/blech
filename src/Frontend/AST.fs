@@ -451,17 +451,16 @@ and Import =
         modulePath: ModulePath
         exposing: Exposing option
     }
+    
     member import.Range = import.range
 
 
-and Exposing =
-    | Few of Name list * range:range
-    | All of range:range
-    member exp.Range = 
-        match exp with
-        | Few (range=r)
-        | All (range=r)
-            -> r    
+and Exposing = 
+    { names: Name list
+      range: range }
+    
+    member this.Range = 
+        this.range
 
 
 /// package members (this also subsumes struct members)

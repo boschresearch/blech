@@ -1,4 +1,4 @@
-import i "imported" exposes S, init
+import _ "imported" exposes S, init
 
 module exposes myS, DoIt
 

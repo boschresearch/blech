@@ -1,6 +1,6 @@
 import M "importMe"
 
-module exposes ...
+module exposes M
 
 struct M
     var a: bool

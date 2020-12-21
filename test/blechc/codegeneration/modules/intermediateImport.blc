@@ -1,7 +1,6 @@
 import M "importMe"
 
-module exposes // ...
-               C, Acc
+module exposes C, Acc
                , M // this should create a shadowing error
 
 const C: float32 = 2

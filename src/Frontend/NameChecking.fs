@@ -536,11 +536,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
 
     let checkImportExposes moduleName ctx (exposing: AST.Exposing) =
-        match exposing with
-        | Few (names, _) ->
-            List.fold (addExposedImportedMember moduleName) ctx names
-        | All _ ->
-            failwith "Currently not supported"
+        List.fold (addExposedImportedMember moduleName) ctx exposing.names
         
 
     let checkImport ctx (import: AST.Import) = 
@@ -610,26 +606,16 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     
     let checkExposingBefore ctx (exposing: AST.Exposing) =
-        match exposing with
-        | Few (names, _) ->
-            List.fold addExposedNameBefore ctx names
-        | All _ ->
-            ctx
-
+        List.fold addExposedNameBefore ctx exposing.names
+        
 
     let checkModuleSpecBefore ctx (modSpec: AST.ModuleSpec) =
         Option.fold checkExposingBefore ctx modSpec.exposing
 
 
     let checkExposingAfter (ctx: NameCheckContext) (exposing: AST.Exposing) = 
-        match exposing with
-        | Few (names, _) ->
-            // List.iter (fun n -> printfn "Exposes: %s" <| string n) names
-            List.fold addExposedNameAfter ctx names 
-        | All _ ->
-            do printfn "Exposed: ... (all)"
-            ctx
-
+        List.fold addExposedNameAfter ctx exposing.names 
+        
 
     let checkModuleSpecAfter (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
         Option.fold checkExposingAfter ctx modSpec.exposing

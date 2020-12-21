@@ -316,7 +316,6 @@ module SymbolTable =
             exposing: Scope
             path: Scope list // sorted from current (innermost) to outermost
             lookupTable: LookupTable
-            exports : Scope
         }
 
         member this.GetLookupTable =
@@ -331,8 +330,7 @@ module SymbolTable =
             { Environment.moduleName = moduleName
               exposing = Scope.createClosedScope()
               path = [ Scope.createGlobalScope() ]
-              lookupTable = LookupTable.Empty 
-              exports = Scope.createOpenScope() }
+              lookupTable = LookupTable.Empty } 
 
 
         let getLookupTable env =
@@ -343,10 +341,6 @@ module SymbolTable =
             assert (List.length env.path >= 1)
             List.last env.path
         
-
-        //let replaceExports env moduleScope =
-        //    { env with exports = moduleScope}
- 
 
         let getModuleScope env =
             let len = List.length env.path
