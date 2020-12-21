@@ -108,6 +108,11 @@ type ValueTypes =
         | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple _ -> true
         | ArrayType _ | StructType _ | OpaqueComplex _ -> false
 
+    member this.IsOpaque =
+        match this with
+        | OpaqueComplex _ | OpaqueSimple _ -> true
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _
+        | ArrayType _ | StructType _ -> false
     
 /// Reference Types are not used anywhere as of the first release 2019/2020
 /// Only introduced as a reminder that not all types are value types and
@@ -151,7 +156,7 @@ and Types =
 
     override this.ToString() = render None <| this.ToDoc
     
-    member this.IsValueType() = 
+    member this.IsValueType = 
         match this with
         | ValueTypes _ -> true
         | _ -> false
@@ -176,6 +181,12 @@ and Types =
         match this with
         | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
+
+    member this.IsOpaque =
+        match this with 
+        | ValueTypes v -> v.IsOpaque
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat
+        | ReferenceTypes _ -> false
 
 
 //=============================================================================
@@ -226,8 +237,8 @@ and VarDecl =
         this.annotation.ToDoc @ [vdDoc]
         |> dpToplevelClose
 
-    override this.ToString () = render None <| this.ToDoc 
-
+    override this.ToString () = render None <| this.ToDoc
+    
 /// variables and constants bound to an external C declaration
 and ExternalVarDecl =
     {

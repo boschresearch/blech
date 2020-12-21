@@ -54,6 +54,7 @@ type TyCheckError =
     | NoDefaultValueForSecondClassType of range * Identifier * ReferenceTypes
     | NoDefaultValueForOpaque of range * Identifier
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
+    | OpaqueMustHaveInitialiser of range * Identifier
     // expressions
     | InvalidFloat of range * string
     | NextOnRhs of range * string
@@ -222,7 +223,6 @@ type TyCheckError =
             | IllegalVoid (p, n) -> p, sprintf "Internal error: tried to determine a default value for %s which has type void." (string n)
             | ValueCannotBeVoid n -> Range.range0, sprintf "Internal error: attempted to create a void value for identifier %s." n
             | EmptyGuardList -> Range.range0, sprintf "Making an empty guard expression should be impossible!"
-            
             // declarations
             | NotInLUTPrevError s -> Range.range0, sprintf "Identifier %s is not in the lookup table, probably due to a previous error." s 
             | VarDeclMissingTypeOrValue (p, n) -> p, sprintf "The declaration of variable %s needs either a type annotation or an initialisation." (string n)
@@ -230,7 +230,7 @@ type TyCheckError =
             | NoDefaultValueForSecondClassType (p, n, typ) -> p, sprintf "Internal error: tried to determine a default value for %s which has type %s." (string n) (typ.ToString())
             | NoDefaultValueForOpaque (pos, name) -> pos, sprintf "Internal error: tried to determine a default value for %s which is opaque." name
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
-            
+            | OpaqueMustHaveInitialiser (p,n) -> p, sprintf "%s has an opaque type and must be initialised." n
             // expressions
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s

@@ -476,8 +476,12 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         vRes |> Result.bind inferFromRhs
     | Some dtyRes, None -> // TODO: will crash for opaque types
         dtyRes 
-        |> Result.map (getInitValueWithoutZeros pos name)
-        |> Result.bind (combine dtyRes)
+        |> Result.bind (fun (typ: Types) ->
+            if typ.IsOpaque then Error [OpaqueMustHaveInitialiser(pos, name)]
+            else
+                getInitValueWithoutZeros pos name typ
+                |> combine dtyRes
+            )
     | Some dtyRes, Some vRes ->
         combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->

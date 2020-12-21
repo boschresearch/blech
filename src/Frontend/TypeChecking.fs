@@ -726,7 +726,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         // typify struct fields
         |> List.map (recVarDecl lut) // type check field declarations as variable declarations
         // make sure they are of value type
-        |> List.map (Result.bind (fun v -> if v.datatype.IsValueType() then Ok v else Error[ValueStructContainsRef (std.name, v)]))
+        |> List.map (Result.bind (fun v -> if v.datatype.IsValueType then Ok v else Error[ValueStructContainsRef (std.name, v)]))
         |> contract
 
     let checkAllFields fields =
@@ -784,13 +784,20 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | _ -> failwith "Location must not be const or param"
         | AST.ReadWrite _ -> Mutability.Variable
     
-    let createVarDecl ((qualifiedName, (dty, value)), anno) =
+    let createVarDecl ((qualifiedName, (dty, initVal)), anno) =
         let v = {
             pos = pos
             BlechTypes.VarDecl.name = qualifiedName
             datatype = dty
             mutability = mutability
-            initValue = value
+            initValue = 
+                match dty with
+                | ValueTypes (ValueTypes.OpaqueSimple _) ->
+                    {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // 0 for simple types
+                | ValueTypes (ValueTypes.OpaqueComplex _) ->
+                    {rhs = ArrayConst [Constants.SizeOne, {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos}]; typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); range = pos} // {0} for complex types
+                | _ ->
+                    initVal
             annotation = anno
             allReferences = HashSet()
         }    
@@ -803,7 +810,15 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | None -> Ok rhsTyp  // if no datatype is given take the activity return type as the location type
             | Some lhsTypRes -> lhsTypRes    
         dtyRes
-        |> Result.map (getInitValueWithoutZeros Range.range0 "") // TODO: will crash for opaque types
+        |> Result.map (fun dty ->
+            match dty with
+            | ValueTypes (ValueTypes.OpaqueSimple _) ->
+                Ok {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // 0 for simple types
+            | ValueTypes (ValueTypes.OpaqueComplex _) ->
+                Ok {rhs = ArrayConst [Constants.SizeOne, {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos}]; typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); range = pos} // {0} for complex types
+            | _ ->
+                getInitValueWithoutZeros Range.range0 "" dty
+            )
         |> Result.bind (combine dtyRes)
         
 
@@ -818,7 +833,7 @@ let private checkFreshLocation lut (v: AST.VarDecl) (rhsTyp: Types) =
     <| Option.map (fDataType lut) v.datatype
     <| Annotation.checkVarDecl lut v 
 
-let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl = 
+let private checkAssignReceiver pos lut (rcvOpt: AST.Receiver option) decl = 
 
     let checkReturnType (storage: Receiver option) declName declReturns =
         match storage with
@@ -857,8 +872,8 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
                 else Error [AssignmentToImmutable (pos, tlhs.ToString())]
             )
     
-    let checkNeedForReceiver (rcv: AST.Receiver option) decl =
-        match rcv with
+    let checkNeedForReceiver (rcvOpt: AST.Receiver option) decl =
+        match rcvOpt with
         | Some location ->
             match decl.returns with
             | Void ->
@@ -885,7 +900,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
         | None ->
             Ok None
     
-    checkNeedForReceiver rcv decl
+    checkNeedForReceiver rcvOpt decl
     |> Result.bind checkLocation
     |> Result.bind (fun receiver -> checkReturnType receiver decl.name decl.returns)
 

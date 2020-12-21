@@ -1228,7 +1228,7 @@ let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams
         | ((argDecl: ParamDecl), (expr: TypedRhs))::ls -> 
             match amendRhsExpr argDecl.datatype expr with // this behaves like an initialisation
             | Ok amendedExpr ->
-                if argDecl.datatype.IsValueType() || isExprALocation amendedExpr then
+                if argDecl.datatype.IsValueType || isExprALocation amendedExpr then
                     Ok amendedExpr :: typecheckInputs ls
                 else
                     Error [ExprMustBeALocationR (pos, expr)] :: typecheckInputs ls
