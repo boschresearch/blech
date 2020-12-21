@@ -362,6 +362,7 @@ module SymbolTable =
             | None ->
                 failwith "Imported Module Scope should always exist"
 
+
         let exposeImportedMember env (moduleName: Name) (exposedName: Name) = 
             let globalScope = getGlobalScope env    
             let impModScp = getImportedModuleScope env moduleName.id
@@ -755,8 +756,8 @@ module SymbolTable =
                         match Scope.tryFindInnerScope scope name.id with
                         | None ->
                             if symbol.isScope then 
-                                printfn "ProbeInnerDecls: Symbol: %A" symbol
-                                printfn "findPartialPath for: %A" path
+                                //printfn "ProbeInnerDecls: Symbol: %A" symbol
+                                //printfn "findPartialPath for: %A" path
                                 decls, false
                             else
                                 decls @ [symbol.name], true
