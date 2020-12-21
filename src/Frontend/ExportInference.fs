@@ -71,11 +71,11 @@ module ExportInference =
             { this with visibility = this.visibility.Weaken }
     
     
-    type ToplevelType =
+    type AbstractType =
         | Complex
         | Simple
    
-    type AbstractTypes = Map<Name, ToplevelType>
+    type AbstractTypes = Map<Name, AbstractType>
     
     type OpaqueSingletons = Set<Name> 
 
@@ -192,14 +192,14 @@ module ExportInference =
             ctx
 
 
-    let private exportTypeDecl topLevelType (ctx: ExportContext) (name: Name) =
+    let private exportTypeDecl abstractType (ctx: ExportContext) (name: Name) =
         if Env.isExposedToplevelMember ctx.environment name.id then 
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
                          |> Env.exportScope ctx.environment name.id
             { ctx with exportScope = expScp }
         else
             printfn "Add abstract type: %s" name.id
-            ctx.AddAbstractType name topLevelType // will only be exported if actually used
+            ctx.AddAbstractType name abstractType // will only be exported if actually used
 
         
     let private exportAllTypesAndValues (ctx: ExportContext) =
@@ -609,20 +609,20 @@ module ExportInference =
 
 
     and private inferTypeAlias exp (ctx: ExportContext) (tad: AST.TypeAliasDecl) =
-        let topLevelType = 
+        let abstractType = 
             match tad.aliasfor with
             | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> 
                 Simple
             | TypeName snp ->
                 match ctx.TryGetAbstractType (List.last snp.names) with
-                | Some topLvTyp -> topLvTyp
+                | Some absTyp -> absTyp
                 | None -> Complex
             | _ -> 
                 Complex
 
         inferDataType exp ctx tad.aliasfor
         |> List.fold (inferExtensionMember exp) <| tad.members  // TODO: change this to something like inferMethod
-        |> exportTypeDecl topLevelType <| tad.name
+        |> exportTypeDecl abstractType <| tad.name
 
 
     and private inferExtensionMember exp ctx (em: AST.Member) = 
