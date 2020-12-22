@@ -1564,10 +1564,10 @@ and internal checkDataType lut utyDataType =
     | AST.TypeName spath ->
         // look up given static name in the dict of known named types (user types)
         // TODO: Create a lookup function in TypeCheckContext and return the result here, fjg. 24.02.20
-        let found, typ =
+        let found, res =
             lut.ncEnv.spathToQname spath
             |> lut.userTypes.TryGetValue
-        if found then Ok typ
+        if found then Ok (snd res)
         else Error [ NotInLUTPrevError spath.dottedPathToString ]
     // unsupported now:
     | AST.SliceType _

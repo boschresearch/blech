@@ -166,58 +166,6 @@ module Main =
             astRes
             |> Result.bind (runImportCompilation pkgCtx logger importChain moduleName fileName)
                         
-        // TODO: run compilation of imports here. Here you need the current from-path from the parameter list, 
-        // to determine the frompath of a relative import (FromPath.makeFromPath) instead of the modulename
-        // fjg. 24.09.20
-
-        //let imports = astRes |> Result.map (fun p -> p.imports |> List.filter (fun (m: AST.Member) -> not m.IsAPragma))
-        //let importedModules = 
-        //    imports 
-        //    |> function
-        //        | Ok imports -> imports |> (List.map (checkImport pkgCtx fromPath))
-        //        | Error lgr -> [Error lgr]
-
-        //let contractCompUnits cuLst =
-        //    let rec recContract cus res =
-        //        match cus with
-        //        | [] -> res
-        //        | x::xs ->
-        //            match x, res with
-        //            | Error e1, _ -> recContract xs <| Error e1 // TODO: merge Diagnostics!
-        //            | _, Error errs -> recContract xs <| Error errs
-        //            | Ok sth, Ok someList -> recContract xs (Ok (someList @ [sth])) // respect the order!
-        //    recContract cuLst (Ok [])
-
-        //let fst4 (a, _, _, _) = a
-        //let snd4 (_, a, _, _) = a
-        //let trd4 (_, _, a, _) = a
-        //let frt4 (_, _, _, a) = a
-
-        // get all top-level scopes of precompiled modules
-        // add them to the top level scope of the current compilation unit
-        // TODO: prefix with the given import name!
-        //let insertLocalName (ln: CommonTypes.Name) (env: SymbolTable.Environment) = //(path: SymbolTable.Scope list) =
-        //    match env.path with
-        //    | [] -> env //[]
-        //    | globalScope :: tail ->
-        //        {env with path = SymbolTable.Scope.rewriteId globalScope ln.id :: tail}                
-
-        //let envsRes = 
-        //    importedModules
-        //    |> contractCompUnits
-        //    |> Result.map (List.map (fun cu -> cu.info))
-        //    //|> Result.map (List.map(fun (localName,cu) -> insertLocalName localName 
-            //                                                (fst4 cu.info), snd4 cu.info, trd4 cu.info, frt4 cu.info))
-            //|> Result.map (List.map (fun (localName,cu) -> cu.info))
-            //|> Result.map (List.concat)
-
-        // addModule ctx p.moduleName  // TODO: use this just for imports
-        // TODO: checkModuleName for shadowing of imports
-        //match envsRes with
-        //| Error foo -> Error foo
-        //| Ok cus ->
-        //    //  let envs, otherLuts, otherMods, preTranslationContexts = List.unzip4 cus
-
         match astRes, importsRes with
         | Ok ast, Ok imports -> 
             

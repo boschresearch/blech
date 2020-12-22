@@ -94,7 +94,8 @@ type TypeCheckContext =
         ncEnv: SymbolTable.LookupTable
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
-        userTypes: Dictionary<QName, Types> 
+        // range is needed for language services
+        userTypes: Dictionary<QName, (Range.range * Types)> 
         // member pragmas are collected in order to do annotation checking
         memberPragmas: ResizeArray<Attribute.MemberPragma> 
     }
@@ -241,12 +242,12 @@ module TypeCheckContext =
             lut.nameToDecl.Add(name, decl)
             
 
-    let addTypeToLut (lut: TypeCheckContext) name typ =
+    let addTypeToLut (lut: TypeCheckContext) name range typ =
         //if lut.userTypes.ContainsKey(name) then
         //    failwith <| sprintf "Fatal error: tried to add the type name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
         //else
         //    lut.userTypes.Add(name, typ)
-        ignore <| lut.userTypes.TryAdd(name, typ)
+        ignore <| lut.userTypes.TryAdd(name, (range, typ))
 
 
     let addPragmaToLut (lut: TypeCheckContext) pragma =
