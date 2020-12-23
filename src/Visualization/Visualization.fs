@@ -7,15 +7,26 @@
     open Blech.Visualization.BlechVisGraph
     open Blech.Frontend.CommonTypes
 
+    /// Unique id.
+    let mutable bracketId = 0
+
+    /// Filters a (input paramter) string, if it contains two curly brackets and is thus not wanted to be illustrated.
+    let filterForCurlyBracketConstructions = fun s -> String.exists (fun c -> match c with '{' -> true | _ -> false) s && String.exists (fun c -> match c with '}' -> true | _ -> false) s
+
     /// Renders the string from the TypedRhs to a more presentable form. (E.g.: activity.in to in).
+    /// Also checks in the end, if parameter is a {...}-construction, which is not wanted. Replaced by other string.
     // TODO improve this method. Converting from string to char[] and back on every method?
     let rec private renderRhsRhlString (rhsOrLhs : string) (original : string): string =
        let chars = Seq.toList rhsOrLhs
 
        match chars with 
             | head :: tail -> let stringTail = String.concat "" <| List.map string tail
-                              match head with '.' -> stringTail | _ -> renderRhsRhlString (stringTail) original
-            | [] -> original // Did not contain a dot.
+                              match head with '.' -> renderRhsRhlString stringTail stringTail | _ -> renderRhsRhlString (stringTail) original
+            | [] -> // Did not contain a dot. Now check for {...} construction.
+                    bracketId <- bracketId + 1
+                    match filterForCurlyBracketConstructions original with
+                        | true -> "curlyBracket" + string bracketId
+                        | false -> original // Did not contain a dot.
 
     /// Functions for transforming Blech paremters to my own parameter type.    
     let paramToParam = fun (paramDec : ParamDecl) -> {typeName = paramDec.datatype.ToString(); name = paramDec.name.basicId}
@@ -183,11 +194,11 @@
         let graph = frst graphBuilder
         let prevNode = scnd graphBuilder
         let stateCount = thrd graphBuilder
-
+        
         let inputList = List.map rhsToString typedRhsList
         let outputList = List.map lhsToString typedLhsList
         let neededVars = List.append (frth graphBuilder) (List.append inputList outputList)
-        
+
         let cmplx = IsActivityCall(inputList, outputList)
         let complexNode = 
             graph.AddNode {label = actName; isComplex = cmplx ; isInitOrFinal = Neither; stateCount = stateCount + 1; wasVisualized = NotVisualized}
@@ -253,13 +264,8 @@
         // Init Data.
         let name : string = entryPoint.name.ToString()
 
-        let input1 = List.map paramToParam entryPoint.inputs
-        let input2 = List.map extParamToParam entryPoint.globalInputs 
-        let output1 = List.map paramToParam entryPoint.outputs 
-        let output2 = List.map extParamToParam entryPoint.globalOutputsInScope 
-
-        let iparam : BlechVisGraph.paramList = List.append input1 input2
-        let oparam : BlechVisGraph.paramList = List.append output1 output2
+        let iparam = List.map paramToParam entryPoint.inputs
+        let oparam = List.map paramToParam entryPoint.outputs 
 
         let bodyStatecountAndVars = synthesize_complex_body entryPoint.body (stateCount + 1) []
 
@@ -279,8 +285,8 @@
                                     | false -> synthesize tail (fst (synthesize_activity head 0) :: accumulator)
             | [] -> accumulator
 
-    /// Synthesis start. Has side effects: unkown.
-    let startSynthesis (arg : Result<TypeCheckContext * BlechModule, Diagnostics.Logger>) = 
+    /// Synthesis start. Has side effects: prints file to current folder.
+    let startSynthesis (arg : Result<TypeCheckContext * BlechModule, Diagnostics.Logger>) (fileName : string )= 
 
         // Access values.
         let resultTuple : TypeCheckContext*BlechModule = 
@@ -310,4 +316,4 @@
         let sctxString = SctxGenerator.generate activityNodes
 
         // Print sctx content to a file.
-        SctxToFile.putToFile sctxString
+        SctxToFile.putToFile sctxString fileName

@@ -5,9 +5,6 @@ module Blech.Visualization.SctxGenerator
     open System.Collections.Generic
     open Blech.Frontend.CommonTypes
 
-    /// Mutable int for IDs of illustrated local variables.
-    let mutable idCount : int = 0
-
     /// Constant for whitespaces.
     let private blank : string = " "
 
@@ -34,13 +31,15 @@ module Blech.Visualization.SctxGenerator
             | head :: tail ->(listParam head isInput) + listParams tail isInput
             | [] -> ""
     
-    /// Converts a single local variable to .sctx.
+    /// Converts a single local variable to .sctx if it a variable name and not a primitive type.
     let private listLocalVar (var : string) : string =
-        "host \"localVar" + string idCount + "\" " + var + lnbreak
+        /// Only list vars that are not primitive types. Ints, booleans and TODO doubles.
+        match Seq.forall System.Char.IsDigit var || var.Equals("true") || var.Equals("false") with
+            | true -> ""
+            | false -> "host \"localVar\" " + var + lnbreak
 
     /// Converts a list of local variables to a .sctx string.
     let rec private listLocalVars (vars : string list ) : string = 
-        idCount <- idCount + 1
         match vars with
             | head :: tail -> listLocalVar head + listLocalVars tail
             | [] -> ""
@@ -95,7 +94,7 @@ module Blech.Visualization.SctxGenerator
         let concat = List.append input output
         
         let arguments = match concat.Length with 
-                        | 0 -> "" // TODO should not happen?
+                        | 0 -> ""
                         | 1 -> "(" + List.head concat + ")"
                         | _ -> "(" + List.fold commaConcatination (List.head concat) (List.tail concat) + ")"
 
