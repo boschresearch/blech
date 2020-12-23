@@ -5,6 +5,9 @@ module Blech.Visualization.SctxGenerator
     open System.Collections.Generic
     open Blech.Frontend.CommonTypes
 
+    /// Mutable int for IDs of illustrated local variables.
+    let mutable idCount : int = 0
+
     /// Constant for whitespaces.
     let private blank : string = " "
 
@@ -33,10 +36,11 @@ module Blech.Visualization.SctxGenerator
     
     /// Converts a single local variable to .sctx.
     let private listLocalVar (var : string) : string =
-        "host \"localVar\" " + var + lnbreak
+        "host \"localVar" + string idCount + "\" " + var + lnbreak
 
     /// Converts a list of local variables to a .sctx string.
     let rec private listLocalVars (vars : string list ) : string = 
+        idCount <- idCount + 1
         match vars with
             | head :: tail -> listLocalVar head + listLocalVars tail
             | [] -> ""
