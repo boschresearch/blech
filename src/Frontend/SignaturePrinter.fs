@@ -103,7 +103,7 @@ module SignaturePrinter =
                 |> align
                 |> group)
         
-    let private bpAnnotation (anno: AST.Annotation) =
+    let bpAnnotation (anno: AST.Annotation) =
         match anno.Attribute with
         | AST.KeyValue (AST.Ident(text=Attribute.Key.linedoc), AST.Literal.String(value=comment), _) ->
             bpLineDoc comment
@@ -193,10 +193,134 @@ module SignaturePrinter =
             txt "next" <^> space
 
 
-    let rec private bpArrayLength expr =
+    let private bpPermission (permission: AST.Permission) = 
+        match permission with
+        | AST.Permission.ReadOnly (ro = ro) ->
+            match ro with
+            | AST.Immutable.Let -> txt "let"
+            | AST.Immutable.Const -> txt "const"
+            | AST.Immutable.Param -> txt "param"
+        | AST.Permission.ReadWrite (rw = rw) ->
+            match rw with
+            | AST.Mutable.Var -> txt "var"
+
+
+    // --- members
+    
+    // 
+
+    let rec bpStaticVarDecl (vd: AST.VarDecl) =
+        let datatype = Option.map bpDataType vd.datatype
+        let initValue = Option.map bpExpr vd.initialiser
+        
+        let varDecl =
+            bpPermission vd.permission <+> bpName vd.name <^> 
+            (bpTypeAnnotation datatype 
+             |> bpInitValue <| initValue 
+             |> gnest dpTabsize) 
+
+        let optExtern =
+            if vd.isExtern then Some <| txt "extern" else None    
+        
+        bpOptAnnotations vd.annotations
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optExtern varDecl
+
+    // enum type declaration
+    
+    and private bpEnumRawType = function
+        | None -> empty
+        | Some datatype -> chr ':' <+> bpDataType datatype
+        
+    and private bpEnumRawValue = function 
+        | None -> empty
+        | Some staticExpr -> chr '=' <.> bpExpr staticExpr
+
+    and private bpEnumIsDefault = function
+        | false -> empty
+        | true -> txt "default"
+
+    and private bpTagDecl (td: AST.TagDecl) =
+        dpName td.name <+> bpEnumRawValue td.rawvalue <+> bpEnumIsDefault td.isDefault
+        |> gnest dpTabsize
+        
+    and bpEnumTypeDecl (et : AST.EnumTypeDecl) =
+        let optRef = 
+            if et.isReference then Some <| txt "ref" else None
+
+        let enumDecl =
+            txt "enum"
+            <+> dpName et.name
+            <^> bpEnumRawType et.rawtype
+            <.> indent dpTabsize (List.map bpTagDecl et.tags |> vsep)
+            // omit extensions for now
+            //<.> match membersDoc with | [] -> empty | _ -> txt "extension"
+            //<.> indent dpTabsize (membersDoc |> vsep)
+            <.> txt "end"
+
+        bpOptAnnotations et.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef enumDecl 
+
+    // struct type declaration
+
+    and private bpDynamicMember (dm : AST.Member) = 
+        match dm with
+        | AST.Member.Var vd ->
+            let datatype = Option.map bpDataType vd.datatype
+            let initValue = Option.map bpExpr vd.initialiser        
+            let varDecl =
+                bpPermission vd.permission <+> bpName vd.name <^> 
+                (bpTypeAnnotation datatype 
+                 |> bpInitValue <| initValue 
+                 |> gnest dpTabsize) 
+
+            bpOptAnnotations vd.annotations
+            |> dpOptLinePrefix
+            <| varDecl
+        | _ ->
+            failwith "Unexpected dynamic member"
+
+
+    and bpStructTypeDecl (st : AST.StructTypeDecl) =
+        let optRef = 
+            if st.isReference then Some <| txt "ref" else None
+
+        let structDecl = 
+            txt "struct"
+            <+> dpName st.name
+            <.> indent dpTabsize (List.map bpDynamicMember st.fields |> vsep)
+            // omit extensions for now
+            //<.> match membersDoc with | [] -> empty | _ -> txt "extension"
+            //<.> indent dpTabsize (membersDoc |> vsep)
+            <.> txt "end"
+
+        bpOptAnnotations st.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef structDecl
+
+    // typealias declaration
+
+    and bpTypeAliasDecl (ta : AST.TypeAliasDecl) =
+        let optRef =
+            if ta.isReference then Some <| txt "ref" else None
+            
+        let typealiasDecl = 
+            txt "typealias"
+            <+> dpName ta.name
+            <+> (chr '=' <.> bpDataType ta.aliasfor
+                 |> gnest dpTabsize)
+
+        bpOptAnnotations ta.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef typealiasDecl
+        
+
+    // --- data types
+
+    and private bpArrayLength expr =
         bpExpr expr
 
-   
     and private bpOptDataType optTyp = 
         match optTyp with
         | None -> empty
@@ -243,14 +367,15 @@ module SignaturePrinter =
         
     and private bpDynamicAccessPath (loc: AST.DynamicAccessPath) = 
         bpTemporalQualifier loc.timepoint <^> bpAccessList loc.path
-            
+      
+    
 
     // --- expressions
 
     and private bpOptExpr optExpr = 
         match optExpr with
-            | None -> Empty
-            | Some expr -> bpPrecExpr dpPrec.["min"] expr
+        | None -> Empty
+        | Some expr -> bpPrecExpr dpPrec.["min"] expr
 
     and private bpExpr (expr: AST.Expr)  = 
         bpPrecExpr dpPrec.["min"] expr
@@ -261,19 +386,19 @@ module SignaturePrinter =
         | AST.LhsInAssignment.Loc l -> 
             bpDynamicAccessPath l    
             
-    and private ppStructField name value =
+    and private bpStructField name value =
         bpName name <+> chr '=' <+> bpExpr value
 
 
-    and private ppWithOptIndex suffix = function 
+    and private bpWithOptIndex suffix = function 
         | None ->
             suffix
         | Some index ->
             (bpExpr index
                 |> brackets) <+> chr '=' <+> suffix
         
-    and private ppArrayField index value =
-        index |> ppWithOptIndex (bpExpr value) 
+    and private bpArrayField index value =
+        index |> bpWithOptIndex (bpExpr value) 
         
     
     and private bpSubProgramCall pName inputs optOutputs =
@@ -297,9 +422,9 @@ module SignaturePrinter =
                 | AST.FieldExpr.ResetFields -> 
                     [empty]
                 | AST.FieldExpr.StructFields sfs -> 
-                    sfs |> List.map (fun sf -> ppStructField sf.name sf.expr)
+                    sfs |> List.map (fun sf -> bpStructField sf.name sf.expr)
                 | AST.FieldExpr.ArrayFields afs -> 
-                    afs |> List.map (fun af -> ppArrayField af.index af.value)
+                    afs |> List.map (fun af -> bpArrayField af.index af.value)
             fields
             |> dpCommaSeparatedInBraces
             |> align
@@ -481,33 +606,7 @@ module SignaturePrinter =
         <| externPrototype
 
 
-    let bpPermission (permission: AST.Permission) = 
-        match permission with
-        | AST.Permission.ReadOnly (ro = ro) ->
-            match ro with
-            | AST.Immutable.Let -> txt "let"
-            | AST.Immutable.Const -> txt "const"
-            | AST.Immutable.Param -> txt "param"
-            // | Input -> txt "input"
-        | AST.Permission.ReadWrite (rw = rw) ->
-            match rw with
-            | AST.Mutable.Var -> txt "var"
-            // | Output -> txt "output"
 
-    // --- members
-
-    let bpEnumType (et : AST.EnumTypeDecl) = 
-        txt "enum declaration"
-
-    
-    let bpStructType (st : AST.StructTypeDecl) = 
-        txt "struct declaration"
-        
-    
-    let bpTypeAlias (ta : AST.TypeAliasDecl) = 
-        txt "typealias declaration"
-        
-    
     /// Prints the blech source code for a signature file from namechecking lookuptable and an AST
     let printSignature (exportContext : ExportInference.ExportContext) (ast : AST.CompilationUnit) =
         assert ast.IsModule // only modules have signatures
@@ -516,6 +615,7 @@ module SignaturePrinter =
         // Functions for printing signature code form an AST    
         // naming: ps<ASTNode> which means: print signature <ASTNode>   
         // ----------------------------------------------
+
 
         let psAbstractType abstractTypes (at: Name) =
             let absType = Map.find at abstractTypes
@@ -553,24 +653,6 @@ module SignaturePrinter =
         
         let psOpaqueSingletonPrototype (pt: AST.Prototype) = 
             txt "opaque singleton prototype"
-        
-        let psStaticVarDecl (vd: AST.VarDecl) =
-            let datatype = Option.map bpDataType vd.datatype
-            let initValue = Option.map bpExpr vd.initialiser
-            
-            let varDecl =
-                bpPermission vd.permission <+> bpName vd.name <^> 
-                (bpTypeAnnotation datatype 
-                 |> bpInitValue <| initValue 
-                 |> gnest dpTabsize) 
-
-            let optExtern =
-                if vd.isExtern then Some <| txt "extern" else None    
-            
-            bpOptAnnotations vd.annotations
-            |> dpOptLinePrefix
-            <| dpOptSpacePrefix optExtern varDecl
-
 
         let psMember (exportContext : ExportInference.ExportContext) (mbr : AST.Member) =
             let isExposed name = 
@@ -582,17 +664,17 @@ module SignaturePrinter =
             
             match mbr with
             | AST.Member.EnumType et -> 
-                if isExposed et.name then bpEnumType et 
+                if isExposed et.name then bpEnumTypeDecl et 
                 elif isAbstractType et.name then psAbstractType exportContext.GetAbstractTypes et.name 
                 else empty  
             
             | AST.Member.StructType st ->
-                if isExposed st.name then bpStructType st 
+                if isExposed st.name then bpStructTypeDecl st 
                 elif isAbstractType st.name then psAbstractType exportContext.GetAbstractTypes st.name
                 else empty
             
             | AST.Member.TypeAlias ta ->
-                if isExposed ta.name then bpTypeAlias ta
+                if isExposed ta.name then bpTypeAliasDecl ta
                 elif isAbstractType ta.name then psAbstractType exportContext.GetAbstractTypes ta.name
                 else empty
             
@@ -600,7 +682,7 @@ module SignaturePrinter =
                 failwith "this should not occur"
             
             | AST.Member.Var vdecl ->
-                psStaticVarDecl vdecl
+                bpStaticVarDecl vdecl
             
             | AST.Member.Subprogram sp ->
                 if isExposed sp.name then psSubProgram sp
