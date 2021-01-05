@@ -94,13 +94,13 @@ module ExportInference =
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
                                  (importedAbstractTypes : AbstractTypes list)
-                                 (importedSingeltons: OpaqueSingletons list) = 
+                                 (importedSingletons: OpaqueSingletons list) = 
             {   
                 environment = env
                 logger = logger
                 
                 abstractTypes = Map.concatWithOverride importedAbstractTypes 
-                opaqueSingletons = Set.unionMany importedSingeltons
+                opaqueSingletons = Set.unionMany importedSingletons
                 
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty

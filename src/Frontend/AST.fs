@@ -470,7 +470,6 @@ and Exposing =
 and Member = 
     | Nothing                   // just for the moment to enable parsing, tolerating pattern matching warnings
     | Pragma of Annotation
-    //| Import of Import
     | EnumType of EnumTypeDecl
     | StructType of StructTypeDecl
     | OpaqueType of OpaqueTypeDecl
@@ -485,7 +484,6 @@ and Member =
         match m with
         | Nothing -> Range.rangeStartup
         | Pragma anno -> anno.Range
-        //| Import i -> i.range
         | EnumType m -> m.range
         | StructType m -> m.range
         | OpaqueType m -> m.range
@@ -496,6 +494,7 @@ and Member =
         | Subprogram m -> m.range
         | Prototype m -> m.range
     
+
     member m.isInterface =
         match m with
         | Subprogram sp ->

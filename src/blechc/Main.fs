@@ -99,9 +99,9 @@ module Main =
         do File.WriteAllText(outFileName, txt)
 
 
-    let private writeSignature outDir moduleName ncEnv ast =
+    let private writeSignature outDir moduleName exports ast =
         let signatureFile = Path.Combine(outDir, TranslatePath.moduleToInterfaceFile moduleName)
-        let blechSignature = SignaturePrinter.printSignature ncEnv ast
+        let blechSignature = SignaturePrinter.printSignature exports ast
         do writeFile signatureFile blechSignature
 
 
@@ -219,17 +219,14 @@ module Main =
                     let isMainProgram = Option.isSome blechModule.entryPoint
                     if not isMainProgram then
                         Logging.log2 "Main" ("writing signature for " + fileName)
-                        do writeSignature cliArgs.outDir moduleName lut.ncEnv ast
-
-                    Logging.log2 "Main" ("writing C code for " + fileName)
+                        do writeSignature cliArgs.outDir moduleName exports ast
 
                     let importedMods = imports.GetTypedModules
-
-                    do printfn "write signature file here" // : %A" exports
-                    // TODO: Add otherMods to writeImplementation
+                    Logging.log2 "Main" ("writing C code for " + fileName)
                     // implementation should also include headers of imported modules, fjg. 19.10.20
                     do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
                     do writeHeader cliArgs.outDir moduleName blechModule importedMods translationContext compilations
+                    
                     // generated test app if required by cliArgs
                     do possiblyWriteTestApp cliArgs blechModule translationContext compilations
 

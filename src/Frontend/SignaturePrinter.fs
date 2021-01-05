@@ -25,6 +25,9 @@ module SignaturePrinter =
     open CommonTypes
     open PrettyPrint.DocPrint
     
+    // Abbreviations
+    module Scope = SymbolTable.Scope
+
 
     // ----------------------------------------------
     // Functions for printing blech code form an AST    
@@ -153,7 +156,7 @@ module SignaturePrinter =
 
 
     
-    // --- types
+    // ---  built-in types
 
     let private bpNaturalType = function
         | Nat8 -> txt "nat8"
@@ -491,10 +494,22 @@ module SignaturePrinter =
             | AST.Mutable.Var -> txt "var"
             // | Output -> txt "output"
 
+    // --- members
 
+    let bpEnumType (et : AST.EnumTypeDecl) = 
+        txt "enum declaration"
 
+    
+    let bpStructType (st : AST.StructTypeDecl) = 
+        txt "struct declaration"
+        
+    
+    let bpTypeAlias (ta : AST.TypeAliasDecl) = 
+        txt "typealias declaration"
+        
+    
     /// Prints the blech source code for a signature file from namechecking lookuptable and an AST
-    let printSignature (lut: SymbolTable.LookupTable) (ast: AST.CompilationUnit) =
+    let printSignature (exportContext : ExportInference.ExportContext) (ast : AST.CompilationUnit) =
         assert ast.IsModule // only modules have signatures
 
         // ----------------------------------------------
@@ -502,9 +517,14 @@ module SignaturePrinter =
         // naming: ps<ASTNode> which means: print signature <ASTNode>   
         // ----------------------------------------------
 
-        let psSpec lut (spec : AST.ModuleSpec) =
-            txt "signature"
-        
+        let psAbstractType abstractTypes (at: Name) =
+            let absType = Map.find at abstractTypes
+            match absType with
+            | ExportInference.Complex ->
+                txt "abstract type declaration"
+            | ExportInference.Simple ->
+                txt "simple abstract type declaration"
+
         let psSubProgram (sp: AST.SubProgram) =
             let subprog =
                 if sp.isFunction then
@@ -527,7 +547,13 @@ module SignaturePrinter =
             bpOptAnnotations sp.annotations
             |> dpOptLinePrefix
             <| prototype
-           
+
+        let psOpaqueSingletonSubprogram (sp: AST.SubProgram) = 
+            txt "opaque singleton subprogram"
+        
+        let psOpaqueSingletonPrototype (pt: AST.Prototype) = 
+            txt "opaque singleton prototype"
+        
         let psStaticVarDecl (vd: AST.VarDecl) =
             let datatype = Option.map bpDataType vd.datatype
             let initValue = Option.map bpExpr vd.initialiser
@@ -545,26 +571,79 @@ module SignaturePrinter =
             |> dpOptLinePrefix
             <| dpOptSpacePrefix optExtern varDecl
 
-        // TODO: check exposedness, fjg 25.01.19
-        let psMember lut (mbr: AST.Member) =
+
+        let psMember (exportContext : ExportInference.ExportContext) (mbr : AST.Member) =
+            let isExposed name = 
+                Scope.containsSymbol exportContext.GetExports name.id
+            let isAbstractType name = 
+                Map.containsKey name exportContext.GetAbstractTypes
+            let isOpaqueSingleton name =
+                Set.contains name exportContext.GetSingletons
+            
             match mbr with
-            | AST.Member.Subprogram subProg ->
-                psSubProgram subProg
-            | AST.Member.Prototype protoTyp ->
-                bpExternalFunction protoTyp
-            | AST.Member.Var vdecl when vdecl.permission.IsStatic ->
+            | AST.Member.EnumType et -> 
+                if isExposed et.name then bpEnumType et 
+                elif isAbstractType et.name then psAbstractType exportContext.GetAbstractTypes et.name 
+                else empty  
+            
+            | AST.Member.StructType st ->
+                if isExposed st.name then bpStructType st 
+                elif isAbstractType st.name then psAbstractType exportContext.GetAbstractTypes st.name
+                else empty
+            
+            | AST.Member.TypeAlias ta ->
+                if isExposed ta.name then bpTypeAlias ta
+                elif isAbstractType ta.name then psAbstractType exportContext.GetAbstractTypes ta.name
+                else empty
+            
+            | AST.Member.OpaqueType ot ->
+                failwith "this should not occur"
+            
+            | AST.Member.Var vdecl ->
                 psStaticVarDecl vdecl
-            | AST.Member.Pragma p ->
-                bpPragma p
-            | _ ->
+            
+            | AST.Member.Subprogram sp ->
+                if isExposed sp.name then psSubProgram sp
+                elif isOpaqueSingleton sp.name then psOpaqueSingletonSubprogram sp
+                else empty
+
+            | AST.Member.Prototype pt ->
+                if isExposed pt.name then bpExternalFunction pt
+                elif isOpaqueSingleton pt.name then psOpaqueSingletonPrototype pt
+                else empty
+            
+            | AST.Member.Unit u ->
                 empty
+                // bpUnitDecl u
+            
+            | AST.Member.Clock c ->
+                empty
+                // bpClockDecl c
+            
+            | AST.Member.Pragma p ->
+                empty
+            
+            | AST.Member.Nothing -> 
+                failwith "this should have been removed"
 
-        let psImport lut (imp: AST.Import) = 
-            empty
+        let psImportExposes requiredImports (exposing: AST.Exposing) =
+            let requiredExposedName name =
+                if Map.containsKey name.id requiredImports then
+                    txt "required exposed import"
+                else
+                    empty
+            List.map requiredExposedName exposing.names 
 
-        let imports = List.map (psImport lut) ast.imports
-        let spec = Option.get ast.spec |> psSpec lut
-        let members = List.map (psMember lut) ast.members
+        let psImport requiredImports (imp: AST.Import) = 
+            let requiredExposedNames = 
+                Option.map (psImportExposes requiredImports) imp.exposing
+            if Map.containsKey imp.localName.id requiredImports then
+                txt "required import"
+            else empty
+
+        let imports = List.map (psImport exportContext.GetRequiredImports) ast.imports
+        let spec = txt "signature"
+        let members = List.map (psMember exportContext) ast.members
         
         (imports @ spec :: members)
         |> dpToplevel
