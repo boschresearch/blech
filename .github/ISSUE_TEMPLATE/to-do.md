@@ -1,6 +1,7 @@
 ---
 name: To do
 about: Create a task list for a specific branch
+title: ''
 labels: ''
 assignees: ''
 
