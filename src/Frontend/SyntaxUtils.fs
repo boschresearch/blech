@@ -330,9 +330,10 @@ module ParserUtils =
         let mkAuxIdentifierFromWildCard wildcard =
             let cur = parserContext.auxIdIndex
             parserContext.auxIdIndex <- cur + 1
+            // printfn "Aux index: %d" cur
             sprintf "%s%s" wildcard (string cur) 
 
-
+        
     /// strips '_' from number, e.g. 100_000 -> 100000
     let private strip_ s =
         String.collect (fun c -> if c = '_' then "" else string c) s

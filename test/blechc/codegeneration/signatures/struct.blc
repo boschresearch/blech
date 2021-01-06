@@ -1,4 +1,8 @@
-module exposes S, MY_VALUE
+import base "base" exposes initValue, hasGrown, init, T
+import _ "one" exposes one
+import _ "two" exposes two
+
+module exposes S, MY_VALUE, useBase
 
 /** A Block Comment
     with several lines */
@@ -7,6 +11,15 @@ const MY_VALUE: int32 = 42
 /// a line comment
 /// another line comment
 struct S 
-    var x: int32 = MY_VALUE * 2
+
+    var x: int32 = MY_VALUE * base.initValue * initValue + one
+    /// a local doc comment
     var y: bool
+end
+
+activity useBase() returns T
+    var x: T = init()
+    two()
+    await hasGrown(x)
+    return x
 end

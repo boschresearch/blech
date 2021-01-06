@@ -710,24 +710,41 @@ module SignaturePrinter =
 
         let psImportExposes requiredImports (exposing: AST.Exposing) =
             let requiredExposedName name =
-                if Map.containsKey name.id requiredImports then
-                    txt "required exposed import"
-                else
-                    empty
-            List.map requiredExposedName exposing.names 
+                if Map.containsKey name.id requiredImports then dpName name
+                else empty
+
+            txt "exposes" <.>
+            (List.map requiredExposedName exposing.names
+             |> dpRemoveEmpty
+             |> dpCommaSeparated)
+            |> align
+            |> group
 
         let psImport requiredImports (imp: AST.Import) = 
             let requiredExposedNames = 
                 Option.map (psImportExposes requiredImports) imp.exposing
+
             if Map.containsKey imp.localName.id requiredImports then
-                txt "required import"
+                txt "import" 
+                <+> dpModuleName imp.localName
+                <+> dquotes imp.modulePath.path.ToDoc
+                |> dpOptSpacePostfix <| requiredExposedNames
+                
             else empty
 
-        let imports = List.map (psImport exportContext.GetRequiredImports) ast.imports
+        let imports = 
+            List.map (psImport exportContext.GetRequiredImports) ast.imports
+            |> dpRemoveEmpty
+            |> dpToplevelClose
+
         let spec = txt "signature"
-        let members = List.map (psMember exportContext) ast.members
+
+        let members = 
+            List.map (psMember exportContext) ast.members
+            |> dpRemoveEmpty
+            |> dpToplevel
         
-        (imports @ spec :: members)
+        [imports; spec ; members]
         |> dpToplevel
         |> render (Some 80)
 

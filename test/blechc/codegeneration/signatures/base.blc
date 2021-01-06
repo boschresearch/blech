@@ -1,0 +1,18 @@
+module exposes initValue, init, hasGrown
+
+/// This is an abstract type
+struct T
+    var internal: int32
+end
+
+/// exported constant
+const initValue = 42 : int32
+
+/// The initialiser
+function init () returns T
+    return { internal = initValue } 
+end
+
+function hasGrown (t: T) returns bool
+    return t.internal > initValue
+end

@@ -29,7 +29,7 @@ module Blech.Common.TranslationUnitPath
 
 open System // for String
 open System.IO // for Path
-
+open PPrint
 
 /// Constants =================================================================
 
@@ -138,9 +138,12 @@ type TranslationUnitPath =
     
     override this.ToString () =
         let prefix = 
-            match this.package with | None -> "" | Some _ -> "bl:"
+            match this.package with | None -> "" | Some _ -> "box:"
         prefix + (this.AsList |> String.concat (string slash))
-    
+
+    member this.ToDoc = 
+        txt <| string this
+        
     member this.AsList =
         let path = this.dirs @ [this.file]
         match this.package with

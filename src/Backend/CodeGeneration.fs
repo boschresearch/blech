@@ -302,7 +302,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
           mainCallback
           mainInit
           (if ctx.cliContext.trace then printState else empty) ]
-    |> dpRemoveEmptyLines
+    |> dpRemoveEmpty
     |> dpToplevel
 
 // end of cpModuleCode
@@ -432,7 +432,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
             |> dpToplevel
            else empty)
       includeGuardEnd ]
-    |> dpRemoveEmptyLines
+    |> dpRemoveEmpty
     |> dpToplevel
 
 // end of cpModuleHeader
@@ -465,7 +465,7 @@ let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilati
       staticVars
       Comment.testFunction
       mainLoop ]
-    |> dpRemoveEmptyLines
+    |> dpRemoveEmpty
     |> dpToplevel
 // end of cpApp
 

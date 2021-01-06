@@ -85,12 +85,14 @@ type Imports =
         // imports: TranslationUnitPath list
         moduleName: TranslationUnitPath
         importChain: CompilationUnit.ImportChain
+        importPaths: TranslationUnitPath Set
         compiledImports: Dictionary<TranslationUnitPath, ModuleInfo>
     }
     
     static member Initialise importChain moduleName = 
         { moduleName = moduleName
           importChain = importChain
+          importPaths = Set.empty
           compiledImports = Dictionary() }
     
     member this.ExtendImportChain moduleName = 
@@ -101,8 +103,11 @@ type Imports =
 
     member this.GetImportedModuleNames : TranslationUnitPath list = 
         Seq.toList ( this.compiledImports.Keys )
-       
-    member this.AddImport moduleName moduleInfo =
+
+    member this.AddImportPath moduleName =
+        { this with importPaths = this.importPaths.Add moduleName }
+
+    member this.AddCompiledImport moduleName moduleInfo =
         ignore <| this.compiledImports.TryAdd(moduleName, moduleInfo)  // The same module might be added more than once
         this
 
@@ -149,6 +154,18 @@ let private checkCyclicImport (importedModule: AST.ModulePath) logger (imports: 
         Ok imports
 
 
+// check if a module is imported multiple times 
+let private checkMultipleImport (importedModule: AST.ModulePath) logger (imports: Imports) =
+    let modName = importedModule.path
+    let srcRng = importedModule.Range
+    if imports.importPaths.Contains modName then
+        Dummy (srcRng, sprintf "Multiple import of module '%s'" <| string modName) 
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger
+    else
+        Ok <| imports.AddImportPath modName
+
+
 // check if the imported and compiled module is NOT a program
 let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledModule: CompilationUnit.Module<ModuleInfo>) (imports: Imports) =
     let modName = modul.path
@@ -158,7 +175,7 @@ let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledMod
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
     else
-        Ok <| imports.AddImport modul.path compiledModule.info
+        Ok <| imports.AddCompiledImport modul.path compiledModule.info
     
 
 // tries to compile an imported module
@@ -190,6 +207,7 @@ let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (im
         | Error _ -> imports
 
     checkCyclicImport import.modulePath logger imports
+    |> Result.bind (checkMultipleImport import.modulePath logger)
     |> Result.bind (compileImportedModule pkgCtx logger import.modulePath)
     |> returnImports 
     
