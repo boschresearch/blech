@@ -6,11 +6,11 @@ labels: ''
 assignees: ''
 
 ---
-**Link to a branch**
-Link to ToDos to a branch
-
 **Describe the todo**
 Short description what to do  
+
+**Link to a branch**
+Link to ToDos to a branch, e.g [codegeneration for feature/modules](/boschresearch/blech/tree/feature/modules)
 
 **Task list**
 Create a task list of todos.
