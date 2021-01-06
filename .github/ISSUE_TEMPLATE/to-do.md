@@ -1,7 +1,6 @@
 ---
 name: To do
-about: Create a task list for a specific branch.
-title: "ToDo"
+about: Create a task list for a specific branch
 labels: ''
 assignees: ''
 
