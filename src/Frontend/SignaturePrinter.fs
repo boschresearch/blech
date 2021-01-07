@@ -28,7 +28,6 @@ module SignaturePrinter =
     // Abbreviations
     module Scope = SymbolTable.Scope
 
-
     // ----------------------------------------------
     // Functions for printing blech code form an AST    
     // naming: bp<ASTNode> which means: blech print <ASTNode>   
@@ -137,11 +136,11 @@ module SignaturePrinter =
         | Some doc -> prefix <+> chr '=' <.> doc
 
 
-    let private bpName name = txt <| name.ToString()
+    let private bpName name = txt <| string name
     
     
-    let private bpStaticNamedPath path =
-        List.map (fun (n: Name) -> txt <| n.idToString) path
+    let private bpStaticNamedPath (snp : AST.StaticNamedPath) =
+        List.map bpName snp.path
         |> punctuate dot
         |> hcat
 
@@ -345,8 +344,8 @@ module SignaturePrinter =
             (empty |> brackets) <^> bpDataType dty 
         | AST.Signal (dtyOpt, _) ->
             (bpOptDataType dtyOpt |> group) <+> txt "signal"
-        | AST.TypeName name ->
-            bpStaticNamedPath name.path
+        | AST.TypeName tn ->
+            bpStaticNamedPath tn
 
     
 
@@ -435,8 +434,8 @@ module SignaturePrinter =
             |> (</>) <| bpDynamicAccessPath buf
             |> align
             |> group                     
-        | AST.Expr.ImplicitMember name ->
-            chr '.' <^> bpStaticNamedPath name.path
+        | AST.Expr.ImplicitMember im ->
+            chr '.' <^> bpStaticNamedPath im
         // --- variable
         | AST.Expr.Var access ->
             bpDynamicAccessPath access 
@@ -616,20 +615,26 @@ module SignaturePrinter =
         // naming: ps<ASTNode> which means: print signature <ASTNode>   
         // ----------------------------------------------
 
-
-        let psAbstractType abstractTypes (at: Name) =
-            let absType = Map.find at abstractTypes
-            match absType with
-            | ExportInference.Complex ->
-                txt "abstract type declaration"
-            | ExportInference.Simple ->
-                txt "simple abstract type declaration"
-
+        let psAbstractType annotations abstractType isRef (name: Name) =
+            let optAnnos = 
+                bpOptAnnotations annotations
+            let optSimple = 
+                match abstractType with
+                | ExportInference.Simple -> Some <| txt "@[SimpleType]"
+                | ExportInference.Complex -> Some <| txt "@[ComplexType]"
+            let optRef =
+                if isRef then Some <| txt "ref" else None
+                
+            txt "type" <+> dpName name
+            |> dpOptSpacePrefix optRef
+            |> dpOptLinePrefix optSimple
+            |> dpOptLinePrefix optAnnos
+            
         let psSubProgram (sp: AST.SubProgram) =
             let subprog =
-                if sp.isFunction then
+                if sp.isFunction then 
                     txt "function"
-                else    
+                else 
                     txt "activity"
             
             let inputs = List.map bpParamDecl sp.inputs
@@ -648,34 +653,48 @@ module SignaturePrinter =
             |> dpOptLinePrefix
             <| prototype
 
-        let psOpaqueSingletonSubprogram (sp: AST.SubProgram) = 
-            txt "opaque singleton subprogram"
+        let psOpaqueSingleton annotations singletons (name: Name)  = 
+            let optAnnos = 
+                bpOptAnnotations annotations
+            let optSingletons = 
+                if List.isEmpty singletons then None
+                else List.map bpStaticNamedPath singletons
+                     |> dpCommaSeparatedInBrackets
+                     |> Some
+ 
+            dpOptLinePrefix optAnnos 
+            <| txt "singleton"
+            |> dpOptSpacePostfix <| optSingletons
+            <+> dpName name
         
         let psOpaqueSingletonPrototype (pt: AST.Prototype) = 
             txt "opaque singleton prototype"
 
-        let psMember (exportContext : ExportInference.ExportContext) (mbr : AST.Member) =
-            let isExposed name = 
-                Scope.containsSymbol exportContext.GetExports name.id
-            let isAbstractType name = 
-                Map.containsKey name exportContext.GetAbstractTypes
-            let isOpaqueSingleton name =
-                Set.contains name exportContext.GetSingletons
+        let psMember (ctx : ExportInference.ExportContext) (mbr : AST.Member) =
             
             match mbr with
             | AST.Member.EnumType et -> 
-                if isExposed et.name then bpEnumTypeDecl et 
-                elif isAbstractType et.name then psAbstractType exportContext.GetAbstractTypes et.name 
+                if ctx.IsAbstractType et.name then
+                    let absType = Option.get <| ctx.TryGetAbstractType et.name
+                    psAbstractType et.annotations absType et.isReference et.name 
+                elif ctx.IsExported et.name then 
+                    bpEnumTypeDecl et 
                 else empty  
             
             | AST.Member.StructType st ->
-                if isExposed st.name then bpStructTypeDecl st 
-                elif isAbstractType st.name then psAbstractType exportContext.GetAbstractTypes st.name
+                if ctx.IsAbstractType st.name then
+                    let absType = Option.get <| ctx.TryGetAbstractType st.name
+                    psAbstractType st.annotations absType st.isReference st.name
+                elif ctx.IsExported st.name then 
+                    bpStructTypeDecl st 
                 else empty
             
             | AST.Member.TypeAlias ta ->
-                if isExposed ta.name then bpTypeAliasDecl ta
-                elif isAbstractType ta.name then psAbstractType exportContext.GetAbstractTypes ta.name
+                if ctx.IsAbstractType ta.name then
+                    let absType = Option.get <| ctx.TryGetAbstractType ta.name
+                    psAbstractType ta.annotations absType ta.isReference ta.name
+                elif ctx.IsExported ta.name then 
+                    bpTypeAliasDecl ta
                 else empty
             
             | AST.Member.OpaqueType ot ->
@@ -685,13 +704,17 @@ module SignaturePrinter =
                 bpStaticVarDecl vdecl
             
             | AST.Member.Subprogram sp ->
-                if isExposed sp.name then psSubProgram sp
-                elif isOpaqueSingleton sp.name then psOpaqueSingletonSubprogram sp
+                if ctx.IsOpaqueSingleton sp.name then 
+                    psOpaqueSingleton sp.annotations sp.singletons sp.name
+                elif ctx.IsExported sp.name then 
+                    psSubProgram sp
                 else empty
 
             | AST.Member.Prototype pt ->
-                if isExposed pt.name then bpExternalFunction pt
-                elif isOpaqueSingleton pt.name then psOpaqueSingletonPrototype pt
+                if ctx.IsOpaqueSingleton pt.name then 
+                    psOpaqueSingleton pt.annotations pt.singletons pt.name
+                elif ctx.IsExported pt.name then 
+                    bpExternalFunction pt
                 else empty
             
             | AST.Member.Unit u ->
@@ -745,6 +768,7 @@ module SignaturePrinter =
             |> dpToplevel
         
         [imports; spec ; members]
+        |> dpRemoveEmpty
         |> dpToplevel
         |> render (Some 80)
 

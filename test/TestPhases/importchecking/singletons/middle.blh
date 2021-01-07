@@ -2,6 +2,10 @@ import b "bottom"
 
 signature 
 
-singleton [b.s, b.t] function f ()
+singleton u
+
+singleton [u] g
+
+singleton [u, g, b.s, b.t, b.f] function f ()
 
 

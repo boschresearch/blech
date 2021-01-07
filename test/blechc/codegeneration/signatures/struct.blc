@@ -1,6 +1,6 @@
-import base "base" exposes initValue, hasGrown, init, T
+import base "base" exposes initValue, hasGrown, init, T //, bla
 import _ "one" exposes one
-import _ "two" exposes two
+import _ "two" exposes two //, three
 
 module exposes S, MY_VALUE, useBase
 
@@ -20,6 +20,7 @@ end
 activity useBase() returns T
     var x: T = init()
     two()
-    await hasGrown(x)
+    _ = hasGrown()(x)
+    await true
     return x
 end

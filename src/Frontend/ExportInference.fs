@@ -123,6 +123,14 @@ module ExportInference =
             else
                 this
 
+        member this.IsAbstractType name = 
+            let declName = Env.getDeclName this.environment name
+            this.abstractTypes.ContainsKey declName
+
+        member this.IsOpaqueSingleton name = 
+            let declName = Env.getDeclName this.environment name
+            this.opaqueSingletons.Contains declName
+
         member this.TryGetAbstractType name =
             let declName = Env.getDeclName this.environment name
             this.abstractTypes.TryFind declName
@@ -134,6 +142,9 @@ module ExportInference =
             else
                 None
             
+        member this.IsExported name = 
+            SymbolTable.Scope.containsSymbol this.exportScope name.id
+
         member this.GetExports = 
             this.exportScope
 
@@ -142,6 +153,7 @@ module ExportInference =
 
         member this.GetSingletons = 
             this.opaqueSingletons
+
 
         member this.GetRequiredImports = 
             this.requiredImports

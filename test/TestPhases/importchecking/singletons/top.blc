@@ -1,10 +1,10 @@
-import m "middle"  // required 
+import _ "middle" exposes u, g, f // required 
 import b "bottom"  // required
 
-module exposes f
+module exposes h
 
-singleton [b.s, b.t, m.f]
-function f () // singleton [b.s, b.t, m.f] function f ()
-    m.f()
+singleton [u, g, b.s, b.t, b.f, f] 
+function h ()
+    f()
 end
 

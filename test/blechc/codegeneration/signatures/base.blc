@@ -9,10 +9,11 @@ end
 const initValue = 42 : int32
 
 /// The initialiser
-function init () returns T
+singleton function init () returns T
     return { internal = initValue } 
 end
 
-function hasGrown (t: T) returns bool
+singleton [init] function hasGrown () (t: T) returns bool
+    t = init()
     return t.internal > initValue
 end

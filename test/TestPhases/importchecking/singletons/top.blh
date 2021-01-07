@@ -1,7 +1,7 @@
-import m "middle" 
+import _ "middle" exposes f
 import b "bottom"
 
 signature
 
-singleton [b.s, b.t, m.f] function f () 
+singleton [f] function h () 
 
