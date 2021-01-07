@@ -357,7 +357,7 @@ module SymbolTable =
                 failwith "Imported Module Scope should always exist"
 
 
-        let exposeImportedMember env (moduleName: Name) (exposedName: Name) = 
+        let exposeImportedMember env (moduleName: Name) (modulePath: TranslationUnitPath) (exposedName: Name) = 
             let globalScope = getGlobalScope env    
             let impModScp = getImportedModuleScope env moduleName.id
             
@@ -382,7 +382,7 @@ module SymbolTable =
                     Ok { env with path = [globScp] }
                 | None ->
                     // TODO: Error: ExpositionNotExported
-                    Error <| Dummy (exposedName.Range, sprintf "Member '%s' is not accessible in module '%s'" exposedName.id moduleName.id)
+                    Error <| Dummy (exposedName.Range, sprintf "Member '%s' is not accessible in module \"%s\"" exposedName.id <| string modulePath )
             
               
             checkShadowing env

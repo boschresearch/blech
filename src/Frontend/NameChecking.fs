@@ -117,8 +117,10 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
     
-    let private addExposedImportedMember (importedModule: Name) (ctx: NameCheckContext) (exposedImportedMember: Name) =
-        match Env.exposeImportedMember ctx.env importedModule exposedImportedMember with
+    let private addExposedImportedMember (import: AST.Import) (ctx: NameCheckContext) (exposedImportedMember: Name) =
+        let modName = import.localName
+        let modPath = import.modulePath.path
+        match Env.exposeImportedMember ctx.env modName modPath exposedImportedMember with
         | Ok env ->
             { ctx with env = env }
         | Error err ->
@@ -535,14 +537,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
 
 
-    let checkImportExposes moduleName ctx (exposing: AST.Exposing) =
-        List.fold (addExposedImportedMember moduleName) ctx exposing.names
+    let checkImportExposes import ctx (exposing: AST.Exposing) =
+        List.fold (addExposedImportedMember import) ctx exposing.names
         
 
     let checkImport ctx (import: AST.Import) = 
         addModuleNameDecl ctx import
         |> addImportedModule <| import
-        |> Option.fold (checkImportExposes import.localName) <| import.exposing
+        |> Option.fold (checkImportExposes import) <| import.exposing
 
 
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
