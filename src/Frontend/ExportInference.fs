@@ -178,7 +178,7 @@ module ExportInference =
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
                                  (importedAbstractTypes : AbstractTypes list)
-                                 (importedSingletons: Singletons list) = 
+                                 (importedSingletons: SingletonInference.Singletons list) = 
             {   
                 environment = env
                 logger = logger
@@ -824,7 +824,7 @@ module ExportInference =
     
     let inferExports logger (env: SymbolTable.Environment) 
                             (importedAbtractTypes : AbstractTypes list)
-                            (importedSingletons : Singletons list)
+                            (importedSingletons : SingletonInference.Singletons list)
                             (cu: AST.CompilationUnit) =
         let exports =
             ExportContext.Initialise logger env importedAbtractTypes importedSingletons

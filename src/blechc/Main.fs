@@ -86,6 +86,11 @@ module Main =
         Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
 
+    let private runSingletonInference logger symboltableEnv fileName importedSingletons ast = 
+        Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
+        SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
+            
+
     let private runExportInference logger symboltableEnv fileName importedAbstractTypes importedSingletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
         ExportInference.inferExports logger symboltableEnv importedAbstractTypes importedSingletons ast 
@@ -174,7 +179,12 @@ module Main =
                 let lookupTables = imports.GetLookupTables
                 let exportScopes = imports.GetExportScopes
                 runNameResolution logger moduleName fileName lookupTables exportScopes ast
-        
+
+            let inferredSingletonRes = 
+                let importedSingletons = imports.GetSingletons
+                astAndSymTableRes 
+                |> Result.bind (fun (ast, env) -> runSingletonInference logger env fileName importedSingletons ast)
+
             let inferredExportRes = 
                 let importedAbstractTypes = imports.GetAbstractTypes
                 let importedSingletons = imports.GetSingletons
@@ -190,8 +200,8 @@ module Main =
                 lutAndPackRes 
                 |> Result.bind (runCausalityCheck logger fileName)
             
-            match astAndSymTableRes, inferredExportRes, lutAndPackRes, pgsRes with    
-            | Ok (ast, env), Ok exports, Ok (lut, blechModule), Ok pgs ->
+            match astAndSymTableRes, inferredSingletonRes, inferredExportRes, lutAndPackRes, pgsRes with    
+            | Ok (ast, env), Ok singletons, Ok exports, Ok (lut, blechModule), Ok pgs ->
                 // generate block graphs for all activities
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
@@ -232,7 +242,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                Ok <| ImportChecking.ModuleInfo.Make importedModules env exports lut blechModule
+                Ok <| ImportChecking.ModuleInfo.Make importedModules env singletons exports lut blechModule
 
             | _ ->
                 // Error during name checking or-else export inference or-else type checking or-else causality checking

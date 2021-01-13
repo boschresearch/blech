@@ -26,6 +26,7 @@
     <Compile Include="ParsePkg.fs" />
     <Compile Include="SymbolTable.fs" />
     <Compile Include="NameChecking.fs" />
+    <Compile Include="SingletonInference.fs" />
     <Compile Include="ExportInference.fs" />
     <Compile Include="SignaturePrinter.fs" />
     <Compile Include="TyChkErrors.fs" />
