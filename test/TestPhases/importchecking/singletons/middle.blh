@@ -6,6 +6,4 @@ singleton u
 
 singleton [u] g
 
-singleton [u, g, b.s, b.t, b.f] function f ()
-
-
+singleton [g, u, b.f] function f ()

@@ -1,4 +1,4 @@
-module exposes f
+module exposes f, f1, f2
 
 singleton function s ()
 end
@@ -10,6 +10,17 @@ end
 singleton function u()
 end
 
-singleton [s, t] function f ()
+function f()
+    t()
+end
+
+singleton function f1()
+    t()
+end
+
+function h()
+end
+
+singleton [t] function f2() 
     t()
 end

@@ -241,6 +241,10 @@ module SymbolTable =
             | Expose declName ->
                 declName
 
+        member this.IsStaticName name =
+            this.lookupTable.ContainsKey name
+
+
 
     type NameCheckError = 
         | ShadowingDeclaration of decl: Name * shadowed: Name                     // declaration name * shadowed name
@@ -410,6 +414,9 @@ module SymbolTable =
 
         let getDeclName env (name: Name) = 
             env.lookupTable.getDeclName name
+
+        let isStaticName env (name: Name) = 
+            env.lookupTable.IsStaticName name
 
         let isExposedToplevelMember env id = 
             Scope.containsSymbol env.exposing id

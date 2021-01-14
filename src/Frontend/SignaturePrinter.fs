@@ -653,7 +653,7 @@ module SignaturePrinter =
             |> dpOptLinePrefix
             <| prototype
 
-        let psOpaqueSingleton annotations singletons (name: Name)  = 
+        let psOpaqueSingletonSignature annotations singletons (name: Name)  = 
             let optAnnos = 
                 bpOptAnnotations annotations
             let optSingletons = 
@@ -664,7 +664,7 @@ module SignaturePrinter =
  
             dpOptLinePrefix optAnnos 
             <| txt "singleton"
-            |> dpOptSpacePostfix <| optSingletons
+            // |> dpOptSpacePostfix <| optSingletons
             <+> dpName name
         
         let psOpaqueSingletonPrototype (pt: AST.Prototype) = 
@@ -704,16 +704,20 @@ module SignaturePrinter =
                 bpStaticVarDecl vdecl
             
             | AST.Member.Subprogram sp ->
-                if ctx.IsOpaqueSingleton sp.name then 
-                    psOpaqueSingleton sp.annotations sp.singletons sp.name
-                elif ctx.IsExported sp.name then 
+                let ie = ctx.IsExported sp.name
+                let hoss = ctx.HasOpaqueSingletonSignature sp.name
+                if ie && hoss then 
+                    psOpaqueSingletonSignature sp.annotations sp.singletons sp.name // Todo: Print inferred singleton signature
+                elif ie then 
                     psSubProgram sp
                 else empty
 
             | AST.Member.Prototype pt ->
-                if ctx.IsOpaqueSingleton pt.name then 
-                    psOpaqueSingleton pt.annotations pt.singletons pt.name
-                elif ctx.IsExported pt.name then 
+                let ie = ctx.IsExported pt.name
+                let hoss = ctx.HasOpaqueSingletonSignature pt.name
+                if ie && hoss then 
+                    psOpaqueSingletonSignature pt.annotations pt.singletons pt.name // Todo: Print inferred singleton signature
+                elif ie then 
                     bpExternalFunction pt
                 else empty
             

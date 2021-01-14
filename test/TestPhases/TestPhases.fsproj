@@ -20,6 +20,7 @@
     <Compile Include="TestFiles.fs" />
     <Compile Include="ParserTest.fs" />
     <Compile Include="NameCheckerTest.fs" />
+    <Compile Include="SingletonInferenceTest.fs" />
     <Compile Include="ExportInferenceTest.fs" />
     <Compile Include="TypeCheckerTest.fs" />
     <Compile Include="CausalityCheckerTest.fs" />

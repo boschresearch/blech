@@ -1,0 +1,13 @@
+module exposes f
+
+function s ()
+end
+
+singleton [s] function t () // s is not a singleton, but t is
+    s()
+end
+
+function f()
+    t()
+end
+

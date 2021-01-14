@@ -27,22 +27,25 @@ open Blech.Frontend
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 type private Environment = SymbolTable.Environment
+type private SingletonContext = SingletonInference.SingletonContext
 type private ExportContext = ExportInference.ExportContext
 
 type ModuleInfo = 
     {
         dependsOn: TranslationUnitPath list
         nameCheck: Environment
+        singletonInference : SingletonContext
         exportInference: ExportContext
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
         //translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
     }
 
-    static member Make imports symbolTable exportContext typecheckContext blechModule =
+    static member Make imports symbolTable singletonContext exportContext typecheckContext blechModule =
         { 
             dependsOn = imports
             nameCheck = symbolTable
+            singletonInference = singletonContext
             exportInference = exportContext
             typeCheck = typecheckContext
             typedModule = blechModule
@@ -127,9 +130,9 @@ type Imports =
         this.GetImports
         |> List.map (fun import -> import.exportInference.GetAbstractTypes)
         
-    member this.GetSingletons : ExportInference.OpaqueSingletons list = 
+    member this.GetSingletons : SingletonInference.Singletons list = 
         this.GetImports
-        |> List.map (fun import -> import.exportInference.GetSingletons)
+        |> List.map (fun import -> import.singletonInference.GetSingletons)
 
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports

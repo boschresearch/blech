@@ -63,6 +63,7 @@ module Diagnostics =
         | Parsing
         | Importing
         | Naming
+        | Singletons
         | Exports
         | Typing
         | Causality
@@ -71,9 +72,10 @@ module Diagnostics =
             match phs with
             | Default
             | Compiling -> "compiling"
-            | Importing -> "importing"
             | Parsing -> "parsing"
+            | Importing -> "importing"
             | Naming -> "name resolution"
+            | Singletons -> "singleton inference"
             | Exports -> "export inference"
             | Typing -> "typing"
             | Causality -> "causality"

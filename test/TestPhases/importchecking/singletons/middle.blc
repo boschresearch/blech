@@ -5,12 +5,10 @@ module exposes f
 singleton function u () 
 end
 
-singleton [u] 
 function g ()
     u()
 end
 
-singleton [u, g, b.s, b.t, b.f] 
 function f () 
     g()
     u()
