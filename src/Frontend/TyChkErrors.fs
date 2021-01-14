@@ -55,6 +55,7 @@ type TyCheckError =
     | NoDefaultValueForOpaque of range * Identifier
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
     | OpaqueMustHaveInitialiser of range * Identifier
+    | OpaqueInitialiserMustBeConcrete of range * Identifier
     // expressions
     | InvalidFloat of range * string
     | NextOnRhs of range * string
@@ -231,6 +232,7 @@ type TyCheckError =
             | NoDefaultValueForOpaque (pos, name) -> pos, sprintf "Internal error: tried to determine a default value for %s which is opaque." name
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
             | OpaqueMustHaveInitialiser (p,n) -> p, sprintf "%s has an opaque type and must be initialised." n
+            | OpaqueInitialiserMustBeConcrete (p, n) -> p, sprintf "%s can only be initialised using a value of the same type (or using a procedure that returns such value)." n
             // expressions
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s

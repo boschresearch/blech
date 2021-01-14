@@ -1365,7 +1365,6 @@ let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.
     let lut = TypeCheckContext.Init cliContext ncEnv
     otherLuts
     |> List.iter (fun otherLut ->
-        // TODO: do we filter here for visibility? opaque procedures and types? fg 22.12.2020
         for pair in otherLut.nameToDecl do addDeclToLut lut pair.Key pair.Value
         for pair in otherLut.userTypes do addTypeToLut lut pair.Key (fst pair.Value) (snd pair.Value)
         for pragma in otherLut.memberPragmas do addPragmaToLut lut pragma

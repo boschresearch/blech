@@ -182,7 +182,57 @@ module Main =
                 |> Result.bind (fun (ast, env) -> runExportInference logger env fileName importedAbstractTypes importedSingletons ast)
             
             let lutAndPackRes = 
-                let otherLuts = imports.GetTypeCheckContexts
+                let otherLuts =
+                    match astAndSymTableRes, inferredExportRes with
+                    | Ok (_, nameEnv), Ok expCtx ->
+                        // today
+                        expCtx.GetAbstractTypes
+                        |> Seq.iter (fun at -> 
+                            let qname = nameEnv.GetLookupTable.nameToQname at.Key
+                            imports.GetTypeCheckContexts
+                            |> List.iter (fun ctx -> // TODO: check is in-place update OK? 13.01.2021
+                                                     // this makes subsequent white-box importing impossible
+                                if ctx.userTypes.ContainsKey qname then // replace by opaque
+                                    let ot = // create opaque
+                                        match at.Value with
+                                        | ExportInference.AbstractType.Complex ->
+                                            BlechTypes.ValueTypes (BlechTypes.OpaqueComplex qname)
+                                        | ExportInference.AbstractType.Simple ->
+                                            BlechTypes.ValueTypes (BlechTypes.OpaqueSimple qname)
+                                    let r = fst ctx.userTypes.[qname]
+                                    ctx.userTypes.[qname] <- (r, ot)
+                                else // nothing to do
+                                    () 
+                                )
+                            )
+                        imports.GetTypeCheckContexts // return updated contexts
+                        // yesterday
+                        //let tctx = imports.GetTypeCheckContexts
+                        //tctx 
+                        //|> List.map (fun ctx ->
+                        //    let newUserTypes =
+                        //        ctx.userTypes
+                        //        |> Seq.map (fun kvp ->
+                        //            let name = { CommonTypes.Name.id = kvp.Key.basicId; CommonTypes.Name.range = fst kvp.Value}
+                        //            match expCtx.TryGetAbstractType name with
+                        //            | Some absTyp ->
+                        //                // create opaque
+                        //                let ot = 
+                        //                    match absTyp with
+                        //                    | ExportInference.AbstractType.Complex ->
+                        //                        BlechTypes.ValueTypes (BlechTypes.OpaqueComplex kvp.Key)
+                        //                    | ExportInference.AbstractType.Simple ->
+                        //                        BlechTypes.ValueTypes (BlechTypes.OpaqueSimple kvp.Key)
+                        //                // create new key-value-pair
+                        //                System.Collections.Generic.KeyValuePair (kvp.Key, (fst kvp.Value, ot))
+                        //            | None -> 
+                        //                kvp
+                        //            )
+                        //        |> System.Collections.Generic.Dictionary
+                        //    {ctx with userTypes = newUserTypes}
+                        //    )
+                    | Error _, _
+                    | _, Error _ -> imports.GetTypeCheckContexts // return unfiltered contexts, anyway we already have errors
                 astAndSymTableRes 
                 |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName otherLuts (ast, env))
         

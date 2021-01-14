@@ -85,8 +85,8 @@ type ValueTypes =
     | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
     | StructType of name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
-    | OpaqueSimple of name:QName
-    | OpaqueComplex of name:QName
+    | OpaqueSimple of QName
+    | OpaqueComplex of QName
     
     member this.ToDoc = txt <| this.ToString()
     

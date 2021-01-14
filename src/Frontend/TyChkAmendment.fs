@@ -474,10 +474,11 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         Error [VarDeclMissingTypeOrValue (pos, name)]
     | None, Some vRes -> 
         vRes |> Result.bind inferFromRhs
-    | Some dtyRes, None -> // TODO: will crash for opaque types
+    | Some dtyRes, None ->
         dtyRes 
         |> Result.bind (fun (typ: Types) ->
-            if typ.IsOpaque then Error [OpaqueMustHaveInitialiser(pos, name)]
+            if typ.IsOpaque then 
+                Error [OpaqueMustHaveInitialiser(pos, name)]
             else
                 getInitValueWithoutZeros pos name typ
                 |> combine dtyRes
@@ -485,7 +486,11 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
     | Some dtyRes, Some vRes ->
         combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
-            amendRhsExpr dty v
-            |> Result.map (fun amendedV -> (dty, amendedV))
+            if dty.IsOpaque && not v.typ.IsOpaque then 
+                printfn "%A" v.typ
+                Error [OpaqueInitialiserMustBeConcrete(pos, name)]
+            else
+                amendRhsExpr dty v
+                |> Result.map (fun amendedV -> (dty, amendedV))
         )
 
