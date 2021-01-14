@@ -241,6 +241,11 @@ module SymbolTable =
             | Expose declName ->
                 declName
 
+        member this.IsDeclName name = 
+            match this.lookupTable.[name] with
+            | Decl _ -> true
+            | _ -> false
+
         member this.IsStaticName name =
             this.lookupTable.ContainsKey name
 
@@ -382,6 +387,7 @@ module SymbolTable =
                             |> Scope.addSymbol <| Symbol.Create exposedName true 
                         | None -> 
                             Scope.addSymbol globalScope <| Symbol.Create exposedName false
+                    // printfn ">>>>> Exposed import: name:%A  declname: %A " exposedName  declSymbol.name
                     do env.lookupTable.addExposed exposedName declSymbol.name  // TODO: this is a side effect make it functional
                     Ok { env with path = [globScp] }
                 | None ->
@@ -415,11 +421,18 @@ module SymbolTable =
         let getDeclName env (name: Name) = 
             env.lookupTable.getDeclName name
 
+
         let isStaticName env (name: Name) = 
             env.lookupTable.IsStaticName name
 
+
+        let isDeclName env (name: Name) = 
+            env.lookupTable.IsDeclName name
+
+
         let isExposedToplevelMember env id = 
             Scope.containsSymbol env.exposing id
+
 
         let isHiddenToplevelMember env id = 
             let modScp = getModuleScope env
@@ -698,7 +711,9 @@ module SymbolTable =
                     | None -> 
                         decls
                     | Some symbol ->
-                        let declName = symbol.name
+                        //let declName = symbol.name
+                        let declName = getDeclName env symbol.name // symbol.name might be exposed import
+                        // do printfn ">>>> Findcomplete path: name: %A decl name: %A" path declName
                         decls @ [declName]
 
                 | name :: tail ->

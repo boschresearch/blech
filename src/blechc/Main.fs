@@ -91,9 +91,9 @@ module Main =
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
             
 
-    let private runExportInference logger symboltableEnv fileName importedAbstractTypes importedSingletons ast = 
+    let private runExportInference logger symboltableEnv fileName singletons importedAbstractTypes importedSingletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
-        ExportInference.inferExports logger symboltableEnv importedAbstractTypes importedSingletons ast 
+        ExportInference.inferExports logger symboltableEnv singletons importedAbstractTypes importedSingletons ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -189,7 +189,9 @@ module Main =
                 let importedAbstractTypes = imports.GetAbstractTypes
                 let importedSingletons = imports.GetSingletons
                 astAndSymTableRes
-                |> Result.bind (fun (ast, env) -> runExportInference logger env fileName importedAbstractTypes importedSingletons ast)
+                |> Result.bind (fun (ast, env) -> Result.append (ast, env) inferredSingletonRes)
+                |> Result.bind (fun ((ast, env), singletons) -> 
+                    runExportInference logger env fileName singletons importedAbstractTypes importedSingletons ast)
             
             let lutAndPackRes = 
                 let otherLuts = imports.GetTypeCheckContexts

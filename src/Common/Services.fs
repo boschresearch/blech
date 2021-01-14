@@ -114,6 +114,11 @@ module Result =
         | Error err -> err 
         | Ok ok -> failwithf "Could not get Error from Result: %A" ok
 
+    let append (value : 'a) (result : Result<'b, 'error>) =
+        match result with
+        | Ok ok -> Ok (value, ok)
+        | Error err -> Error err
+
 //-------------------------------------------------------------------------
 // Bits, from fsharp compiler
 // This source code is derived from The F# compiler

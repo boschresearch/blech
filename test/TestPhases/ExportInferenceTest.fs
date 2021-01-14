@@ -36,24 +36,35 @@ type Test() =
         
         let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
+
+        // import checking is omitted
         
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
+        
         Assert.True (Result.isOk astAndEnv)
 
-        // import checking is omitted
+        let inferredSingletonRes = 
+            let importedSingletons = List.empty
+            astAndEnv
+            |> Result.bind (fun (ast, env) -> 
+                    SingletonInference.inferSingletons logger env importedSingletons ast)
+
+        Assert.True (Result.isOk inferredSingletonRes)
 
         let inferredExportRes = 
             let importedAbstractTypes = List.empty
             let importedSingletons = List.empty
             astAndEnv
-            |> Result.bind (fun (ast, env) -> ExportInference.inferExports 
-                                                logger 
-                                                env 
-                                                importedAbstractTypes 
-                                                importedSingletons 
-                                                ast)
+            |> Result.bind (fun (ast, env) -> Result.append (ast, env) inferredSingletonRes)
+            |> Result.bind (fun ((ast, env), singletons) -> ExportInference.inferExports 
+                                                                logger 
+                                                                env
+                                                                singletons
+                                                                importedAbstractTypes 
+                                                                importedSingletons 
+                                                                ast)
 
         match inferredExportRes with
         | Error logger ->
@@ -75,24 +86,35 @@ type Test() =
         
         let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         Assert.True (Result.isOk ast)
-
+        
+        // import checking is omitted
+        
         let astAndEnv = 
             let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
             Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
         Assert.True (Result.isOk astAndEnv)
         
-        // import checking is omitted
-       
+        let inferredSingletonRes = 
+            let importedSingletons = List.empty
+            astAndEnv
+            |> Result.bind (fun (ast, env) -> 
+                    SingletonInference.inferSingletons logger env importedSingletons ast)
+
+        Assert.True (Result.isOk inferredSingletonRes)
+
         let inferredExportRes = 
             let importedAbstractTypes = List.empty
             let importedSingletons = List.empty
             astAndEnv
-            |> Result.bind (fun (ast, env) -> ExportInference.inferExports 
-                                                logger 
-                                                env 
-                                                importedAbstractTypes 
-                                                importedSingletons 
-                                                ast)
+            |> Result.bind (fun (ast, env) -> Result.append (ast, env) inferredSingletonRes)
+            |> Result.bind (fun ((ast, env), singletons) -> ExportInference.inferExports 
+                                                                logger 
+                                                                env
+                                                                singletons
+                                                                importedAbstractTypes 
+                                                                importedSingletons 
+                                                                ast)
+
         match inferredExportRes with
         | Error logger ->
             printfn "Discovered Errors:\n" 
