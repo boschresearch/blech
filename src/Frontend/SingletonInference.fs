@@ -102,14 +102,14 @@ module SingletonInference =
 
     module Env = SymbolTable.Environment
         
-    type private SingletonCall = Name list 
-    type Singletons = Map<Name, SingletonCall list> // declaration name |-> singleton calls (multiple occurences of the same singleton possible)
+    type private SingletonUse = Name list 
+    type Singletons = Map<Name, SingletonUse list> // declaration name |-> singleton calls (multiple occurences of the same singleton possible)
 
     type SingletonContext = 
         private {
             logger : Diagnostics.Logger
             environment : SymbolTable.Environment
-            calledSingletons : SingletonCall list // accumulator for singleton calls, in reverse order of appearance
+            calledSingletons : SingletonUse list // accumulator for singleton calls, in reverse order of appearance
             singletons : Singletons
         }
 
@@ -123,6 +123,7 @@ module SingletonInference =
                 calledSingletons = List.Empty
                 singletons = Map.concatWithOverride importedSingletons
             }
+            // |> fun ctx -> printfn "##########\nInitialised singletons: %A\n################" ctx.singletons; ctx
 
         member this.CollectSingletons declName : QName list = 
             let env = this.environment
@@ -141,6 +142,7 @@ module SingletonInference =
         member this.IsSingleton name = 
             if Env.isStaticName this.environment name then 
                 let declName = Env.getDeclName this.environment name
+                //printfn "???????\n IsSingleton name: %A\n decl name: %A\n??????????" name declName
                 this.singletons.ContainsKey declName
             else
                 false
@@ -158,8 +160,14 @@ module SingletonInference =
         member this.HasCalledSingletons = 
             not <| List.isEmpty this.calledSingletons
 
-        member this.GetSingletons = 
-            this.singletons
+        member this.AddSingleton declName =
+            assert Env.isDeclName this.environment declName
+            { this with 
+                singletons = Map.add declName this.calledSingletons this.singletons 
+                calledSingletons = List.empty }
+
+        //member this.GetSingletons = 
+        //    this.singletons
             
 
     type SingletonError = 
@@ -190,19 +198,13 @@ module SingletonInference =
     // recursively descend the AST for export inference
 
     let private addToSingletons isDeclaredSingleton (ctx: SingletonContext) (name: Name) : SingletonContext =
-        //let isExposed = Env.isExposedToplevelMember ctx.environment name.id
-        let isSingleton = isDeclaredSingleton || ctx.HasCalledSingletons
+        if isDeclaredSingleton || ctx.HasCalledSingletons then
+            // printfn "Add singleton: %s" name.id
+            ctx.AddSingleton name
+        else
+            ctx
 
-        let sngltns = 
-            if isSingleton then
-                printfn "Add singleton: %s" name.id
-                Map.add name ctx.calledSingletons ctx.singletons
-            else
-                ctx.singletons
 
-        { ctx with singletons = sngltns }
-
-    
     let private addSingletonUsageDeclaration (ctx : SingletonContext) (snp : AST.StaticNamedPath) = 
         let lastName = List.last snp.names
         if not <| ctx.IsSingleton lastName then 
@@ -601,7 +603,11 @@ module SingletonInference =
     //let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
     //    Option.fold inferExposing ctx modSpec.exposing
 
+    //let addExposedImportedSingleton (ctx : SingletonContext) name =
+    //    let declName 
+    //    ctx
 
+    
     // Compilation Unit
     let private inferCompilationUnit (ctx: SingletonContext) (cu: AST.CompilationUnit) =
         List.fold inferTopLevelMember ctx cu.members
@@ -616,9 +622,9 @@ module SingletonInference =
             SingletonContext.Initialise logger env importedSingletons
             |> inferCompilationUnit <| cu
         // just for debugging
-        printfn "Singletons: \n %A" ctx.singletons
+        // printfn "Singletons: \n %A" ctx.singletons
         if Diagnostics.Logger.hasErrors ctx.logger then
             Error ctx.logger
         else
-            Ok ctx
+            Ok ctx.singletons
 

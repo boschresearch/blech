@@ -1,9 +1,10 @@
 import _ "middle" exposes u, f // required 
+// import m "middle"  // required 
 import b "bottom"  // required
 
 module exposes h
 
-singleton [u]
+singleton [f]
 function h ()
     b.f()
     f()

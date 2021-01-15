@@ -81,115 +81,126 @@ module ExportInference =
 
     type RequiredImports = Map<Identifier, Identifier option>
 
+    // --- Singleton Handling
+
+    type SingletonUsage = LongIdentifier list // in order of appearance
+
+    type SingletonSignature = 
+        | Opaque of SingletonUsage       // e.g. singleton [f, g] h
+        | Translucent of SingletonUsage  // e.g. singleton [f, g] function h ()
+    
+    type SingletonSignatures = Map<Name, SingletonSignature>
 
     // --- Singleton handling
     
-    type private Path = Name list
+    //type private Path = Name list
      
-    type SingletonSignature = 
-        | Opaque of LongIdentifier list       // e.g. singleton [f, g] h
-        | Translucent of LongIdentifier list  // e.g. singleton [f, g] function h ()
     
-    type Singletons = 
-        private {
-            calledSingletons : Path list       // accumulator for called singletons in a subprogram
-            singletons : Map<Name, Path list>  // declaration name |-> singleton uses (multiple occurences of the same singleton possible)
-            signatures : Map<Name, SingletonSignature>
-        }
+    //type Singletons = 
+    //    private {
+    //        calledSingletons : Path list       // accumulator for called singletons in a subprogram
+    //        singletons : Map<Name, Path list>  // declaration name |-> singleton uses (multiple occurences of the same singleton possible)
+    //        signatures : Map<Name, SingletonSignature>
+    //    }
 
-        static member Empty = 
-            { calledSingletons = List.empty
-              singletons = Map.empty
-              signatures = Map.empty }
+    //    static member Empty = 
+    //        { calledSingletons = List.empty
+    //          singletons = Map.empty
+    //          signatures = Map.empty }
 
-        member this.AddCalledSingleton (env : SymbolTable.Environment) (path : Path) =
-            assert this.IsSingleton env path
-            { this with calledSingletons = path :: this.calledSingletons }  
+    //    member this.AddCalledSingleton (env : SymbolTable.Environment) (path : Path) =
+    //        assert this.IsSingleton env path
+    //        { this with calledSingletons = path :: this.calledSingletons }  
 
-        member this.HasCalledSingletons = 
-            not <| List.isEmpty this.calledSingletons
+    //    member this.HasCalledSingletons = 
+    //        not <| List.isEmpty this.calledSingletons
 
-        // Assume, that all called singletons have been collected
-        //member this.AddSingleton declName =
-        //    { this with 
-        //        singletons = this.singletons.Add (declName, this.calledSingletons) 
-        //        calledSingletons = List.empty }       
+    //    // Assume, that all called singletons have been collected
+    //    //member this.AddSingleton declName =
+    //    //    { this with 
+    //    //        singletons = this.singletons.Add (declName, this.calledSingletons) 
+    //    //        calledSingletons = List.empty }       
 
-        member this.IsSingleton (env : SymbolTable.Environment) (path : Path) =
-            let lastName = List.last path
-            let declName = Env.getDeclName env lastName
-            this.singletons.ContainsKey declName
+    //    member this.IsSingleton (env : SymbolTable.Environment) (path : Path) =
+    //        let lastName = List.last path
+    //        let declName = Env.getDeclName env lastName
+    //        this.singletons.ContainsKey declName
 
-        //member this.IsSingleton (declName : Name) =
-        //    this.singletons.ContainsKey declName
-
-
-        member private this.CalledToSignature : LongIdentifier list = 
-            let pathToLongid path = List.map (fun name -> name.id) path
-            this.calledSingletons
-            |> List.map pathToLongid
-            |> List.distinct
-
-        //member this.AddTranslucentSingleton declName = 
-        //    { calledSingletons = List.empty
-        //      singletons = this.singletons.Add (declName, this.calledSingletons)
-        //      signatures = this.signatures.Add (declName, Translucent this.CalledToSignature) }
-
-        member this.AddSingleton declName signatureCase = 
-            { calledSingletons = List.empty
-              singletons = this.singletons.Add (declName, this.calledSingletons)
-              signatures = this.signatures.Add (declName, signatureCase this.CalledToSignature) }
+    //    //member this.IsSingleton (declName : Name) =
+    //    //    this.singletons.ContainsKey declName
 
 
-        member this.HasSignature declName =
-            Option.isSome <| this.signatures.TryFind declName
+    //    member private this.CalledToSignature : LongIdentifier list = 
+    //        let pathToLongid path = List.map (fun name -> name.id) path
+    //        this.calledSingletons
+    //        |> List.map pathToLongid
+    //        |> List.distinct
 
-        member this.GetSignature declName =
-            this.signatures.Item declName
+    //    //member this.AddTranslucentSingleton declName = 
+    //    //    { calledSingletons = List.empty
+    //    //      singletons = this.singletons.Add (declName, this.calledSingletons)
+    //    //      signatures = this.signatures.Add (declName, Translucent this.CalledToSignature) }
 
-        member this.CollectSingletons (env : SymbolTable.Environment) declName : QName list =     
-            let rec recurse path =
-                let lastname = List.last path
-                let declname = Env.getDeclName env lastname
-                let qname = (Env.getLookupTable env).nameToQname declname
-                match this.singletons.Item declname with
-                | [] -> [qname]
-                | singletons -> 
-                    qname :: List.collect recurse singletons
+    //    member this.AddSingleton declName signatureCase = 
+    //        { calledSingletons = List.empty
+    //          singletons = this.singletons.Add (declName, this.calledSingletons)
+    //          signatures = this.signatures.Add (declName, signatureCase this.CalledToSignature) }
 
-            List.collect recurse (this.singletons.Item declName)
-            |> List.distinct
+
+    //    member this.HasSignature declName =
+    //        Option.isSome <| this.signatures.TryFind declName
+
+    //    member this.GetSignature declName =
+    //        this.signatures.Item declName
+
+    //    member this.CollectSingletons (env : SymbolTable.Environment) declName : QName list =     
+    //        let rec recurse path =
+    //            let lastname = List.last path
+    //            let declname = Env.getDeclName env lastname
+    //            let qname = (Env.getLookupTable env).nameToQname declname
+    //            match this.singletons.Item declname with
+    //            | [] -> [qname]
+    //            | singletons -> 
+    //                qname :: List.collect recurse singletons
+
+    //        List.collect recurse (this.singletons.Item declName)
+    //        |> List.distinct
 
 
     type ExportContext = 
         private {
-            environment : SymbolTable.Environment
             logger : Diagnostics.Logger
-            
+            environment : SymbolTable.Environment
+            singletons : SingletonInference.Singletons
+
             abstractTypes : AbstractTypes
             // opaqueSingletons : OpaqueSingletons 
-
-            singletons : Singletons
+            // singletons : Singletons
             
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
+            singletonSignatures : SingletonSignatures
+           
         }
 
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
+                                 (singletons: SingletonInference.Singletons)
                                  (importedAbstractTypes : AbstractTypes list)
                                  (importedSingletons: SingletonInference.Singletons list) = 
             {   
                 environment = env
                 logger = logger
+                singletons = Map.concatWithOverride <| singletons :: importedSingletons
                 
                 abstractTypes = Map.concatWithOverride importedAbstractTypes 
-                // opaqueSingletons = Set.unionMany importedSingletons
-
-                singletons = Singletons.Empty // ToDo: add imported singletons
+                
+                // singletons = Singletons.Empty // ToDo: add imported singletons
                 
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
+                singletonSignatures = Map.empty
+                
             }
 
         //member this.AddAbstractType name abstype = 
@@ -224,19 +235,41 @@ module ExportInference =
             let declName = Env.getDeclName this.environment name
             this.abstractTypes.TryFind declName
 
-        member this.HasOpaqueSingletonSignature name = 
+        member this.HasOpaqueSingletonSignature name =
             let declName = Env.getDeclName this.environment name
-            match this.singletons.signatures.TryFind declName with
+            match this.singletonSignatures.TryFind declName with
             | Some (Opaque _) -> true
             | _ -> false
           
-        member this.TryGetSingletonSignature name = 
-            let declName = Env.getDeclName this.environment name
-            this.singletons.signatures.TryFind declName
-              
+        member this.TryGetSingletonSignature declName = 
+            assert Env.isDeclName this.environment declName
+            // let declName = Env.getDeclName this.environment name
+            this.singletonSignatures.TryFind declName
 
+        member this.IsSingleton name = 
+            let declName = Env.getDeclName this.environment name
+            this.singletons.ContainsKey declName
+            
+        member this.AddSingletonSignature declName signatureTag =
+            assert Env.isDeclName this.environment declName
+            let singletonUses = this.singletons.Item declName // in reverse appearance order
+            let pathsToLongids paths = List.map (fun name -> name.id) paths
+            let longIds = 
+                List.rev singletonUses  // to appearance order
+                |> List.map pathsToLongids
+                |> List.distinct
+            let sss = this.singletonSignatures.Add (declName, signatureTag longIds)
+            { this with singletonSignatures = sss }
+
+        member this.IsExposed name  =
+            Env.isExposedToplevelMember this.environment name.id
+            
         member this.IsExported name = 
             SymbolTable.Scope.containsSymbol this.exportScope name.id
+
+        member this.AddExport declName = 
+            assert Env.isDeclName this.environment declName
+            { this with exportScope = Env.exportName this.environment declName.id this.exportScope }
 
         member this.GetExports = 
             this.exportScope
@@ -244,9 +277,8 @@ module ExportInference =
         member this.GetAbstractTypes = 
             this.abstractTypes
 
-        member this.GetSingletons = 
-            this.singletons
-
+        member this.GetSingletonSignatures = 
+            this.singletonSignatures
 
         member this.GetRequiredImports = 
             this.requiredImports
@@ -287,26 +319,29 @@ module ExportInference =
     // recursively descend the AST for export inference
 
     let private exportValueDecl isDeclaredSingleton (ctx: ExportContext) (name: Name) =
-        let isExposed = Env.isExposedToplevelMember ctx.environment name.id
-        let isSingleton = isDeclaredSingleton || ctx.singletons.HasCalledSingletons
-
-        let expscp =  
+        // printfn "Export Value Decl: %s" name.id
+        let isExposed = ctx.IsExposed name
+        let isSingleton = ctx.IsSingleton name
+        let addExport (ctx : ExportContext) name =
             if isExposed then 
-                Env.exportName ctx.environment name.id ctx.exportScope
+                // printfn "Add exported value: %s" name.id
+                ctx.AddExport name 
             else 
-                ctx.exportScope 
-
-        let sngltns = 
-            if isSingleton && isExposed then
-                printfn "Add translucent singleton: %s" name.id
-                ctx.singletons.AddSingleton name Translucent
+                ctx
+        let addSingletonSignature (ctx : ExportContext) name = 
+            if isSingleton && isExposed then 
+                // printfn "Add translucent singleton: %s" name.id
+                ctx.AddSingletonSignature name Translucent
             elif isSingleton then
-                printfn "Add opaque singleton: %s" name.id
-                ctx.singletons.AddSingleton name Opaque // will only be exported if actually used
-            else
-                ctx.singletons
-
-        { ctx with exportScope = expscp ; singletons = sngltns }
+                // printfn "Add opaque singleton: %s" name.id
+                ctx.AddSingletonSignature name Opaque // will only be exported if actually used
+            else 
+                // printfn "IsSingleton is false: %s" name.id
+                ctx 
+                
+        ctx 
+        |> addExport <| name
+        |> addSingletonSignature <| name
 
 
     let private exportTypeDecl abstractType (ctx: ExportContext) (name: Name) =
@@ -315,7 +350,7 @@ module ExportInference =
                          |> Env.exportScope ctx.environment name.id
             { ctx with exportScope = expScp }
         else
-            printfn "Add abstract type: %s" name.id
+            // printfn "Add abstract type: %s" name.id
             { ctx with abstractTypes = ctx.abstractTypes.Add(name, abstractType) } // will only be exported if actually used
 
         
@@ -347,7 +382,7 @@ module ExportInference =
 
     let private exportNameIfOpaqueSingletonSignature (ctx: ExportContext) (name: Name) =
         if ctx.HasOpaqueSingletonSignature name then
-            printfn "Export opaque singleton: %s" name.id
+            // printfn "Export opaque singleton: %s" name.id
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
         else    
@@ -397,6 +432,7 @@ module ExportInference =
             |> requireImportIfImported <| firstName
         | _ ->
             exportNameIfOpaqueSingletonSignature ctx firstName
+            // ctx
 
 
     let private inferImplicitMember exp ctx (snp: AST.StaticNamedPath) = 
@@ -408,6 +444,7 @@ module ExportInference =
             |> requireImportForMemberIfImported <| firstName
         | _ ->
             exportNameIfOpaqueSingletonSignature ctx firstName
+            // ctx
 
 
     let private inferNameInCurrentScope exp ctx (sharing: Name) = 
@@ -823,16 +860,17 @@ module ExportInference =
     
     
     let inferExports logger (env: SymbolTable.Environment) 
+                            (singletons: SingletonInference.Singletons)
                             (importedAbtractTypes : AbstractTypes list)
                             (importedSingletons : SingletonInference.Singletons list)
                             (cu: AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env importedAbtractTypes importedSingletons
+            ExportContext.Initialise logger env singletons importedAbtractTypes importedSingletons
             |> inferCompilationUnit <| cu
         // just for debugging
-        printfn "Abstract Types: \n %A" exports.abstractTypes
-        printfn "Singletons: \n %A" exports.singletons
-        printfn "Required imports: \n %A" exports.requiredImports
+        //printfn "Abstract Types: \n %A" exports.abstractTypes
+        //printfn "SingletonSignatures: \n %A" exports.singletonSignatures
+        //printfn "Required imports: \n %A" exports.requiredImports
         if Diagnostics.Logger.hasErrors exports.logger then
             Error exports.logger
         else
