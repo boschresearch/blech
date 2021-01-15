@@ -1,0 +1,32 @@
+module exposes Exp1, Exp2, Exp3, Exp4
+
+struct O1 // opaque
+    var t: int32
+end
+
+singleton function f () end
+
+activity Hid1 ()() // hidden
+    await true
+end
+
+activity Exp1 ()() returns O1
+    await true
+    run Hid1 ()
+    return {}
+end
+
+activity Exp2 (p: O1)()
+    await true
+    run Hid1 ()
+end
+
+activity Exp3 ()(p: O1)
+    await true
+    run Hid1 ()
+end
+
+activity Exp4 ()() // singleton [f]
+    await true
+    f()
+end

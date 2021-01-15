@@ -49,13 +49,14 @@ type Validity =
 
 
 let private modulesAndFiles (phase: Phase) (validity: Validity) =
-    let where = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory, validity.Directory)
+    let fileDirectory = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory, validity.Directory)
+    let fakeSourcePath = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory)
     let testCaseNameFrom moduleName =
         sprintf "%s/%s: %s" phase.Directory validity.Directory (moduleName.ToString())
     let mkTestCaseData file = 
         let modName = 
             printfn "file name: '%s'" file
-            match tryMakeTranslationUnitPath file where None with
+            match tryMakeTranslationUnitPath file fakeSourcePath None with
             | Ok fp -> fp
             | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
         printfn "module name: '%s'" <| modName.ToString()
@@ -63,7 +64,7 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
         let loadWhat = Option.get (CompilationUnit.loadWhat file) 
         TestCaseData(loadWhat, modName, file).SetName(testName)    
     let files = 
-        Directory.EnumerateFiles where
+        Directory.EnumerateFiles fileDirectory
     
     Seq.filter (fun f -> isImplementation f || isInterface f) files
     |> Seq.map mkTestCaseData

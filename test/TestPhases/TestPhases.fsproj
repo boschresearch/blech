@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\blechc\blechc.fsproj" />
     <ProjectReference Include="..\..\src\Intermediate\Intermediate.fsproj" />
   </ItemGroup>
 

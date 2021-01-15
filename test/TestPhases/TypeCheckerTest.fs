@@ -21,6 +21,47 @@ open NUnit.Framework
 open Blech.Common
 open Blech.Frontend
 
+let runTypeChecker implOrIface moduleName filePath =
+    let cliContext = Arguments.BlechCOptions.Default
+    let logger = Diagnostics.Logger.create ()
+    let options = 
+        { Blech.Common.Arguments.BlechCOptions.Default 
+            with inputFile = filePath
+                 sourcePath = System.IO.Path.Combine(__SOURCE_DIRECTORY__, TestFiles.Typechecker.Directory) }
+    let pkgCtx = CompilationUnit.Context.Make options (Blech.Compiler.Main.loader options)
+
+    let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
+    Assert.True (Result.isOk ast)
+    
+    let importsRes =
+        ast
+        |> Result.bind (Blech.Compiler.Main.runImportCompilation pkgCtx logger CompilationUnit.ImportChain.Empty moduleName filePath)
+                    
+    match ast, importsRes with
+    | Ok ast, Ok imports -> 
+        
+        let astAndSymTableRes =
+            let lookupTables = imports.GetLookupTables
+            let exportScopes = imports.GetExportScopes
+            Blech.Compiler.Main.runNameResolution logger moduleName filePath lookupTables exportScopes ast
+        Assert.True (Result.isOk astAndSymTableRes)
+        
+        let pack, ncEnv = Result.getOk astAndSymTableRes
+        let lut = TypeCheckContext.Init cliContext ncEnv
+        imports.GetTypeCheckContexts
+        |> List.iter (fun otherLut ->
+            for pair in otherLut.nameToDecl do Blech.Frontend.TypeCheckContext.addDeclToLut lut pair.Key pair.Value
+            for pair in otherLut.userTypes do Blech.Frontend.TypeCheckContext.addTypeToLut lut pair.Key (fst pair.Value) (snd pair.Value)
+            for pragma in otherLut.memberPragmas do Blech.Frontend.TypeCheckContext.addPragmaToLut lut pragma
+            )
+
+        Blech.Frontend.TypeChecking.fPackage lut pack
+    | _, Error errs
+    | Error errs, _ ->
+        printfn "Did not expect to find errors in imported files!\n" 
+        Diagnostics.Emitter.printDiagnostics errs
+        Error []
+
 [<TestFixture>]
 type Test() =
 
@@ -32,29 +73,14 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member x.typeCheckValidFiles (implOrIface, moduleName, filePath) =
-        let cliContext = Arguments.BlechCOptions.Default
-
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv
-        
-        match lutAndTyPkg with
+        match runTypeChecker implOrIface moduleName filePath with
         | Ok _ ->
             Assert.True true
         | Error errs ->
             printfn "Did not expect to find errors!\n" 
-            Diagnostics.Emitter.printDiagnostics errs
-            Assert.True false
+            let logger = Diagnostics.Logger.create ()
+            Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
+            Assert.Fail()
         
     /// load test cases for typeCheckInvalidInputs test
     static member invalidFiles =
@@ -64,49 +90,31 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member x.typeCheckInvalidInputs (implOrIface, moduleName, filePath) =
-        let blechcOptions = Arguments.BlechCOptions.Default
-        
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        match astAndEnv with
-        | Error _ ->
-            Assert.True false 
-        | Ok (ast, env) ->
-            let lut = TypeCheckContext.Init blechcOptions env
-            let typedResult = Blech.Frontend.TypeChecking.fPackage lut ast
-            match typedResult with
-            | Ok _ ->
-                Assert.True false
-            | Error errs ->
-                let isUndesiredError e =
-                    match e with
-                    | ImpossibleCase _ 
-                    | UnsupportedFeature _ 
-                    | UnsupportedTuple _
-                    | IllegalAccessOfTypeInfo _ 
-                    | ExpectedSubProgDecl _ 
-                    | AmendBroken _
-                    //| MissingQName _
-                    | NoDefaultValueForAny _ 
-                    | IllegalVoid _ 
-                    | ValueCannotBeVoid _ 
-                    | EmptyGuardList -> true
-                    | _ -> false
-                if errs |> List.exists isUndesiredError then
-                    printfn "Errors did occur in this invalid test case, BUT NOT THE ONES WE EXPECTED!"
-                    Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
-                    Assert.Fail()
-                else
-                    printfn "Discovered Errors:\n" 
-                    Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
-                    Assert.True true
+        match runTypeChecker implOrIface moduleName filePath with
+        | Ok _ ->
+            Assert.True false
+        | Error errs ->
+            let logger = Diagnostics.Logger.create ()
+            let isUndesiredError e =
+                match e with
+                | ImpossibleCase _ 
+                | UnsupportedFeature _ 
+                | UnsupportedTuple _
+                | IllegalAccessOfTypeInfo _ 
+                | ExpectedSubProgDecl _ 
+                | AmendBroken _
+                //| MissingQName _
+                | NoDefaultValueForAny _ 
+                | IllegalVoid _ 
+                | ValueCannotBeVoid _ 
+                | EmptyGuardList -> true
+                | _ -> false
+            if errs |> List.exists isUndesiredError then
+                printfn "Errors did occur in this invalid test case, BUT NOT THE ONES WE EXPECTED!"
+                Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
+                Assert.Fail()
+            else
+                printfn "Discovered Errors:\n" 
+                Diagnostics.printErrors logger Diagnostics.Phase.Typing errs
+                Assert.Pass()
             

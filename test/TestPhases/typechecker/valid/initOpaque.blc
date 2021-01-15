@@ -1,0 +1,9 @@
+import M "../imports/moduleToImport"
+
+module
+
+activity X()
+    run let r = M.Exp1()
+    var t1: M.O1 = r
+    var t2 = r
+end
