@@ -45,7 +45,7 @@ type Test() =
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
-        | Ok (ast, env) ->
+        | Ok env ->
             printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.True true
             
@@ -70,7 +70,7 @@ type Test() =
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        | Ok (ast, env) ->
+        | Ok env ->
             printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.False true
 

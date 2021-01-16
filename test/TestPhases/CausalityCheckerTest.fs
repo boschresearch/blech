@@ -20,6 +20,29 @@ open NUnit.Framework
 
 open Blech.Common
 
+
+let runCausalityAnalysis implOrIface moduleName filePath =
+    let cliContext = Arguments.BlechCOptions.Default
+    let logger = Diagnostics.Logger.create ()
+    
+    let resultWorkflow = new Blech.Common.ResultBuilder()
+    resultWorkflow
+        {
+            let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
+            let! env = 
+                let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
+                Blech.Frontend.NameChecking.checkDeclaredness ctx ast
+            let! lut, blechModule = 
+                Blech.Frontend.TypeChecking.typeCheck cliContext logger [] ast env
+                    
+            return!
+                Blech.Intermediate.Causality.checkPackCausality
+                    logger
+                    lut
+                    blechModule
+        }
+
+
 [<TestFixture>]
 type Test() =
 
@@ -32,31 +55,7 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member x.causalityCheckValidFiles (implOrIface, moduleName, filePath) =
-        let cliContext = Arguments.BlechCOptions.Default
-
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            // Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv 
-        Assert.True (Result.isOk lutAndTyPkg)
-        
-        let progGraphs = 
-            Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality logger
-            <| lutAndTyPkg
-        
-        //let causalityContext = Blech.Intermediate.ProgramGraph.createPGofPackage lut blechPack
-        //match Blech.Intermediate.Causality.checkPackCausality causalityContext with
-        match progGraphs with
+        match runCausalityAnalysis implOrIface moduleName filePath with
         | Ok pgs ->
             pgs.Values
             |> Seq.map Blech.Intermediate.BlockGraph.buildFromPG
@@ -76,36 +75,10 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member x.causalityCheckInvalidInputs (implOrIface, moduleName, filePath) =
-        let cliContext = Arguments.BlechCOptions.Default
-        
-        let logger = Diagnostics.Logger.create ()
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            //Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext logger []) astAndEnv 
-        Assert.True (Result.isOk lutAndTyPkg)
-        
-        let progGraphs = 
-            Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality logger
-            <| lutAndTyPkg
-        
-        match progGraphs with
+        match runCausalityAnalysis implOrIface moduleName filePath with
         | Ok pgs ->
             pgs.Values |> Seq.iter (fun pg -> printf "%s\n" (pg.ToString()))
             Assert.True false
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        
-        
-
-    
-

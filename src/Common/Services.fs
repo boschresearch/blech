@@ -119,6 +119,17 @@ module Result =
         | Ok ok -> Ok (value, ok)
         | Error err -> Error err
 
+type ResultBuilder() =
+    member __.Return(x) = Ok x
+
+    member __.ReturnFrom(m: Result<_, _>) = m
+
+    member __.Bind(m, f) = Result.bind f m
+    
+    member __.Zero() = None
+
+    member __.Combine(m, f) = Result.bind f m
+
 //-------------------------------------------------------------------------
 // Bits, from fsharp compiler
 // This source code is derived from The F# compiler

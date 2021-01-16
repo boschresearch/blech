@@ -639,7 +639,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            Ok (ast, ncc.env)
+            Ok ncc.env
     
 
     // end ============================================================

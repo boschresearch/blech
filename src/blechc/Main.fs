@@ -72,21 +72,21 @@ module Main =
         |> NameChecking.checkDeclaredness <| ast
 
 
-    let private runTypeChecking cliArgs logger inputFile otherLuts astAndEnv =
+    let private runTypeChecking cliArgs logger inputFile otherLuts ast env =
         Logging.log2 "Main" ("performing type checking on " + inputFile)
-        TypeChecking.typeCheck cliArgs logger otherLuts astAndEnv
+        TypeChecking.typeCheck cliArgs logger otherLuts ast env
 
 
-    let private runCausalityCheck logger inputFile tyAstAndLut =
+    let private runCausalityCheck logger inputFile tyCtx blechModule =
         Logging.log2 "Main" ("checking causality in " + inputFile) 
-        Causality.checkPackCausality logger tyAstAndLut
+        Causality.checkPackCausality logger tyCtx blechModule
 
 
     let runImportCompilation packageContext logger importChain moduleName fileName ast = 
         Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
 
-    let runSingletonInference logger symboltableEnv fileName importedSingletons ast = 
+    let runSingletonInference logger fileName importedSingletons ast symboltableEnv = 
         Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
             
@@ -144,65 +144,76 @@ module Main =
             ()
 
 
-    //let private checkImport (packageContext: CompilationUnit.Context<ImportChecking.ModuleInfo>) currentpath (import: AST.Member) = 
-    //    let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
-    //    match import with
-    //    | AST.Member.Import i ->
-    //        let importPath = i.modulePath.path
-    //        CompilationUnit.require pkgCtx i.modulePath.path
-    //        //|> Result.map (fun cu -> importPath, cu)
-    //        //|> Result.map (fun cu -> i.localName, cu)
-    //    | _ ->
-    //        failwith "This should never happen"
-    
-    /// Runs compilation steps given input as a string
+    /// Runs compilation steps given input file as a string
     /// which exactly depends on options such as --dry-run
     /// returns a Result type of
-    /// TypeCheckContext and typed AST (BlechModule)
+    /// ModuleInfo
     /// or Diagnostic.Logger
-    //let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<SymbolTable.Environment * TypeCheckContext * BlechTypes.BlechModule * TranslationContext>) logger (fromPath: TranslationUnitPath) fileName fileContents =
-
     let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
         // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
-        
-        let astRes = runParser logger CompilationUnit.Implementation moduleName fileContents fileName
-        
-        let importsRes =
-            astRes
-            |> Result.bind (runImportCompilation pkgCtx logger importChain moduleName fileName)
+        let resultWorkflow = new ResultBuilder()
+        resultWorkflow
+            {
+                let! ast =
+                    runParser 
+                        logger 
+                        CompilationUnit.Implementation 
+                        moduleName 
+                        fileContents 
+                        fileName
+
+                let! imports =
+                    runImportCompilation 
+                        pkgCtx 
+                        logger 
+                        importChain 
+                        moduleName 
+                        fileName
+                        ast
                         
-        match astRes, importsRes with
-        | Ok ast, Ok imports -> 
-            
-            let astAndSymTableRes =
-                // let importedEnvs = imports.GetNameCheckEnvironments // TODO: Take this from the package Context, fjg. 23.10.20
-                let lookupTables = imports.GetLookupTables
-                let exportScopes = imports.GetExportScopes
-                runNameResolution logger moduleName fileName lookupTables exportScopes ast
+                let! symTable =
+                    runNameResolution 
+                        logger 
+                        moduleName 
+                        fileName 
+                        imports.GetLookupTables
+                        imports.GetExportScopes
+                        ast
 
-            let inferredSingletonRes = 
-                let importedSingletons = imports.GetSingletons
-                astAndSymTableRes 
-                |> Result.bind (fun (ast, env) -> runSingletonInference logger env fileName importedSingletons ast)
+                let! inferredSingleton = 
+                    runSingletonInference 
+                        logger 
+                        fileName 
+                        imports.GetSingletons 
+                        ast
+                        symTable
 
-            let inferredExportRes = 
-                let importedAbstractTypes = imports.GetAbstractTypes
-                let importedSingletons = imports.GetSingletons
-                astAndSymTableRes
-                |> Result.bind (fun (ast, env) -> Result.append (ast, env) inferredSingletonRes)
-                |> Result.bind (fun ((ast, env), singletons) -> 
-                    runExportInference logger env fileName singletons importedAbstractTypes importedSingletons ast)
-            
-            let lutAndPackRes = 
-                astAndSymTableRes 
-                |> Result.bind (fun (ast, env) -> runTypeChecking cliArgs logger fileName imports.GetTypeCheckContexts (ast, env))
-        
-            let pgsRes = 
-                lutAndPackRes 
-                |> Result.bind (runCausalityCheck logger fileName)
-            
-            match astAndSymTableRes, inferredSingletonRes, inferredExportRes, lutAndPackRes, pgsRes with    
-            | Ok (ast, env), Ok singletons, Ok exports, Ok (lut, blechModule), Ok pgs ->
+                let! inferredExport = 
+                    runExportInference 
+                        logger 
+                        symTable 
+                        fileName 
+                        inferredSingleton 
+                        imports.GetAbstractTypes 
+                        imports.GetSingletons 
+                        ast
+
+                let! lut, blechModule = 
+                    runTypeChecking 
+                        cliArgs 
+                        logger 
+                        fileName 
+                        imports.GetTypeCheckContexts 
+                        ast 
+                        symTable
+
+                let! pgs = 
+                    runCausalityCheck 
+                        logger 
+                        fileName
+                        lut 
+                        blechModule
+
                 // generate block graphs for all activities
                 // this is only needed for code generation but is left here for debugging purposes
                 let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
@@ -218,39 +229,35 @@ module Main =
                     { translationContext with compilations = compilations @ translationContext.compilations}
 
                 Logging.log6 "Main" ("source code\n")
-                for c in compilations do
+                compilations 
+                |> List.iter (fun c ->
                     let codetxt = PPrint.PPrint.render (Some 160) c.implementation
                     let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                    Logging.log6 "Main" msg
+                    Logging.log6 "Main" msg )
 
                 // if not dry run, write it to file
                 // create code depending on entry point
-                if not cliArgs.isDryRun then
-                    // if not entry point, create signature
-                    let isMainProgram = Option.isSome blechModule.entryPoint
-                    if not isMainProgram then
-                        Logging.log2 "Main" ("writing signature for " + fileName)
-                        do writeSignature cliArgs.outDir moduleName exports ast
+                do // this do is required in a workflow, otherwise a Result<_> type expr is expected
+                    if not cliArgs.isDryRun then
+                        // if not entry point, create signature
+                        let isMainProgram = Option.isSome blechModule.entryPoint
+                        if not isMainProgram then
+                            Logging.log2 "Main" ("writing signature for " + fileName)
+                            do writeSignature cliArgs.outDir moduleName inferredExport ast
 
-                    let importedMods = imports.GetTypedModules
-                    Logging.log2 "Main" ("writing C code for " + fileName)
-                    // implementation should also include headers of imported modules, fjg. 19.10.20
-                    do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
-                    do writeHeader cliArgs.outDir moduleName blechModule importedMods translationContext compilations
+                        let importedMods = imports.GetTypedModules
+                        Logging.log2 "Main" ("writing C code for " + fileName)
+                        // implementation should also include headers of imported modules, fjg. 19.10.20
+                        do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
+                        do writeHeader cliArgs.outDir moduleName blechModule importedMods translationContext compilations
                     
-                    // generated test app if required by cliArgs
-                    do possiblyWriteTestApp cliArgs blechModule translationContext compilations
+                        // generated test app if required by cliArgs
+                        do possiblyWriteTestApp cliArgs blechModule translationContext compilations
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                Ok <| ImportChecking.ModuleInfo.Make importedModules env singletons exports lut blechModule
-
-            | _ ->
-                // Error during name checking or-else export inference or-else type checking or-else causality checking
-                Error <| logger
-        | _ ->
-            // Error during parsing or else import compilation
-            Error <| logger
+                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton inferredExport lut blechModule
+            }
 
                 
     /// Runs compilation starting with a filename

@@ -469,5 +469,5 @@ let private checkCausalityOfContext logger context =
     else
         Ok context.pgs
 
-let checkPackCausality logger (lut, pack) =
+let checkPackCausality logger lut pack =
     createPGofPackage (lut, pack) |> checkCausalityOfContext logger

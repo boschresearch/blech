@@ -40,13 +40,13 @@ let runTypeChecker implOrIface moduleName filePath =
     match ast, importsRes with
     | Ok ast, Ok imports -> 
         
-        let astAndSymTableRes =
+        let symTableRes =
             let lookupTables = imports.GetLookupTables
             let exportScopes = imports.GetExportScopes
             Blech.Compiler.Main.runNameResolution logger moduleName filePath lookupTables exportScopes ast
-        Assert.True (Result.isOk astAndSymTableRes)
+        Assert.True (Result.isOk symTableRes)
         
-        let pack, ncEnv = Result.getOk astAndSymTableRes
+        let ncEnv = Result.getOk symTableRes
         let lut = TypeCheckContext.Init cliContext ncEnv
         imports.GetTypeCheckContexts
         |> List.iter (fun otherLut ->
@@ -55,7 +55,7 @@ let runTypeChecker implOrIface moduleName filePath =
             for pragma in otherLut.memberPragmas do Blech.Frontend.TypeCheckContext.addPragmaToLut lut pragma
             )
 
-        Blech.Frontend.TypeChecking.fPackage lut pack
+        Blech.Frontend.TypeChecking.fPackage lut ast
     | _, Error errs
     | Error errs, _ ->
         printfn "Did not expect to find errors in imported files!\n" 

@@ -21,6 +21,25 @@ open NUnit.Framework
 open Blech.Common
 open Blech.Frontend
 
+
+let runSingletonInference implOrIface moduleName filePath =
+    let logger = Diagnostics.Logger.create ()
+
+    let resultWorkflow = new Blech.Common.ResultBuilder()
+    resultWorkflow
+        {
+            let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
+            
+            let! env = 
+                let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
+                Blech.Frontend.NameChecking.checkDeclaredness ctx ast
+            
+            let importedSingletons = List.empty
+            return!
+                SingletonInference.inferSingletons logger env importedSingletons ast
+        }
+
+
 [<TestFixture>]
 type Test() =
 
@@ -32,24 +51,7 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member x.nameCheckValidFiles (implOrIface, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-
-        // import checking is omitted
-        
-        let inferredSingletonRes = 
-            let importedSingletons = List.empty
-            astAndEnv 
-            |> Result.bind (fun (ast, env) -> SingletonInference.inferSingletons logger env importedSingletons ast) 
-
-        match inferredSingletonRes with
+        match runSingletonInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
             Diagnostics.Emitter.printDiagnostics logger
@@ -65,24 +67,7 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member x.nameCheckInvalidInputs (implOrIface, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        // import checking is omitted
-        
-        let inferredSingletonRes = 
-            let importedSingletons = List.empty
-            astAndEnv 
-            |> Result.bind (fun (ast, env) -> SingletonInference.inferSingletons logger env importedSingletons ast) 
-
-        match inferredSingletonRes with
+        match runSingletonInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 
             Diagnostics.Emitter.printDiagnostics logger
