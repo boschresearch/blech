@@ -57,7 +57,7 @@ module Blech.Visualization.BlechVisGraph
     /// Payload for a node.
     and NodePayload = {Label : string; IsComplex : ComplexOrSimpleOrCobegin ; IsInitOrFinal : InitOrFinalOrNeither; StateCount : StateCount; mutable WasVisualized : WasVisualized} with
         member x.Visualize = x.WasVisualized <- Visualized
-        member x.CopyWithSimpleComplexity = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = Neither ; StateCount = x.StateCount; WasVisualized = NotVisualized}
+        member x.CopyWithInitOrFinalStatusSetTo (newStatus : InitOrFinalOrNeither) = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = newStatus ; StateCount = x.StateCount; WasVisualized = NotVisualized}
 
     /// Determines what kind of edge the edge ist.
     and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort

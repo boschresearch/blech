@@ -1,4 +1,4 @@
- module Blech.Visualization.Translation
+module Blech.Visualization.Translation
 
     open Blech.Frontend.BlechTypes
     open Blech.Common
