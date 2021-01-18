@@ -396,6 +396,14 @@ module ExportInference =
         ctx.AddRequiredImports name.id
 
 
+    let private requireImportIfCalledSingleton (ctx: ExportContext) (name: Name) (maybeSingleton: Name) =
+        // printfn "require import for: %s" name.id
+        if ctx.IsSingleton maybeSingleton then 
+            ctx.AddRequiredImports name.id
+        else
+            ctx
+
+
     let private exportNameIfAbstractType (ctx: ExportContext) (name: Name) =
         match ctx.TryGetAbstractType name with
         | Some _ ->
@@ -455,7 +463,9 @@ module ExportInference =
             |> exportNameIfOpaqueSingletonSignature <| firstName
             |> requireImportIfImported <| firstName
         | _ ->
+            let maybeImportedSingleton = List.last dap.leadingNames
             exportNameIfOpaqueSingletonSignature ctx firstName
+            |> requireImportIfCalledSingleton <| firstName <| maybeImportedSingleton
             // ctx
 
 
