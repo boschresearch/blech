@@ -91,9 +91,9 @@ module Main =
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
             
 
-    let private runExportInference logger symboltableEnv fileName singletons importedAbstractTypes importedSingletons ast = 
+    let private runExportInference logger symboltableEnv fileName singletons importedAbstractTypes ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
-        ExportInference.inferExports logger symboltableEnv singletons importedAbstractTypes importedSingletons ast 
+        ExportInference.inferExports logger symboltableEnv singletons importedAbstractTypes ast // importedSingletons ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -195,7 +195,7 @@ module Main =
                         fileName 
                         inferredSingleton 
                         imports.GetAbstractTypes 
-                        imports.GetSingletons 
+                        // imports.GetSingletons 
                         ast
 
                 let! lut, blechModule = 

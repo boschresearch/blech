@@ -629,46 +629,84 @@ module SignaturePrinter =
             |> dpOptSpacePrefix optRef
             |> dpOptLinePrefix optSimple
             |> dpOptLinePrefix optAnnos
+
+        let psIdentifier (id : Identifier) = 
+            txt <| string id
+
+        let psLongIdentifier (su : LongIdentifier) =
+            List.map psIdentifier su
+            |> punctuate dot
+            |> hcat
+
+        //let psSingletonUsage (su: ExportInference.SingletonUsage) = 
+        //    List.map psLongIdentifier su
+
+        let psSingletonSignature (singletonSig: ExportInference.SingletonSignature) =
+            let usedSingletons = 
+                match singletonSig with
+                | ExportInference.Opaque su
+                | ExportInference.Translucent su ->
+                    if List.isEmpty su then None
+                    else List.map psLongIdentifier su
+                         |> dpCommaSeparatedInBrackets
+                         |> Some
+
+            txt "singleton"
+            |> dpOptSpacePostfix <| usedSingletons
             
-        let psSubProgram (sp: AST.SubProgram) =
-            let subprog =
-                if sp.isFunction then 
-                    txt "function"
-                else 
-                    txt "activity"
-            
-            let inputs = List.map bpParamDecl sp.inputs
-            let outputs = List.map bpParamDecl sp.outputs
-            let optReturns = Option.map bpReturnDecl sp.result
-
-            let prototype = 
-                subprog <+> bpName sp.name <^>
-                (dpArguments inputs
-                 |> dpOptArguments <| outputs
-                 |> bpOptReturns <| optReturns
-                 |> align
-                 |> group) 
-
-            bpOptAnnotations sp.annotations
-            |> dpOptLinePrefix
-            <| prototype
-
-        let psOpaqueSingletonSignature annotations singletons (name: Name)  = 
-            let optAnnos = 
-                bpOptAnnotations annotations
-            let optSingletons = 
-                if List.isEmpty singletons then None
-                else List.map bpStaticNamedPath singletons
-                     |> dpCommaSeparatedInBrackets
-                     |> Some
- 
-            dpOptLinePrefix optAnnos 
-            <| txt "singleton"
-            // |> dpOptSpacePostfix <| optSingletons
-            <+> dpName name
         
-        let psOpaqueSingletonPrototype (pt: AST.Prototype) = 
-            txt "opaque singleton prototype"
+        let psPrototype isFunction name inputs outputs result =
+            let subprog = if isFunction then txt "function" else txt "activity"
+            let inputs = List.map bpParamDecl inputs
+            let outputs = List.map bpParamDecl outputs
+            let optReturns = Option.map bpReturnDecl result
+
+            subprog <+> bpName name <^>
+            (dpArguments inputs
+                |> dpOptArguments <| outputs
+                |> bpOptReturns <| optReturns
+                |> align
+                |> group) 
+
+
+        let psSubProgram (sp: AST.SubProgram) =
+            let optAnnos = bpOptAnnotations sp.annotations
+            
+            dpOptLinePrefix optAnnos
+            <| psPrototype sp.isFunction sp.name sp.inputs sp.outputs sp.result
+
+
+        let psSingletonSubProgram (singletonSig : ExportInference.SingletonSignature) (sp: AST.SubProgram) = 
+            // printfn "Singleton Signature for sub program: %A\n Singleton Signature %A" sp.name singletonSig
+            let optAnnos = bpOptAnnotations sp.annotations
+            let singleton = psSingletonSignature singletonSig
+            let prototype = psPrototype sp.isFunction sp.name sp.inputs sp.outputs sp.result
+
+            dpOptLinePrefix optAnnos
+            <| ( singleton <.> prototype
+                 |> align 
+                 |> group )
+
+
+        let psSingletonExternalFunction (singletonSig : ExportInference.SingletonSignature) (pt: AST.Prototype) = 
+            let optAnnos = bpOptAnnotations pt.annotations
+            let singleton = psSingletonSignature singletonSig
+            let prototype = psPrototype true pt.name pt.inputs pt.outputs pt.result
+
+            dpOptLinePrefix optAnnos
+            <| ( txt "extern" <.> singleton <.> prototype 
+                 |> align
+                 |> group )
+
+
+        let psOpaqueSingletonSignature annotations (singletonSig : ExportInference.SingletonSignature) (name: Name)  = 
+            let optAnnos = bpOptAnnotations annotations
+
+            dpOptLinePrefix optAnnos
+            <| ( psSingletonSignature singletonSig <+> dpName name
+                 |> align
+                 |> group )
+
 
         let psMember (ctx : ExportInference.ExportContext) (mbr : AST.Member) =
             
@@ -704,22 +742,33 @@ module SignaturePrinter =
                 bpStaticVarDecl vdecl
             
             | AST.Member.Subprogram sp ->
-                let ie = ctx.IsExported sp.name
-                let hoss = ctx.HasOpaqueSingletonSignature sp.name
-                if ie && hoss then 
-                    psOpaqueSingletonSignature sp.annotations sp.singletons sp.name // Todo: Print inferred singleton signature
-                elif ie then 
-                    psSubProgram sp
+                if ctx.IsExported sp.name then
+                    if ctx.HasOpaqueSingletonSignature sp.name then
+                        psOpaqueSingletonSignature sp.annotations (ctx.GetSingletonSignature sp.name) sp.name
+                    elif ctx.HasTranslucentSingletonSignature sp.name then
+                        psSingletonSubProgram (ctx.GetSingletonSignature sp.name) sp
+                    else
+                        psSubProgram sp
                 else empty
 
             | AST.Member.Prototype pt ->
-                let ie = ctx.IsExported pt.name
-                let hoss = ctx.HasOpaqueSingletonSignature pt.name
-                if ie && hoss then 
-                    psOpaqueSingletonSignature pt.annotations pt.singletons pt.name // Todo: Print inferred singleton signature
-                elif ie then 
-                    bpExternalFunction pt
+                if ctx.IsExported pt.name then
+                    if ctx.HasOpaqueSingletonSignature pt.name then
+                        psOpaqueSingletonSignature pt.annotations (ctx.GetSingletonSignature pt.name) pt.name
+                    elif ctx.HasTranslucentSingletonSignature pt.name then
+                        psSingletonExternalFunction (ctx.GetSingletonSignature pt.name) pt
+                    else
+                        bpExternalFunction pt
                 else empty
+
+                //let ie = ctx.IsExported pt.name
+                //let hoss = ctx.HasOpaqueSingletonSignature pt.name
+                //if ie && hoss then 
+                //    let singletonSig = ctx.GetSingletonSignature pt.name
+                //    psOpaqueSingletonSignature pt.annotations singletonSig pt.name // Todo: Print inferred singleton signature
+                //elif ie then 
+                //    bpExternalFunction pt
+                //else empty
             
             | AST.Member.Unit u ->
                 empty

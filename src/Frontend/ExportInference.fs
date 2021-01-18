@@ -186,12 +186,13 @@ module ExportInference =
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
                                  (singletons: SingletonInference.Singletons)
-                                 (importedAbstractTypes : AbstractTypes list)
-                                 (importedSingletons: SingletonInference.Singletons list) = 
+                                 (importedAbstractTypes : AbstractTypes list) = 
+                                 // (importedSingletons: SingletonInference.Singletons list) =
             {   
                 environment = env
                 logger = logger
-                singletons = Map.concatWithOverride <| singletons :: importedSingletons
+                // singletons = Map.concatWithOverride <| singletons :: importedSingletons
+                singletons = singletons
                 
                 abstractTypes = Map.concatWithOverride importedAbstractTypes 
                 
@@ -241,10 +242,21 @@ module ExportInference =
             | Some (Opaque _) -> true
             | _ -> false
           
+        member this.HasTranslucentSingletonSignature name = 
+            let declName = Env.getDeclName this.environment name
+            match this.singletonSignatures.TryFind declName with
+            | Some (Translucent _) -> true
+            | _ -> false
+        
         member this.TryGetSingletonSignature declName = 
             assert Env.isDeclName this.environment declName
             // let declName = Env.getDeclName this.environment name
             this.singletonSignatures.TryFind declName
+
+        member this.GetSingletonSignature declName = 
+            assert Env.isDeclName this.environment declName
+            // printfn "Singleton Signatures: %A" this.singletonSignatures
+            this.singletonSignatures.Item declName
 
         member this.IsSingleton name = 
             let declName = Env.getDeclName this.environment name
@@ -252,6 +264,7 @@ module ExportInference =
             
         member this.AddSingletonSignature declName signatureTag =
             assert Env.isDeclName this.environment declName
+            // printfn "Singletons: %A" this.singletons
             let singletonUses = this.singletons.Item declName // in reverse appearance order
             let pathsToLongids paths = List.map (fun name -> name.id) paths
             let longIds = 
@@ -280,6 +293,17 @@ module ExportInference =
         member this.GetSingletonSignatures = 
             this.singletonSignatures
 
+        // TODO: remove this
+        //member this.GetUsedSingletons declName = 
+        //    assert Env.isDeclName this.environment declName
+        //    match Map.tryFind declName this.singletonSignatures with
+        //    | Some (Opaque usedSingletons)
+        //    | Some (Translucent usedSingletons) ->
+        //        usedSingletons
+        //    | None ->
+        //        List.empty
+
+        
         member this.GetRequiredImports = 
             this.requiredImports
 
@@ -862,10 +886,10 @@ module ExportInference =
     let inferExports logger (env: SymbolTable.Environment) 
                             (singletons: SingletonInference.Singletons)
                             (importedAbtractTypes : AbstractTypes list)
-                            (importedSingletons : SingletonInference.Singletons list)
+                            // (importedSingletons : SingletonInference.Singletons list)
                             (cu: AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env singletons importedAbtractTypes importedSingletons
+            ExportContext.Initialise logger env singletons importedAbtractTypes // importedSingletons
             |> inferCompilationUnit <| cu
         // just for debugging
         //printfn "Abstract Types: \n %A" exports.abstractTypes
