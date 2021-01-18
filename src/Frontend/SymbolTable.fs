@@ -763,7 +763,8 @@ module SymbolTable =
                     | None -> 
                         decls, false
                     | Some symbol ->
-                        decls @ [symbol.name], true
+                        let declName = getDeclName env symbol.name // symbol.name might be exposed import
+                        decls @ [declName], true
                 | name :: tail ->
                     match Scope.tryFindSymbol scope name.id with
                     | None ->
