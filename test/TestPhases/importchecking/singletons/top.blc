@@ -1,6 +1,6 @@
-import _ "middle" exposes u, f // required 
-// import m "middle"  // required 
-import b "bottom"  // required
+import _ "middle" exposes u, f
+// import m "middle" 
+import b "bottom" 
 
 module exposes h
 

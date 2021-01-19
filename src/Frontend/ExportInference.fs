@@ -189,15 +189,13 @@ module ExportInference =
                                  (importedAbstractTypes : AbstractTypes list) = 
                                  // (importedSingletons: SingletonInference.Singletons list) =
             {   
+                // inputs
                 environment = env
                 logger = logger
-                // singletons = Map.concatWithOverride <| singletons :: importedSingletons
                 singletons = singletons
-                
-                abstractTypes = Map.concatWithOverride importedAbstractTypes 
-                
-                // singletons = Singletons.Empty // ToDo: add imported singletons
-                
+        
+                // results
+                abstractTypes = Map.collect importedAbstractTypes 
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
@@ -259,9 +257,11 @@ module ExportInference =
             this.singletonSignatures.Item declName
 
         member this.IsSingleton name = 
-            let declName = Env.getDeclName this.environment name
-            this.singletons.ContainsKey declName
-            
+            if Env.isStaticName this.environment name then 
+                let declName = Env.getDeclName this.environment name
+                this.singletons.ContainsKey declName
+            else
+                false
         member this.AddSingletonSignature declName signatureTag =
             assert Env.isDeclName this.environment declName
             // printfn "Singletons: %A" this.singletons

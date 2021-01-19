@@ -1,0 +1,11 @@
+module exposes f
+
+struct S 
+    var x: int32 
+    var y: bool
+end
+
+function f () returns bool
+    var s: S = {y = true}  // y is not handled in name checking
+    return s.y
+end

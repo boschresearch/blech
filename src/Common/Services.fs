@@ -60,11 +60,20 @@ module Pair =
 
 
 module Map = 
-    let concatWithOverride (maps: Map<'a, 'b> list) : Map<'a, 'b> =
-        List.map Map.toSeq maps
-        |> Seq.concat
-        |> Map.ofSeq
+    let collectWithOverride (maps: Map<'a, 'b> list) : Map<'a, 'b> =
+        let mapfolder acc key value = Map.add key value acc
+        let listfolder acc map = Map.fold mapfolder acc map
+        List.fold listfolder Map.empty maps
 
+
+    let collect (maps: Map<'a, 'b> list) : Map<'a, 'b> =
+        let mapfolder acc key value =
+            if Map.containsKey key acc then 
+                failwith <| sprintf "Key: %A already bound" key
+            else 
+                Map.add key value acc
+        let listfolder acc map = Map.fold mapfolder acc map
+        List.fold listfolder Map.empty maps
 
 // --------------------------------------------------------------------------
 //  String
@@ -114,10 +123,6 @@ module Result =
         | Error err -> err 
         | Ok ok -> failwithf "Could not get Error from Result: %A" ok
 
-    let append (value : 'a) (result : Result<'b, 'error>) =
-        match result with
-        | Ok ok -> Ok (value, ok)
-        | Error err -> Error err
 
 type ResultBuilder() =
     member __.Return(x) = Ok x

@@ -121,7 +121,7 @@ module SingletonInference =
                 environment = env
                 
                 calledSingletons = List.Empty
-                singletons = Map.concatWithOverride importedSingletons
+                singletons = Map.collectWithOverride importedSingletons // might contain duplicates
             }
             // |> fun ctx -> printfn "##########\nInitialised singletons: %A\n################" ctx.singletons; ctx
 

@@ -1,4 +1,4 @@
-import b "bottom" // required import
+import b "bottom"
 
 module exposes f
 
