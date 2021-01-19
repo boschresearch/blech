@@ -421,7 +421,16 @@ and Prototype =
         member this.Range = this.range
         member this.name = this.name
 
-    
+and OpaqueSingleton = 
+    { 
+        range : range
+        singletons : StaticNamedPath list
+        name : Name
+        annotations : Annotation list
+    }
+    interface IDeclarable with
+        member this.Range = this.range
+        member this.name = this.name
 
 and ModulePath = 
     {
@@ -479,6 +488,7 @@ and Member =
     | Var of VarDecl
     | Subprogram of SubProgram
     | Prototype of Prototype
+    | OpaqueSingleton of OpaqueSingleton
     
     member m.Range =
         match m with
@@ -493,6 +503,7 @@ and Member =
         | Var m -> m.range
         | Subprogram m -> m.range
         | Prototype m -> m.range
+        | OpaqueSingleton m -> m.range
     
 
     member m.isInterface =
@@ -1195,6 +1206,7 @@ type ASTNode =
     | Member' of Member
     | Subprogram of SubProgram
     | Prototype of Prototype
+    | OpaqueSingleton of OpaqueSingleton
     | Stmt of Stmt
     | VarDecl' of VarDecl
     | ParamDecl of ParamDecl
@@ -1216,6 +1228,9 @@ type ASTNode =
     | Annotation' of Annotation
 
 // end of AST data structures
+
+// TODO: postOrderWalk is only used in pretty printer, which is itself incomplete.
+// TODO remove postOrderWalk and substitute code pretty printer with something better/more suitable, fjg 19.01.21
 
 /// Postorder (i.e. bottom-up) AST walker.
 let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
@@ -1252,6 +1267,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
             fPackageMember (recurse (ASTNode.Subprogram f))
         | Member.Prototype f ->
             fPackageMember (recurse (ASTNode.Prototype f))
+        | Member.OpaqueSingleton s ->
+            fPackageMember (recurse (ASTNode.OpaqueSingleton s))
     | Subprogram f -> 
         let resIn = List.map (fun i -> recurse (ASTNode.ParamDecl i)) f.inputs
         let resOut = List.map (fun o -> recurse (ASTNode.ParamDecl o)) f.outputs
@@ -1265,6 +1282,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
         let resRet = Option.map (fun r -> recurse (ASTNode.ReturnDecl r)) f.result
         let resAtt =  List.map (fun a -> recurse (ASTNode.Annotation' a)) f.annotations
         fFunctionPrototype (f.range, f.name, resIn, resOut, resRet, resAtt)
+    | OpaqueSingleton s ->
+        fNothing // TODO: just for the time being
     | Stmt s -> 
         match s with
         | LocalVar vdecl ->

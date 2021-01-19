@@ -1317,6 +1317,17 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                     <| Option.map (recReturnDecl lut) f.result
                     <| Annotation.checkFunctionPrototype lut f
                 do typedMembers.AddFunPrototype funPrototype
+            | AST.Member.OpaqueSingleton s ->
+                // TODO: Maybe create a separate typed member, fjg. 19.01.21
+                let kind = ProcedureKind.OpaqueProcedure
+                let funPrototype =
+                    fFunPrototype lut kind s.range s.name true // true = isSingleton
+                    <| List.map (recParamDecl lut) [] // inputs
+                    <| List.map (recParamDecl lut) [] // outputs
+                    <| Option.map (recReturnDecl lut) None // result
+                    // annotations are printed into the signature
+                    <| Annotation.checkOpaqueSingleton lut s
+                do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
     let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =

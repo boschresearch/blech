@@ -490,20 +490,18 @@ module SingletonInference =
  
     let private inferSubprogram ctx (sp: AST.SubProgram) =
         List.fold inferStaticNamedPath ctx sp.singletons
-        //|> List.fold inferParamDecl <| sp.inputs
-        //|> List.fold inferParamDecl <| sp.outputs
-        //|> Option.fold inferReturnDecl <| sp.result
         |> List.fold inferStatement <| sp.body
         |> (addToSingletons sp.isSingleton) <| sp.name
 
 
-
-    let private inferFunctionPrototype ctx (fp: Prototype) =
+    let private inferFunctionPrototype ctx (fp: AST.Prototype) =
         List.fold inferStaticNamedPath ctx fp.singletons
-        //|> List.fold inferParamDecl <| fp.inputs
-        //|> List.fold inferParamDecl <| fp.outputs
-        //|> Option.fold inferReturnDecl <| fp.result
         |> (addToSingletons fp.isSingleton) <| fp.name
+
+
+    let private inferOpaqueSingleton ctx (os: AST.OpaqueSingleton) =
+        List.fold inferStaticNamedPath ctx os.singletons
+        |> (addToSingletons true) <| os.name
 
 
     //let private inferUnitDecl ctx (ud: AST.UnitDecl) =
@@ -575,6 +573,8 @@ module SingletonInference =
             inferSubprogram ctx sp
         | Member.Prototype fp ->
             inferFunctionPrototype ctx fp
+        | Member.OpaqueSingleton os ->
+            inferOpaqueSingleton ctx os
         | Member.Unit u ->
             ctx
             // inferUnitDecl ctx u

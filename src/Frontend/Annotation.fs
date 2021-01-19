@@ -182,6 +182,34 @@ module Annotation =
         |> Result.bind checkParameterIndex 
 
     
+    let checkOpaqueSingleton (lut: TypeCheckContext) (os: AST.OpaqueSingleton) =
+        let checkOsAnno osattr anno = 
+            let checkAttribute (fpattr, attr) = 
+                match attr with
+                | CFunctionPrototype (header = header) ->
+                    if Option.isSome fpattr.cfunction then
+                        multipleUniqueAnnotation anno
+                    elif Option.isNone header && not (hasInclude lut) then 
+                        missingNamedArgument os.range Attribute.Key.header
+                    else
+                        Ok { fpattr with cfunction = Some attr }
+                | CFunctionWrapper _ ->
+                    if Option.isSome fpattr.cfunction then
+                        multipleUniqueAnnotation anno
+                    else
+                        Ok { fpattr with cfunction = Some attr }
+                | LineDoc _
+                | BlockDoc _ ->
+                    Ok { fpattr with doc = List.append fpattr.doc [attr] }        
+                | _ ->
+                    unsupportedAnnotation anno
+        
+            combine osattr (checkAnnotation anno)
+            |> Result.bind checkAttribute
+        
+        List.fold checkOsAnno (Ok Attribute.FunctionPrototype.Empty) os.annotations
+        
+
     let checkVarDecl lut (v: AST.VarDecl) =
         let checkVdAnnotation vdattr (anno: AST.Annotation) =
             let checkAttribute (vdattr, attr) =

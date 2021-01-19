@@ -1109,7 +1109,12 @@ ExternalFunction
 
 // TODO: This should not be a prototype because it is not callable, just for the time being, fjg. 12.11.20
 OpaqueSingleton:
-    | OptAnnotations SingletonDecl Name     
+    | OptAnnotations SingletonDecl Name  
+                                        { Member.OpaqueSingleton { OpaqueSingleton.range = opaqueSingletonRange $1 (fst $2) $3.range
+                                                                   singletons = snd $2
+                                                                   name = $3
+                                                                   annotations = $1 } }
+/*                                        
                                         { Member.Prototype { Prototype.range = opaqueSingletonRange $1 (fst $2) $3.range
                                                              isExtern = false
                                                              isSingleton = true
@@ -1121,6 +1126,7 @@ OpaqueSingleton:
                                                              outputs = []
                                                              result = None
                                                              annotations = $1 } }
+*/
 
 
 Prototype

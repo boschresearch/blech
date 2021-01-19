@@ -195,7 +195,6 @@ module Main =
                         fileName 
                         inferredSingleton 
                         imports.GetAbstractTypes 
-                        // imports.GetSingletons 
                         ast
 
                 let! lut, blechModule = 
@@ -235,15 +234,22 @@ module Main =
                     let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
                     Logging.log6 "Main" msg )
 
+                // if not entry point, create signature
+                do  
+                    let isMainProgram = Option.isSome blechModule.entryPoint
+                    if not isMainProgram then
+                        Logging.log2 "Main" ("writing signature for " + fileName)
+                        do writeSignature cliArgs.outDir moduleName inferredExport ast
+
                 // if not dry run, write it to file
                 // create code depending on entry point
                 do // this do is required in a workflow, otherwise a Result<_> type expr is expected
                     if not cliArgs.isDryRun then
                         // if not entry point, create signature
-                        let isMainProgram = Option.isSome blechModule.entryPoint
-                        if not isMainProgram then
-                            Logging.log2 "Main" ("writing signature for " + fileName)
-                            do writeSignature cliArgs.outDir moduleName inferredExport ast
+                        //let isMainProgram = Option.isSome blechModule.entryPoint
+                        //if not isMainProgram then
+                        //    Logging.log2 "Main" ("writing signature for " + fileName)
+                        //    do writeSignature cliArgs.outDir moduleName inferredExport ast
 
                         let importedMods = imports.GetTypedModules
                         Logging.log2 "Main" ("writing C code for " + fileName)
@@ -316,15 +322,83 @@ module Main =
     
     //    tyAstAndLutRes
 
+    
+    /// Runs interface compilation steps given input file as a string
+    /// returns a Result type of
+    /// ModuleInfo
+    /// or Diagnostic.Logger
+    let compileInterfaceFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
+        // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
+        let resultWorkflow = new ResultBuilder()
+        resultWorkflow
+            {
+                let! ast =
+                    runParser 
+                        logger 
+                        CompilationUnit.Implementation 
+                        moduleName 
+                        fileContents 
+                        fileName
+
+                let! imports =
+                    runImportCompilation 
+                        pkgCtx 
+                        logger 
+                        importChain 
+                        moduleName 
+                        fileName
+                        ast
+                        
+                let! symTable =
+                    runNameResolution 
+                        logger 
+                        moduleName 
+                        fileName 
+                        imports.GetLookupTables
+                        imports.GetExportScopes
+                        ast
+
+                let! inferredSingleton = 
+                    runSingletonInference 
+                        logger 
+                        fileName 
+                        imports.GetSingletons 
+                        ast
+                        symTable
+
+                let! lut, blechModule = 
+                    runTypeChecking 
+                        cliArgs 
+                        logger 
+                        fileName 
+                        imports.GetTypeCheckContexts 
+                        ast 
+                        symTable
+
+                let importedModules = imports.GetImportedModuleNames
+                // TODO: Remove inferredExport from interface compilation
+                let inferredExport = ExportInference.ExportContext.Initialise logger symTable inferredSingleton imports.GetAbstractTypes
+                
+                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton inferredExport lut blechModule
+            }
+
+    /// Runs interface compilation starting with a filename
+    let compileInterfaceFromFile cliArgs pkgCtx logger importChain moduleName inputFile =
+        // open stream from file
+        File.ReadAllText (Path.GetFullPath(inputFile))
+        |> compileInterfaceFromStr cliArgs pkgCtx logger importChain moduleName inputFile
+    
         
     let loader options packageContext logger importChain implOrIface moduleName infile 
             : Result<CompilationUnit.Module<ImportChecking.ModuleInfo>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Implementation ->
+                printfn "Compile implementation: '%s'" infile
                 compileFromFile options packageContext logger importChain moduleName infile
-            //| CompilationUnit.Interface ->
-            //    compileInterface options packageContext logger fromPath infile
+            | CompilationUnit.Interface ->
+                printfn "Compile interface: '%s'" infile
+                compileInterfaceFromFile options packageContext logger importChain moduleName infile
                 
         Result.bind (CompilationUnit.Module<_>.Make moduleName infile) compilationRes 
 

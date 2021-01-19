@@ -166,6 +166,14 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             { ctx with env = Env.enterAnonymousScope ctx.env }  // remains as anonymous inner scope
 
+    let private addOpaqueSingletonDecl (ctx: NameCheckContext) name = 
+        match Env.insertOpaqueSingletonName ctx.env name with  // wird im inner scope eingetragen
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx 
+            
 
     let private addSubScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterAnonymousScope ctx.env }
@@ -505,26 +513,28 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // |> exportCodeDecl <| sp.name
 
 
-    let checkFunctionPrototype ctx (fp: Prototype) =
+    let checkFunctionPrototype ctx (fp: AST.Prototype) =
         addSubprogramDecl ctx fp.name
+        |> List.fold identifyStatic <| fp.singletons
         |> List.fold checkParamDecl <| fp.inputs
         |> List.fold checkParamDecl <| fp.outputs
         |> Option.fold checkReturnDecl <| fp.result
         |> exitSubScope
-        // |> exportCodeDecl <| fp.name
+        
 
+    let checkOpaqueSingleton ctx (os: AST.OpaqueSingleton) =
+        List.fold identifyStatic ctx os.singletons
+        |> addOpaqueSingletonDecl <| os.name
+        
 
     let checkUnitDecl ctx (ud: AST.UnitDecl) =
         addUnitDecl ctx ud
-        // |> exportCodeDecl <| ud.name
-
  
  
     let checkTagDecl ctx (td: AST.TagDecl) =
         Option.fold checkExpr ctx td.rawvalue
         |> addDecl <| td <| IdLabel.Static
-        // |> addHiddenDecl <| td <| IdLabel.Static
-
+        
 
     // all field names are syntactically var decls
     let checkFieldDecl ctx (field: AST.Member) =
@@ -597,6 +607,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkSubprogram ctx sp
             | Member.Prototype fp ->
                 checkFunctionPrototype ctx fp
+            | Member.OpaqueSingleton os ->
+                checkOpaqueSingleton ctx os
             | Member.Unit u ->
                 checkUnitDecl ctx u
             | Member.Clock _ ->

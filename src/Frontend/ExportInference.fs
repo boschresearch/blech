@@ -854,6 +854,9 @@ module ExportInference =
         | Member.Prototype fp ->
             let exp = Exposing.Type ctx.environment fp.name
             inferFunctionPrototype exp ctx fp
+        | Member.OpaqueSingleton _ ->
+            // only occurs in signatures
+            ctx
         | Member.Unit u ->
             // inferUnitDecl ctx u
             ctx

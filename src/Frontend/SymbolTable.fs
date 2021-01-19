@@ -586,6 +586,9 @@ module SymbolTable =
         let insertConstOrParamName env (name: Name) = 
             insertSymbol env name IdLabel.Static false
 
+        let insertOpaqueSingletonName env (name : Name) =
+            insertSymbol env name IdLabel.Static false
+
         let insertUnitName = insertConstOrParamName
         
         ////////////////////

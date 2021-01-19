@@ -761,14 +761,8 @@ module SignaturePrinter =
                         bpExternalFunction pt
                 else empty
 
-                //let ie = ctx.IsExported pt.name
-                //let hoss = ctx.HasOpaqueSingletonSignature pt.name
-                //if ie && hoss then 
-                //    let singletonSig = ctx.GetSingletonSignature pt.name
-                //    psOpaqueSingletonSignature pt.annotations singletonSig pt.name // Todo: Print inferred singleton signature
-                //elif ie then 
-                //    bpExternalFunction pt
-                //else empty
+            | AST.Member.OpaqueSingleton os ->
+                failwith "Opaque signatures are not part of module implementations, which are printed here."
             
             | AST.Member.Unit u ->
                 empty
