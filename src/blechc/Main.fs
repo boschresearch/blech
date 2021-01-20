@@ -104,8 +104,8 @@ module Main =
         do File.WriteAllText(outFileName, txt)
 
 
-    let private writeSignature outDir moduleName exports ast =
-        let signatureFile = Path.Combine(outDir, TranslatePath.moduleToInterfaceFile moduleName)
+    let private writeSignature moduleName exports ast =  
+        let signatureFile = TranslatePath.moduleToInterfaceFile moduleName
         let blechSignature = SignaturePrinter.printSignature exports ast
         do writeFile signatureFile blechSignature
 
@@ -239,8 +239,8 @@ module Main =
                     let isMainProgram = Option.isSome blechModule.entryPoint
                     if not isMainProgram then
                         Logging.log2 "Main" ("writing signature for " + fileName)
-                        do writeSignature cliArgs.outDir moduleName inferredExport ast
-
+                        do writeSignature moduleName inferredExport ast
+                        
                 // if not dry run, write it to file
                 // create code depending on entry point
                 do // this do is required in a workflow, otherwise a Result<_> type expr is expected

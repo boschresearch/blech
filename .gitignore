@@ -235,6 +235,7 @@ test/blechc/codegeneration/blech
 blech.c
 *.c
 *.h
+*.blh
 # *.blh
 !*.ext.c
 !*.ext.h
