@@ -20,7 +20,6 @@ module Blech.Compiler.ImportChecking
 
 open System.Collections.Generic
 
-open Blech
 open Blech.Common
 open Blech.Frontend
 
@@ -38,7 +37,6 @@ type ModuleInfo =
         exportInference: ExportContext
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
-        //translation: Backend.TranslationContext   // TODO: if this is not necessary, the whole Module can be moved to Frontend, fjg. 21.10.20
     }
 
     static member Make imports symbolTable singletons exportContext typecheckContext blechModule =
@@ -49,7 +47,6 @@ type ModuleInfo =
             exportInference = exportContext
             typeCheck = typecheckContext
             typedModule = blechModule
-            //translation = translationContext
         }
 
     member this.IsCompiledProgram = 

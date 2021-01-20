@@ -13,5 +13,6 @@ function f ()
     g()
     u()
     b.f()
+    b.h()
 end
 

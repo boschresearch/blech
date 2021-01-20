@@ -70,19 +70,7 @@ module CompilationUnit =
                       sprintf "use '%s' for interface files." <| interfaceFileExtension ]
 
     
-    type ImplOrIface =
-        | Implementation
-        | Interface
-
     
-    let loadWhat (file: string) =
-        if isImplementation file then
-            Some Implementation
-        elif isInterface file then
-            Some Interface
-        else
-            None
-
 
     type ImportChain =
         private { chain : TranslationUnitPath list } // in reverse order
@@ -109,6 +97,25 @@ module CompilationUnit =
                  info = info }
 
 
+    type TranslatedUnit =
+        | Implementation of TranslationUnitPath
+        | Interface of TranslationUnitPath
+        | Program of TranslationUnitPath
+        
+    
+    type ImplOrIface =
+        | Blc
+        | Blh
+
+    let loadWhat (file: string) =
+        if isImplementation file then
+            Some Blc
+        elif isInterface file then
+            Some Blh
+        else
+            None
+
+
     type Context<'info> =
         {
             sourcePath: string
@@ -117,7 +124,7 @@ module CompilationUnit =
             outDir: string
             loader: Context<'info> -> Diagnostics.Logger -> ImportChain -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
                     // package context -> module logger -> import chain -> LoadWhat -> module name -> file name -> compiled module or errors in logged errors
-            loaded: Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>              
+            loaded: Dictionary<TranslatedUnit, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> compiled module or errors in logger
         }
         static member Make (arguments: Arguments.BlechCOptions) loader =
@@ -126,13 +133,13 @@ module CompilationUnit =
               package = None
               outDir = arguments.outDir
               loader = loader
-              loaded = Dictionary<TranslationUnitPath, Result<Module<'info>, Diagnostics.Logger>>() }
+              loaded = Dictionary<TranslatedUnit, Result<Module<'info>, Diagnostics.Logger>>() }
 
-        member this.GetErrorImports : (TranslationUnitPath * Diagnostics.Logger) list =
+        member this.GetErrorImports : (TranslatedUnit * Diagnostics.Logger) list =
             [ for pairs in this.loaded do 
                 if Result.isError pairs.Value then yield pairs.Key, Result.getError pairs.Value ]
 
-        member this.GetOkImports : Dictionary<TranslationUnitPath, Module<'info>> =
+        member this.GetOkImports : Dictionary<TranslatedUnit, Module<'info>> =
             let oks = Dictionary()
             for pairs in this.loaded do 
                 if Result.isOk pairs.Value then 
@@ -199,30 +206,60 @@ module CompilationUnit =
     /// load the unit, compile it and return the compilation result for imported usage
     let require (ctx: Context<'info>) logger importChain (requiredModule: TranslationUnitPath) (importRange: Range.range)
             : Result<Module<'info>, Diagnostics.Logger> =
-        if ctx.loaded.ContainsKey requiredModule then
-            ctx.loaded.[requiredModule]
+        let translatedSig = Interface requiredModule
+        if ctx.loaded.ContainsKey translatedSig then
+            printfn "Use compiled module: %A" translatedSig
+            ctx.loaded.[translatedSig]
         else
-            let compiled = 
-                let blcFile = searchImplementation ctx.sourcePath requiredModule
-                let blhFile = searchInterface ctx.outDir requiredModule
-                match blhFile, blcFile with
-                | Ok blh, Ok blc ->
-                    ctx.loader ctx logger importChain Implementation requiredModule blc
+            let blcFile = searchImplementation ctx.sourcePath requiredModule
+            // let blhFile = searchInterface ctx.outDir requiredModule
+            //match blhFile, blcFile with
+            //| Ok blh, Ok blc ->
+            //    ctx.loader ctx logger importChain Blc requiredModule blc
                 
-                | Error _, Ok blc ->
-                    ctx.loader ctx logger importChain Implementation requiredModule blc
+            //| Error _, Ok blc ->
+            //    ctx.loader ctx logger importChain Blc requiredModule blc
                 
-                | _ , Error triedBlcs ->
-                    let sigFile = searchInterface ctx.blechPath requiredModule 
-                    match sigFile with
+            //| _ , Error triedBlcs ->
+            //    let sigFile = searchInterface ctx.blechPath requiredModule 
+            //    match sigFile with
+            //    | Ok blh ->
+            //        ctx.loader ctx logger importChain Blh requiredModule blh
+            //    | Error triedBlhs ->
+            //        Diagnostics.Logger.logFatalError 
+            //        <| logger
+            //        <| Diagnostics.Phase.Compiling
+            //        <| ModuleNotFound (requiredModule, importRange, triedBlcs @ triedBlhs) 
+            //        Error logger
+            
+            match blcFile with
+            | Ok blc ->
+                let translatedMod = Implementation requiredModule
+                let compiledBlc = ctx.loader ctx logger importChain Blc requiredModule blc
+                printfn "Add compiled module: %A" translatedMod
+                do ctx.loaded.Add (translatedMod, compiledBlc)
+                
+                if Result.isOk compiledBlc then    
+                    let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
+                    match blhFile with
                     | Ok blh ->
-                        ctx.loader ctx logger importChain Interface requiredModule blh
+                        let compiledBlh = ctx.loader ctx logger importChain Blh requiredModule blh
+                        printfn "Add compiled signature: %A" translatedSig
+                        do ctx.loaded.Add (translatedSig, compiledBlh)
+                        compiledBlh           
                     | Error triedBlhs ->
                         Diagnostics.Logger.logFatalError 
                         <| logger
                         <| Diagnostics.Phase.Compiling
-                        <| ModuleNotFound (requiredModule, importRange, triedBlcs @ triedBlhs) 
+                        <| ModuleNotFound (requiredModule, importRange, triedBlhs) 
                         Error logger
+                else
+                    compiledBlc
             
-            do ctx.loaded.Add (requiredModule, compiled)
-            compiled
+            | Error triedBlcs ->
+                Diagnostics.Logger.logFatalError 
+                <| logger
+                <| Diagnostics.Phase.Compiling
+                <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
+                Error logger
+

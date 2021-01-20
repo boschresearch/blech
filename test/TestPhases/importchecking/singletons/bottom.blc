@@ -1,4 +1,4 @@
-module exposes f, f1, f2, noSingleton
+module exposes f, f1, f2, noSingleton, h
 
 singleton function s ()
 end

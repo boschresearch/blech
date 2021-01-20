@@ -11,6 +11,6 @@ function h ()
     // m.f()
     // m.u()
     f()
-    u()
+    // u()
 end
 

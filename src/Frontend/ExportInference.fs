@@ -202,6 +202,22 @@ module ExportInference =
                 
             }
 
+        static member MakeForSignature (logger: Diagnostics.Logger) 
+                                       (env: SymbolTable.Environment) = 
+            {   
+                // inputs
+                environment = env
+                logger = logger
+                singletons = Map.empty
+        
+                // results
+                abstractTypes = Map.empty 
+                exportScope = Env.getModuleScope env
+                requiredImports = Map.empty
+                singletonSignatures = Map.empty
+            }
+
+
         //member this.AddAbstractType name abstype = 
         //    { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
 
@@ -262,6 +278,7 @@ module ExportInference =
                 this.singletons.ContainsKey declName
             else
                 false
+
         member this.AddSingletonSignature declName signatureTag =
             assert Env.isDeclName this.environment declName
             // printfn "Singletons: %A" this.singletons
@@ -757,7 +774,9 @@ module ExportInference =
 
 
     let private inferFunctionPrototype exp ctx (fp: Prototype) =
-        List.fold (inferParamDecl exp) ctx fp.inputs
+        printfn "Infer function Prototype: %A" fp.name
+        List.fold (inferStaticNamedPath exp) ctx fp.singletons
+        |> List.fold (inferParamDecl exp) <| fp.inputs
         |> List.fold (inferParamDecl exp) <| fp.outputs
         |> Option.fold (inferReturnDecl exp) <| fp.result
         |> exportValueDecl fp.isSingleton <| fp.name
@@ -890,6 +909,9 @@ module ExportInference =
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
             List.fold inferTopLevelMember ctx cu.members
+        elif cu.IsSignature then
+            // Todo: Refactor this in import checking
+            ExportContext.MakeForSignature ctx.logger ctx.environment // no inference just needs the export scope
         else
             ctx
 

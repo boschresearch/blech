@@ -157,7 +157,7 @@ module Main =
                 let! ast =
                     runParser 
                         logger 
-                        CompilationUnit.Implementation 
+                        CompilationUnit.Blc
                         moduleName 
                         fileContents 
                         fileName
@@ -273,56 +273,6 @@ module Main =
         |> compileFromStr cliArgs pkgCtx logger importChain moduleName inputFile
     
 
-    //let compileInterface (cliContext: Arguments.BlechCOptions) 
-    //                     (pkgContext: CompilationUnit.Context<TypeCheckContext * BlechTypes.BlechModule>) 
-    //                     diagnosticLogger 
-    //                     (fromPath: FromPath.FromPath)
-    //                     (inputFile: string) =
-
-    //    let moduleName = fromPath.ToModuleName
-        
-    //    // parse
-    //    Logging.log2 "Main" ("processing source file " + inputFile)
-    //    let astRes = 
-    //        ParsePkg.parseModuleFromFile diagnosticLogger CompilationUnit.Interface moduleName inputFile
-        
-    //    // TODO: recurse over signature imports here, fromPath argument is needed here.
-    //    // fjg. 24.09.20
-
-    //    // name resolution 
-    //    Logging.log2 "Main" ("performing name resolution on " + inputFile)
-    //    let astAndEnvRes = 
-    //        let ncContext = NameChecking.initialiseEmpty diagnosticLogger moduleName
-    //        Result.bind (NameChecking.checkDeclaredness pkgContext ncContext) astRes
-        
-    //    // type check
-    //    Logging.log2 "Main" ("performing type checking on " + inputFile)
-    //    let tyAstAndLutRes = 
-    //        Result.bind (TypeChecking.typeCheck cliContext) astAndEnvRes
-        
-    //    //match tyAstAndLutRes with
-    //    //| Ok (lut, package) ->        
-    //    //    let translationContext: TranslationContext =
-    //    //        { tcc = lut
-    //    //          pgs = Dictionary()
-    //    //          bgs = Dictionary() 
-    //    //          cliContext = cliContext }
-    //    //    let compilations = translate translationContext package
-            
-    //    //    // this ensures side-effects (files written) are prevented in a dry run
-    //    //    if not cliContext.isDryRun then
-    //    //        // TODO: Add exposed subprograms and constants to header, fjg 21.01.19
-    //    //        // TODO: Take package into account, fjg 10.01.19
-    //    //        let headerFile = Path.Combine(cliContext.outDir, SearchPath.moduleToHFile moduleName)
-    //    //        let header = CodeGeneration.emitHeader translationContext package compilations
-    //    //        FileInfo(headerFile).Directory.Create()
-    //    //        File.WriteAllText(headerFile, header)
-    //    //| _ ->
-    //    //    ()
-    
-    //    tyAstAndLutRes
-
-    
     /// Runs interface compilation steps given input file as a string
     /// returns a Result type of
     /// ModuleInfo
@@ -335,7 +285,7 @@ module Main =
                 let! ast =
                     runParser 
                         logger 
-                        CompilationUnit.Implementation 
+                        CompilationUnit.Blh
                         moduleName 
                         fileContents 
                         fileName
@@ -366,6 +316,15 @@ module Main =
                         ast
                         symTable
 
+                let! inferredExport = 
+                    runExportInference 
+                        logger 
+                        symTable 
+                        fileName 
+                        inferredSingleton 
+                        imports.GetAbstractTypes 
+                        ast
+
                 let! lut, blechModule = 
                     runTypeChecking 
                         cliArgs 
@@ -377,10 +336,12 @@ module Main =
 
                 let importedModules = imports.GetImportedModuleNames
                 // TODO: Remove inferredExport from interface compilation
-                let inferredExport = ExportInference.ExportContext.Initialise logger symTable inferredSingleton imports.GetAbstractTypes
+                // let inferredExport = ExportInference.ExportContext.Initialise logger symTable inferredSingleton imports.GetAbstractTypes
                 
+                // Todo: Rethink inferredExport for module info, signatures only need the export scope
                 return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton inferredExport lut blechModule
             }
+
 
     /// Runs interface compilation starting with a filename
     let compileInterfaceFromFile cliArgs pkgCtx logger importChain moduleName inputFile =
@@ -393,10 +354,10 @@ module Main =
             : Result<CompilationUnit.Module<ImportChecking.ModuleInfo>, Diagnostics.Logger> =
         let compilationRes = 
             match implOrIface with
-            | CompilationUnit.Implementation ->
+            | CompilationUnit.Blc->
                 printfn "Compile implementation: '%s'" infile
                 compileFromFile options packageContext logger importChain moduleName infile
-            | CompilationUnit.Interface ->
+            | CompilationUnit.Blh ->
                 printfn "Compile interface: '%s'" infile
                 compileInterfaceFromFile options packageContext logger importChain moduleName infile
                 

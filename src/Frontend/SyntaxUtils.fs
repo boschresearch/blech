@@ -270,7 +270,7 @@ module ParserUtils =
 
         static member Default = {
                 currentModuleName = TranslationUnitPath.Empty
-                currentLoadWhat = CompilationUnit.Implementation
+                currentLoadWhat = CompilationUnit.Blc
                 // packageHead = PackageHead.Default 
                 errorTokenAccepted = false
                 errorInfo = None
@@ -306,8 +306,8 @@ module ParserUtils =
         let getModuleName () = parserContext.currentModuleName
         // let getLoadWhat () = parserContext.currentLoadWhat
         //let isSignature () = parserContext.packageHead.isSignature
-        let isInterface () = parserContext.currentLoadWhat = CompilationUnit.Interface
-        let isImplementation () = parserContext.currentLoadWhat = CompilationUnit.Implementation
+        let isInterface () = parserContext.currentLoadWhat = CompilationUnit.Blh
+        let isImplementation () = parserContext.currentLoadWhat = CompilationUnit.Blc
         //let getHeadRange () = parserContext.packageHead.range
         //let setPackageHead isSignature range = 
         //    parserContext.packageHead <- { parserContext.packageHead with isSignature = isSignature; range = range }
