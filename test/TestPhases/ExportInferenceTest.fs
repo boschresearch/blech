@@ -38,14 +38,14 @@ let runExportInference implOrIface moduleName filePath =
                 let importedSingletons = List.empty
                 SingletonInference.inferSingletons logger env importedSingletons ast
 
-            let importedAbstractTypes = List.empty
+            // let importedAbstractTypes = List.empty
             // let importedSingletons = List.empty
             return!
                 ExportInference.inferExports 
                     logger 
                     env
                     inferredSingleton
-                    importedAbstractTypes 
+                    // importedAbstractTypes 
                     // importedSingletons 
                     ast
         }
