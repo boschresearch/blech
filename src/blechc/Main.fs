@@ -91,9 +91,9 @@ module Main =
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
             
 
-    let private runExportInference logger symboltableEnv fileName singletons importedAbstractTypes ast = 
+    let private runExportInference logger symboltableEnv fileName singletons ast = // importedAbstractTypes ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
-        ExportInference.inferExports logger symboltableEnv singletons importedAbstractTypes ast // importedSingletons ast 
+        ExportInference.inferExports logger symboltableEnv singletons ast // importedAbstractTypes ast // importedSingletons ast 
         
     //---
     //  Functions that write to the file system during compilation
@@ -194,7 +194,7 @@ module Main =
                         symTable 
                         fileName 
                         inferredSingleton 
-                        imports.GetAbstractTypes 
+                        // imports.GetAbstractTypes 
                         ast
 
                 let! lut, blechModule = 
@@ -262,7 +262,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton inferredExport lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton lut blechModule
             }
 
                 
@@ -316,14 +316,14 @@ module Main =
                         ast
                         symTable
 
-                let! inferredExport = 
-                    runExportInference 
-                        logger 
-                        symTable 
-                        fileName 
-                        inferredSingleton 
-                        imports.GetAbstractTypes 
-                        ast
+                //let! inferredExport = 
+                //    runExportInference 
+                //        logger 
+                //        symTable 
+                //        fileName 
+                //        inferredSingleton 
+                //        // imports.GetAbstractTypes 
+                //        ast
 
                 let! lut, blechModule = 
                     runTypeChecking 
@@ -339,7 +339,8 @@ module Main =
                 // let inferredExport = ExportInference.ExportContext.Initialise logger symTable inferredSingleton imports.GetAbstractTypes
                 
                 // Todo: Rethink inferredExport for module info, signatures only need the export scope
-                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton inferredExport lut blechModule
+                let exports = SymbolTable.Environment.getModuleScope symTable
+                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton lut blechModule
             }
 
 

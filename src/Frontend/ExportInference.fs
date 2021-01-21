@@ -185,8 +185,8 @@ module ExportInference =
 
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
-                                 (singletons: SingletonInference.Singletons)
-                                 (importedAbstractTypes : AbstractTypes list) = 
+                                 (singletons: SingletonInference.Singletons) =
+                                 // (importedAbstractTypes : AbstractTypes list) = 
                                  // (importedSingletons: SingletonInference.Singletons list) =
             {   
                 // inputs
@@ -195,7 +195,8 @@ module ExportInference =
                 singletons = singletons
         
                 // results
-                abstractTypes = Map.collect importedAbstractTypes 
+                // abstractTypes = Map.collect importedAbstractTypes 
+                abstractTypes = Map.empty
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
@@ -920,11 +921,11 @@ module ExportInference =
     
     let inferExports logger (env: SymbolTable.Environment) 
                             (singletons: SingletonInference.Singletons)
-                            (importedAbtractTypes : AbstractTypes list)
+                            // (importedAbtractTypes : AbstractTypes list)
                             // (importedSingletons : SingletonInference.Singletons list)
                             (cu: AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env singletons importedAbtractTypes // importedSingletons
+            ExportContext.Initialise logger env singletons // importedAbtractTypes // importedSingletons
             |> inferCompilationUnit <| cu
         // just for debugging
         //printfn "Abstract Types: \n %A" exports.abstractTypes

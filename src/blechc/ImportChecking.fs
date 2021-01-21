@@ -34,17 +34,20 @@ type ModuleInfo =
         dependsOn: TranslationUnitPath list
         nameCheck: Environment
         singletons : Singletons
-        exportInference: ExportContext
+        // exportInference: ExportContext
+        // exports : SymbolTable.Scope
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
     }
 
-    static member Make imports symbolTable singletons exportContext typecheckContext blechModule =
+    static member Make imports symbolTable singletons // exportScope 
+                        typecheckContext blechModule =
         { 
             dependsOn = imports
             nameCheck = symbolTable
             singletons = singletons
-            exportInference = exportContext
+            // exportInference = exportContext
+            // exports = exportScope
             typeCheck = typecheckContext
             typedModule = blechModule
         }
@@ -58,7 +61,10 @@ type ModuleInfo =
     member this.GetEnv : Environment = 
         this.nameCheck
 
+    member this.GetExportScope : SymbolTable.Scope = 
+        SymbolTable.Environment.getModuleScope this.nameCheck
 
+    
 type ImportError = 
     | Dummy of range: Range.range * msg: string   // just for development purposes
 
@@ -121,11 +127,11 @@ type Imports =
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv.GetLookupTable) ]
 
     member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
-        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.exportInference.GetExports) ]
+        Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetExportScope) ]
 
-    member this.GetAbstractTypes : ExportInference.AbstractTypes list = 
-        this.GetImports
-        |> List.map (fun import -> import.exportInference.GetAbstractTypes)
+    //member this.GetAbstractTypes : ExportInference.AbstractTypes list = 
+    //    this.GetImports
+    //    |> List.map (fun import -> import.exportInference.GetAbstractTypes)
         
     member this.GetSingletons : SingletonInference.Singletons list = 
         this.GetImports
