@@ -1,0 +1,9 @@
+module exposes A
+
+
+activity A ()
+    @[COutput (binding ="<c-variable>", header = "<c-header>.h")]
+    extern var x: bool
+    await true
+end
+    

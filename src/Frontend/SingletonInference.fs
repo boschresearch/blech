@@ -110,6 +110,7 @@ module SingletonInference =
             logger : Diagnostics.Logger
             environment : SymbolTable.Environment
             calledSingletons : SingletonUse list // accumulator for singleton calls, in reverse order of appearance
+            usesExternVar : bool                 // flags declaration of local extern var
             singletons : Singletons
         }
 
@@ -121,6 +122,7 @@ module SingletonInference =
                 environment = env
                 
                 calledSingletons = List.Empty
+                usesExternVar = false
                 singletons = Map.collectWithOverride importedSingletons // might contain duplicates
             }
             // |> fun ctx -> printfn "##########\nInitialised singletons: %A\n################" ctx.singletons; ctx
@@ -160,11 +162,15 @@ module SingletonInference =
         member this.HasCalledSingletons = 
             not <| List.isEmpty this.calledSingletons
 
+        member this.UsesExternVar = 
+            this.usesExternVar
+
         member this.AddSingleton declName =
             assert Env.isDeclName this.environment declName
             { this with 
                 singletons = Map.add declName this.calledSingletons this.singletons 
-                calledSingletons = List.empty }
+                calledSingletons = List.empty 
+                usesExternVar = false }
 
         //member this.GetSingletons = 
         //    this.singletons
@@ -198,7 +204,7 @@ module SingletonInference =
     // recursively descend the AST for export inference
 
     let private addToSingletons isDeclaredSingleton (ctx: SingletonContext) (name: Name) : SingletonContext =
-        if isDeclaredSingleton || ctx.HasCalledSingletons then
+        if isDeclaredSingleton || ctx.HasCalledSingletons || ctx.UsesExternVar then
             // printfn "Add singleton: %s" name.id
             ctx.AddSingleton name
         else
@@ -218,6 +224,12 @@ module SingletonInference =
         let lastName = List.last dap.leadingNames
         if ctx.IsSingleton lastName then 
             { ctx with calledSingletons = leadingNames :: ctx.calledSingletons }
+        else
+            ctx
+
+    let private addExternVarUsage (ctx: SingletonContext) (vd : AST.VarDecl) = 
+        if vd.isExtern && vd.permission.IsVar then
+            { ctx with usesExternVar = true }
         else
             ctx
 
@@ -379,8 +391,8 @@ module SingletonInference =
  
  
     let private inferVarDecl ctx (vd: AST.VarDecl) =
-        // Option.fold inferDataType ctx vd.datatype
-        Option.fold inferExpr ctx vd.initialiser
+        addExternVarUsage ctx vd  
+        |> Option.fold inferExpr <| vd.initialiser
 
 
     //let private inferStaticVarDecl ctx (vd: AST.VarDecl) =
