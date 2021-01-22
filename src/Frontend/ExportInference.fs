@@ -921,11 +921,9 @@ module ExportInference =
     
     let inferExports logger (env: SymbolTable.Environment) 
                             (singletons: SingletonInference.Singletons)
-                            // (importedAbtractTypes : AbstractTypes list)
-                            // (importedSingletons : SingletonInference.Singletons list)
                             (cu: AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env singletons // importedAbtractTypes // importedSingletons
+            ExportContext.Initialise logger env singletons 
             |> inferCompilationUnit <| cu
         // just for debugging
         //printfn "Abstract Types: \n %A" exports.abstractTypes

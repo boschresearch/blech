@@ -25,81 +25,6 @@ module SingletonInference =
     open AST
 
     
-     
-    //type SingletonSignature = 
-    //    | Opaque of LongIdentifier list       // e.g. singleton [f, g] h
-    //    | Translucent of LongIdentifier list  // e.g. singleton [f, g] function h ()
-    
-    //type Singletons = 
-    //    private {
-    //        calledSingletons : Path list       // accumulator for called singletons in a subprogram
-    //        singletons : Map<Name, Path list>  // declaration name |-> singleton uses (multiple occurences of the same singleton possible)
-    //        signatures : Map<Name, SingletonSignature>
-    //    }
-
-    //    static member Empty = 
-    //        { calledSingletons = List.empty
-    //          singletons = Map.empty
-    //          signatures = Map.empty }
-
-    //    member this.AddCalledSingleton (env : SymbolTable.Environment) (path : Path) =
-    //        assert this.IsSingleton env path
-    //        { this with calledSingletons = path :: this.calledSingletons }  
-
-    //    member this.HasCalledSingletons = 
-    //        not <| List.isEmpty this.calledSingletons
-
-    //    // Assume, that all called singletons have been collected
-    //    //member this.AddSingleton declName =
-    //    //    { this with 
-    //    //        singletons = this.singletons.Add (declName, this.calledSingletons) 
-    //    //        calledSingletons = List.empty }       
-
-    //    member this.IsSingleton (env : SymbolTable.Environment) (path : Path) =
-    //        let lastName = List.last path
-    //        let declName = Env.getDeclName env lastName
-    //        this.singletons.ContainsKey declName
-
-    //    //member this.IsSingleton (declName : Name) =
-    //    //    this.singletons.ContainsKey declName
-
-
-    //    member private this.CalledToSignature : LongIdentifier list = 
-    //        let pathToLongid path = List.map (fun name -> name.id) path
-    //        this.calledSingletons
-    //        |> List.map pathToLongid
-    //        |> List.distinct
-
-    //    //member this.AddTranslucentSingleton declName = 
-    //    //    { calledSingletons = List.empty
-    //    //      singletons = this.singletons.Add (declName, this.calledSingletons)
-    //    //      signatures = this.signatures.Add (declName, Translucent this.CalledToSignature) }
-
-    //    member this.AddSingleton declName signatureCase = 
-    //        { calledSingletons = List.empty
-    //          singletons = this.singletons.Add (declName, this.calledSingletons)
-    //          signatures = this.signatures.Add (declName, signatureCase this.CalledToSignature) }
-
-
-    //    member this.HasSignature declName =
-    //        Option.isSome <| this.signatures.TryFind declName
-
-    //    member this.GetSignature declName =
-    //        this.signatures.Item declName
-
-    //    member this.CollectSingletons (env : SymbolTable.Environment) declName : QName list =     
-    //        let rec recurse path =
-    //            let lastname = List.last path
-    //            let declname = Env.getDeclName env lastname
-    //            let qname = (Env.getLookupTable env).nameToQname declname
-    //            match this.singletons.Item declname with
-    //            | [] -> [qname]
-    //            | singletons -> 
-    //                qname :: List.collect recurse singletons
-
-    //        List.collect recurse (this.singletons.Item declName)
-    //        |> List.distinct
-
     module Env = SymbolTable.Environment
         
     type private SingletonUse = Name list 
@@ -125,7 +50,6 @@ module SingletonInference =
                 usesExternVar = false
                 singletons = Map.collectWithOverride importedSingletons // might contain duplicates
             }
-            // |> fun ctx -> printfn "##########\nInitialised singletons: %A\n################" ctx.singletons; ctx
 
         member this.CollectSingletons declName : QName list = 
             let env = this.environment
@@ -148,16 +72,6 @@ module SingletonInference =
                 this.singletons.ContainsKey declName
             else
                 false
-
-        //member this.HasOpaqueSingletonSignature name = 
-        //    let declName = Env.getDeclName this.environment name
-        //    match this.singletons.signatures.TryFind declName with
-        //    | Some (Opaque _) -> true
-        //    | _ -> false
-          
-        //member this.TryGetSingletonSignature name = 
-        //    let declName = Env.getDeclName this.environment name
-        //    this.singletons.signatures.TryFind declName
               
         member this.HasCalledSingletons = 
             not <| List.isEmpty this.calledSingletons
@@ -172,9 +86,6 @@ module SingletonInference =
                 calledSingletons = List.empty 
                 usesExternVar = false }
 
-        //member this.GetSingletons = 
-        //    this.singletons
-            
 
     type SingletonError = 
         | Dummy of range: Range.range * msg: string   // just for development purposes
