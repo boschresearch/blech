@@ -31,6 +31,7 @@
         let optimizedNodes : BlechNode list = optimize activityNodes
 
         // Generate sctx content.
+        printfn "Generating .sctx.."
         let sctxString = SctxGenerator.generate optimizedNodes
 
         // Print sctx content to a file.

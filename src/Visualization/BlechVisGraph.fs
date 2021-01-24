@@ -45,26 +45,51 @@ module Blech.Visualization.BlechVisGraph
     /// IsActivityCall consists of the input and output variable names.
     and ComplexOrSimpleOrCobegin = IsComplex of ComplexNode | IsSimple | IsCobegin of CobeginPayload | IsActivityCall of (string list * string list)
 
-    /// Determines whether something is "Initial" or "Final".
-    and InitOrFinalOrNeither = Init | Final | Neither
+    /// Determines if a node is an initial node.
+    and IsInit = IsInit | IsNotInit
 
+    /// Determines if a node is a final node.
+    and IsFinal = IsFinal | IsNotFinal
+
+    /// Determines whether something is "Initial" or "Final".
+    and InitOrFinalOrNeither = {Init : IsInit; Final : IsFinal} with 
+        member x.ToString = (match x.Init with IsInit -> "init" | IsNotInit -> "not init") + " " + (match x.Final with IsFinal -> "final" | IsNotFinal -> "not final")
+  
     /// Determines if a node closes an if-else case.
     and StateCount = int
 
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
     and WasVisualized = Visualized | NotVisualized
 
+    /// Indicating, whether outgoing edges of this node have been edge optimized.
+    and WasEdgeOptimized = Optimized | NotOptimized
+
+    /// Indicating, whether a node has been hierarchy optimized (checked for hierarchy, and hierarchy flattened if so).
+    and WasHierarchyOptimized = HierarchyOptimized | NotHierarchyOptimized
+
     /// Payload for a node.
-    and NodePayload = {Label : string; IsComplex : ComplexOrSimpleOrCobegin ; IsInitOrFinal : InitOrFinalOrNeither; StateCount : StateCount; mutable WasVisualized : WasVisualized} with
+    and NodePayload = { Label : string; 
+                        IsComplex : ComplexOrSimpleOrCobegin ; 
+                        IsInitOrFinal : InitOrFinalOrNeither; 
+                        StateCount : StateCount;
+                        mutable WasVisualized : WasVisualized;
+                        mutable WasHierarchyOptimized: WasHierarchyOptimized} with
         member x.Visualize = x.WasVisualized <- Visualized
-        member x.CopyWithInitOrFinalStatusSetTo (newStatus : InitOrFinalOrNeither) = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = newStatus ; StateCount = x.StateCount; WasVisualized = NotVisualized}
+        member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
+        member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
 
     /// Determines what kind of edge the edge ist.
-    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort
+    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
 
     /// Payload for an edge.
-    and EdgePayload = {Label : string; Property : EdgeProperty} with
-        member x.CopyWithPropertyImmediate = {Label = x.Label ; Property = IsImmediate}
+    and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with
+        member x.CopyAsOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = Optimized}
+        member x.CopyAsNotOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = NotOptimized}
+        member x.CopyWithPropertyImmediate = {Label = x.Label ; Property = IsImmediate; WasOptimized = x.WasOptimized}
+        member x.CopyWithPropertyConditional = {Label = x.Label ; Property = IsConditional; WasOptimized = x.WasOptimized}
 
     /// Node of a graph extracted from Blech code.
     and BlechNode = Node<NodePayload, EdgePayload>
@@ -80,6 +105,11 @@ module Blech.Visualization.BlechVisGraph
     /// Fourth element is used to compare to the list of defined in- and output variables to determine the missing variables that have to be defined.
     /// Can later be used for implementation of actual local variables.
     and GraphBuilder = VisGraph * BlechNode * int * string list
+
+    let NeitherInitOrFinal = {Init = IsNotInit; Final = IsNotFinal}
+    let InitNotFinal = {Init = IsInit; Final = IsNotFinal}
+    let FinalNotInit = {Init = IsNotInit; Final = IsFinal}
+    let InitAndFinal = {Init = IsInit; Final = IsFinal}
 
     //____________________ Find first await on every path in a graph.____________________________
     /// TODO comment.
@@ -123,32 +153,41 @@ module Blech.Visualization.BlechVisGraph
 
     /// Finds the node that has Property Init set to true and returns it.
     let findInitNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =
-            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal with Init -> true | _ -> false)
+            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Init with IsInit -> true | _ -> false)
     
     /// Finds the node that has Property Init set to true and returns it.
     let findFinalNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =
-            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal with Final -> true | _ -> false) 
+            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Final with IsFinal -> true | _ -> false) 
 
-///////////////////// FOR DEBUG
-    let rec compareGraphToString (cmpstring1 : string) (cmpString: string) : bool =        
-        cmpstring1.Equals cmpString
+    //____________________________________Remove element in list.
+    /// Removes element from a list. If element is not in list, original list will be returned.
+    let rec removeItem (item : 'T) (list : 'T list) =
+        match item, list with
+            | item, head :: tail -> if(item = head) then removeItem item tail else head :: removeItem item tail
+            | _, [] -> []
 
-    and listGraph (graph : BlechNode list) : string =
-        match graph with
-                | head :: tail -> match head.Payload.IsComplex with IsComplex _ -> listActNodeAndSubgraphs head + listGraph tail | _ -> listGraph tail
-                | [] -> ""
+    //_________________________________Add graph to graph in single not failable steps.
+    /// Adds a given graph to a graph by imitating the nodes and replicating the edges (creating brand new objects that is).
+    let rec addGraphToGraph (graph : VisGraph) (graphToAdd : VisGraph) : VisGraph = 
+        // 1. Add all nodes from the graph with their respectve payloads.
+        graphToAdd.Nodes |> Seq.iter (fun n -> graph.AddNode n.Payload |> ignore)        
+        // 2. Imitate edges as given, for this find the corresponding now existing nodes from step 1 and add a new edge with these nodes and the given edge data.
+        graphToAdd.Edges |> Seq.iter(fun e -> graph.AddEdge e.Payload (findNodeByStateCount e.Source.Payload.StateCount graph) (findNodeByStateCount e.Target.Payload.StateCount graph))
+        graph
 
-    and listActNodeAndSubgraphs(node : BlechNode) : string =
-        let str = match node.Payload.IsComplex with 
-                        | IsComplex a ->        //printfn "Complex state s%i" node.Payload.StateCount
-                                                listEdges (Seq.toList node.Outgoing) + listGraph (Seq.toList a.Body.Nodes)
-                        | _ -> //printf "State s%i " node.Payload.StateCount
-                               listEdges (Seq.toList node.Outgoing)
-        str
+    /// Finds a specific Blechnode in a given list of nodes, specified by the StateCount of the desired node.
+    and findNodeByStateCount (desiredCount: int) (graph: VisGraph) : BlechNode =
+        graph.Nodes |> Seq.find (fun n -> n.Payload.StateCount = desiredCount)
 
-    and listEdges (edges : BlechEdge list) : string =
-        match edges with
-                | head :: tail -> (string head.Source.Payload.StateCount) + (string head.Target.Payload.StateCount) + listEdges tail
-                | [] -> ""
+   /////////////////// DEBUG ______________________
+    let rec listNodes (nodes : BlechNode list) =
+        match nodes with 
+            | head :: tail ->   printfn "node s%i, outgoing size s%i, incoming size %i" head.Payload.StateCount (Seq.toList head.Outgoing).Length (Seq.toList head.Incoming).Length
+                                listNodes tail
+            | [] -> printf ""
 
-   
+    let rec listEdges (edges : BlechEdge list) =
+        match edges with 
+            | head :: tail ->   printfn "edge from s%i to s%i" head.Source.Payload.StateCount head.Target.Payload.StateCount
+                                listEdges tail
+            | [] -> printf ""
