@@ -148,10 +148,10 @@ module Blech.Visualization.SctxGenerator
         //BlechVisGraph.listEdges (Seq.toList body.Edges)
         // Find init node.
         //printfn "i get here"
-        List.map (fun (n:BlechNode) -> printfn "s%i - %s" n.Payload.StateCount n.Payload.IsInitOrFinal.ToString) (Seq.toList body.Nodes) |> ignore 
+        //List.map (fun (n:BlechNode) -> printfn "s%i - %s" n.Payload.StateCount n.Payload.IsInitOrFinal.ToString) (Seq.toList body.Nodes) |> ignore 
         let initNode = findInitNodeInHashSet body.Nodes
         //printfn "starter s%i" initNode.Payload.StateCount
-        List.map (fun (n:BlechNode) -> printfn "s%i" n.Payload.StateCount) (Seq.toList initNode.Successors) |> ignore 
+        //List.map (fun (n:BlechNode) -> printfn "s%i" n.Payload.StateCount) (Seq.toList initNode.Successors) |> ignore 
         //printfn "i dont get here"
         
         // Add nodes and edges recursively. 

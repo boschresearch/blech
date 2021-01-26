@@ -5,6 +5,7 @@ module Blech.Visualization.Optimization
     /// Keeps track of which edges have been optimized yet.
     let mutable optimizedEdges: (int * int) list = []
 
+     //______________________________CENTRAL FUNCTION_______________________________________________________
     /// Optimizes the nodes and their contents according to the optimization steps introduced in the thesis.
     /// Optimizations steps: flatten hierarchy, collapsing transient states.
     let rec optimize (activityNodes: BlechNode list) : BlechNode list = 
@@ -28,10 +29,10 @@ module Blech.Visualization.Optimization
         // Collapse transient states.
         printfn "Collapsing transient states."
         optimizedEdges <- []
-        //let collapsenTransientStatesBody = collapseTransient flattenedBody
+        let collapsenTransientStatesBody = collapseTransient flattenedBody
 
         // Put changed body in new node and return it.
-        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = flattenedBody; IsActivity = actPayload; CaseClosingNode = None; IsAbort = Neither}
+        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = collapsenTransientStatesBody; IsActivity = actPayload; CaseClosingNode = None; IsAbort = Neither}
         BlechNode.Create{Label = actNodePayload.Label; 
                          IsComplex = newComplex; 
                          IsInitOrFinal = actNodePayload.IsInitOrFinal; 
@@ -151,6 +152,7 @@ module Blech.Visualization.Optimization
 
     ///Method to iterate over an edge of list to check single edges.
     and private checkEdgesForCollapse (edges : BlechEdge list) (graph : VisGraph) : VisGraph = 
+        printfn "length %i" edges.Length
         match edges with
             | head :: tail -> checkSingleEdgeForCollapse graph head |> checkEdgesForCollapse tail
             | [] -> graph
@@ -163,7 +165,7 @@ module Blech.Visualization.Optimization
 
     /// Updates the status of the current node in context of immediate transition deletion. 
     /// Depending on the final and init status of the other node (sourceOrTarget), which is to be deleted, the status of the given node changes.
-    and updateStatusOfNodeDependingOfSuccessorOrPredeccor (current : BlechNode) (counterpart : BlechNode) (graph : VisGraph) : BlechNode = 
+    and updateStatusOfNodeDependingOfSuccessorOrPredecessor (current : BlechNode) (counterpart : BlechNode) (graph : VisGraph) : BlechNode = 
         let initChecked = match counterpart.Payload.IsInitOrFinal.Init with
                                         | IsInit -> graph.ReplacePayloadInByAndReturn current (current.Payload.SetInitStatusOn)
                                         | _ -> current
@@ -178,7 +180,7 @@ module Blech.Visualization.Optimization
     /// Also calls the collapse of immediate trnaasitions recursively to complex nodes.
     // TODO this is not functional programming..
     and private checkSingleEdgeForCollapse (graph : VisGraph) (edge : BlechEdge) : VisGraph = 
-        //printfn "checking s%i - %s - edge s%i to s%i" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount
+        printfn "checking s%i - %s - edge s%i to s%i" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount
         
         //Recursive calls
         match edge.Source.Payload.IsComplex with 
@@ -197,15 +199,26 @@ module Blech.Visualization.Optimization
         //graph.RemoveEdge edge
         optimizedEdges <- (source.Payload.StateCount, target.Payload.StateCount) :: optimizedEdges
 
-        // Source initial and multiple outgoing?        
-        // Target final and multiple incoming?
-        // transition has condition?
-        if( sourceOutgoings.Length > 1 && targetIncomings.Length > 1 ||
-            source.Payload.StateCount = target.Payload.StateCount ||
-            edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal ||
-            edge.Payload.Property = IsTerminal && not (edge.Payload.Label.Equals "") ||
-            edge.Payload.Property = IsImmediate && not (edge.Payload.Label.Equals "")) then 
-                //printfn "case 1"
+        // Special case: between two nodes are a immediate and a abort transition.
+        // Both are deleted, if target or source is simple and has only two outgoing/incoming transitions respecitvely.
+        // If none of the two nodes can be deleted, only the abort is deleted, since it is unneccessary.
+        if(sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
+            immediateAndAbortNode edge sourceOutgoings &&
+            immediateAndAbortNode edge targetIncomings) then
+            if source.Payload.IsComplex = IsSimple && source.Payload.Label.Equals "" && (Seq.toList source.Outgoing).Length = 2 then
+                handleSourceDeletion source target graph
+            else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" && (Seq.toList target.Incoming).Length = 2 then
+                handleTargetDeletion source target graph
+            else 
+                printf "here?"
+                callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
+        // Clear cases where the edge is not deleted.
+        elif(sourceOutgoings.Length > 1 && targetIncomings.Length > 1 ||
+             source.Payload.StateCount = target.Payload.StateCount ||
+             edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal ||
+             edge.Payload.Property = IsTerminal && not (edge.Payload.Label.Equals "") ||
+             edge.Payload.Property = IsImmediate && not (edge.Payload.Label.Equals "")) then 
+                printfn "case 1"
                 callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
         else 
             // Can a) source or b) target be deleted (no label, no complexity)? If so, delete possible node. If not, immediate transition is not deleted.
@@ -214,28 +227,38 @@ module Blech.Visualization.Optimization
             // If a final or initial state is removed, that status needs to be reassigned.
             // Target can not be deleted if it has multiple incomings, source can not be deleted if it has multiple outgoings.
             if source.Payload.IsComplex = IsSimple && source.Payload.Label.Equals "" && (Seq.toList source.Outgoing).Length = 1 then
-                let statusChangedTarget = updateStatusOfNodeDependingOfSuccessorOrPredeccor target source graph
-                let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) statusChangedTarget Target graph
-                //printfn "case 2"
-                //printfn "removing s%i" source.Payload.StateCount
-                //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList source.Incoming) |> ignore 
-                graph.RemoveNode source
-                //printfn "-"
-                callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedTarget.Outgoing) graph
+                handleSourceDeletion source target graph
             else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" && (Seq.toList target.Incoming).Length = 1 then
-                let statusChangedSource = updateStatusOfNodeDependingOfSuccessorOrPredeccor source target graph
-                List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList target.Outgoing) |> ignore                         
-                let updatedSource = updateEdgesCollapseImmediate (Seq.toList target.Outgoing) statusChangedSource Source graph
-                //printfn "case 3"
-                //printfn "removing s%i" target.Payload.StateCount
-                graph.RemoveNode target
-                callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedSource.Outgoing) graph
+                handleTargetDeletion source target graph
             else if (Seq.toList target.Outgoing).Length > 0 then 
-                //printfn "case 4"
+                printfn "case 4"
                 callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
             else
-                //printfn "case 5"
+                printfn "case 5"
                 graph
+
+    /// Updates the status of the target and reassigns source's incoming and deletes the source node (and not updated edges).
+    and private handleSourceDeletion (source : BlechNode) (target : BlechNode) (graph : VisGraph) : VisGraph =  
+        let statusChangedTarget = updateStatusOfNodeDependingOfSuccessorOrPredecessor target source graph
+        let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) statusChangedTarget Target graph
+        printfn "case 2"
+        //printfn "removing s%i" source.Payload.StateCount
+        //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList source.Incoming) |> ignore 
+        graph.RemoveNode source
+        //printfn "-"
+        callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedTarget.Outgoing) graph
+
+    /// Updates the status of the source and reassigns source's incoming and deletes the target node (and not updated edges).
+    and private handleTargetDeletion (source : BlechNode) (target : BlechNode) (graph : VisGraph) : VisGraph =  
+        let statusChangedSource = updateStatusOfNodeDependingOfSuccessorOrPredecessor source target graph
+        //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList target.Outgoing) |> ignore                         
+        let updatedSource = updateEdgesCollapseImmediate (Seq.toList target.Outgoing) statusChangedSource Source graph
+        printfn "case 3"
+        //printfn "removing s%i" target.Payload.StateCount
+        graph.RemoveNode target
+        printfn "length.. %i" (Seq.toList updatedSource.Outgoing).Length
+        List.map (fun (n:BlechEdge) -> printfn "s%i to s%i - %s" n.Source.Payload.StateCount n.Target.Payload.StateCount (n.Payload.Property.ToString())) (Seq.toList updatedSource.Outgoing) |> ignore                         
+        callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedSource.Outgoing) graph
 
     /// Adds a list of new edges to the graph.
     /// New edges are based on the data given by the edges, the information whether source or target is to be changed and the given node to be the new source/target.

@@ -151,7 +151,7 @@ module Blech.Visualization.BlechVisGraph
                               head :: (addAllSubsequentNodes validSuccessors validNodes) @ (addAllSubsequentNodes tail validNodes)
             | [] -> []
 
-    //____________________________________Find specific nodes in hashset.
+    //____________________________________Find specific nodes/edges in hashset/list.
     /// Finds the node that has matches true on the given function and returns it.
     let private findNodeInHashSet(nodes : HashSet<BlechNode>) (fnct : BlechNode -> bool): BlechNode =
             nodes 
@@ -165,7 +165,29 @@ module Blech.Visualization.BlechVisGraph
     
     /// Finds the node that has Property Init set to true and returns it.
     let findFinalNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =
-            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Final with IsFinal -> true | _ -> false) 
+            findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Final with IsFinal -> true | _ -> false)
+
+    /// Determines if apart of this edge, another edge between source and target is present.
+    /// Edge list should, as peer previous conditions in the code be a list of two. Asserting this fact nonetheless.
+    let immediateAndAbortNode (edge : BlechEdge) (edges : BlechEdge list) : bool =
+        if (not (List.contains edge edges)) then failwith "Expected given edge to be part of given list. Was not the case."
+
+        // Now check if both edges have same source and target.
+        let counter = 
+            fun (tuple: int * BlechEdge list) (e:BlechEdge) -> 
+                if e.Source.Payload.StateCount = edge.Source.Payload.StateCount && 
+                    e.Source.Payload.StateCount = edge.Source.Payload.StateCount then 
+                    (fst tuple + 1, e :: (snd tuple))
+                else 
+                    (fst tuple, snd tuple)
+        let count = List.fold counter (0, []) edges
+        let detectedEdges = snd count
+        let countAbort = List.fold (fun (acc:int) (e:BlechEdge) -> match e.Payload.Property with IsAbort -> acc + 1 | _ -> acc) 0 detectedEdges
+        let countImmediate = List.fold (fun (acc:int) (e:BlechEdge) -> match e.Payload.Property with IsImmediate -> acc + 1 | _ -> acc) 0 detectedEdges
+        
+        // We want exactly two edges between source and target. One abort and one immediate, others are unknown and unconsidered cases.
+        (fst count) = 2 && countAbort = 1 && countImmediate = 1
+        
 
     //____________________________________Remove element in list.
     /// Removes element from a list. If element is not in list, original list will be returned.
