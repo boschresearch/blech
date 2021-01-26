@@ -1,5 +1,4 @@
- module Blech.Visualization.Optimization
-
+module Blech.Visualization.Optimization
     open Blech.Common.GenericGraph
     open Blech.Visualization.BlechVisGraph
 
@@ -29,16 +28,16 @@
         // Collapse transient states.
         printfn "Collapsing transient states."
         optimizedEdges <- []
-        let collapsenTransientStatesBody = collapseTransient flattenedBody
+        //let collapsenTransientStatesBody = collapseTransient flattenedBody
 
         // Put changed body in new node and return it.
-        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = collapsenTransientStatesBody; IsActivity = actPayload; CaseClosingNode = None; IsAbort = Neither}
+        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = flattenedBody; IsActivity = actPayload; CaseClosingNode = None; IsAbort = Neither}
         BlechNode.Create{Label = actNodePayload.Label; 
-                        IsComplex = newComplex; 
-                        IsInitOrFinal = actNodePayload.IsInitOrFinal; 
-                        StateCount = actNodePayload.StateCount; 
-                        WasVisualized = NotVisualized; 
-                        WasHierarchyOptimized = HierarchyOptimized}
+                         IsComplex = newComplex; 
+                         IsInitOrFinal = actNodePayload.IsInitOrFinal; 
+                         StateCount = actNodePayload.StateCount; 
+                         WasVisualized = NotVisualized; 
+                         WasHierarchyOptimized = HierarchyOptimized}
 
     //______________________________FLATTEN HIERARCHY (NOT COBEGIN OR ACTIITY CALLS)_______________________________________________________
     /// Flattens a given graph if node is complex, else just call flattening method on successors.
@@ -71,34 +70,38 @@
         r
 
     /// Elevates the inner body of a complex node to the level given in graph. Collapses hierarchies recursively regarding all hierarchies that are not caused by activites.
-    and private flattenHierarchy (currentNode : BlechNode) (complex : ComplexNode) (graph : VisGraph) : VisGraph = 
-        // Recursive hierarchy flattening call on inner graph.
-        let innerGraph = flattenHierarchyIfComplex (findInitNodeInHashSet complex.Body.Nodes) (complex.Body)
-        // TODO no final node?
         // 1. Change the status of the inner init/final state, so that they are regular states.
         // 2. Join inner graph with current graph. 
         // 4. Modify in- and outcoming edges from node and change their source/target to the final/init node of the inner graph, respecitvely.
         // 5. Respect the differences in handling edges (aborts, for example). Some completely new edges might have to be added.
         // 6. Remove node from graph.
+    and private flattenHierarchy (currentNode : BlechNode) (complex : ComplexNode) (graph : VisGraph) : VisGraph = 
+        // Recursive hierarchy flattening call on inner graph.
+        let innerGraph = flattenHierarchyIfComplex (findInitNodeInHashSet complex.Body.Nodes) (complex.Body)
+        // TODO no final node?
         //printfn "----->current node s%i" currentNode.Payload.StateCount
         let init = findInitNodeInHashSet innerGraph.Nodes
         let final = findFinalNodeInHashSet innerGraph.Nodes
-        let newInit = innerGraph.ReplacePayloadInByAndReturn init (init.Payload.SetInitStatusOff)
-        let newFinal = innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
-        let innerInitStateCount = newInit.Payload.StateCount
-        let innerFinalStateCount = newFinal.Payload.StateCount
+        let replacedInit = innerGraph.ReplacePayloadInByAndReturn init (init.Payload.SetInitStatusOff)
+        let replacedFinal = innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
+        // Use above two with caution ! Not correct ones after joining graphs.
+        let innerInitStateCount = replacedInit.Payload.StateCount
+        let innerFinalStateCount = replacedFinal.Payload.StateCount
+
+        let innerNodesIds = List.map (fun (n:BlechNode) -> n.Payload.StateCount) (Seq.toList innerGraph.Nodes)
         let joinedGraph = addGraphToGraph graph innerGraph
+        let newInit = findNodeByStateCount innerInitStateCount joinedGraph
+        let newFinal = findNodeByStateCount innerFinalStateCount joinedGraph
 
         // Add abort transitions according to the concept from the inner graph to either the former initial state of the inner graph or the case closing state, depending on the abort.
-        // TODO wrong init and finals..
-        //match complex.IsAbort with
-        //    | AbortWhen label -> List.map (addAbortEdgeToNode  complex.CaseClosingNode.Value label innerGraph) (findFirstAwaitNodeOnEveryPath newInit) |> ignore
-        //    | AbortRepeat label -> List.map (addAbortEdgeToNode newInit label innerGraph) (findFirstAwaitNodeOnEveryPath newInit) |> ignore
-        //    | Neither -> () // Do nothing.
+        match complex.IsAbort with
+            | AbortWhen label -> List.map (addAbortEdgeToNode complex.CaseClosingNode.Value label joinedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
+            | AbortRepeat label -> List.map (addAbortEdgeToNode newInit label joinedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
+            | Neither -> () // Do nothing.
 
         // Update edges.
-        let updatedGraph = updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) (findNodeByStateCount innerInitStateCount joinedGraph) Target joinedGraph 
-                            |> updateEdgesFlattenHierarchy (Seq.toList currentNode.Outgoing) (findNodeByStateCount innerFinalStateCount joinedGraph) Source
+        let updatedGraph = updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph 
+                            |> updateEdgesFlattenHierarchy (Seq.toList currentNode.Outgoing) newFinal Source
 
         //There is something wrong with the removal of the node. Find specific node and remove it.
         //if(currentNode.Payload.StateCount = 12) then 
@@ -106,7 +109,6 @@
         //if(currentNode.Payload.StateCount = 12) then printfn "before"; listEdges (Seq.toList updatedGraph.Edges)
         //printfn "statecount %i" currentNode.Payload.StateCount
         let nodeToRemove = List.find (fun (n:BlechNode) -> n.Payload.StateCount = currentNode.Payload.StateCount) (Seq.toList updatedGraph.Nodes)
-
         updatedGraph.RemoveNode nodeToRemove
         //if(currentNode.Payload.StateCount = 12) then printfn "after"; listNodes (Seq.toList updatedGraph.Nodes)
         //if(currentNode.Payload.StateCount = 12) then printfn "after"; listEdges (Seq.toList updatedGraph.Edges)

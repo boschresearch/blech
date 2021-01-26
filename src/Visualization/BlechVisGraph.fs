@@ -113,20 +113,26 @@ module Blech.Visualization.BlechVisGraph
 
     //____________________ Find first await on every path in a graph.____________________________
     /// TODO comment.
-    let rec findFirstAwaitNodeOnEveryPath (entryPoint : BlechNode) : BlechNode list=
-        List.distinct (findAwaitsOnNodeAndSubsequentPaths entryPoint)
+    let isValidNode (validNodeIdList : int list) = fun (n : BlechNode) -> List.contains n.Payload.StateCount validNodeIdList
+    let isValidEdge (validNodeIdList : int list) = fun (e : BlechEdge) -> List.contains e.Target.Payload.StateCount validNodeIdList
 
     /// TODO comment.
-    and private findAwaitsOnNodeAndSubsequentPaths (currentNode : BlechNode) : BlechNode list=
-        let isAwait = checkEdgesForAwait (Seq.toList currentNode.Outgoing)
+    let rec findFirstAwaitNodeOnEveryPath (entryPoint : BlechNode) (validNodes : int list) : BlechNode list=
+        List.distinct (findAwaitsOnNodeAndSubsequentPaths entryPoint validNodes)
+
+    /// TODO comment.
+    and private findAwaitsOnNodeAndSubsequentPaths (currentNode : BlechNode) (validNodes : int list) : BlechNode list=
+        let isAwait = checkEdgesForAwait (List.filter (isValidEdge validNodes) (Seq.toList currentNode.Outgoing))
+        let validSuccessors = List.filter (isValidNode validNodes) (Seq.toList currentNode.Successors)
         match isAwait with
-            | true -> [currentNode] @ addAllSubsequentNodes (Seq.toList currentNode.Successors) // Found first await, just add all subsequent nodes to the list.
-            | false -> checkNodesForAwaitsInPath (Seq.toList currentNode.Successors)
+            | true -> currentNode :: addAllSubsequentNodes validSuccessors validNodes
+                      // Found first await, just add all subsequent nodes to the list.
+            | false -> checkNodesForAwaitsInPath validSuccessors validNodes
     
     /// TODO comment.
-    and private checkNodesForAwaitsInPath (nodes : BlechNode list) : BlechNode list =
+    and private checkNodesForAwaitsInPath (nodes : BlechNode list) (validNodes : int list) : BlechNode list =
         match nodes with
-            | head :: tail -> (findFirstAwaitNodeOnEveryPath head) @ (checkNodesForAwaitsInPath tail)
+            | head :: tail -> (findFirstAwaitNodeOnEveryPath head validNodes) @ (checkNodesForAwaitsInPath tail validNodes)
             | [] -> []
 
     /// TODO comment.
@@ -138,9 +144,11 @@ module Blech.Visualization.BlechVisGraph
             | [] -> false
 
     /// TODO comment.
-    and private addAllSubsequentNodes (nodes : BlechNode list) : BlechNode list = 
+    /// No filtering of nodes needed, given nodes are already valid nodes.
+    and private addAllSubsequentNodes (nodes : BlechNode list) (validNodes: int list) : BlechNode list = 
         match nodes with
-            | head :: tail -> [head] @ addAllSubsequentNodes (Seq.toList head.Successors) @ addAllSubsequentNodes tail
+            | head :: tail -> let validSuccessors = List.filter (isValidNode validNodes) (Seq.toList head.Successors)
+                              head :: (addAllSubsequentNodes validSuccessors validNodes) @ (addAllSubsequentNodes tail validNodes)
             | [] -> []
 
     //____________________________________Find specific nodes in hashset.
