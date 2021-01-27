@@ -27,7 +27,8 @@ module SyntaxErrors =
     open Blech.Common.Range
     
     type ParserError = 
-        | InconsistentModuleName of moduleName: AST.StaticNamedPath
+        | InconsistentModuleName of moduleName: AST.StaticNamedPath // TODO: dead code? fg 26.01.21
+        | ImportPathMalformed of string * Range.range
         | NotUnitOne of number: string * range: Range.range
         | UnexpectedEOF of range: Range.range * expectedTokens: string list * start: Range.range
         | UnexpectedEndOfInput of range: Range.range * start: Range.range
@@ -41,6 +42,10 @@ module SyntaxErrors =
                       message = sprintf "module name '%s'is not consistent with the filesystem."
                                 <| moduleName.dottedPathToString } 
                 
+                | ImportPathMalformed (msg, pos) ->
+                    { range = pos
+                      message = msg }
+
                 | NotUnitOne (number, range) ->
                     { range = range
                       message = sprintf "incorrent constant '%s' in unit expression, must be '1'." number }
@@ -468,12 +473,23 @@ module ParserUtils =
         <| e
 
 
-    let parseOne (nat: string, r: Range.range) =
+    let parseOne (nat: string, r: Range.range) = // TODO: dead code? fg 26.01.21
         match System.Int32.TryParse(nat) with
         | (true,value) when value = 1 -> 
             ()
         | _ ->
             reportError <| NotUnitOne (nat, r)
+
+    let parseImportPath pos strToParse =
+        let currentPath = ParserContext.getModuleName ()
+        match makeFromPath currentPath strToParse with
+        | Ok tup -> 
+            { AST.ModulePath.range = pos
+              AST.ModulePath.path = tup }
+        | Error msg ->
+            reportError <| ImportPathMalformed (msg, pos)
+            { range = pos
+              path = TranslationUnitPath.Empty }
 
        
     /// Logs the last stored parser error
@@ -495,9 +511,7 @@ module ParserUtils =
                                       start = startRange )
                 | None ->
                     UnexpectedEndOfInput (range = r, start = startRange)
-            Diagnostics.Logger.logError
-            <|| ParserContext.getDiagnosticsLogger ()
-            <| parserError
+            reportError parserError
 
     
     let getStartOfLine (r: Range.range) =

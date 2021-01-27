@@ -1354,17 +1354,7 @@ Exposing
                                                   Option.None }
 
 ModulePath
-    : STRING                                    { // Todo: Move this to syntaxutils and add error handling, fjg. 15.10.20
-                                                  let currentModule = ParserContext.getModuleName ()
-                                                  let fromPath = makeFromPath currentModule (fst $1)
-                                                                 |> function
-                                                                    | Ok tup ->
-                                                                        printfn "ImportURL: %s" (string tup)
-                                                                        tup
-                                                                    | Error strlist ->
-                                                                        failwithf "makeFromPath failed:\n%A" strlist
-                                                  { ModulePath.range = snd $1
-                                                    path = fromPath } }
+    : STRING                                    { parseImportPath (snd $1) (fst $1) } /* range string */
 
 Import
     : IMPORT NameOrWildcard ModulePath Exposing 

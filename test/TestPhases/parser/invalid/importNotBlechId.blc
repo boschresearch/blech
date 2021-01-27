@@ -1,0 +1,8 @@
+
+import mymod "0_17Y"
+
+module
+
+activity main()
+end
+

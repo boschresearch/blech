@@ -39,6 +39,7 @@ let underscore = '_' // directory separator in include guards
 
 let glob = '?'
 let dirSep = ';'  // directory separator for searchpaths
+let box = "box:"
 
 let implementationFileExtension = ".blc"
 let interfaceFileExtension = ".blh"
@@ -65,7 +66,10 @@ module PathRegex =
         let isIdentifierFirstChar c = isLetter c || c = '_'
         let isIdentifierChar c = isLetter c || isDigit c || c = '_'
     
-        many1Satisfy2L isIdentifierFirstChar isIdentifierChar "Identifier must start with a letter or underscore."
+        many1Satisfy2L // _L version of the parser additionally expects an error "label"
+            isIdentifierFirstChar 
+            isIdentifierChar 
+            "an identifier starting with a letter or underscore"
         .>> spaces // skips trailing whitespace
     
     let private slash = pstring "/" // prstring is a predefined parser, that parses a given string
@@ -81,7 +85,7 @@ module PathRegex =
         |>> (List.length >> Up) // |>> takes the result of the parser on the left and applies the function on the right 
     
     let private package =
-        pstring "bl:" >>. identifier .>> slash // >>. returns the result of the right parser
+        pstring box >>. identifier .>> slash // >>. returns the result of the right parser
         |>> Pack                               // .>> returns the result of the left parser
     
     let private root =
@@ -101,15 +105,21 @@ module PathRegex =
         directories .>>. identifier // .>>. returns left * right result
 
     // import paths have the following form
-    // bl:package/a/b/file  - external package import
+    // box:package/a/b/file  - external package import
     // /a/b/file            - absolute in-package import with '/' under package dir
     // b/file               - relative in-package import from current directory
     // ./b/file             - relative in-package import with ./ indicating current directory
     // ../../b/file         - relative in-package import with ../ up from current directory
     let parseImportPath input =
         match run (navigationPrefix .>>. path .>> eof) input with
-        | ParserResult.Success (res,_,_) -> res
-        | ParserResult.Failure _ -> failwith "invalid import path"
+        | ParserResult.Success (res,_,_) -> 
+            Result.Ok res
+        | ParserResult.Failure (msg,perror,_) -> 
+            Result.Error msg
+            //perror.Messages 
+            //|> ErrorMessageList.ToSortedArray 
+            //|> List.ofArray 
+            //|> Result.Error 
 
     open System.Text.RegularExpressions
     [<Literal>]
@@ -138,7 +148,7 @@ type TranslationUnitPath =
     
     override this.ToString () =
         let prefix = 
-            match this.package with | None -> "" | Some _ -> "box:"
+            match this.package with | None -> "" | Some _ -> box
         prefix + (this.AsList |> String.concat (string slash))
 
     member this.ToDoc = 
@@ -160,29 +170,43 @@ type TranslationUnitPath =
 
 /// Given the current path of the translation unit and an import path
 /// construct the path of the imported translation unit
-let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string list> = 
-    let nav, (dirs, file) = PathRegex.parseImportPath path
-    // TODO: guess we should use tryMakeTranslationUnitPath here to ensure pkg, dirs and file are valid identifiers, fg 12.10.20
-    match nav with
-    | PathRegex.Pack pkg -> // external package import
-        Ok { package = Some pkg
-             dirs = dirs
-             file = file }
-    | PathRegex.Root -> // absolute in-package import
-        Ok { package = current.package 
-             dirs = dirs
-             file = file }
-    | PathRegex.Up levels ->
-        if levels <= current.dirs.Length then // in-package import up from current directory
-            Ok { package = current.package
-                 dirs = List.take (current.dirs.Length - levels) current.dirs @ dirs
-                 file = file }
-        else // too many up steps from current directory
-            Error [] // TODO
-    | PathRegex.Here ->
-        Ok { package = current.package 
-             dirs = current.dirs @ dirs
-             file = file }
+// used in SyntaxUtils
+let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string> = 
+    let resultBuilder = new ResultBuilder()
+    resultBuilder 
+        {
+            let! nav, (dirs, file) = PathRegex.parseImportPath path
+            // Note we do not check whether pkg, dirs and file are valid identifiers here.
+            // This is not a parsing issue.
+            // Instead, this will be checked when requiring this module. 
+            // The search methods would fail there and report the missing module.
+            let res = 
+                match nav with
+                | PathRegex.Pack pkg -> // external package import
+                    Ok { package = Some pkg
+                         dirs = dirs
+                         file = file }
+                | PathRegex.Root -> // absolute in-package import
+                    Ok { package = current.package 
+                         dirs = dirs
+                         file = file }
+                | PathRegex.Up levels ->
+                    if levels <= current.dirs.Length then // in-package import up from current directory
+                        Ok { package = current.package
+                             dirs = List.take (current.dirs.Length - levels) current.dirs @ dirs
+                             file = file }
+                    else // too many up steps from current directory
+                        current.dirs 
+                        |> String.concat (string slash)
+                        |> sprintf "The path ascends %d directory levels up. This is outside the given source path \"%s\"." levels
+                        //|> (fun x -> [x])
+                        |> Error
+                | PathRegex.Here ->
+                    Ok { package = current.package 
+                         dirs = current.dirs @ dirs
+                         file = file }
+            return! res
+        }
 
 /// Returns the list of source directories in a search path.
 /// For example: searchPath = ".;../otherSources" -> [".", "../otherSources"] 
