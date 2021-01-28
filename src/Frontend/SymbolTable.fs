@@ -258,6 +258,7 @@ module SymbolTable =
         | NoDeclarationInStaticAccess of usage:Name * access: AST.StaticNamedPath
         | NoImplicitMemberDeclaration of access: AST.StaticNamedPath
         | NonUniqueImplicitMember of usage: AST.StaticNamedPath * decls: Name list list   // static path * declaration names
+        | NonUniqueMember of usage: Name * decls: (Name * Scope) list  
         | Dummy of range: Range.range * msg: string   // just for development purposes
 
         interface Diagnostics.IDiagnosable with
@@ -282,6 +283,9 @@ module SymbolTable =
                 | NonUniqueImplicitMember (usage = spath) ->
                     { range = spath.Range
                       message = sprintf "the implicit member access '%s' is not unique" (spath.dottedPathToString) }
+                | NonUniqueMember (usage = name) ->
+                    { range = name.range
+                      message = sprintf "the declaration for '%s' is not unique" (string name) }
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
@@ -701,111 +705,111 @@ module SymbolTable =
 
         /// name checks a static access path
         /// updates the environment         
-        let findCompletePath env (spath : AST.StaticNamedPath) : Result<Environment, NameCheckError> = 
+        //let findCompletePath env (spath : AST.StaticNamedPath) : Result<Environment, NameCheckError> = 
             
-            let rec findInnerDecls (decls: Name list) (scope: Scope) (path: Name list) : Name list = 
-                match path with
-                | [] -> 
-                    decls
+        //    let rec findInnerDecls (decls: Name list) (scope: Scope) (path: Name list) : Name list = 
+        //        match path with
+        //        | [] -> 
+        //            decls
 
-                | [name] ->
-                    // printfn "Static path component: %s" name.id
-                    match Scope.tryFindSymbol scope name.id with
-                    | None -> 
-                        decls
-                    | Some symbol ->
-                        //let declName = symbol.name
-                        let declName = getDeclName env symbol.name // symbol.name might be exposed import
-                        // do printfn ">>>> Findcomplete path: name: %A decl name: %A" path declName
-                        decls @ [declName]
+        //        | [name] ->
+        //            // printfn "Static path component: %s" name.id
+        //            match Scope.tryFindSymbol scope name.id with
+        //            | None -> 
+        //                decls
+        //            | Some symbol ->
+        //                //let declName = symbol.name
+        //                let declName = getDeclName env symbol.name // symbol.name might be exposed import
+        //                // do printfn ">>>> Findcomplete path: name: %A decl name: %A" path declName
+        //                decls @ [declName]
 
-                | name :: tail ->
-                    // printfn "Static path component: %s" name.id
-                    match Scope.tryFindInnerScope scope name.id with
-                    | None ->
-                        decls
-                    | Some innerscope ->
-                        let declName = (Scope.getSymbol scope name.id).name
-                        findInnerDecls  (decls @ [declName]) innerscope tail
+        //        | name :: tail ->
+        //            // printfn "Static path component: %s" name.id
+        //            match Scope.tryFindInnerScope scope name.id with
+        //            | None ->
+        //                decls
+        //            | Some innerscope ->
+        //                let declName = (Scope.getSymbol scope name.id).name
+        //                findInnerDecls  (decls @ [declName]) innerscope tail
             
-            let findDecls (path: Name list) : Name list =
-                let firstName = List.head path
-                match tryFindDeclarationScope env firstName.id with   
-                | None ->
-                    []
-                | Some declScope -> 
-                    findInnerDecls [] declScope path     
+        //    let findDecls (path: Name list) : Name list =
+        //        let firstName = List.head path
+        //        match tryFindDeclarationScope env firstName.id with   
+        //        | None ->
+        //            []
+        //        | Some declScope -> 
+        //            findInnerDecls [] declScope path     
             
-            let path = spath.names
-            let decls = findDecls path
-            do List.iter2 env.lookupTable.addUsage <| List.take decls.Length path <| decls
-            //do List.iter (fun decl -> printfn "Decl:\n %A" decl; 
-            //                          printfn "QName:\n %A" (env.lookupTable.nameToQname decl) ) decls
+        //    let path = spath.names
+        //    let decls = findDecls path
+        //    do List.iter2 env.lookupTable.addUsage <| List.take decls.Length path <| decls
+        //    //do List.iter (fun decl -> printfn "Decl:\n %A" decl; 
+        //    //                          printfn "QName:\n %A" (env.lookupTable.nameToQname decl) ) decls
             
-            let isOk = decls.Length = path.Length 
+        //    let isOk = decls.Length = path.Length 
             
-            if isOk then
-                Ok env
-            elif path.Length = 1 then
-                Error (NoDeclaration path.[0])
-            else
-                Error (NoDeclarationInStaticAccess (path.[decls.Length], spath))
+        //    if isOk then
+        //        Ok env
+        //    elif path.Length = 1 then
+        //        Error (NoDeclaration path.[0])
+        //    else
+        //        Error (NoDeclarationInStaticAccess (path.[decls.Length], spath))
 
 
         /// name check the static part of dynamic access path 
         /// updates the environment with a list of used names
         /// returns declaration name or an error
-        let findPartialPath env (dpath: AST.DynamicAccessPath) : Result< Environment, NameCheckError > =
+        //let findPartialPath env (dpath: AST.DynamicAccessPath) : Result< Environment, NameCheckError > =
 
-            let rec probeInnerDecls (decls: Name list) (scope: Scope) (path: Name list) = 
-                match path with
-                | [] ->
-                    decls, true
-                | [name] ->
-                    match Scope.tryFindSymbol scope name.id with
-                    | None -> 
-                        decls, false
-                    | Some symbol ->
-                        let declName = getDeclName env symbol.name // symbol.name might be exposed import
-                        decls @ [declName], true
-                | name :: tail ->
-                    match Scope.tryFindSymbol scope name.id with
-                    | None ->
-                        decls, false
-                    | Some symbol ->
-                        match Scope.tryFindInnerScope scope name.id with
-                        | None ->
-                            if symbol.isScope then 
-                                //printfn "ProbeInnerDecls: Symbol: %A" symbol
-                                //printfn "findPartialPath for: %A" path
-                                decls, false
-                            else
-                                decls @ [symbol.name], true
-                        | Some innerscope ->
-                            if innerscope.access = Accessibility.Closed then
-                                decls @ [symbol.name], true
-                            else
-                                probeInnerDecls ( decls @ [symbol.name] ) innerscope tail
+        //    let rec probeInnerDecls (decls: Name list) (scope: Scope) (path: Name list) = 
+        //        match path with
+        //        | [] ->
+        //            decls, true
+        //        | [name] ->
+        //            match Scope.tryFindSymbol scope name.id with
+        //            | None -> 
+        //                decls, false
+        //            | Some symbol ->
+        //                let declName = getDeclName env symbol.name // symbol.name might be exposed import
+        //                decls @ [declName], true
+        //        | name :: tail ->
+        //            match Scope.tryFindSymbol scope name.id with
+        //            | None ->
+        //                decls, false
+        //            | Some symbol ->
+        //                match Scope.tryFindInnerScope scope name.id with
+        //                | None ->
+        //                    if symbol.isScope then 
+        //                        //printfn "ProbeInnerDecls: Symbol: %A" symbol
+        //                        //printfn "findPartialPath for: %A" path
+        //                        decls, false
+        //                    else
+        //                        decls @ [symbol.name], true
+        //                | Some innerscope ->
+        //                    if innerscope.access = Accessibility.Closed then
+        //                        decls @ [symbol.name], true
+        //                    else
+        //                        probeInnerDecls ( decls @ [symbol.name] ) innerscope tail
                      
-            let findDecls (path: Name list) =
-                let firstName = List.head path
-                match tryFindDeclarationScope env firstName.id with
-                | None ->
-                    [], false
-                | Some declScope -> 
-                    probeInnerDecls [] declScope path     
+        //    let findDecls (path: Name list) =
+        //        let firstName = List.head path
+        //        match tryFindDeclarationScope env firstName.id with
+        //        | None ->
+        //            [], false
+        //        | Some declScope -> 
+        //            probeInnerDecls [] declScope path     
            
-            let path = dpath.leadingNames
-            let decls, isOk = findDecls path
+        //    let path = dpath.leadingNames
+        //    let decls, isOk = findDecls path
              
-            do List.iter2 env.lookupTable.addUsage <| List.take decls.Length path <| decls
+        //    do List.iter2 env.lookupTable.addUsage <| List.take decls.Length path <| decls
 
-            if isOk then 
-                Ok env // preliminary eliminate this
-            elif path.Length = 1 then
-                Error (NoDeclaration (path.[0]))
-            else
-                Error (NoDeclarationInDynamicAccess (path.[decls.Length], dpath))
+        //    if isOk then 
+        //        Ok env // preliminary eliminate this
+        //    elif path.Length = 1 then
+        //        Error (NoDeclaration (path.[0]))
+        //    else
+        //        Error (NoDeclarationInDynamicAccess (path.[decls.Length], dpath))
 
 
         /// name checks an impliit member access
@@ -868,3 +872,125 @@ module SymbolTable =
             | decls -> 
                 Error (NonUniqueImplicitMember (implicitMember, decls))
 
+
+    
+        // ------- Reimplementation for name checking a dynamic or static access path with implicit member access ----//
+
+
+        let private addUsage env usage declaration =
+            let declName = getDeclName env declaration // declaration might be exposed import
+            do env.lookupTable.addUsage usage declName
+            
+
+        let private findDeclaration env declScope (usage : Name) =
+            match Scope.tryFindSymbol declScope usage.id with
+            | None ->
+                Error (NoDeclaration usage)
+            | Some symbol ->
+                do addUsage env usage symbol.name    
+                Ok declScope
+
+        
+        /// Search in all open scopes inside module scope
+        let private probeOpenInnerDeclaration env openScope (usage : Name) =
+            let probeDeclaration declarations scope = 
+                match Scope.tryFindSymbol scope usage.id with
+                | None -> declarations
+                | Some symbol -> declarations @ [(symbol.name, scope)]
+
+            let openInnerScopes = 
+                Map.fold (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) [] openScope.innerscopes
+
+            printfn "Open inner scopes: %A" openInnerScopes 
+
+            let foundDeclarations = List.fold probeDeclaration [] openInnerScopes
+            
+            match foundDeclarations with
+            | [] ->
+                printfn "Here is it"
+                Error (NoDeclaration usage) 
+            | [(decl, scope)] ->
+                addUsage env usage decl
+                Ok scope
+            | decls -> 
+                Error (NonUniqueMember (usage, decls))
+
+            
+        let private findFirstName env (firstName : Name) =
+            match tryFindDeclarationScope env firstName.id with
+            | None ->
+                probeOpenInnerDeclaration env (getModuleScope env) firstName
+            | Some declScope ->
+                findDeclaration env declScope firstName
+                
+        let private findDotNameInScope env (dotName : Name) scope = 
+            assert Scope.isOpen scope
+            match Scope.tryFindSymbol scope dotName.id with
+            | None ->
+                probeOpenInnerDeclaration env scope dotName
+            | Some symbol ->
+                do addUsage env dotName symbol.name
+                Ok scope
+                
+        let rec private recurseDynamic env (names: Name list) result : Result<Scope, NameCheckError> = 
+            match result, names with
+            | Error err, _ -> 
+                Error err
+            | Ok scope, [] -> 
+                Ok scope
+            | Ok scope, dotName :: tail when Scope.isOpen scope ->
+                findDotNameInScope env dotName scope
+                |> Result.bind (nextDynamicScope env dotName tail) 
+            | Ok scope, _ ->
+                Ok scope
+                   
+        and private nextDynamicScope env dotName otherNames scope =  
+            match Scope.tryFindInnerScope scope dotName.id with
+            | None ->
+                Ok scope
+            | Some innerscope ->
+                recurseDynamic env otherNames (Ok innerscope)     
+
+
+        let rec private recurseStatic env (names: Name list) result : Result<Scope, NameCheckError> = 
+            match result, names with
+            | Error err, _ -> Error err
+            | Ok scope, [] -> Ok scope
+            | Ok scope, [dotName] when Scope.isOpen scope ->
+                findDotNameInScope env dotName scope
+            | Ok scope, dotName :: tail when Scope.isOpen scope ->
+                findDotNameInScope env dotName scope
+                |> Result.bind (nextStaticScope env dotName tail)     
+            | Ok _, dotName :: _ ->
+                Error (NoDeclaration dotName)
+        
+
+        and private nextStaticScope env dotName otherNames scope =  
+            match Scope.tryFindInnerScope scope dotName.id with
+            | None ->
+                if List.isEmpty otherNames then 
+                    Ok scope
+                else
+                    Error (Dummy (dotName.Range, "no scope to go on")) // no scope to go on
+            | Some innerscope ->
+                recurseStatic env otherNames (Ok innerscope)    
+
+        
+        let findPartialPath env (dpath: AST.DynamicAccessPath) =
+            match dpath.leadingNames with
+            | name :: dotNames ->
+                findFirstName env name
+                |> Result.bind (nextDynamicScope env name dotNames) 
+            | [] ->
+                failwith "Leading names of a dynamic access path are never empty"
+            |> Result.bind (fun scope -> Ok env)        
+
+
+        let findCompletePath env (spath : AST.StaticNamedPath) : Result<Environment, NameCheckError> = 
+            match spath.names with
+            | name :: dotNames ->
+                findFirstName env name
+                |> Result.bind (nextStaticScope env name dotNames) 
+            | [] ->
+                failwith "Leading names of a dynamic access path are never empty"
+            |> Result.bind (fun scope -> Ok env)        
