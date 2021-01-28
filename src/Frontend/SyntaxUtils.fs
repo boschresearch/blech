@@ -44,7 +44,7 @@ module SyntaxErrors =
                 
                 | ImportPathMalformed (msg, pos) ->
                     { range = pos
-                      message = msg }
+                      message = "malformed import path." }
 
                 | NotUnitOne (number, range) ->
                     { range = range
@@ -73,6 +73,11 @@ module SyntaxErrors =
                 | UnexpectedToken (_token, range, _, start) ->
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
+                
+                | ImportPathMalformed (msg, pos) ->
+                    [ { range = pos
+                        message = msg 
+                        isPrimary = true} ]
                 
                 | _ ->
                     []
@@ -486,8 +491,10 @@ module ParserUtils =
         | Ok tup -> 
             { AST.ModulePath.range = pos
               AST.ModulePath.path = tup }
-        | Error msg ->
-            reportError <| ImportPathMalformed (msg, pos)
+        | Error (msg, colOffset) ->
+            let errStart = Range.pos(pos.Start.Line, pos.Start.Column + colOffset)
+            let errPos = Range.mkFileIndexRange pos.FileIndex errStart pos.End
+            reportError <| ImportPathMalformed (msg, errPos)
             { range = pos
               path = TranslationUnitPath.Empty }
 

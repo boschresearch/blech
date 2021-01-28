@@ -69,7 +69,7 @@ module PathRegex =
         many1Satisfy2L // _L version of the parser additionally expects an error "label"
             isIdentifierFirstChar 
             isIdentifierChar 
-            "an identifier starting with a letter or underscore"
+            "expected an identifier starting with a letter or underscore"
         .>> spaces // skips trailing whitespace
     
     let private slash = pstring "/" // prstring is a predefined parser, that parses a given string
@@ -137,9 +137,9 @@ module PathRegex =
                     | _ ->
                         failwith "printMessages"
                     )
-                |> String.concat "\n"
-            mapToStr perror.Messages
-            |> Result.Error
+                |> String.concat ", "
+            (mapToStr perror.Messages, int perror.Position.Column)
+            |> Result.Error 
             //perror.Messages 
             //|> ErrorMessageList.ToSortedArray 
             //|> List.ofArray 
@@ -195,7 +195,7 @@ type TranslationUnitPath =
 /// Given the current path of the translation unit and an import path
 /// construct the path of the imported translation unit
 // used in SyntaxUtils
-let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, string> = 
+let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPath, (string * int)> = 
     let resultBuilder = new ResultBuilder()
     resultBuilder 
         {
@@ -220,11 +220,11 @@ let makeFromPath (current: TranslationUnitPath) path : Result<TranslationUnitPat
                              dirs = List.take (current.dirs.Length - levels) current.dirs @ dirs
                              file = file }
                     else // too many up steps from current directory
-                        current.dirs 
-                        |> String.concat (string slash)
-                        |> sprintf "The path ascends %d directory levels up. This is outside the given source path \"%s\"." levels
-                        //|> (fun x -> [x])
-                        |> Error
+                        let msg =
+                            current.dirs 
+                            |> String.concat (string slash)
+                            |> sprintf "The path ascends %d directory levels up. This is outside the given source path \"%s\"." levels
+                        Error (msg, 0)
                 | PathRegex.Here ->
                     Ok { package = current.package 
                          dirs = current.dirs @ dirs
