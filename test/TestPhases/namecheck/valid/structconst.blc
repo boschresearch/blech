@@ -1,0 +1,25 @@
+module 
+
+struct S
+    var c: bool
+    let a: int16
+    var b: float32
+end
+
+
+struct T
+    var ss: [2]S
+end
+
+const myS: S = {a = 42, b = .42, c = true}
+const defaultT: T = {ss = {[1]=myS}}
+
+activity Main ()
+    var x: T
+    let xss0 = x.ss[0]
+
+    
+    let ss0 = defaultT.ss[0]
+   
+    await true
+end
