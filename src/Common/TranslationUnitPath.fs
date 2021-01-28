@@ -115,7 +115,31 @@ module PathRegex =
         | ParserResult.Success (res,_,_) -> 
             Result.Ok res
         | ParserResult.Failure (msg,perror,_) -> 
-            Result.Error msg
+            // see https://www.quanttec.com/fparsec/reference/error.html
+            let rec mapToStr (msgs: ErrorMessageList) =
+                ErrorMessageList.ToSortedArray(msgs)
+                |> List.ofArray
+                |> List.map (
+                    function
+                    | Expected msg -> msg
+                    | ExpectedString msg -> msg
+                    | ExpectedStringCI msg -> msg
+                    | Unexpected msg -> msg
+                    | UnexpectedString msg -> msg
+                    | UnexpectedStringCI msg -> msg
+                    | Message msg -> msg
+                    | NestedError (_,_, msgs)
+                    | CompoundError (_,_,_,msgs) ->
+                        // recurse
+                        mapToStr msgs
+                    | OtherErrorMessage _ ->
+                        failwith "Unknown error in import path parser."
+                    | _ ->
+                        failwith "printMessages"
+                    )
+                |> String.concat "\n"
+            mapToStr perror.Messages
+            |> Result.Error
             //perror.Messages 
             //|> ErrorMessageList.ToSortedArray 
             //|> List.ofArray 
