@@ -4,5 +4,5 @@ module
 
 activity X()
     await true
-    var t2: M.T // error not initialised
+    var t2: M.O1 // error not initialised
 end
