@@ -435,6 +435,19 @@ and BlechModule =
         entryPoint: ProcedureImpl option
     }
 
+    // creates an empty type checking result for test purposes
+    static member MakeEmpty moduleName =
+        { 
+            name = moduleName
+            types = List.empty 
+            funPrototypes = List.empty 
+            funacts = List.empty 
+            variables = List.empty 
+            externalVariables = List.empty 
+            memberPragmas = List.empty 
+            entryPoint = None 
+        }
+
     override this.ToString() = 
         render (Some 72) <| this.ToDoc
     

@@ -72,7 +72,7 @@ type Test() =
     /// run typeCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.typeCheckValidFiles (implOrIface, moduleName, filePath) =
+    member x.TypeCheckValidFiles (implOrIface, moduleName, filePath) =
         match runTypeChecker implOrIface moduleName filePath with
         | Ok _ ->
             Assert.True true
@@ -89,7 +89,7 @@ type Test() =
     /// run typeCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.typeCheckInvalidInputs (implOrIface, moduleName, filePath) =
+    member x.TypeCheckInvalidInputs (implOrIface, moduleName, filePath) =
         match runTypeChecker implOrIface moduleName filePath with
         | Ok _ ->
             Assert.True false

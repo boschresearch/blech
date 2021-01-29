@@ -72,7 +72,7 @@ module Arguments =
                 | Rebuild -> 
                     "always re-compile from source files."
                 | Dry_Run _ -> 
-                    "do not write any result files."
+                    "do not generate any C code files."
                 | App _ -> 
                     "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
                 | Source_Path _ ->

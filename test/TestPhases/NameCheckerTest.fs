@@ -21,6 +21,34 @@ open NUnit.Framework
 open Blech.Common
 open Blech.Frontend
 
+
+let runNameChecking implOrIface moduleName filePath =
+    let cliContext = Arguments.BlechCOptions.Default
+    let logger = Diagnostics.Logger.create ()
+    let options = 
+        { Arguments.BlechCOptions.Default 
+            with inputFile = filePath
+                 sourcePath = System.IO.Path.Combine(__SOURCE_DIRECTORY__, TestFiles.Namecheck.Directory) }
+    let pkgCtx = CompilationUnit.Context.Make options (Blech.Compiler.Main.loader options)
+
+    let ast = ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
+    Assert.True (Result.isOk ast)
+    
+    let importsRes =
+        ast
+        |> Result.bind (Blech.Compiler.Main.runImportCompilation pkgCtx logger CompilationUnit.ImportChain.Empty moduleName filePath)
+                    
+    match ast, importsRes with
+    | Ok ast, Ok imports -> 
+        let lookupTables = imports.GetLookupTables
+        let exportScopes = imports.GetExportScopes
+        Blech.Compiler.Main.runNameResolution logger moduleName filePath lookupTables exportScopes ast
+    | Error errs, _ 
+    | _, Error errs ->
+        printfn "Did not expect to find errors during parsing or in imported files!\n" 
+        Diagnostics.Emitter.printDiagnostics errs
+        Error errs
+    
 [<TestFixture>]
 type Test() =
 
@@ -31,22 +59,14 @@ type Test() =
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.nameCheckValidFiles (implOrIface, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
+    member x.NameCheckValidFiles (implOrIface, moduleName, filePath) =
         
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-
-        match astAndEnv with
+        match runNameChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
         | Ok env ->
-            printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
+            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test
@@ -56,22 +76,13 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.nameCheckInvalidInputs (implOrIface, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-        Assert.True (Result.isOk ast)
-
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-            Result.bind (Blech.Frontend.NameChecking.checkDeclaredness ctx) ast
-
-        match astAndEnv with
+    member x.NameCheckInvalidInputs (implOrIface, moduleName, filePath) =
+        match runNameChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
         | Ok env ->
-            printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
+            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.False true
 
         

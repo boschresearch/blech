@@ -311,7 +311,9 @@ module SymbolTable =
            
                     List.foldBack ( fun decl infos -> declInfo decl @ infos ) decls              
                         [ { range = usage.Range; message = "more than one declaration found"; isPrimary = true } ]
-                    //|> List.append [ { range = r; message = "this is a test"; isPrimary = true } ]        
+                    //|> List.append [ { range = r; message = "this is a test"; isPrimary = true } ] 
+                | NonUniqueMember (usage, decls) ->
+                    []  // TODO: Give more context information, fjg. 29.01.21
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -901,13 +903,13 @@ module SymbolTable =
             let openInnerScopes = 
                 Map.fold (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) [] openScope.innerscopes
 
-            printfn "Open inner scopes: %A" openInnerScopes 
+            // printfn "Open inner scopes: %A" openInnerScopes 
 
             let foundDeclarations = List.fold probeDeclaration [] openInnerScopes
             
             match foundDeclarations with
             | [] ->
-                printfn "Here is it"
+                // printfn "Here is it"
                 Error (NoDeclaration usage) 
             | [(decl, scope)] ->
                 addUsage env usage decl

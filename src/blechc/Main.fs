@@ -151,7 +151,7 @@ module Main =
     /// or Diagnostic.Logger
     let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
         // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
-        let resultWorkflow = new ResultBuilder()
+        let resultWorkflow = ResultBuilder()
         resultWorkflow
             {
                 let! ast =
@@ -278,7 +278,7 @@ module Main =
     /// or Diagnostic.Logger
     let compileInterfaceFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
         // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
-        let resultWorkflow = new ResultBuilder()
+        let resultWorkflow = ResultBuilder ()
         resultWorkflow
             {
                 let! ast =
