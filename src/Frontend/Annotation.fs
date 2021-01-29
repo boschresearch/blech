@@ -45,7 +45,13 @@ module Annotation =
         match anno.Attribute with
         | AST.Key ( key = AST.Ident(text = Attribute.entrypoint) ) ->
             Ok EntryPoint
+
+        | AST.Key ( key = AST.Ident(text = Attribute.complexType) ) ->
+            Ok ComplexType
         
+        | AST.Key ( key = AST.Ident(text = Attribute.simpleType) ) ->
+            Ok SimpleType
+
         | AST.KeyValue ( key = AST.Ident(text = Key.linedoc) 
                          value = AST.String(value = doc) ) ->
             Ok (LineDoc (doc))
@@ -264,8 +270,10 @@ module Annotation =
             let checkAttribute (odattr, attr) =
                 match attr with
                 | LineDoc _
-                | BlockDoc _ ->
-                    Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }        
+                | BlockDoc _ 
+                | SimpleType 
+                | ComplexType ->
+                    Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }
                 | _ ->
                     unsupportedAnnotation anno
 

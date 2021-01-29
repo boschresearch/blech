@@ -235,11 +235,11 @@ module CompilationUnit =
             match blcFile with
             | Ok blc ->
                 let translatedMod = Implementation requiredModule
-                let compiledBlc = ctx.loader ctx logger importChain Blc requiredModule blc
+                let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
                 printfn "Add compiled module: %A" translatedMod
-                do ctx.loaded.Add (translatedMod, compiledBlc)
+                do ctx.loaded.Add (translatedMod, compiledBlcRes)
                 
-                if Result.isOk compiledBlc then    
+                if Result.isOk compiledBlcRes then    
                     let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
                     match blhFile with
                     | Ok blh ->
@@ -254,7 +254,7 @@ module CompilationUnit =
                         <| ModuleNotFound (requiredModule, importRange, triedBlhs) 
                         Error logger
                 else
-                    compiledBlc
+                    compiledBlcRes // contains Error logger
             
             | Error triedBlcs ->
                 Diagnostics.Logger.logFatalError 

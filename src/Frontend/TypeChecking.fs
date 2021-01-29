@@ -764,7 +764,35 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
     newType
 
         
-let private fOpaqueTypeDecl pos = unsupported3 "new type declarations" pos //TODO
+let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OtherDecl, _>) =
+    let mkOpaqueType (n, (a: Attribute.OtherDecl)) =
+        let isComplex =
+            a.doc 
+            |> List.exists (function | Attribute.ComplexType -> true | _ -> false)
+        let isSimple = 
+            a.doc 
+            |> List.exists (function | Attribute.SimpleType -> true | _ -> false)
+        let newType =
+            match isComplex, isSimple with
+            | true, true ->
+                Error [OpaqueConflictingAnnotations pos]
+            | false, false ->
+                Error [OpaqueNeedsAnnotation pos]
+            | true, false ->
+                Ok <| ValueTypes (ValueTypes.OpaqueComplex n)
+            | false, true ->
+                Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
+        // add type declaration to lookup table
+        match newType with
+        | Ok typ -> do addTypeToLut lut n name.Range typ
+        | _ -> ()
+        newType
+
+    Ok (lut.ncEnv.nameToQname name)
+    |> combine <| annotation
+    |> Result.bind mkOpaqueType
+    
+
 let private fTypeAliasDecl pos = unsupported4 "alias declarations" pos //TODO
 let private fEnumTypeDecl (etd: AST.EnumTypeDecl) = unsupported1 "enum declarations" etd.range //TODO 
 let private fUnitDecl pos = unsupported4 "unit declarations" pos //TODO
@@ -1262,7 +1290,7 @@ let public fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddType (fStructTypeDecl lut s)
             | AST.Member.OpaqueType ot ->
                 let t =
-                    fOpaqueTypeDecl ot.range ot.name
+                    fOpaqueTypeDecl lut ot.range ot.name
                     <| Annotation.checkOtherDecl ot.annotations
                 do typedMembers.AddType t
             | AST.Member.TypeAlias t ->

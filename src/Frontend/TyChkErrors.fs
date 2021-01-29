@@ -56,6 +56,8 @@ type TyCheckError =
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
     | OpaqueMustHaveInitialiser of range * Identifier
     | OpaqueInitialiserMustBeConcrete of range * Identifier
+    | OpaqueNeedsAnnotation of range
+    | OpaqueConflictingAnnotations of range
     // expressions
     | InvalidFloat of range * string
     | NextOnRhs of range * string
@@ -233,6 +235,8 @@ type TyCheckError =
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
             | OpaqueMustHaveInitialiser (p,n) -> p, sprintf "%s has an opaque type and must be initialised." n
             | OpaqueInitialiserMustBeConcrete (p, n) -> p, sprintf "%s can only be initialised using a value of the same type (or using a procedure that returns such value)." n
+            | OpaqueNeedsAnnotation p -> p, sprintf "The signature must specify the opaque type either as a complex or a simple type."
+            | OpaqueConflictingAnnotations p -> p, sprintf "An opaque type cannot be both complex and simple at the same time." 
             // expressions
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s
