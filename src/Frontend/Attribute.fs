@@ -45,6 +45,12 @@ module Attribute =
     [<Literal>]
     let ccompile = "CCompile"
 
+    // opaque types qualification
+    [<Literal>] 
+    let complexType = "ComplexType"
+    [<Literal>] 
+    let simpleType = "SimpleType"
+
     module Key =
 
         // C bindings
@@ -77,6 +83,9 @@ module Attribute =
 
         | LineDoc of linedoc: string
         | BlockDoc of blockdoc: string
+
+        | ComplexType
+        | SimpleType
     
         member attr.ToDoc =
             let dpStructured key attrs =
@@ -127,7 +136,13 @@ module Attribute =
                 txt "///" <+> txt doc
             | BlockDoc doc ->
                 txt "/**" <^> txt doc <^> txt "*/"
-                
+
+            | ComplexType ->
+                txt "ComplexType" |> dpAnno
+            | SimpleType ->
+                txt "SimpleType" |> dpAnno
+
+
         override attr.ToString() =
             render None <| attr.ToDoc
 
