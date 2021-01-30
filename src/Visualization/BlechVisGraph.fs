@@ -35,6 +35,9 @@ module Blech.Visualization.BlechVisGraph
     /// Shows if activity payload is present
     and IsActivity = IsActivity of ActivityPayload | IsNotActivity
 
+    /// Run statement, calling an activity.
+    and IsActivityCall = (string list * string list)
+
     /// Specifies a complex node to a specific abort type. The strings are the abort labels.
     and IsAbort = AbortWhen of string | AbortRepeat of string | Neither
     
@@ -43,7 +46,7 @@ module Blech.Visualization.BlechVisGraph
     
     /// Type to match whether a node is simple or complex or a cobegin node. Cobegin nodes are very different from others due to their concurrenc nature.
     /// IsActivityCall consists of the input and output variable names.
-    and ComplexOrSimpleOrCobegin = IsComplex of ComplexNode | IsSimple | IsCobegin of CobeginPayload | IsActivityCall of (string list * string list)
+    and ComplexOrSimpleOrCobegin = IsComplex of ComplexNode | IsSimple | IsCobegin of CobeginPayload | IsActivityCall of IsActivityCall
 
     /// Determines if a node is an initial node.
     and IsInit = IsInit | IsNotInit
@@ -89,7 +92,9 @@ module Blech.Visualization.BlechVisGraph
         member x.CopyAsOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = Optimized}
         member x.CopyAsNotOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = NotOptimized}
         member x.CopyWithPropertyImmediate = {Label = x.Label ; Property = IsImmediate; WasOptimized = x.WasOptimized}
+        member x.CopyWithPropertyTerminal =  {Label = x.Label ; Property = IsTerminal; WasOptimized = x.WasOptimized}
         member x.CopyWithPropertyConditional = {Label = x.Label ; Property = IsConditional; WasOptimized = x.WasOptimized}
+        member x.CopyWithPropertyConditionalTerminal = {Label = x.Label ; Property = IsConditionalTerminal; WasOptimized = x.WasOptimized}
 
     /// Node of a graph extracted from Blech code.
     and BlechNode = Node<NodePayload, EdgePayload>
@@ -112,30 +117,37 @@ module Blech.Visualization.BlechVisGraph
     let InitAndFinal = {Init = IsInit; Final = IsFinal}
 
     //____________________ Find first await on every path in a graph.____________________________
-    /// TODO comment.
+    /// Function that determines whether a node (identified by its state count) is valid, because it is part of a list of valid ids.
     let isValidNode (validNodeIdList : int list) = fun (n : BlechNode) -> List.contains n.Payload.StateCount validNodeIdList
+    /// Function that determines whether an edge (identified by state count of source and edge) is valid, because it is part of a list of valid ids.
     let isValidEdge (validNodeIdList : int list) = fun (e : BlechEdge) -> List.contains e.Target.Payload.StateCount validNodeIdList
 
-    /// TODO comment.
+    /// Starts the search of the first await on a path, given by a node starting the path. 
+    /// The nodes that are allowed to be in the path are given by the list of state count integers.
+    /// Successors of the nodes and its successors might be invalid and should not be considered, hence the list.
+    /// Returns all valid nodes in the path that follow the first found await statement.
+    /// If there is an await edge going out of the current node, we reached the first await.
+    /// If the current node is an activity (call), it must contain an await, and is thus the first await statement.
+    /// TODO what if an await is inside an unbroken complex node or an activity?
     let rec findFirstAwaitNodeOnEveryPath (entryPoint : BlechNode) (validNodes : int list) : BlechNode list=
-        List.distinct (findAwaitsOnNodeAndSubsequentPaths entryPoint validNodes)
-
-    /// TODO comment.
-    and private findAwaitsOnNodeAndSubsequentPaths (currentNode : BlechNode) (validNodes : int list) : BlechNode list=
-        let isAwait = checkEdgesForAwait (List.filter (isValidEdge validNodes) (Seq.toList currentNode.Outgoing))
-        let validSuccessors = List.filter (isValidNode validNodes) (Seq.toList currentNode.Successors)
-        match isAwait with
-            | true -> currentNode :: addAllSubsequentNodes validSuccessors validNodes
-                      // Found first await, just add all subsequent nodes to the list.
-            | false -> checkNodesForAwaitsInPath validSuccessors validNodes
+        let isActivityCall = match entryPoint.Payload.IsComplex with
+                                | IsActivityCall _ -> true
+                                | _ -> false
+        let isAwaitEdge = checkEdgesForAwait (List.filter (isValidEdge validNodes) (Seq.toList entryPoint.Outgoing))
+        let validSuccessors = List.filter (isValidNode validNodes) (Seq.toList entryPoint.Successors)
+        let returnList = match isAwaitEdge || isActivityCall with
+                            | true -> entryPoint :: addAllSubsequentNodes validSuccessors validNodes
+                            // Found first await, just add all subsequent nodes to the list.
+                            | false -> checkNodesForAwaitsInPath validSuccessors validNodes
+        List.distinct returnList 
     
-    /// TODO comment.
+    /// Recursively checks single nodes in a list of nodes for their first await.
     and private checkNodesForAwaitsInPath (nodes : BlechNode list) (validNodes : int list) : BlechNode list =
         match nodes with
             | head :: tail -> (findFirstAwaitNodeOnEveryPath head validNodes) @ (checkNodesForAwaitsInPath tail validNodes)
             | [] -> []
 
-    /// TODO comment.
+    /// Checks a list of edges, whether or not there is an await edges among them.
     and private checkEdgesForAwait (edges: BlechEdge list) : bool =
         match edges with
             | head :: tail -> match head.Payload.Property with
@@ -143,7 +155,7 @@ module Blech.Visualization.BlechVisGraph
                                 | _ -> checkEdgesForAwait tail
             | [] -> false
 
-    /// TODO comment.
+    /// Constructs a list of the given nodes and all subsequent nodes (that are valid).
     /// No filtering of nodes needed, given nodes are already valid nodes.
     and private addAllSubsequentNodes (nodes : BlechNode list) (validNodes: int list) : BlechNode list = 
         match nodes with
