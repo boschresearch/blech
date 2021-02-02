@@ -25,10 +25,14 @@ let runTypeChecker implOrIface moduleName filePath =
     let cliContext = Arguments.BlechCOptions.Default
     let logger = Diagnostics.Logger.create ()
     let options = 
-        { Blech.Common.Arguments.BlechCOptions.Default 
-            with inputFile = filePath
-                 sourcePath = System.IO.Path.Combine(__SOURCE_DIRECTORY__, TestFiles.Typechecker.Directory) }
+        let projectDir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, TestFiles.Typechecker.Directory)
+        { Blech.Common.Arguments.BlechCOptions.Default with inputFile = filePath
+                                                            sourcePath = projectDir 
+                                                            projectDir = projectDir }
+
     let pkgCtx = CompilationUnit.Context.Make options (Blech.Compiler.Main.loader options)
+
+    printfn "Source Directory: %s" __SOURCE_DIRECTORY__
 
     let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
     Assert.True (Result.isOk ast)

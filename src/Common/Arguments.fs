@@ -20,6 +20,7 @@ namespace Blech.Common
 module Arguments =
     
     open Argu // see: https://fsprojects.github.io/Argu/index.html
+    open System.IO
 
     type Verbosity = 
         | Q 
@@ -41,7 +42,7 @@ module Arguments =
     
     let defaultBlechPath = "."
     let defaultSourcePath = "." 
-    let defaultOutDir = "./blech" // put all generated files into blech folder bei default
+    let defaultOutDir = Path.Combine (".", "blech") // put all generated files into blech folder bei default
     let defaultAppName = "blech"
     
     
@@ -120,6 +121,7 @@ module Arguments =
             inputFile: string
             appName: string option
             sourcePath: string
+            projectDir : string  // for future use and dotnet test
             outDir: string
             blechPath: string
             showVersion: bool
@@ -134,6 +136,7 @@ module Arguments =
                 inputFile = ""
                 appName = None
                 sourcePath = defaultSourcePath
+                projectDir = ""  // currently only used for "dotnet test"
                 outDir = defaultOutDir
                 blechPath = defaultBlechPath
                 showVersion = false

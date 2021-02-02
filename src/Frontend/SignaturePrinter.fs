@@ -661,7 +661,7 @@ module SignaturePrinter =
             let outputs = List.map bpParamDecl outputs
             let optReturns = Option.map bpReturnDecl result
 
-            subprog <+> bpName name <^>
+            subprog <+> bpName name <+>
             (dpArguments inputs
                 |> dpOptArguments <| outputs
                 |> bpOptReturns <| optReturns

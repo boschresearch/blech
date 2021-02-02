@@ -208,7 +208,7 @@ module CompilationUnit =
             : Result<Module<'info>, Diagnostics.Logger> =
         let translatedSig = Interface requiredModule
         if ctx.loaded.ContainsKey translatedSig then
-            printfn "Use compiled module: %A" translatedSig
+            // printfn "Use compiled module: %A" translatedSig
             ctx.loaded.[translatedSig]
         else
             let blcFile = searchImplementation ctx.sourcePath requiredModule
@@ -236,7 +236,7 @@ module CompilationUnit =
             | Ok blc ->
                 let translatedMod = Implementation requiredModule
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
-                printfn "Add compiled module: %A" translatedMod
+                // printfn "Add compiled module: %A" translatedMod
                 do ctx.loaded.Add (translatedMod, compiledBlcRes)
                 
                 if Result.isOk compiledBlcRes then    
@@ -244,7 +244,7 @@ module CompilationUnit =
                     match blhFile with
                     | Ok blh ->
                         let compiledBlh = ctx.loader ctx logger importChain Blh requiredModule blh
-                        printfn "Add compiled signature: %A" translatedSig
+                        // printfn "Add compiled signature: %A" translatedSig
                         do ctx.loaded.Add (translatedSig, compiledBlh)
                         compiledBlh           
                     | Error triedBlhs ->

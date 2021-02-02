@@ -7,23 +7,23 @@ singleton [s] function t ()
     s()
 end
 
-singleton function u()
+singleton function u ()
 end
 
 function f()
     t()
 end
 
-singleton function f1()
+singleton function f1 ()
     t()
 end
 
-function h()
+function h ()
 end
 
-singleton [t] function f2() 
+singleton [t] function f2 () 
     t()
 end
 
-function noSingleton()
+function noSingleton ()
 end

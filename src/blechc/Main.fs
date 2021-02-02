@@ -104,20 +104,27 @@ module Main =
         do File.WriteAllText(outFileName, txt)
 
 
-    let private writeSignature moduleName exports ast =  
-        let signatureFile = TranslatePath.moduleToInterfaceFile moduleName
+    let private writeSignature (cliArgs : Arguments.BlechCOptions ) 
+                                moduleName exports ast =  
+        let signatureFile = Path.Combine(cliArgs.projectDir, TranslatePath.moduleToInterfaceFile moduleName)
         let blechSignature = SignaturePrinter.printSignature exports ast
         do writeFile signatureFile blechSignature
 
 
-    let private writeImplementation outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
-        let codeFile = Path.Combine(outDir, TranslatePath.moduleToCFile moduleName)
+    let private writeImplementation (cliArgs : Arguments.BlechCOptions ) 
+                                    moduleName 
+                                    (modul: BlechTypes.BlechModule) 
+                                    importedModules translationContext compilations =
+        let codeFile = Path.Combine(cliArgs.outDir, TranslatePath.moduleToCFile moduleName)
         let code = CodeGeneration.emitCode translationContext modul importedModules compilations    
         do writeFile codeFile code
 
 
-    let private writeHeader outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
-        let headerFile = Path.Combine(outDir, TranslatePath.moduleToHFile moduleName)
+    let private writeHeader (cliArgs : Arguments.BlechCOptions ) 
+                            moduleName 
+                            (modul: BlechTypes.BlechModule) 
+                            importedModules translationContext compilations =
+        let headerFile = Path.Combine(cliArgs.outDir, TranslatePath.moduleToHFile moduleName)
         let header = CodeGeneration.emitHeader translationContext modul importedModules compilations    
         do writeFile headerFile header
 
@@ -228,7 +235,7 @@ module Main =
                     let isMainProgram = Option.isSome blechModule.entryPoint
                     if not isMainProgram then
                         Logging.log2 "Main" ("writing signature for " + fileName)
-                        do writeSignature moduleName inferredExport ast
+                        do writeSignature cliArgs moduleName inferredExport ast
                         
                 // if not dry run, write it to file
                 // create code depending on entry point
@@ -243,8 +250,8 @@ module Main =
                         let importedMods = imports.GetTypedModules
                         Logging.log2 "Main" ("writing C code for " + fileName)
                         // implementation should also include headers of imported modules, fjg. 19.10.20
-                        do writeImplementation cliArgs.outDir moduleName blechModule importedMods translationContext compilations
-                        do writeHeader cliArgs.outDir moduleName blechModule importedMods translationContext compilations
+                        do writeImplementation cliArgs moduleName blechModule importedMods translationContext compilations
+                        do writeHeader cliArgs moduleName blechModule importedMods translationContext compilations
                     
                         // generated test app if required by cliArgs
                         do possiblyWriteTestApp cliArgs blechModule translationContext compilations
