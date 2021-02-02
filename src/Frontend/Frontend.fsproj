@@ -36,6 +36,7 @@
     <Compile Include="TyChkExpressions.fs" />
     <Compile Include="Annotation.fs" />
     <Compile Include="TypeChecking.fs" />
+    <Compile Include="ImportChecking.fs" />
   </ItemGroup>
 
   <ItemGroup>

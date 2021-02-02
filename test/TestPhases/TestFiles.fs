@@ -77,3 +77,9 @@ let invalidFiles phase =
 let validFiles phase =
     modulesAndFiles phase Valid
 
+
+let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
+    let projectDir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, phasedir)
+    { Arguments.BlechCOptions.Default with inputFile = inputfile
+                                           sourcePath = projectDir 
+                                           projectDir = projectDir }

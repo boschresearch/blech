@@ -12,7 +12,6 @@
     <None Include="include\blech.hpp" />
     <None Include="include\blechconf.h" />
     <Compile Include="CmdLine.fs" />
-    <Compile Include="ImportChecking.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
 

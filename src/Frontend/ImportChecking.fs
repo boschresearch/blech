@@ -16,12 +16,12 @@
 
 
 
-module Blech.Compiler.ImportChecking
+module Blech.Frontend.ImportChecking
 
 open System.Collections.Generic
 
 open Blech.Common
-open Blech.Frontend
+//open Blech.Frontend
 
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
