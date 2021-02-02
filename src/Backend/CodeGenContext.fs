@@ -78,7 +78,7 @@ type Compilation =
         retvar: ParamDecl option
         actctx: ActivityContext option // None for functions
         varsToPrev: QName list // always empty for functions
-        signature: Doc // goes into blh
+        signature: Doc // C prototype, goes into *.h
         implementation: Doc // pretty printed C code
         doc: Doc option // optional "doc"-comment
     }

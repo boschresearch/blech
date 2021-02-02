@@ -112,23 +112,13 @@ module Main =
 
     let private writeImplementation outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
         let codeFile = Path.Combine(outDir, TranslatePath.moduleToCFile moduleName)
-        let code = 
-            match modul.entryPoint with
-            | Some ep ->
-                CodeGeneration.emitMainCode translationContext modul importedModules compilations ep.Name
-            | None ->
-                CodeGeneration.emitCode translationContext modul importedModules compilations
+        let code = CodeGeneration.emitCode translationContext modul importedModules compilations    
         do writeFile codeFile code
 
 
     let private writeHeader outDir moduleName (modul: BlechTypes.BlechModule) importedModules translationContext compilations =
         let headerFile = Path.Combine(outDir, TranslatePath.moduleToHFile moduleName)
-        let header = 
-            match modul.entryPoint with
-            | Some ep ->
-                CodeGeneration.emitMainHeader translationContext modul importedModules compilations ep.Name
-            | None ->
-                CodeGeneration.emitHeader translationContext modul importedModules compilations
+        let header = CodeGeneration.emitHeader translationContext modul importedModules compilations    
         do writeFile headerFile header
 
 

@@ -147,6 +147,13 @@ let generateSubmoduleIncludes otherMods =
     |> List.map (fun otherMod -> TranslatePath.moduleToInclude otherMod.name |> includeQuotedHfile)
     |> dpBlock
 
+let private mkFunctionPrototypes tcc = 
+    tcc.nameToDecl.Values
+    |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
+
+let private mkCCalls functionPrototypes =
+    Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
+
 /// Emit C code for module as Doc
 let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
                              (pragmas: Attribute.MemberPragma list) 
@@ -209,12 +216,9 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         |> dpBlock
 
     // Translate function prototypes to direct C calls
-    let functionPrototypes = 
-        ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
+    let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls =
-        Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
+    let cCalls = mkCCalls functionPrototypes
 
     let cHeaders = 
         let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
@@ -315,15 +319,9 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
     let importIncludes = generateSubmoduleIncludes importedModules
 
     // Translate function prototypes to extern functions and direct C calls
-    let functionPrototypes = 
-        ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
+    let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls =
-        Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
-
-    let cWrappers = 
-        Seq.except cCalls functionPrototypes
+    let cCalls = mkCCalls functionPrototypes
 
     let cCallHeaders = 
         let hfiles =
@@ -349,15 +347,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
         List.map cpContextTypeDeclaration compilations
         |> dpBlock
 
-    let externFunctions =
-        let ifaceOf (fp: ProcedurePrototype) =
-            {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
-        cWrappers
-        |> Seq.toList // change to List for eager evaluation since ctx.tcc may be updated during the map iteration
-        |> List.map (fun fp -> cpExternFunction ctx.tcc fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
-        |> dpToplevel
-
-    let directCCalls = // TODO: directCCalls must not be exported, check this, fjg. 20.02.19
+    let directCCalls =
         cCalls
         |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
         |> dpBlock
@@ -409,17 +399,14 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
       
       // Comment.constants
       
-      Comment.cPrototypes
-      externFunctions
-      
       Comment.cConstants
       // externConstMacros
       
       Comment.cFunctions
-      // directCCalls  // only exposed direct C Calls go there, currently none
+      directCCalls
       
       Comment.exportedFunctions
-      // localFunctions // only exposed functions go there, currently all
+      localFunctions // only exposed functions go there, currently all
 
       // Program functions must not be created and exposed for blech modules
       if entryPointOpt.IsSome then
@@ -470,25 +457,30 @@ let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilati
 // end of cpApp
 
 
-// TODO: Use module name for self include. Remove separate entryPointName param - it is part of package fjg 10.01.19
+let private emitAnything (entryPointOpt: ProcedureImpl option) emitter =
+    entryPointOpt
+    |> Option.map (fun ep -> ep.Name)
+    |> emitter 
+    |> render (Some 80)
+
+/// Generate contents of the *.c file
+/// The choice whether to emit a module or a main program code is based on
+/// the option modul.entryPoint
 let public emitCode ctx (modul: BlechModule) importedModules compilations =
-    cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations None
-    |> render (Some 80)
+    emitAnything
+        <| modul.entryPoint
+        <| cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations
 
-let public emitMainCode ctx (modul: BlechModule) importedModules compilations entryPointName =
-    cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations (Some entryPointName)
-    |> render (Some 80)
 
-// TODO: Remove entryPointName, it is part of package. fjg 10.01.19
+/// Generate contents of the *.h file
+/// The choice whether to emit a module or a main program header is based on
+/// the option modul.entryPoint
 let public emitHeader ctx (modul: BlechModule) importedModules compilations =
-    cpModuleHeader ctx modul.name importedModules compilations None
-    |> render (Some 80)
+    emitAnything
+        <| modul.entryPoint
+        <| cpModuleHeader ctx modul.name importedModules compilations
 
-let public emitMainHeader ctx (modul: BlechModule) importedModules compilations entryPointName =
-    cpModuleHeader ctx modul.name importedModules compilations (Some entryPointName)
-    |> render (Some 80)
 
 let public emitApp ctx (modul: BlechModule) compilations entryPointName =
     cpApp ctx modul.name compilations entryPointName
-    //|> render (Some 160)
     |> render (Some 80)

@@ -234,7 +234,7 @@ type TyCheckError =
             | NoDefaultValueForOpaque (pos, name) -> pos, sprintf "Internal error: tried to determine a default value for %s which is opaque." name
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
             | OpaqueMustHaveInitialiser (p,n) -> p, sprintf "%s has an opaque type and must be initialised." n
-            | OpaqueInitialiserMustBeConcrete (p, n) -> p, sprintf "%s can only be initialised using a value of the same type (or using a procedure that returns such value)." n
+            | OpaqueInitialiserMustBeConcrete (p, n) -> p, sprintf "%s is opaque and can only be initialised using a value of the same type (or using a procedure that returns such value)." n
             | OpaqueNeedsAnnotation p -> p, sprintf "The signature must specify the opaque type either as a complex or a simple type."
             | OpaqueConflictingAnnotations p -> p, sprintf "An opaque type cannot be both complex and simple at the same time." 
             // expressions
@@ -429,10 +429,7 @@ type TyCheckError =
             // --- Dummy error, just for development purposes ---
             | Dummy (p, msg) -> p, msg
  
-            |> (fun (srcPos, msg) -> 
-                { range = srcPos
-                  message = msg }
-                )
+            ||> Diagnostics.Information.Create 
 
         member err.ContextInformation = 
             match err with
