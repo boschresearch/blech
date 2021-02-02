@@ -9,23 +9,22 @@ module Blech.Visualization.Translation
     /// Unique id.
     let mutable bracketId = 0
 
-    /// Filters a (input paramter) string, if it contains two curly brackets and is thus not wanted to be illustrated.
-    let filterForCurlyBracketConstructions = 
-        fun s -> String.exists (fun c -> match c with '{' -> true | _ -> false) s && String.exists (fun c -> match c with '}' -> true | _ -> false) s
-
-    ///Checks a string from TypedRhs to a more presentable form.
+    /// Checks a string from TypedRhs to a more presentable form.
     /// Identifies single words separated by round brackets and blanks and renders them.
+    /// Special treatment of curly brackets.
     let rec renderRhsRhlString (toCheck : string) : string =
-        // Split on curly and cornered brackets and blanks.
-        // This method will add an empty string if two separating delimeters follow directly after each other. Need to filter this out.
-        let filterEmpty = fun s -> match s with "" -> false | _ -> true
-        let separated = List.filter filterEmpty (Seq.toList (toCheck.Split([|'(';')';' ';'[';']'|])))
-        // Render single words.
-        let originalAndRenderedWords = List.map renderRhsRhlWordInitial separated
-        // Replace separated words in given string by their rendered counterparts.
-        let replaceOrigByRendered (acc:string) (pair:string*string) = acc.Replace(fst pair, snd pair)
-
-        List.fold replaceOrigByRendered toCheck originalAndRenderedWords
+        match toCheck.Contains '{' && toCheck.Contains '}' with
+            | true ->   bracketId <- bracketId + 1
+                        "curlyBracket" + string bracketId
+            | false ->  // Split on round and cornered brackets and blanks.
+                        // This method will add an empty string if two separating delimeters follow directly after each other. Need to filter this out.
+                        let filterEmpty = fun s -> match s with "" -> false | _ -> true
+                        let separated = List.filter filterEmpty (Seq.toList (toCheck.Split([|'(';')';' ';'[';']'|])))
+                        // Render single words.
+                        let originalAndRenderedWords = List.map renderRhsRhlWordInitial separated
+                        // Replace separated words in given string by their rendered counterparts.
+                        let replaceOrigByRendered (acc:string) (pair:string*string) = acc.Replace(fst pair, snd pair)
+                        List.fold replaceOrigByRendered toCheck originalAndRenderedWords
         
     /// Initially calls the render method. To be used in a list map so that both arguments are the same.
     /// Returns the original and the rendered ones as pairs.
@@ -41,11 +40,7 @@ module Blech.Visualization.Translation
        match chars with 
             | head :: tail -> let stringTail = String.concat "" <| List.map string tail
                               match head with '.' -> renderRhsRhlWord stringTail stringTail | _ -> renderRhsRhlWord (stringTail) original
-            | [] -> // Did not contain a dot. Now check for {...} construction.
-                    bracketId <- bracketId + 1
-                    match filterForCurlyBracketConstructions original with
-                        | true -> "curlyBracket" + string bracketId
-                        | false -> original // Did not contain a dot.
+            | [] -> original // Did not contain a dot.
 
     /// Functions for transforming Blech paremters to my own parameter type.    
     let paramToParam = fun (paramDec : ParamDecl) -> {TypeName = paramDec.datatype.ToString(); Name = paramDec.name.basicId}
@@ -164,7 +159,7 @@ module Blech.Visualization.Translation
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
     /// TODO add that a loop can be endless
     and private synthesizeRepeatUntil (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) (isEndless : bool): GraphBuilder =
-        printfn "yea %b" isEndless
+        //printfn "yea %b" isEndless
         // Extract.
         let graph = frst graphBuilder
         let prevNode = (scnd graphBuilder).Value

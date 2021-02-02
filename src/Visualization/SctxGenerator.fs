@@ -45,18 +45,19 @@ module Blech.Visualization.SctxGenerator
             | head :: tail ->(listParam head isInput) + listParams tail isInput
             | [] -> ""
     
-    /// Converts a single local variable to .sctx if it a variable name and not a primitive type.
-    let private listLocalVar (var : string) : string =
-        /// Only list vars that are not primitive types. Ints, booleans and TODO doubles.
-        match Seq.forall System.Char.IsDigit var || var.Equals("true") || var.Equals("false") with
-            | true -> ""
-            | false -> "host \"localVar\" " + var + lnbreak
+    /// Converts a single local variable to .sctx if its a variable name and not a primitive type.
+    /// Decomposes complex boolean construct, e.g. x and not y into the local variables x and y.
+    let private listLocalVar (var : string) : string list=
+        /// Only list vars that are not primitive types. Ints, booleans, TODO doubles and other boolean constructs (and, or, not)
+        match Seq.forall System.Char.IsDigit var || var.Equals("true") || var.Equals("false") || (var.Contains '{' && var.Contains '}') with
+            | true -> [""]
+            | false -> let blankSplit = Seq.toList (var.Split([|' '|])) // split into single words, then filter keywords 'and', 'or', 'not' out.
+                       let expressionFiltered = List.filter (fun e -> not (e.Equals "not" || e.Equals "and" || e.Equals "or" || e.Equals "prev")) blankSplit
+                       List.map (fun var -> "host \"localVar\" " + var + lnbreak) expressionFiltered
 
-    /// Converts a list of local variables to a .sctx string.
+    /// Converts a list of local variables to a .sctx string. Filters duplicates.
     let rec private listLocalVars (vars : string list ) : string = 
-        match vars with
-            | head :: tail -> listLocalVar head + listLocalVars tail
-            | [] -> ""
+        List.collect listLocalVar vars |> List.distinct |> List.fold (+) ""
 
     /// Construct a string representing a single edge.
     let private singleEdge(edge : BlechEdge) (target : int): string =
@@ -106,12 +107,24 @@ module Blech.Visualization.SctxGenerator
 
     /// Constructs a sctx string for an activity call.
     and private actCallToString (input : string list) (output : string list) (actName : string) : string =
-        let concat = List.append input output
+        // Replace complex conditions containing boolean constructs (and, or, not).
+        let workOnConditions = 
+            fun (var:string) -> match Seq.forall System.Char.IsDigit var || var.Equals("true") || var.Equals("false") with
+                                    | true -> var
+                                    | false -> var.Replace("not", "!").Replace("or ", "||").Replace("or ", "&&")
 
-        let arguments = match concat.Length with 
+        // Take care of "prev". Replace "prev " with "pre(" and concat a ")" and the end.
+        let replacePrev = fun (var:string) -> match var.Contains "prev "with 
+                                                | false -> var
+                                                | true -> var.Replace("prev ", "pre(") + ")"
+        
+        // Apply both functions.
+        let filteredAndCleaned = List.map (workOnConditions >> replacePrev) (List.append input output)
+
+        let arguments = match filteredAndCleaned.Length with 
                         | 0 -> ""
-                        | 1 -> "(" + List.head concat + ")"
-                        | _ -> "(" + List.fold commaConcatination (List.head concat) (List.tail concat) + ")"
+                        | 1 -> "(" + List.head filteredAndCleaned + ")"
+                        | _ -> "(" + List.fold commaConcatination (List.head filteredAndCleaned) (List.tail filteredAndCleaned) + ")"
 
         "is" + blank + actName + arguments        
 
