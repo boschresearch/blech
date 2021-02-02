@@ -10,7 +10,7 @@ end
 singleton function u ()
 end
 
-function f()
+function f ()
     t()
 end
 
