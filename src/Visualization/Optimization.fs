@@ -14,7 +14,7 @@ module Blech.Visualization.Optimization
 
     /// Optimizes a single activity node.
     and private optimizeSingleActivity (activityNode: BlechNode) : BlechNode = 
-        printfn "Optimizing activity %s" activityNode.Payload.Label
+        //printfn "Optimizing activity"
         let actNodePayload = activityNode.Payload
         // Extract body.
         let isComplex = match actNodePayload.IsComplex with 
@@ -24,11 +24,11 @@ module Blech.Visualization.Optimization
         let actPayload = isComplex.IsActivity
         
         //Flatten hierarchy inside activity.
-        printfn "Flattening hierarchies."
+        //printfn "Flattening hierarchies."
         let flattenedBody = flattenHierarchyIfComplex (findInitNodeInHashSet body.Nodes) body
 
         // Collapse transient states.
-        printfn "Collapsing transient states."
+        //printfn "Collapsing transient states."
         optimizedEdges <- []
         let collapsenTransientStatesBody = collapseTransient flattenedBody
 
@@ -52,11 +52,11 @@ module Blech.Visualization.Optimization
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
         let unoptedSuccesssors = List.filter filterForUnoptimized successorsWithoutCurrent
         //printfn "current s%i" currentNode.Payload.StateCount
-        List.map (fun (n : BlechNode)-> printfn "s%i" n.Payload.StateCount) unoptedSuccesssors |> ignore
+        //List.map (fun (n : BlechNode)-> printfn "s%i" n.Payload.StateCount) unoptedSuccesssors |> ignore
         let currentGraph = match currentNode.Payload.IsComplex with
-                            | IsSimple | IsActivityCall _ ->printfn "case1"; graph
-                            | IsCobegin cmplx -> printfn "case2"; flattenHierarchyCobegin currentNode cmplx graph
-                            | IsComplex cmplx -> printfn "case3"; flattenHierarchy currentNode cmplx graph
+                            | IsSimple | IsActivityCall _ ->graph
+                            | IsCobegin cmplx -> flattenHierarchyCobegin currentNode cmplx graph
+                            | IsComplex cmplx -> flattenHierarchy currentNode cmplx graph
 
         currentNode.Payload.SetHierarchyOptimized
 
@@ -81,30 +81,44 @@ module Blech.Visualization.Optimization
     and private flattenHierarchy (currentNode : BlechNode) (complex : ComplexNode) (graph : VisGraph) : VisGraph = 
         // Recursive hierarchy flattening call on inner graph.
         let innerGraph = flattenHierarchyIfComplex (findInitNodeInHashSet complex.Body.Nodes) (complex.Body)
-        // TODO no final node?
+        
         //printfn "----->current node s%i" currentNode.Payload.StateCount
+        // Init.
         let init = findInitNodeInHashSet innerGraph.Nodes
-        let final = findFinalNodeInHashSet innerGraph.Nodes
         let replacedInit = innerGraph.ReplacePayloadInByAndReturn init (init.Payload.SetInitStatusOff)
-        let replacedFinal = innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
-        // Use above two with caution ! Not correct ones after joining graphs.
         let innerInitStateCount = replacedInit.Payload.StateCount
-        let innerFinalStateCount = replacedFinal.Payload.StateCount
-
         let innerNodesIds = List.map (fun (n:BlechNode) -> n.Payload.StateCount) (Seq.toList innerGraph.Nodes)
-        let joinedGraph = addGraphToGraph graph innerGraph
-        let newInit = findNodeByStateCount innerInitStateCount joinedGraph
-        let newFinal = findNodeByStateCount innerFinalStateCount joinedGraph
+        let finalNodePresent = isThereFinalNodeInHashSet innerGraph.Nodes
+        
+        let initGraphPair = 
+            match finalNodePresent with 
+                | true ->
+                    let final = findFinalNodeInHashSet innerGraph.Nodes
+                    let replacedFinal = innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
+                    let innerFinalStateCount = replacedFinal.Payload.StateCount
+
+                    let joinedGraph = addGraphToGraph graph innerGraph
+                    let newInit = findNodeByStateCount innerInitStateCount joinedGraph
+                    let newFinal = findNodeByStateCount innerFinalStateCount joinedGraph
+
+                    // Update edges.
+                    (updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph 
+                        |> updateEdgesFlattenHierarchy (Seq.toList currentNode.Outgoing) newFinal Source,
+                     newInit)
+                | false -> 
+                    let joinedGraph = addGraphToGraph graph innerGraph
+                    let newInit = findNodeByStateCount innerInitStateCount joinedGraph
+            
+                    // Update edges.
+                    (updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph, newInit)
+        let updatedGraph = fst initGraphPair
+        let newInit = snd initGraphPair
 
         // Add abort transitions according to the concept from the inner graph to either the former initial state of the inner graph or the case closing state, depending on the abort.
         match complex.IsAbort with
-            | AbortWhen label -> List.map (addAbortEdgeToNode complex.CaseClosingNode.Value label joinedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
-            | AbortRepeat label -> List.map (addAbortEdgeToNode newInit label joinedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
+            | AbortWhen label -> List.map (addAbortEdgeToNode complex.CaseClosingNode.Value label updatedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
+            | AbortRepeat label -> List.map (addAbortEdgeToNode newInit label updatedGraph) (findFirstAwaitNodeOnEveryPath newInit innerNodesIds) |> ignore
             | Neither -> () // Do nothing.
-
-        // Update edges.
-        let updatedGraph = updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph 
-                            |> updateEdgesFlattenHierarchy (Seq.toList currentNode.Outgoing) newFinal Source
 
         //There is something wrong with the removal of the node. Find specific node and remove it.
         //if(currentNode.Payload.StateCount = 12) then 
@@ -186,7 +200,7 @@ module Blech.Visualization.Optimization
     /// Also calls the collapse of immediate trnaasitions recursively to complex nodes.
     // TODO this is not functional programming..
     and private checkSingleEdgeForCollapse (graph : VisGraph) (edge : BlechEdge) : VisGraph = 
-        printfn "checking s%i - %s - edge s%i to s%i - %s" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount edge.Payload.Label
+        //printfn "checking s%i - %s - edge s%i to s%i - %s" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount edge.Payload.Label
         
         //Recursive calls
         match edge.Source.Payload.IsComplex with 
@@ -213,7 +227,7 @@ module Blech.Visualization.Optimization
             immediateAndAbortNode edge sourceOutgoings &&
             immediateAndAbortNode edge targetIncomings &&
             sourceNotActivityCall) then
-            printfn "0"
+            //printfn "0"
             if source.Payload.IsComplex = IsSimple && source.Payload.Label.Equals "" && (Seq.toList source.Outgoing).Length = 2 then
                 handleSourceDeletion source target graph
             else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" && (Seq.toList target.Incoming).Length = 2 then
@@ -226,7 +240,7 @@ module Blech.Visualization.Optimization
              edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal ||
              edge.Payload.Property = IsTerminal && not (edge.Payload.Label.Equals "") ||
              edge.Payload.Property = IsImmediate && not (edge.Payload.Label.Equals "")) then 
-                printfn "case 1"
+                //printfn "case 1"
                 callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
         else 
             // Can a) source or b) target be deleted (no label, no complexity)? If so, delete possible node. If not, immediate transition is not deleted.
@@ -239,17 +253,17 @@ module Blech.Visualization.Optimization
             else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" && (Seq.toList target.Incoming).Length = 1 then
                 handleTargetDeletion source target graph
             else if (Seq.toList target.Outgoing).Length > 0 then 
-                printfn "case 4"
+                //printfn "case 4"
                 callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
             else
-                printfn "case 5"
+                //printfn "case 5"
                 graph
 
     /// Updates the status of the target and reassigns source's incoming and deletes the source node (and not updated edges).
     and private handleSourceDeletion (source : BlechNode) (target : BlechNode) (graph : VisGraph) : VisGraph =  
         let statusChangedTarget = updateStatusOfNodeDependingOfSuccessorOrPredecessor target source graph
         let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) statusChangedTarget Target graph
-        printfn "case 2"
+        //printfn "case 2"
         //printfn "removing s%i" source.Payload.StateCount
         //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList source.Incoming) |> ignore 
         graph.RemoveNode source
@@ -261,7 +275,7 @@ module Blech.Visualization.Optimization
         let statusChangedSource = updateStatusOfNodeDependingOfSuccessorOrPredecessor source target graph
         //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList target.Outgoing) |> ignore                         
         let updatedSource = updateEdgesCollapseImmediate (Seq.toList target.Outgoing) statusChangedSource Source graph
-        printfn "case 3"
+        //printfn "case 3"
         //printfn "removing s%i" target.Payload.StateCount
         graph.RemoveNode target
         //printfn "length.. %i" (Seq.toList updatedSource.Outgoing).Length

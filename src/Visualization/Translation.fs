@@ -13,15 +13,34 @@ module Blech.Visualization.Translation
     let filterForCurlyBracketConstructions = 
         fun s -> String.exists (fun c -> match c with '{' -> true | _ -> false) s && String.exists (fun c -> match c with '}' -> true | _ -> false) s
 
-    /// Renders the string from the TypedRhs to a more presentable form. (E.g.: activity.in to in).
+    ///Checks a string from TypedRhs to a more presentable form.
+    /// Identifies single words separated by round brackets and blanks and renders them.
+    let rec renderRhsRhlString (toCheck : string) : string =
+        // Split on curly and cornered brackets and blanks.
+        // This method will add an empty string if two separating delimeters follow directly after each other. Need to filter this out.
+        let filterEmpty = fun s -> match s with "" -> false | _ -> true
+        let separated = List.filter filterEmpty (Seq.toList (toCheck.Split([|'(';')';' ';'[';']'|])))
+        // Render single words.
+        let originalAndRenderedWords = List.map renderRhsRhlWordInitial separated
+        // Replace separated words in given string by their rendered counterparts.
+        let replaceOrigByRendered (acc:string) (pair:string*string) = acc.Replace(fst pair, snd pair)
+
+        List.fold replaceOrigByRendered toCheck originalAndRenderedWords
+        
+    /// Initially calls the render method. To be used in a list map so that both arguments are the same.
+    /// Returns the original and the rendered ones as pairs.
+    and private renderRhsRhlWordInitial(checkWord : string) : string * string =
+        (checkWord, renderRhsRhlWord checkWord checkWord)
+
+    /// Renders the single words of strings from the TypedRhs to a more presentable form. (E.g.: activity.in to in).
     /// Also checks in the end, if parameter is a {...}-construction, which is not wanted. Replaced by other string.
     // TODO improve this method. Converting from string to char[] and back on every method?
-    let rec private renderRhsRhlString (rhsOrLhs : string) (original : string): string =
+    and private renderRhsRhlWord (rhsOrLhs : string) (original : string): string =
        let chars = Seq.toList rhsOrLhs
 
        match chars with 
             | head :: tail -> let stringTail = String.concat "" <| List.map string tail
-                              match head with '.' -> renderRhsRhlString stringTail stringTail | _ -> renderRhsRhlString (stringTail) original
+                              match head with '.' -> renderRhsRhlWord stringTail stringTail | _ -> renderRhsRhlWord (stringTail) original
             | [] -> // Did not contain a dot. Now check for {...} construction.
                     bracketId <- bracketId + 1
                     match filterForCurlyBracketConstructions original with
@@ -33,14 +52,14 @@ module Blech.Visualization.Translation
     let extParamToParam = fun (extVarDecl : ExternalVarDecl) -> {TypeName = extVarDecl.datatype.ToString(); Name = extVarDecl.name.basicId}
 
     /// Functions for transforming Rhs and Lhs paremters to my own strings.    
-    let rhsToString = fun (rhs : TypedRhs) -> renderRhsRhlString (rhs.ToString()) (rhs.ToString())
-    let lhsToString = fun (lhs : TypedLhs) -> renderRhsRhlString (lhs.ToString()) (lhs.ToString())
+    let rhsToString = fun (rhs : TypedRhs) -> renderRhsRhlString (rhs.ToString())
+    let lhsToString = fun (lhs : TypedLhs) -> renderRhsRhlString (lhs.ToString())
 
     /// Add an await statement to the graph connecting to the previous node. According to the proposal in the thesis.
     let private synthesizeAwait (graphBuilder : GraphBuilder) (rhs : TypedRhs) : GraphBuilder =
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder + 1
 
         // New node and edge
@@ -50,16 +69,16 @@ module Blech.Visualization.Translation
                                     StateCount = stateCount; 
                                     WasVisualized = NotVisualized; 
                                     WasHierarchyOptimized = NotHierarchyOptimized}
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()) (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} prevNode newNode |> ignore
+        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} prevNode newNode |> ignore
 
-        (graph, newNode, stateCount, frth graphBuilder) 
+        (graph, Some newNode, stateCount, frth graphBuilder) 
 
     /// Add an if-else statement to the graph connecting to the previous node. According to the proposal in the thesis.
     // StateCount: If-Node +1, Else-Node +2, Closing-Node +3, if-Body +4 , Else-Body If-Body+1, Return Else-Body
     let rec private synthesizeIte (graphBuilder : GraphBuilder) (rhs : TypedRhs) (ifBlock : Stmt list) (elseBlock : Stmt list ): GraphBuilder =
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder
 
         // New node for each branch. Init their bodies and connect the nodes to the case-closing node. 
@@ -82,7 +101,7 @@ module Blech.Visualization.Translation
                                     StateCount = stateCount + 1; 
                                     WasVisualized = NotVisualized;
                                     WasHierarchyOptimized = NotHierarchyOptimized}
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()) (rhs.ToString()); 
+        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
                        Property = IsConditional; 
                        WasOptimized = NotOptimized} 
                        prevNode ifNode |> ignore
@@ -91,7 +110,7 @@ module Blech.Visualization.Translation
         // Else-path gets a complex state, if the else block contains code.
         match elseBlock.Length with
             | 0 -> graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode caseClosingNode |> ignore
-                   (graph, caseClosingNode, scnd3 ifBody, thrd3 ifBody)
+                   (graph, Some caseClosingNode, scnd3 ifBody, thrd3 ifBody)
             | _ -> let elseBody = synthesizeComplexBody elseBlock (scnd3 ifBody + 1) (thrd3 ifBody)
                    let elseComplex : ComplexOrSimpleOrCobegin = 
                         IsComplex {Body = frst3 elseBody ; IsActivity = IsNotActivity; CaseClosingNode = Some caseClosingNode; IsAbort = IsAbort.Neither}
@@ -105,13 +124,13 @@ module Blech.Visualization.Translation
                    graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode elseNode |> ignore
                    graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} elseNode caseClosingNode |> ignore
 
-                   (graph, caseClosingNode, scnd3 elseBody, thrd3 elseBody)
+                   (graph, Some caseClosingNode, scnd3 elseBody, thrd3 elseBody)
 
-
+    // While-loops are optimized in previous compiler steps. The visualization only receives repeat statements. Caution: this method is not optimized!
     /// Synthesize while statement.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
-    and private synthesizeWhileRepeat (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) : GraphBuilder =
-        // Extract.
+    (*and private synthesizeWhileRepeat (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) : GraphBuilder =
+        Extract.
         let graph = frst graphBuilder
         let prevNode = scnd graphBuilder
         let stateCount = thrd graphBuilder
@@ -139,42 +158,56 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode prevNode |> ignore
         graph.AddEdge {Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} prevNode caseClosingNode |> ignore
 
-        (graph, caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
+        (graph, caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)*)
 
     /// Synthesize repeat statement.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
     /// TODO add that a loop can be endless
     and private synthesizeRepeatUntil (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) (isEndless : bool): GraphBuilder =
+        printfn "yea %b" isEndless
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder
 
-        // TODO closing node only if there is a final node.
+        // Synthesize body.
         let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth graphBuilder)
-        let caseClosingNode = graph.AddNode {   Label = "";
-                                                IsComplex = IsSimple; 
-                                                IsInitOrFinal = NeitherInitOrFinal; 
-                                                StateCount = stateCount + 2; 
-                                                WasVisualized = NotVisualized; 
-                                                WasHierarchyOptimized = NotHierarchyOptimized}
+
+        // Is there a case closing node?
+        // While true loops are transformed to isEndless = false repeats, with the condition "false".." || (renderRhsRhlString (rhs.ToString()) (rhs.ToString())).Equals "false"
+        let caseClosingNodeMaybe = 
+            match isEndless with
+                | true -> None
+                | false ->  let caseClosingNode = graph.AddNode {Label = "";
+                                                                 IsComplex = IsSimple; 
+                                                                 IsInitOrFinal = NeitherInitOrFinal; 
+                                                                 StateCount = stateCount + 2; 
+                                                                 WasVisualized = NotVisualized; 
+                                                                 WasHierarchyOptimized = NotHierarchyOptimized}
+                            Some caseClosingNode
+           
+        //Construct complex node based on calculated data.
         let complexNode = 
-            graph.AddNode { Label = ""; 
-                            IsComplex = 
-                                IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = Some caseClosingNode; IsAbort = IsAbort.Neither};
-                            IsInitOrFinal = NeitherInitOrFinal; 
-                            StateCount = stateCount + 1; 
-                            WasVisualized = NotVisualized; 
-                            WasHierarchyOptimized = NotHierarchyOptimized}
+                graph.AddNode { Label = ""; 
+                                IsComplex = 
+                                    IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = caseClosingNodeMaybe; IsAbort = Neither};
+                                IsInitOrFinal = NeitherInitOrFinal; 
+                                StateCount = stateCount + 1; 
+                                WasVisualized = NotVisualized; 
+                                WasHierarchyOptimized = NotHierarchyOptimized}
+
+        // Connect complex to case closing if available.
+        if not isEndless then 
+                graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
+                               Property = IsConditionalTerminal; 
+                               WasOptimized = NotOptimized} 
+                               complexNode caseClosingNodeMaybe.Value |> ignore
+
+        // Regular transitions that are always present
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
-        // Add the edge to the previous node first.
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()) (rhs.ToString()); 
-                       Property = IsConditionalTerminal; 
-                       WasOptimized = NotOptimized} 
-                       complexNode caseClosingNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode complexNode |> ignore
 
-        (graph, caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
+        (graph, caseClosingNodeMaybe, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
 
     /// Determines what a preemption depending on the type.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body + 1.
@@ -185,11 +218,11 @@ module Blech.Visualization.Translation
         
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder
 
         // Determine the target node of the preemption.
-        let abortLabel = renderRhsRhlString (rhs.ToString()) (rhs.ToString())
+        let abortLabel = renderRhsRhlString (rhs.ToString())
         let abortType = match preemtpion with
                             | Abort -> AbortWhen abortLabel
                             | Reset -> AbortRepeat abortLabel
@@ -220,7 +253,7 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = abortLabel; Property = IsAbort; WasOptimized = NotOptimized} complexNode abortTarget |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
 
-        (graph, caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
+        (graph, Some caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
 
     /// Method that converts a single strength and statement to (Visgraph * Strength). Also returns the state count and the list of needed vars.
     and private convertSingleToCobeginPayload 
@@ -244,7 +277,7 @@ module Blech.Visualization.Translation
     and private synthesizeCobegin (graphBuilder : GraphBuilder) (strengthsAndStmts : (Strength * Stmt list) list) : GraphBuilder = 
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder
         
         // Construct branches, nodes and edges.
@@ -265,13 +298,13 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
 
-        (graph, caseClosingNode, scnd3 branches, thrd3 branches)
+        (graph, Some caseClosingNode, scnd3 branches, thrd3 branches)
 
     /// Synthesizes a run statement. A node that references an activity.
     and private activityCalled (graphBuilder : GraphBuilder) (actName : string) (typedRhsList : TypedRhs list) (typedLhsList: TypedLhs list): GraphBuilder = 
         // Extract.
         let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
+        let prevNode = (scnd graphBuilder).Value
         let stateCount = thrd graphBuilder
         
         let inputList = List.map rhsToString typedRhsList
@@ -295,7 +328,7 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
         
-        (graph, caseClosingNode, stateCount + 2, neededVars)
+        (graph, Some caseClosingNode, stateCount + 2, neededVars)
 
     /// Synthesization of a single statement.
     /// TODO Labels for states.
@@ -303,7 +336,7 @@ module Blech.Visualization.Translation
         match stmt with 
             | Await (_, typedRhs) -> synthesizeAwait graphBuilder typedRhs
             | ITE (_, typedRhs, ifStmts, elseStmts)-> synthesizeIte graphBuilder typedRhs ifStmts elseStmts
-            | WhileRepeat (_, typedRhs, stmtList) -> synthesizeWhileRepeat graphBuilder typedRhs stmtList // TODO entfernen, da unnötig?
+            //Unnötig, while is optimized in previous compiler steps. | WhileRepeat _ -> graphBuilder - synthesizeWhileRepeat graphBuilder typedRhs stmtList 
             | RepeatUntil (_, stmtList, typedRhs, bool) -> synthesizeRepeatUntil graphBuilder typedRhs stmtList bool
             | Preempt (_, preemeption, typedRhs, _, stmtList) -> synthesizePreempt graphBuilder preemeption typedRhs stmtList // TODO Argument 4 - Moment needed?
             | StmtSequence (stmtList) -> synthesizeStatements stmtList graphBuilder
@@ -330,17 +363,24 @@ module Blech.Visualization.Translation
                                 StateCount = stateCount + 1; 
                                 WasVisualized = NotVisualized; 
                                 WasHierarchyOptimized = NotHierarchyOptimized}
-        let graphBuilder = synthesizeStatements stmts (graph, init, stateCount + 3, neededVars)
+        let graphBuilder = synthesizeStatements stmts (graph, Some init, stateCount + 3, neededVars)
 
-        // Connect last available node to the final node. TODO only if available?
-        let updatedGraph = frst graphBuilder
-        let final = updatedGraph.AddNode{Label = ""; 
-                                        IsComplex = IsSimple; 
-                                        IsInitOrFinal = FinalNotInit; 
-                                        StateCount = stateCount + 2; 
-                                        WasVisualized = NotVisualized; 
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
-        updatedGraph.AddEdge {Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd graphBuilder) final |> ignore
+        // Only add final node if previous statements resulted in a caseClosing node.
+        let updatedGraph = match (scnd graphBuilder).IsSome with 
+                            | true ->   let updatedGraph = frst graphBuilder
+                                        let final = 
+                                            updatedGraph.AddNode{
+                                                Label = ""; 
+                                                IsComplex = IsSimple; 
+                                                IsInitOrFinal = FinalNotInit; 
+                                                StateCount = stateCount + 2; 
+                                                WasVisualized = NotVisualized; 
+                                                WasHierarchyOptimized = NotHierarchyOptimized}
+                                        updatedGraph.AddEdge {
+                                            Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd graphBuilder).Value final |> ignore
+                                        updatedGraph
+                            | false -> frst graphBuilder
+        
         (updatedGraph, thrd graphBuilder, frth graphBuilder)
    
     // Checks whether given variable is a member if the in- and output list. If yes, empty string is returned, if not, the variable name is returned.

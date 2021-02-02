@@ -13,7 +13,7 @@ module Blech.Visualization.SctxGenerator
     let rec orderEdgeList (edges : BlechEdge list) : BlechEdge list = 
         // 1. Extract all abort edges from list. 2. Put extracted elements at the beginning of the list.
         let partition = List.partition (fun e -> match e.Payload.Property with | IsAbort -> true | _ -> false) edges
-        let sndPartition = List.partition (fun e -> match e.Payload.Property with | IsConditional -> true | _ -> false) (snd partition)
+        let sndPartition = List.partition (fun e -> match e.Payload.Property with | IsConditional | IsConditionalTerminal-> true | _ -> false) (snd partition)
         
         // Aborts are the first element of the pair. Contitionals the first of the second pair.
         List.append (fst partition) (List.append (fst sndPartition) (snd sndPartition))

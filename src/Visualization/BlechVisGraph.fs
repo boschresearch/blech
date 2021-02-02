@@ -109,7 +109,7 @@ module Blech.Visualization.BlechVisGraph
     /// Fourth element is a list of strings that contains the names of all parameters needed to make function calls in this scope. 
     /// Fourth element is used to compare to the list of defined in- and output variables to determine the missing variables that have to be defined.
     /// Can later be used for implementation of actual local variables.
-    and GraphBuilder = VisGraph * BlechNode * int * string list
+    and GraphBuilder = VisGraph * (Option<BlechNode>) * int * string list
 
     let NeitherInitOrFinal = {Init = IsNotInit; Final = IsNotFinal}
     let InitNotFinal = {Init = IsInit; Final = IsNotFinal}
@@ -178,6 +178,13 @@ module Blech.Visualization.BlechVisGraph
     /// Finds the node that has Property Init set to true and returns it.
     let findFinalNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =
             findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Final with IsFinal -> true | _ -> false)
+
+    /// Determines if there is a final node in a set of nodes.
+    let isThereFinalNodeInHashSet(nodes : HashSet<BlechNode>) : bool =
+         nodes 
+         |> Seq.toList 
+         |> List.tryFind (fun node -> match node.Payload.IsInitOrFinal.Final with IsFinal -> true | _ -> false) 
+         |> (fun option -> option.IsSome)
 
     /// Determines if apart of this edge, another edge between source and target is present.
     /// Edge list should, as peer previous conditions in the code be a list of two. Asserting this fact nonetheless.
