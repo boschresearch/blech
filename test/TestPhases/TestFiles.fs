@@ -76,7 +76,7 @@ let invalidFiles phase =
 /// Returns a sequence of TestCaseData formed from pairs: filepath * modulename, for valid source files
 let validFiles phase =
     modulesAndFiles phase Valid
-
+  
 
 let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
     let projectDir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, phasedir)

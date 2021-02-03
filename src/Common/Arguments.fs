@@ -127,12 +127,13 @@ module Arguments =
             showVersion: bool
             isDryRun: bool
             isRebuild: bool
-            isFrontendTest : bool
+            isFrontendTest : bool // used to stop import compilation before type check
             trace: bool
             wordSize: WordSize
             passPrimitiveByAddress: bool
             verbosity: Verbosity
         }
+
         static member Default = {
                 inputFile = ""
                 appName = None
@@ -143,7 +144,7 @@ module Arguments =
                 showVersion = false
                 isDryRun = false
                 isRebuild = false
-                isFrontendTest = false
+                isFrontendTest = false // currently used to test language features that do not typecheck
                 trace = false
                 wordSize = W32
                 passPrimitiveByAddress = false
@@ -182,12 +183,13 @@ module Arguments =
         | Pass_Primitive_By_Address ->
             { opts with passPrimitiveByAddress = true }
 
+
     let private parseWordSize ws = 
         if ws = 8 || ws = 16 || ws = 32 || ws = 64 then
             ws
         else
             failwith <| "invalid word size " + string ws + ". Allowed values are 8, 16, 32, 64."
-       
+
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")

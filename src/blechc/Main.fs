@@ -61,7 +61,7 @@ module Main =
     //  Functions that run a single compilation phase
     //---
 
-    let private runParser logger implOrIface moduleName contents fileName =
+    let runParser logger implOrIface moduleName contents fileName =
         Logging.log2 "Main" ("processing file " + fileName)
         ParsePkg.parseModuleFromStr logger implOrIface moduleName fileName contents
 
