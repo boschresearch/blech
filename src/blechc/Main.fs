@@ -140,14 +140,95 @@ module Main =
         | None, _ -> 
             ()
 
+    //---
+    // Compilation work flow starting with the type checker
+    // This workflow is NOT called in test scenarios where early phases before type checking need imports
+    // The imported modules might contain features that are not supported by the type checker or subsequent phases
+    //---
+
+    /// create a empty typecheck result, which is not supposed to be used
+    let private createTypecheckDummyResult moduleName = 
+        let dummyLut = TypeCheckContext.Empty
+        let dummyBlechModule = BlechTypes.BlechModule.MakeEmpty moduleName
+        Ok (dummyLut, dummyBlechModule)
+
+    /// run the compilation phases starting with the type checker
+    let private runFromTypeChecking cliArgs
+                            logger 
+                            moduleName
+                            fileName
+                            ast
+                            symTable
+                            (imports : ImportChecking.Imports) = 
+        let resultWorkflow = ResultBuilder()    
+        resultWorkflow {
+            let! lut, blechModule = 
+                runTypeChecking 
+                    cliArgs 
+                    logger 
+                    fileName 
+                    imports.GetTypeCheckContexts 
+                    ast 
+                    symTable
+                
+            let! pgs = 
+                runCausalityCheck 
+                    logger 
+                    fileName
+                    lut 
+                    blechModule
+
+            // generate block graphs for all activities
+            // this is only needed for code generation but is left here for debugging purposes
+            let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
+            let translationContext: TranslationContext =
+                { tcc = lut
+                  pgs = pgs
+                  bgs = blockGraphContext 
+                  compilations = []
+                  cliContext = cliArgs }
+                
+            let compilations = CodeGeneration.translate translationContext blechModule
+            let translationContext = 
+                { translationContext with compilations = compilations @ translationContext.compilations }
+
+            Logging.log6 "Main" ("source code\n")
+            compilations 
+            |> List.iter (fun c ->
+                let codetxt = PPrint.PPrint.render (Some 160) c.implementation
+                let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
+                Logging.log6 "Main" msg )
+
+            do // this do is required in a workflow, otherwise a Result<_> type expr is expected
+                if not cliArgs.isDryRun then
+                    let importedMods = imports.GetTypedModules
+                    Logging.log2 "Main" ("writing C code for " + fileName)
+                    // implementation should also include headers of imported modules, fjg. 19.10.20
+                    do writeImplementation cliArgs moduleName blechModule importedMods translationContext compilations
+                    do writeHeader cliArgs moduleName blechModule importedMods translationContext compilations
+            
+                    // generated test app if required by cliArgs
+                    do possiblyWriteTestApp cliArgs blechModule translationContext compilations
+            
+            return lut, blechModule
+        }
+        
+    //---
+    // Compilation work flow for implementations, i.e. modules and programs
+    //---
 
     /// Runs compilation steps given input file as a string
     /// which exactly depends on options such as --dry-run
     /// returns a Result type of
     /// ModuleInfo
     /// or Diagnostic.Logger
-    let compileFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
-        // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
+    let compileFromStr (cliArgs : Arguments.BlechCOptions) 
+                       (pkgCtx : CompilationUnit.Context<ImportChecking.ModuleInfo>) 
+                       logger 
+                       importChain 
+                       moduleName 
+                       fileName 
+                       fileContents =
         let resultWorkflow = ResultBuilder()
         resultWorkflow
             {
@@ -177,7 +258,7 @@ module Main =
                         imports.GetExportScopes
                         ast
 
-                let! inferredSingleton = 
+                let! singletons = 
                     runSingletonInference 
                         logger 
                         fileName 
@@ -185,80 +266,35 @@ module Main =
                         ast
                         symTable
 
-                let! inferredExport = 
+                let! exports = 
                     runExportInference 
                         logger 
                         symTable 
                         fileName 
-                        inferredSingleton 
+                        singletons 
                         ast
 
                 let! lut, blechModule = 
-                    runTypeChecking 
-                        cliArgs 
-                        logger 
-                        fileName 
-                        imports.GetTypeCheckContexts 
-                        ast 
-                        symTable
+                    if cliArgs.isFrontendTest then
+                        createTypecheckDummyResult moduleName
+                    else runFromTypeChecking
+                            cliArgs 
+                            logger
+                            moduleName
+                            fileName
+                            ast
+                            symTable
+                            imports
 
-                let! pgs = 
-                    runCausalityCheck 
-                        logger 
-                        fileName
-                        lut 
-                        blechModule
-
-                // generate block graphs for all activities
-                // this is only needed for code generation but is left here for debugging purposes
-                let blockGraphContext = BlockGraph.bgCtxOfPGs pgs
-                let translationContext: TranslationContext =
-                    { tcc = lut
-                      pgs = pgs
-                      bgs = blockGraphContext 
-                      compilations = []
-                      cliContext = cliArgs }
-                        
-                let compilations = CodeGeneration.translate translationContext blechModule
-                let translationContext = 
-                    { translationContext with compilations = compilations @ translationContext.compilations}
-
-                Logging.log6 "Main" ("source code\n")
-                compilations 
-                |> List.iter (fun c ->
-                    let codetxt = PPrint.PPrint.render (Some 160) c.implementation
-                    let msg = sprintf "Code for %s:\n%s\n" c.name.basicId codetxt
-                    Logging.log6 "Main" msg )
-
-                // if not entry point, create signature
-                do  
+                do // this do is required in a workflow, otherwise a Result<_> type expr is expected
                     let isMainProgram = Option.isSome blechModule.entryPoint
                     if not isMainProgram then
                         Logging.log2 "Main" ("writing signature for " + fileName)
-                        do writeSignature cliArgs moduleName inferredExport ast
-                        
-                // if not dry run, write it to file
-                // create code depending on entry point
-                do // this do is required in a workflow, otherwise a Result<_> type expr is expected
-                    if not cliArgs.isDryRun then
-                        // if not entry point, create signature
-                        //let isMainProgram = Option.isSome blechModule.entryPoint
-                        //if not isMainProgram then
-                        //    Logging.log2 "Main" ("writing signature for " + fileName)
-                        //    do writeSignature cliArgs.outDir moduleName inferredExport ast
-
-                        let importedMods = imports.GetTypedModules
-                        Logging.log2 "Main" ("writing C code for " + fileName)
-                        // implementation should also include headers of imported modules, fjg. 19.10.20
-                        do writeImplementation cliArgs moduleName blechModule importedMods translationContext compilations
-                        do writeHeader cliArgs moduleName blechModule importedMods translationContext compilations
-                    
-                        // generated test app if required by cliArgs
-                        do possiblyWriteTestApp cliArgs blechModule translationContext compilations
+                        do writeSignature cliArgs moduleName exports ast
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules symTable singletons lut blechModule
             }
 
                 
@@ -269,12 +305,21 @@ module Main =
         |> compileFromStr cliArgs pkgCtx logger importChain moduleName inputFile
     
 
+    //---
+    // Compilation work flow for interfaces, i.e. signatures
+    //---
+
     /// Runs interface compilation steps given input file as a string
     /// returns a Result type of
     /// ModuleInfo
     /// or Diagnostic.Logger
-    let compileInterfaceFromStr cliArgs (pkgCtx: CompilationUnit.Context<ImportChecking.ModuleInfo>) logger importChain moduleName fileName fileContents =
-        // always run lexer, parser, import compilation, name resolution, export inference, type check and causality checks
+    let compileInterfaceFromStr (cliArgs : Arguments.BlechCOptions) 
+                                (pkgCtx : CompilationUnit.Context<ImportChecking.ModuleInfo>) 
+                                logger 
+                                importChain 
+                                moduleName 
+                                fileName 
+                                fileContents =
         let resultWorkflow = ResultBuilder ()
         resultWorkflow
             {
@@ -304,7 +349,7 @@ module Main =
                         imports.GetExportScopes
                         ast
 
-                let! inferredSingleton = 
+                let! singletons = 
                     runSingletonInference 
                         logger 
                         fileName 
@@ -312,20 +357,21 @@ module Main =
                         ast
                         symTable
 
-                //    no runExportInference 
+                // no runExportInference needed 
                 
-                let! lut, blechModule = 
-                    runTypeChecking 
-                        cliArgs 
-                        logger 
-                        fileName 
-                        imports.GetTypeCheckContexts 
-                        ast 
-                        symTable
+                let! lut, blechModule =
+                    if cliArgs.isFrontendTest then
+                        createTypecheckDummyResult moduleName
+                    else runTypeChecking 
+                            cliArgs 
+                            logger 
+                            fileName 
+                            imports.GetTypeCheckContexts 
+                            ast 
+                            symTable
 
                 let importedModules = imports.GetImportedModuleNames
-                
-                return ImportChecking.ModuleInfo.Make importedModules symTable inferredSingleton lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules symTable singletons lut blechModule
             }
 
 

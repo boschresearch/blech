@@ -19,7 +19,6 @@
     <Compile Include="AST.fs" />
     <Compile Include="PrettyPrint.fs" />
     <Compile Include="Attribute.fs" />
-    <Compile Include="BlechTypes.fs" />
     <Compile Include="SyntaxUtils.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="BlechLexer.fs" />
@@ -29,6 +28,7 @@
     <Compile Include="SingletonInference.fs" />
     <Compile Include="ExportInference.fs" />
     <Compile Include="SignaturePrinter.fs" />
+    <Compile Include="BlechTypes.fs" />
     <Compile Include="TyChkErrors.fs" />
     <Compile Include="TypeCheckContext.fs" />
     <Compile Include="Evaluation.fs" />

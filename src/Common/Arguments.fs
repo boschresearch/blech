@@ -127,6 +127,7 @@ module Arguments =
             showVersion: bool
             isDryRun: bool
             isRebuild: bool
+            isFrontendTest : bool
             trace: bool
             wordSize: WordSize
             passPrimitiveByAddress: bool
@@ -142,6 +143,7 @@ module Arguments =
                 showVersion = false
                 isDryRun = false
                 isRebuild = false
+                isFrontendTest = false
                 trace = false
                 wordSize = W32
                 passPrimitiveByAddress = false
