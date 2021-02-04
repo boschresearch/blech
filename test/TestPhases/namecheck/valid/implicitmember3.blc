@@ -5,8 +5,8 @@ module
 function f ()
     var color: E.Color = E.Green // implicit member access in other module
     var ms : M.S
-    M.f()
-    M.S.f()
-    //run M.a()
-    //run M.S.a()
+    // M.f()
+    // M.S.f()
+    // run M.a()
+    // run M.S.a()
 end

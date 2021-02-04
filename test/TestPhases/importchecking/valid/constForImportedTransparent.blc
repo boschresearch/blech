@@ -1,7 +1,0 @@
-
-import c "imports/constant"
-
-module exposes c1, c2
-
-const c1: tt.S = {x = true}
-const c2 = .FortyTwo + c.FortyTwo

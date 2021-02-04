@@ -15,4 +15,4 @@ end
 
 const RED : Color = Color.Red
 
-const BLUE : Color = .Blue
+const BLUE : Color = Blue
