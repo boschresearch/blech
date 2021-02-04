@@ -24,6 +24,7 @@
     <Compile Include="ExportInferenceTest.fs" />
     <Compile Include="TypeCheckerTest.fs" />
     <Compile Include="CausalityCheckerTest.fs" />
+    <Compile Include="ImportCheckerTest.fs" />
   </ItemGroup>
 
   <ItemGroup>

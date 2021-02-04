@@ -1,4 +1,4 @@
-import tt "imports/transparenttype"
+
 import c "imports/constant"
 
 module exposes c1, c2

@@ -637,8 +637,8 @@ PrimaryExpr
     | LEN Expr                %prec UNARY       { Len ($2, unionRanges $1 $2.Range) }
     | CAP Expr                %prec UNARY       { Cap ($2, unionRanges $1 $2.Range) }
   
-    /* --- implicit member access to a type (i.e. enum tags, methods, constants --- */
-    | ImplicitMember                            { ImplicitMember $1 }
+    /* --- implicit member access to a type (i.e. enum tags, methods, constants --- 
+    | ImplicitMember                            { ImplicitMember $1 } */
 
     /* --- variables, and structured datatype access, object access --- */
     | Location                                  { Var $1 }

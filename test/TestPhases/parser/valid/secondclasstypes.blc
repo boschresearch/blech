@@ -12,7 +12,7 @@ extension
     param p: int8 = 0       // static member, can be changed in the binary 
 
     function init () returns MyClass
-        return {x = 42, c = .Red}
+        return {x = 42, c = Red}
     end
 
     function f (this: MyClass) end

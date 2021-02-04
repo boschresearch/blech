@@ -818,61 +818,61 @@ module SymbolTable =
         /// i.e. a static access path without (currently?) one qualifying names
         /// updates the environment with the name usages
         /// returns declaration name or an error
-        let findImplicitPath (env: Environment) (implicitMember: AST.StaticNamedPath) : Result<Environment, NameCheckError> =
+        //let findImplicitPath (env: Environment) (implicitMember: AST.StaticNamedPath) : Result<Environment, NameCheckError> =
 
-            // on success returns a list of declaration names
-            // in case of failure an empty list
-            // declsAcc starts with a guessed declaration
-            // returns accumulate declaration names
-            let rec probeInnerDecl (declsAcc: Name list) (scope: Scope) (dotpath: Name list) : Name list = 
-                match dotpath with
-                | [name] ->
-                    match Scope.tryFindSymbol scope name.id with
-                    | None ->
-                        []
-                    | Some symb ->
-                        declsAcc @ [symb.name]
-                | name :: tail ->
-                    match Scope.tryFindInnerScope scope name.id with
-                    | None ->
-                        []
-                    | Some innerscope ->
-                        let symb = Scope.getSymbol scope name.id
-                        probeInnerDecl (declsAcc @ [symb.name]) innerscope tail
-                | [] -> 
-                    failwith "Implicit member path should never be empty"
+        //    // on success returns a list of declaration names
+        //    // in case of failure an empty list
+        //    // declsAcc starts with a guessed declaration
+        //    // returns accumulate declaration names
+        //    let rec probeInnerDecl (declsAcc: Name list) (scope: Scope) (dotpath: Name list) : Name list = 
+        //        match dotpath with
+        //        | [name] ->
+        //            match Scope.tryFindSymbol scope name.id with
+        //            | None ->
+        //                []
+        //            | Some symb ->
+        //                declsAcc @ [symb.name]
+        //        | name :: tail ->
+        //            match Scope.tryFindInnerScope scope name.id with
+        //            | None ->
+        //                []
+        //            | Some innerscope ->
+        //                let symb = Scope.getSymbol scope name.id
+        //                probeInnerDecl (declsAcc @ [symb.name]) innerscope tail
+        //        | [] -> 
+        //            failwith "Implicit member path should never be empty"
             
-            let dotpath = implicitMember.names
+        //    let dotpath = implicitMember.names
 
-            let probeInnerScopes (scope: Scope) : Name list list =
-                let openInnerScopes = Map.fold
-                                        (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) 
-                                        [] scope.innerscopes
+        //    let probeInnerScopes (scope: Scope) : Name list list =
+        //        let openInnerScopes = Map.fold
+        //                                (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) 
+        //                                [] scope.innerscopes
                 
-                let declName innerscope = (Scope.getSymbol scope innerscope.id).name 
+        //        let declName innerscope = (Scope.getSymbol scope innerscope.id).name 
                 
-                List.map (fun (ois: Scope) -> probeInnerDecl [declName ois] ois dotpath) openInnerScopes
-                |> List.filter (List.isEmpty >> not) 
+        //        List.map (fun (ois: Scope) -> probeInnerDecl [declName ois] ois dotpath) openInnerScopes
+        //        |> List.filter (List.isEmpty >> not) 
                 
-            // accumulates possible declarations
-            let rec probeScopes (positives: Name list list) (path: Scope list) =
-                match path with
-                | [] ->
-                    failwith "scope stack should never be empty"
-                | [globalscope] ->
-                    positives @ probeInnerScopes globalscope
-                | current :: outer ->
-                    let innerPositives = probeInnerScopes current
-                    probeScopes (positives @ innerPositives) outer
+        //    // accumulates possible declarations
+        //    let rec probeScopes (positives: Name list list) (path: Scope list) =
+        //        match path with
+        //        | [] ->
+        //            failwith "scope stack should never be empty"
+        //        | [globalscope] ->
+        //            positives @ probeInnerScopes globalscope
+        //        | current :: outer ->
+        //            let innerPositives = probeInnerScopes current
+        //            probeScopes (positives @ innerPositives) outer
             
-            match probeScopes [] env.path with
-            | [] ->
-                Error (NoImplicitMemberDeclaration implicitMember) 
-            | [decl] ->
-                do List.iter2 env.lookupTable.addUsage dotpath (List.tail decl)
-                Ok env
-            | decls -> 
-                Error (NonUniqueImplicitMember (implicitMember, decls))
+        //    match probeScopes [] env.path with
+        //    | [] ->
+        //        Error (NoImplicitMemberDeclaration implicitMember) 
+        //    | [decl] ->
+        //        do List.iter2 env.lookupTable.addUsage dotpath (List.tail decl)
+        //        Ok env
+        //    | decls -> 
+        //        Error (NonUniqueImplicitMember (implicitMember, decls))
 
 
     

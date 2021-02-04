@@ -1424,7 +1424,6 @@ and internal checkExpr (lut: TypeCheckContext) expr =
     | AST.Expr.Const literal -> checkSimpleLiteral literal
     | AST.Expr.AggregateConst (ac, r) -> checkAggregateLiteral lut ac r
     | AST.Expr.SliceConst (_, _, _, r) -> Error [UnsupportedFeature (r, "slice const")] // TODO
-    | AST.Expr.ImplicitMember spath -> Error [UnsupportedFeature (spath.Range, "implicit members")] // TODO
     // -- variables --
     | AST.Expr.Var dname ->
         let makeTimedRhsStructure ( tml, dty ) =

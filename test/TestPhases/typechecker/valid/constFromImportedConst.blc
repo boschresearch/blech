@@ -1,0 +1,6 @@
+
+import C "../imports/constant"
+
+module exposes c
+
+const c = C.FortyTwo

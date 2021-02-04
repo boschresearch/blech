@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2019 - for information on the respective copyright owner
+﻿// Copyright (c) 2020 - for information on the respective copyright owner
 // see the NOTICE file and/or the repository 
 // https://github.com/boschresearch/blech.
 //
@@ -14,27 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module NameCheckerTest
+module ImportCheckTest
 
 open NUnit.Framework
 
 open System.IO
 open Blech.Compiler
 open Blech.Common
-
-
-let private parseFileAndHandleImports logger implOrIface moduleName fileName =
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
-                isFrontendTest = true // stop before typecheck for imports
-        }
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
-    let importChain = CompilationUnit.ImportChain.Empty
+           
+let private parseFile logger implOrIface moduleName fileName = 
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
     
     let resultWorkflow = ResultBuilder()
-    resultWorkflow {
+    resultWorkflow { // a one-step workflow, just for consistency with other tests
         let! ast =
             Main.runParser 
                 logger 
@@ -43,32 +35,25 @@ let private parseFileAndHandleImports logger implOrIface moduleName fileName =
                 fileContents 
                 fileName
 
-        let! imports =
-            Main.runImportCompilation 
-                pkgCtx 
-                logger 
-                importChain
-                moduleName 
-                fileName
-                ast
-        return ast, imports
+        return ast
     }
-           
-
-let private runNameChecking implOrIface moduleName fileName = 
-    let logger = Diagnostics.Logger.create ()
     
-    match parseFileAndHandleImports logger implOrIface moduleName fileName with
-    | Ok (ast, imports) -> 
-        Main.runNameResolution 
-            logger 
-            moduleName 
-            fileName 
-            imports.GetLookupTables 
-            imports.GetExportScopes
-            ast
+let private runImportChecking implOrIface moduleName fileName = 
+    let logger = Diagnostics.Logger.create ()
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.ImportChecker.Directory fileName with
+                isFrontendTest = true // no need for type checking and following phases
+        }
+                            
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    let importChain = CompilationUnit.ImportChain.Empty
+    
+    match parseFile logger implOrIface moduleName fileName with
+    | Ok ast -> 
+        Main.runImportCompilation pkgCtx logger importChain moduleName fileName ast 
     | Error logger ->
-        printfn "Did not expect to find errors during parsing or in imported files!\n" 
+        printfn "Did not expect to find errors during parsing \n" 
         Diagnostics.Emitter.printDiagnostics logger
         Assert.False true
         Error logger
@@ -79,35 +64,33 @@ type Test() =
 
     /// load test cases for nameCheckValidFiles test
     static member validFiles =
-        TestFiles.validFiles TestFiles.Namecheck
+        TestFiles.validFiles TestFiles.ImportChecker
         
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member __.NameCheckValidFiles (implOrIface, moduleName, filePath) =
-        match runNameChecking implOrIface moduleName filePath with
+    member __.ImportCheckerValidFiles (implOrIface, moduleName, filePath) =
+        match runImportChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
-        | Ok env ->
-            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
+        | Ok imports ->
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test
     static member invalidFiles = 
-        TestFiles.invalidFiles TestFiles.Namecheck
+        TestFiles.invalidFiles TestFiles.ImportChecker
         
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member __.NameCheckInvalidInputs (implOrIface, moduleName, filePath) =
-        match runNameChecking implOrIface moduleName filePath with
+    member __.ImportCheckerInvalidInputs (implOrIface, moduleName, filePath) =
+        match runImportChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        | Ok env ->
-            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
+        | Ok imports ->
             Assert.False true
 
-        
-    
+
+

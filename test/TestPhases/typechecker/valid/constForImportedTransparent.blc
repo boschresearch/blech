@@ -1,0 +1,5 @@
+import tt "../imports/transparenttype"
+
+module exposes c1
+
+const c1: tt.S = {x = true}

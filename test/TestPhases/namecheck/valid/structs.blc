@@ -35,6 +35,6 @@ end
 
 function f()
     var x: E //S.E.B
-    x = .A
+    x = A
     // f.x.y.z[1].a() // wrong
 end

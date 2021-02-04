@@ -8,6 +8,6 @@ enum RGB
 end
 
 function f ()
-    var tl: Color = Color.Green
-    var rgb: RGB = Green // typing does not help, no overloading resolution in Blech
+    var tl: Color = Color.Green 
+    var rgb: RGB = Green // implicit member local
 end

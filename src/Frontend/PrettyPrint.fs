@@ -684,8 +684,6 @@ module PrettyPrint =
                     |> (</>) <| ppLexpr buf
                     |> align
                     |> group                     
-                | ImplicitMember name ->
-                    chr '.' <^> ppStaticNamedPath name.path
                 // --- variable
                 | Var access ->
                     ppDynamicAccessPath access.timepoint access.path  

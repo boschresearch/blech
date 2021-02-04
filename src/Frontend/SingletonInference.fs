@@ -150,10 +150,6 @@ module SingletonInference =
     let private inferDynamicNamePath =
         addSingletonCall
         
-    // TODO: Currently a function call is not possible for an implicit member
-    // implicit members should be usable for all static and dynamic access paths
-    let private inferImplicitMember ctx (snp : AST.StaticNamedPath) =  
-        ctx
     
     // TODO: Singletons should not be usable as function references, i.e. they become 2nd class subprograms
     let private inferNameInCurrentScope ctx (sharing: Name) = 
@@ -222,8 +218,6 @@ module SingletonInference =
             | ArrayFields fields -> List.fold inferArrayField ctx fields
         | Expr.SliceConst _ ->
             ctx
-        | Expr.ImplicitMember name ->
-            inferImplicitMember ctx name
         | Expr.Var pname ->
             inferDynamicAccessPath ctx pname
         | Expr.Not (e, _) 

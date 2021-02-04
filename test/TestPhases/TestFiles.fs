@@ -30,6 +30,7 @@ type Phase =
     | ExportInference
     | Typechecker
     | Causality
+    | ImportChecker
     member p.Directory =
         match p with
         | Parser -> "parser"
@@ -38,6 +39,7 @@ type Phase =
         | ExportInference -> "exportinference"
         | Typechecker -> "typechecker"
         | Causality -> "causality"
+        | ImportChecker -> "importchecking"
 
 type Validity = 
     | Valid

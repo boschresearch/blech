@@ -1,4 +1,4 @@
-import AT "imports/abstracttype"
+import AT "../imports/abstracttype"
 
 module exposes c
 

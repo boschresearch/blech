@@ -6,4 +6,4 @@ enum Test
     FortyTwo
 end
 
-const incr42 = .FortyTwo + 1
+const incr42 = FortyTwo + 1

@@ -434,8 +434,6 @@ module SignaturePrinter =
             |> (</>) <| bpDynamicAccessPath buf
             |> align
             |> group                     
-        | AST.Expr.ImplicitMember im ->
-            chr '.' <^> bpStaticNamedPath im
         // --- variable
         | AST.Expr.Var access ->
             bpDynamicAccessPath access 

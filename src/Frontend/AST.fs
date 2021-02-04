@@ -677,7 +677,6 @@ and Expr =
     | Const of Literal
     | AggregateConst of FieldExpr * range:range // array or struct const
     | SliceConst of index:Expr option * length:Expr option * buffer:DynamicAccessPath * range:range 
-    | ImplicitMember of StaticNamedPath 
     // -- variables --
     | Var of DynamicAccessPath
     // -- function call --
@@ -728,8 +727,6 @@ and Expr =
         match e with
         | Const literal 
             -> literal.Range
-        | ImplicitMember staticNamedPath 
-            -> staticNamedPath.Range
         | Var location 
             -> location.Range
         | And (l, r)

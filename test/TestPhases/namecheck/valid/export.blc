@@ -31,7 +31,7 @@ param p2: bits8 = 0x8F & p
 // const p3: bits8 = 0x8F
 // const p4: bits8 = 0x8F & p3
 
-const MyColor: Color = .Red 
+const MyColor: Color = Red 
 
 // const c = 42 : nat8
 // const c2 = 42 : nat8

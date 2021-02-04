@@ -9,7 +9,7 @@ end
 
 //var z = .D
 activity main()
-    var zz = .B
+    var zz = B
 
-    var y: ABEnum = .A
+    var y: ABEnum = A
 end

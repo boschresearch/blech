@@ -90,15 +90,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
-
-    let private identifyImplicitMember (ctx: NameCheckContext) (implicitMember: AST.StaticNamedPath) =
-        match Env.findImplicitPath ctx.env implicitMember with
-        | Ok env ->
-            { ctx with env = env }
-        | Error err ->
-            Logger.logError ctx.logger Diagnostics.Phase.Naming err
-            ctx     
-
     
     /// adds an imported module to the name check context
     let private addImportedModule (ctx: NameCheckContext) (import: AST.Import) = 
@@ -275,8 +266,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 | ArrayFields fields -> List.fold checkArrayField ctx fields
             | Expr.SliceConst _ ->
                 ctx
-            | Expr.ImplicitMember name ->
-                identifyImplicitMember ctx name
             | Expr.Var pname ->
                 checkDynamicAccessPath ctx pname
             | Expr.Not (e, _) 

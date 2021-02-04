@@ -1,5 +1,0 @@
-import c "imports/constant"
-
-module exposes incr42
-
-const incr42 = .FortyTwo + 1

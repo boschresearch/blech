@@ -401,13 +401,13 @@ module ExportInference =
     //    { ctx with exportScope = modScp }
 
 
-    let private requireImportForMemberIfImported (ctx: ExportContext) (name: Name) =
-        // printfn "try get import for member: %A" name
-        match Env.tryGetImportForMember ctx.environment name.id with
-        | Some declScopeId ->
-            ctx.AddRequiredImports declScopeId
-        | None ->
-            ctx
+    //let private requireImportForMemberIfImported (ctx: ExportContext) (name: Name) =
+    //    // printfn "try get import for member: %A" name
+    //    match Env.tryGetImportForMember ctx.environment name.id with
+    //    | Some declScopeId ->
+    //        ctx.AddRequiredImports declScopeId
+    //    | None ->
+    //        ctx
 
     let private requireImportIfImported (ctx: ExportContext) (name: Name) =
         // printfn "require import for: %s" name.id
@@ -487,16 +487,16 @@ module ExportInference =
             // ctx
 
 
-    let private inferImplicitMember exp ctx (snp: AST.StaticNamedPath) = 
-        let firstName = List.head snp.names
-        match exp.visibility with
-        | Transparent ->
-            checkTransparentImplicitName exp ctx firstName
-            |> exportNameIfOpaqueSingletonSignature <| firstName
-            |> requireImportForMemberIfImported <| firstName
-        | _ ->
-            exportNameIfOpaqueSingletonSignature ctx firstName
-            // ctx
+    //let private inferImplicitMember exp ctx (snp: AST.StaticNamedPath) = 
+    //    let firstName = List.head snp.names
+    //    match exp.visibility with
+    //    | Transparent ->
+    //        checkTransparentImplicitName exp ctx firstName
+    //        |> exportNameIfOpaqueSingletonSignature <| firstName
+    //        |> requireImportForMemberIfImported <| firstName
+    //    | _ ->
+    //        exportNameIfOpaqueSingletonSignature ctx firstName
+    //        // ctx
 
 
     let private inferNameInCurrentScope exp ctx (sharing: Name) = 
@@ -567,8 +567,6 @@ module ExportInference =
             | ArrayFields fields -> List.fold (inferArrayField exp) ctx fields
         | Expr.SliceConst _ ->
             ctx
-        | Expr.ImplicitMember name ->
-            inferImplicitMember exp ctx name
         | Expr.Var pname ->
             inferDynamicAccessPath exp ctx pname
         | Expr.Not (e, _) 

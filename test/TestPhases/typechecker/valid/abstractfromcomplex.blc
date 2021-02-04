@@ -1,4 +1,4 @@
-import ac "imports/abstracttype"
+import ac "../imports/abstracttype"
 
 module
 
