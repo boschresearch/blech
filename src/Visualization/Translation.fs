@@ -25,7 +25,7 @@ module Blech.Visualization.Translation
                         // Replace separated words in given string by their rendered counterparts.
                         let replaceOrigByRendered (acc:string) (pair:string*string) = acc.Replace(fst pair, snd pair)
                         List.fold replaceOrigByRendered toCheck originalAndRenderedWords
-        
+
     /// Initially calls the render method. To be used in a list map so that both arguments are the same.
     /// Returns the original and the rendered ones as pairs.
     and private renderRhsRhlWordInitial(checkWord : string) : string * string =
@@ -41,6 +41,21 @@ module Blech.Visualization.Translation
             | head :: tail -> let stringTail = String.concat "" <| List.map string tail
                               match head with '.' -> renderRhsRhlWord stringTail stringTail | _ -> renderRhsRhlWord (stringTail) original
             | [] -> original // Did not contain a dot.
+
+    /// Recursively check for statefullness in body and subsequent complex nodes.
+    /// TODO delete since it is not being used.
+    let rec isStateful(stmts : Stmt list) : bool =
+        let checkListAndCallRec = 
+            fun acc (stmt : Stmt) -> match stmt with
+                                        | Await _ -> true
+                                        | ITE (_, _, ifStmts, elseStmts)-> acc || isStateful ifStmts || isStateful elseStmts 
+                                        | RepeatUntil (_, stmtList, _, _) -> acc || isStateful stmtList
+                                        | Preempt (_, _, _, _, stmtList) -> acc || isStateful stmtList
+                                        | StmtSequence (stmtList) -> acc || isStateful stmtList
+                                        | Cobegin (_, listOfStrengthAndStmts) -> acc || isStateful (List.collect (fun (e:Strength * Stmt list) -> snd e) listOfStrengthAndStmts)
+                                        | ActivityCall (_, qName, _, typedRhsList, typedLhsList) -> true
+                                        | _ -> acc || false
+        List.fold checkListAndCallRec false stmts
 
     /// Functions for transforming Blech paremters to my own parameter type.    
     let paramToParam = fun (paramDec : ParamDecl) -> {TypeName = paramDec.datatype.ToString(); Name = paramDec.name.basicId}

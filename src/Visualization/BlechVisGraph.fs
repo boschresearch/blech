@@ -195,7 +195,7 @@ module Blech.Visualization.BlechVisGraph
         let counter = 
             fun (tuple: int * BlechEdge list) (e:BlechEdge) -> 
                 if e.Source.Payload.StateCount = edge.Source.Payload.StateCount && 
-                    e.Source.Payload.StateCount = edge.Source.Payload.StateCount then 
+                    e.Target.Payload.StateCount = edge.Target.Payload.StateCount then 
                     (fst tuple + 1, e :: (snd tuple))
                 else 
                     (fst tuple, snd tuple)
@@ -206,7 +206,25 @@ module Blech.Visualization.BlechVisGraph
         
         // We want exactly two edges between source and target. One abort and one immediate, others are unknown and unconsidered cases.
         (fst count) = 2 && countAbort = 1 && countImmediate = 1
-        
+
+    /// Checks whether the source and target of the edge have only edges between then regarding outgoing and incoming. All the edges are immediates for true.
+    let onlyImmediatesOrConditionals (edge : BlechEdge) : bool = 
+        let source = edge.Source
+        let target = edge.Target
+        let sourceOutgoings = (Seq.toList source.Outgoing)
+        let targetIncomings = (Seq.toList target.Incoming)
+        printfn "source out %i" sourceOutgoings.Length
+        printfn "target in %i" targetIncomings.Length
+        let cond1 = sourceOutgoings.Length = targetIncomings.Length && sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2
+        let edgesEqualToEdge = 
+            (fun acc (e:BlechEdge) -> acc && (e.Source.Payload.StateCount = source.Payload.StateCount && e.Target.Payload.StateCount = target.Payload.StateCount))
+        let edgeTerminalOrImmediate =
+            (fun acc (e:BlechEdge) -> 
+                acc && (e.Payload.Property = IsImmediate || e.Payload.Property = IsTerminal || e.Payload.Property = IsConditional || e.Payload.Property = IsConditionalTerminal))
+        let cond2 = List.fold edgesEqualToEdge true sourceOutgoings && List.fold edgesEqualToEdge true targetIncomings
+        let cond3 = List.fold edgeTerminalOrImmediate true sourceOutgoings && List.fold edgeTerminalOrImmediate true targetIncomings
+
+        cond1 && cond2 && cond3
 
     //____________________________________Remove element in list.
     /// Removes element from a list. If element is not in list, original list will be returned.

@@ -14,7 +14,8 @@ module Blech.Visualization.Optimization
 
     /// Optimizes a single activity node.
     and private optimizeSingleActivity (activityNode: BlechNode) : BlechNode = 
-        //printfn "Optimizing activity"
+        printfn "_______________________________"
+        printfn "Optimizing activity %s" activityNode.Payload.Label
         let actNodePayload = activityNode.Payload
         // Extract body.
         let isComplex = match actNodePayload.IsComplex with 
@@ -200,7 +201,7 @@ module Blech.Visualization.Optimization
     /// Also calls the collapse of immediate trnaasitions recursively to complex nodes.
     // TODO this is not functional programming..
     and private checkSingleEdgeForCollapse (graph : VisGraph) (edge : BlechEdge) : VisGraph = 
-        //printfn "checking s%i - %s - edge s%i to s%i - %s" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount edge.Payload.Label
+        printfn "checking s%i - %s - edge s%i to s%i - %s - target in %i" edge.Source.Payload.StateCount (edge.Payload.Property.ToString()) edge.Source.Payload.StateCount edge.Target.Payload.StateCount edge.Payload.Label (Seq.toList edge.Target.Incoming).Length
         
         //Recursive calls
         match edge.Source.Payload.IsComplex with 
@@ -222,18 +223,32 @@ module Blech.Visualization.Optimization
         let sourceNotActivityCall = match source.Payload.IsComplex with IsActivityCall _ -> false | _ -> true 
         // Special case: between two nodes are a immediate and a abort transition.
         // Both are deleted, if target or source is simple and has only two outgoing/incoming transitions respecitvely.
-        // If none of the two nodes can be deleted, only the abort is deleted, since it is unneccessary.
-        if(sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
-            immediateAndAbortNode edge sourceOutgoings &&
-            immediateAndAbortNode edge targetIncomings &&
-            sourceNotActivityCall) then
+        let specialCase1 = sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
+                            immediateAndAbortNode edge sourceOutgoings &&
+                            immediateAndAbortNode edge targetIncomings &&
+                            sourceNotActivityCall
+        // Other special cases. 
+        // Only immediate transitions between the source and edge.
+        let specialCase2 = sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
+                            onlyImmediatesOrConditionals edge
+        printfn "%b" specialCase2
+        if(specialCase1) then
             //printfn "0"
             if source.Payload.IsComplex = IsSimple && source.Payload.Label.Equals "" && (Seq.toList source.Outgoing).Length = 2 then
                 handleSourceDeletion source target graph
             else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" && (Seq.toList target.Incoming).Length = 2 then
                 handleTargetDeletion source target graph
-            else 
+            else    
                 callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
+        elif(specialCase2) then
+            //printfn "0"
+            if source.Payload.IsComplex = IsSimple && source.Payload.Label.Equals "" then
+                handleSourceDeletion source target graph
+            else if target.Payload.IsComplex = IsSimple && target.Payload.Label.Equals "" then
+                handleTargetDeletion source target graph
+            else    
+                callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList target.Outgoing) graph
+        // Clear cases where the edge is not deleted.
         // Clear cases where the edge is not deleted.
         elif(sourceOutgoings.Length > 1 && targetIncomings.Length > 1 ||
              source.Payload.StateCount = target.Payload.StateCount ||
@@ -265,7 +280,7 @@ module Blech.Visualization.Optimization
         let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) statusChangedTarget Target graph
         //printfn "case 2"
         //printfn "removing s%i" source.Payload.StateCount
-        //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList source.Incoming) |> ignore 
+        List.map (fun (n:BlechEdge) -> printfn "s%i to s%i" n.Source.Payload.StateCount n.Target.Payload.StateCount) (Seq.toList source.Incoming) |> ignore 
         graph.RemoveNode source
         //printfn "-"
         callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedTarget.Outgoing) graph
@@ -279,7 +294,7 @@ module Blech.Visualization.Optimization
         //printfn "removing s%i" target.Payload.StateCount
         graph.RemoveNode target
         //printfn "length.. %i" (Seq.toList updatedSource.Outgoing).Length
-        //List.map (fun (n:BlechEdge) -> printfn "s%i to s%i - %s" n.Source.Payload.StateCount n.Target.Payload.StateCount (n.Payload.Property.ToString())) (Seq.toList updatedSource.Outgoing) |> ignore                         
+        List.map (fun (n:BlechEdge) -> printfn "s%i to s%i - %s" n.Source.Payload.StateCount n.Target.Payload.StateCount (n.Payload.Property.ToString())) (Seq.toList updatedSource.Outgoing) |> ignore                         
         callSubsequentAndFilterAlreadyVisitedTargets (Seq.toList updatedSource.Outgoing) graph
 
     /// Adds a list of new edges to the graph.
