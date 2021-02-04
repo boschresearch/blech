@@ -252,7 +252,7 @@ module Annotation =
     //--------------
 
     let private unknownPragma (anno : AST.Annotation)  = 
-        Error [UnknownPragma anno.Range ]
+        Error [UnknownMemberPragma anno.Range ]
 
     let private checkPragma (pragma: AST.Annotation) =
         match pragma.Attribute with       
@@ -280,4 +280,17 @@ module Annotation =
             
         checkPragma pragma 
         |> Result.bind checkDirective 
+
+
+    let private unknownStatementPragma (anno : AST.Annotation)  = 
+        Error [UnknownStatementPragma anno.Range ]
+
+    let checkStatementPragma (pragma: AST.Annotation) =
+        match pragma.Attribute with
+        | AST.KeyValue ( key = AST.Ident(text = Key.label) 
+                         value = AST.String(value = userLabel)
+                         range = pos ) ->
+             Ok ( Label (pos,userLabel))
+        | _ ->
+            unknownStatementPragma pragma
 

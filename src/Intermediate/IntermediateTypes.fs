@@ -85,6 +85,7 @@ type Transition =
 /// executed instantaneously
 type Action =
     | Nothing
+    | StatementPragma of Attribute.StatementPragma
     // initialisation
     | VarDecl of VarDecl
     | ExternalVarDecl of ExternalVarDecl

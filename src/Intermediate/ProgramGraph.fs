@@ -293,7 +293,8 @@ module ProgramGraph =
         let pg = createEmpty line thread (ActionLocation action)
         do connect pg pg.Entry pg.Exit
         match action with
-        | Nothing -> ()
+        | Nothing
+        | Action.StatementPragma _ -> ()
         | Action.VarDecl v ->
             let newLhs =
                 { lhs = LhsCur (Loc v.name)
@@ -645,6 +646,7 @@ module ProgramGraph =
         | Stmt.Assert (pos, cond, x) -> createAction context pos thread (Action.Assert (pos, cond, x))
         | Stmt.Assume (pos, cond, x) -> createAction context pos thread (Action.Assume (pos, cond, x))
         | Stmt.Print (pos, x, y) -> createAction context pos thread (Action.Print (pos, x, y))
+        | Stmt.StatementPragma p -> createAction context p.Range thread (Action.StatementPragma p)
         // pause
         | Await (pos, cond) -> createAwait context pos thread "ticker" cond
         // control flow
