@@ -57,11 +57,11 @@ let private modulesAndFiles (phase: Phase) (validity: Validity) =
         sprintf "%s/%s: %s" phase.Directory validity.Directory (moduleName.ToString())
     let mkTestCaseData file = 
         let modName = 
-            printfn "file name: '%s'" file
+            // printfn "file name: '%s'" file
             match tryMakeTranslationUnitPath file fakeSourcePath None with
             | Ok fp -> fp
             | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
-        printfn "module name: '%s'" <| modName.ToString()
+        // printfn "module name: '%s'" <| modName.ToString()
         let testName = testCaseNameFrom modName
         let loadWhat = Option.get (CompilationUnit.loadWhat file) 
         TestCaseData(loadWhat, modName, file).SetName(testName)    
