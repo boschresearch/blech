@@ -1,4 +1,4 @@
-module
+module exposes S
 
 struct S
     var b: bool

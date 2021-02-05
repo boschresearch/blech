@@ -97,7 +97,7 @@ module SignaturePrinter =
         | AST.Structured (key, attrs, _) ->
             ppKey key <^> 
             (
-            (List.map (fun a -> bpAttribute a) attrs) 
+            (List.map bpAttribute attrs) 
                 |> dpCommaSeparatedInParens
                 |> align
                 |> group)
@@ -243,7 +243,7 @@ module SignaturePrinter =
         dpName td.name <+> bpEnumRawValue td.rawvalue <+> bpEnumIsDefault td.isDefault
         |> gnest dpTabsize
         
-    and bpEnumTypeDecl (et : AST.EnumTypeDecl) =
+    and bpEnumTypeDecl memberDocs (et : AST.EnumTypeDecl) =
         let optRef = 
             if et.isReference then Some <| txt "ref" else None
 
@@ -252,9 +252,9 @@ module SignaturePrinter =
             <+> dpName et.name
             <^> bpEnumRawType et.rawtype
             <.> indent dpTabsize (List.map bpTagDecl et.tags |> vsep)
-            // omit extensions for now
-            //<.> match membersDoc with | [] -> empty | _ -> txt "extension"
-            //<.> indent dpTabsize (membersDoc |> vsep)
+            // extensions are preliminaryfor now
+            <.> match et.members with | [] -> empty | _ -> txt "extension"
+            <.> indent dpTabsize (memberDocs |> vsep)
             <.> txt "end"
 
         bpOptAnnotations et.annotations 
@@ -281,17 +281,17 @@ module SignaturePrinter =
             failwith "Unexpected dynamic member"
 
 
-    and bpStructTypeDecl (st : AST.StructTypeDecl) =
+    and bpStructTypeDecl memberDocs (st : AST.StructTypeDecl) =
         let optRef = 
             if st.isReference then Some <| txt "ref" else None
 
-        let structDecl = 
+        let structDecl =
             txt "struct"
             <+> dpName st.name
             <.> indent dpTabsize (List.map bpDynamicMember st.fields |> vsep)
-            // omit extensions for now
-            //<.> match membersDoc with | [] -> empty | _ -> txt "extension"
-            //<.> indent dpTabsize (membersDoc |> vsep)
+            // extensions are preliminaryfor now
+            <.> match st.members with | [] -> empty | _ -> txt "extension"
+            <.> indent dpTabsize (memberDocs |> vsep)
             <.> txt "end"
 
         bpOptAnnotations st.annotations 
@@ -440,8 +440,8 @@ module SignaturePrinter =
         // --- function call
         | AST.Expr.FunctionCall (fp, inputs, optOutputs, _)->
             bpSubProgramCall fp 
-            <| List.map (fun e -> bpExpr e) inputs
-            <| List.map (fun e -> bpDynamicAccessPath e) optOutputs
+            <| List.map bpExpr inputs
+            <| List.map bpDynamicAccessPath optOutputs
         // --- logical operators ---
         | AST.Expr.Not (expr, _) -> 
             fun p -> txt "not" <+> bpPrecExpr p expr
@@ -706,6 +706,13 @@ module SignaturePrinter =
                  |> group )
 
 
+        let psExtensionMember (mbr: AST.Member) =
+            match mbr with
+            | AST.Member.Subprogram sp ->
+                psSubProgram sp
+            | _ ->
+                failwith "Extensions are preliminary and only used to test implicit member access"
+
         let psMember (ctx : ExportInference.ExportContext) (mbr : AST.Member) =
             
             match mbr with
@@ -714,8 +721,9 @@ module SignaturePrinter =
                     if ctx.IsAbstractType et.name then
                         let absType = Option.get <| ctx.TryGetAbstractType et.name
                         psAbstractType et.annotations absType et.isReference et.name 
-                    else 
-                        bpEnumTypeDecl et 
+                    else
+                        let memberDocs = List.map psExtensionMember et.members 
+                        bpEnumTypeDecl memberDocs et 
                 else empty  
             
             | AST.Member.StructType st ->
@@ -724,7 +732,8 @@ module SignaturePrinter =
                         let absType = Option.get <| ctx.TryGetAbstractType st.name
                         psAbstractType st.annotations absType st.isReference st.name 
                     else 
-                        bpStructTypeDecl st 
+                        let memberDocs = List.map psExtensionMember st.members
+                        bpStructTypeDecl memberDocs st
                 else empty  
 
             | AST.Member.TypeAlias ta ->
@@ -778,6 +787,7 @@ module SignaturePrinter =
             
             | AST.Member.Nothing -> 
                 failwith "this should have been removed"
+
 
         let psImportExposes requiredImports (exposing: AST.Exposing) =
             let requiredExposedName name =
