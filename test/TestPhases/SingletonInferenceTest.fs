@@ -18,28 +18,70 @@ module SingletonInferenceTest
 
 open NUnit.Framework
 
+open System.IO
 open Blech.Common
-open Blech.Frontend
+open Blech.Compiler
+//open Blech.Frontend
 
+let private parseNameCheckAndHandleImports logger implOrIface moduleName fileName =
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    let importChain = CompilationUnit.ImportChain.Empty
+    let fileContents = File.ReadAllText <| Path.GetFullPath fileName
+    
+    let resultWorkflow = ResultBuilder()
+    resultWorkflow {
+        let! ast =
+            Main.runParser 
+                logger 
+                implOrIface
+                moduleName 
+                fileContents 
+                fileName
 
-let runSingletonInference implOrIface moduleName filePath =
+        let! imports =
+            Main.runImportCompilation 
+                pkgCtx 
+                logger 
+                importChain
+                moduleName 
+                fileName
+                ast
+
+        let! symTable =
+            Main.runNameResolution 
+                logger 
+                moduleName 
+                fileName 
+                imports.GetLookupTables
+                imports.GetExportScopes
+                ast
+        
+        return ast, imports, symTable
+    }
+
+let runSingletonInference implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
 
-    let resultWorkflow = new Blech.Common.ResultBuilder()
-    resultWorkflow
-        {
-            let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-            
-            let! env = 
-                let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-                Blech.Frontend.NameChecking.checkDeclaredness ctx ast
-            
-            let importedSingletons = List.empty
-            return!
-                SingletonInference.inferSingletons logger env importedSingletons ast
-        }
+    match parseNameCheckAndHandleImports logger implOrIface moduleName fileName with
+    | Ok (ast, imports, symTable) -> 
+        Main.runSingletonInference
+            logger 
+            fileName 
+            imports.GetSingletons 
+            ast
+            symTable
+    | Error logger ->
+        printfn "Did not expect to find errors during parsing, name checking, or in imported files!\n" 
+        Diagnostics.Emitter.printDiagnostics logger
+        Assert.False true
+        Error logger
 
-
+    
 [<TestFixture>]
 type Test() =
 
@@ -50,7 +92,7 @@ type Test() =
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.nameCheckValidFiles (implOrIface, moduleName, filePath) =
+    member __.SingletonInferenceValidFiles (implOrIface, moduleName, filePath) =
         match runSingletonInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
@@ -66,7 +108,7 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.nameCheckInvalidInputs (implOrIface, moduleName, filePath) =
+    member __.SingletonInferencencInvalidFiles (implOrIface, moduleName, filePath) =
         match runSingletonInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 

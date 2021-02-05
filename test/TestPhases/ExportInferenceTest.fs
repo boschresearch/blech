@@ -25,7 +25,7 @@ open Blech.Frontend
 let runExportInference implOrIface moduleName filePath =
     let logger = Diagnostics.Logger.create ()
 
-    let resultWorkflow = new Blech.Common.ResultBuilder()
+    let resultWorkflow = ResultBuilder ()
     resultWorkflow
         {
             let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
@@ -57,7 +57,7 @@ type Test() =
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.nameCheckValidFiles (implOrIface, moduleName, filePath) =
+    member __.InferExportsValidFiles (implOrIface, moduleName, filePath) =
         match runExportInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
@@ -73,7 +73,7 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.nameCheckInvalidInputs (implOrIface, moduleName, filePath) =
+    member __.InferExportsInvalidInputs (implOrIface, moduleName, filePath) =
         match runExportInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 

@@ -100,7 +100,7 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member __.NameCheckInvalidInputs (implOrIface, moduleName, filePath) =
+    member __.NameCheckInvalidFiles (implOrIface, moduleName, filePath) =
         match runNameChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger

@@ -710,29 +710,32 @@ module SignaturePrinter =
             
             match mbr with
             | AST.Member.EnumType et -> 
-                if ctx.IsAbstractType et.name then
-                    let absType = Option.get <| ctx.TryGetAbstractType et.name
-                    psAbstractType et.annotations absType et.isReference et.name 
-                elif ctx.IsExported et.name then 
-                    bpEnumTypeDecl et 
+                if ctx.IsExported et.name then 
+                    if ctx.IsAbstractType et.name then
+                        let absType = Option.get <| ctx.TryGetAbstractType et.name
+                        psAbstractType et.annotations absType et.isReference et.name 
+                    else 
+                        bpEnumTypeDecl et 
                 else empty  
             
             | AST.Member.StructType st ->
-                if ctx.IsAbstractType st.name then
-                    let absType = Option.get <| ctx.TryGetAbstractType st.name
-                    psAbstractType st.annotations absType st.isReference st.name
-                elif ctx.IsExported st.name then 
-                    bpStructTypeDecl st 
-                else empty
-            
+                if ctx.IsExported st.name then 
+                    if ctx.IsAbstractType st.name then
+                        let absType = Option.get <| ctx.TryGetAbstractType st.name
+                        psAbstractType st.annotations absType st.isReference st.name 
+                    else 
+                        bpStructTypeDecl st 
+                else empty  
+
             | AST.Member.TypeAlias ta ->
-                if ctx.IsAbstractType ta.name then
-                    let absType = Option.get <| ctx.TryGetAbstractType ta.name
-                    psAbstractType ta.annotations absType ta.isReference ta.name
-                elif ctx.IsExported ta.name then 
-                    bpTypeAliasDecl ta
-                else empty
-            
+                if ctx.IsExported ta.name then 
+                    if ctx.IsAbstractType ta.name then
+                        let absType = Option.get <| ctx.TryGetAbstractType ta.name
+                        psAbstractType ta.annotations absType ta.isReference ta.name 
+                    else 
+                        bpTypeAliasDecl ta
+                else empty  
+                
             | AST.Member.OpaqueType ot ->
                 failwith "this should not occur"
             
