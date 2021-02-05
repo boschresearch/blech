@@ -91,29 +91,36 @@ let internal isLhsMutable lut lhs =
 
 
 /// Returns true when the evaluation of expr does not change the program's state
-let rec private hasNoSideEffect expr =
+let rec private hasNoSideEffect lut expr =
+    let recHasNoSideEffect = hasNoSideEffect lut
     let recurFields fields =
         fields
-        |> List.map (snd >> hasNoSideEffect)
+        |> List.map (snd >> recHasNoSideEffect)
         |> List.forall id
     match expr.rhs with
     // locations
     | RhsCur tml 
-    | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
+    | Prev tml -> tml.FindAllIndexExpr |> List.forall recHasNoSideEffect
     // constants and literals
     | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _  | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
-    // call, has no side-effect IFF it does not write any outputs
+    // call, has no side-effect if it does not write any outputs, 
+    // nor changes anything in the environment (singleton!)
     // this assumption is only valid when there are not global variables (as is the case in Blech)
-    // and no external C variables are written (TODO!)
-    | FunCall (_, inputs, outputs) ->
+    | FunCall (qname, inputs, outputs) ->
+        let isSingleton =
+            lut.nameToDecl.[qname].TryGetPrototype
+            |> function
+                | None -> false
+                | Some prot -> prot.IsSingleton
         List.isEmpty outputs 
-        && List.forall hasNoSideEffect inputs
+        && not isSingleton
+        && List.forall recHasNoSideEffect inputs
     // type conversion
-    | Convert (e, _, _) -> hasNoSideEffect e
+    | Convert (e, _, _) -> recHasNoSideEffect e
     // unary 
-    | Neg e | Bnot e -> hasNoSideEffect e
+    | Neg e | Bnot e -> recHasNoSideEffect e
     // logical
     | Conj (x, y) | Disj (x, y) 
     // bitwise 
@@ -123,7 +130,7 @@ let rec private hasNoSideEffect expr =
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
-        hasNoSideEffect x && hasNoSideEffect y
+        recHasNoSideEffect x && recHasNoSideEffect y
 
 
 /// True if given expression contains only compile time or param values
@@ -1694,7 +1701,7 @@ let internal fCondition lut cond =
         | ValueTypes BoolType -> Ok e
         | _ -> Error [ExpectedBoolExpr (e.Range, e)]
     let ensureSideEffectFree (e: TypedRhs) =
-        if hasNoSideEffect e then Ok e
+        if hasNoSideEffect lut e then Ok e
         else Error [ConditionHasSideEffect e]
     match cond with
     | AST.Cond expr ->

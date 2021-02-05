@@ -74,6 +74,14 @@ type Declarable =
         | VarDecl _
         | ParamDecl _
         | ExternalVarDecl _ -> None
+
+    member this.TryGetPrototype =
+        match this with
+        | ProcedurePrototype p -> Some p
+        | ProcedureImpl i -> Some i.prototype
+        | VarDecl _
+        | ParamDecl _
+        | ExternalVarDecl _ -> None
     
     member this.AddReference pos =
         match this with
