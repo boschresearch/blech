@@ -1,0 +1,7 @@
+import M "moduledoesnotexist"
+
+module exposes Main
+
+activity Main ()
+    await true
+end
