@@ -72,19 +72,10 @@ module Main =
         |> NameChecking.checkDeclaredness <| ast
 
 
-    let private runTypeChecking cliArgs logger inputFile otherLuts ast env =
-        Logging.log2 "Main" ("performing type checking on " + inputFile)
-        TypeChecking.typeCheck cliArgs logger otherLuts ast env
-
-
-    let private runCausalityCheck logger inputFile tyCtx blechModule =
-        Logging.log2 "Main" ("checking causality in " + inputFile) 
-        Causality.checkPackCausality logger tyCtx blechModule
-
-
     let runImportCompilation packageContext logger importChain moduleName fileName ast = 
         Logging.log2 "Main" ("checking imports in " + fileName + " and compiling imported modules")
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
+
 
     let runSingletonInference logger fileName importedSingletons ast symboltableEnv = 
         Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
@@ -94,13 +85,23 @@ module Main =
     let runExportInference logger symboltableEnv fileName singletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
         ExportInference.inferExports logger symboltableEnv singletons ast 
-        
+    
+    
+    let runTypeChecking cliArgs logger inputFile otherLuts ast env =
+        Logging.log2 "Main" ("performing type checking on " + inputFile)
+        TypeChecking.typeCheck cliArgs logger otherLuts ast env
+
+
+    let private runCausalityCheck logger inputFile tyCtx blechModule =
+        Logging.log2 "Main" ("checking causality in " + inputFile) 
+        Causality.checkPackCausality logger tyCtx blechModule
+
     //---
     //  Functions that write to the file system during compilation
     //---
 
     let private writeFile outFileName txt =
-        FileInfo(outFileName).Directory.Create()
+        do FileInfo(outFileName).Directory.Create()
         do File.WriteAllText(outFileName, txt)
 
 
@@ -134,8 +135,7 @@ module Main =
         | Some an, Some ep ->
             let appFile = Path.Combine(cliArgs.outDir, TranslatePath.appNameToCFile an)
             let app = CodeGeneration.emitApp translationContext modul compilations ep.Name
-            do FileInfo(appFile).Directory.Create()
-            do File.WriteAllText(appFile, app)
+            do writeFile appFile app
         | Some _, None // TODO: throw error if there is no entry point, fg 17.09.20
         | None, _ -> 
             ()

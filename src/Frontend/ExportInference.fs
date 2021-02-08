@@ -465,6 +465,7 @@ module ExportInference =
         match exp.visibility with
         | Transparent ->
             checkTransparentStaticName exp ctx firstName
+            |> checkTransparentImplicitName exp <| firstName  // only necessary for types in extensions or other open scopes
             |> requireImportIfImported <| firstName
         | Semitransparent ->
             exportNameIfAbstractType ctx firstName

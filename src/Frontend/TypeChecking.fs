@@ -1263,8 +1263,7 @@ type private ProcessedMembers =
         }
 
 
-// this is also an entry point for testing, hence public
-let public fPackage lut (pack: AST.CompilationUnit) =
+let private fPackage lut (pack: AST.CompilationUnit) =
     let pos = pack.Range
     //let spec = pack.spec
 
@@ -1398,9 +1397,12 @@ let public fPackage lut (pack: AST.CompilationUnit) =
     Result.bind checkEntryPoint typedPack
 
 
-/// Performs type checking starting with an untyped package and a namecheck loopup table.
-/// Returns a TypeCheck context and a BlechModule.
-let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit) (ncEnv: SymbolTable.Environment) =
+ 
+/// This is an entry point for type check testing
+let typeCheckUnLogged (cliContext: Arguments.BlechCOptions) 
+                      otherLuts 
+                      (pack: AST.CompilationUnit) 
+                      (ncEnv: SymbolTable.Environment) = 
     let lut = TypeCheckContext.Init cliContext ncEnv
     otherLuts
     |> List.iter (fun otherLut ->
@@ -1411,7 +1413,17 @@ let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.
     fPackage lut pack
     |> function
         | Ok p -> 
-            Blech.Common.Logging.log6 "Main" ("typed syntax tree built\n" + p.ToString())
             Ok (lut, p)
-        | Error errs -> Error (Diagnostics.wrapErrsInLogger logger Diagnostics.Phase.Typing errs)
-        
+        | Error errs ->
+            Error errs
+
+
+/// Performs type checking starting with an untyped package and a namecheck loopup table.
+/// Returns a TypeCheck context and a BlechModule.
+let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit) (ncEnv: SymbolTable.Environment) =
+    match typeCheckUnLogged cliContext otherLuts pack ncEnv with
+    | Ok (lut, blechModule) ->
+        Blech.Common.Logging.log6 "Main" ("typed syntax tree built\n" + blechModule.ToString())
+        Ok (lut, blechModule)
+    | Error errs -> 
+        Error (Diagnostics.wrapErrsInLogger logger Diagnostics.Phase.Typing errs)
