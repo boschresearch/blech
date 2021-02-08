@@ -16,11 +16,9 @@ end
 activity A()
     var a: [3]bool
     cobegin
-        let b = f()
-        await true
+        await f()
         
     with
-        let b = a[h()]
-        await true
+        await a[h()]
     end
 end

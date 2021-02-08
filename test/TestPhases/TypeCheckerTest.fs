@@ -91,7 +91,7 @@ type Test() =
     static member validFiles =
         TestFiles.validFiles TestFiles.Typechecker
         
-    /// run typeCheckValidFiles
+    /// run typeCheck on valid files
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member __.TypeCheckValidFiles (implOrIface, moduleName, filePath) =
@@ -108,7 +108,7 @@ type Test() =
     static member invalidFiles =
         TestFiles.invalidFiles TestFiles.Typechecker
         
-    /// run typeCheckInvalidInputs
+    /// run typeCheck on invalid files
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member __.TypeCheckInvalidFiles (implOrIface, moduleName, filePath) =

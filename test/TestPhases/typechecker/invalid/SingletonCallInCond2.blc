@@ -6,16 +6,12 @@ function f() returns bool
 end
 
 activity B()
-    let b = f()
-    await b
+    await f()
 end
 
 @[EntryPoint]
 activity A()
-    cobegin
-        run B()
-    with
-        let b = f()
-        await b
+    if f() then
     end
+    await true
 end

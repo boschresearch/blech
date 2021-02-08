@@ -92,7 +92,7 @@ module Main =
         TypeChecking.typeCheck cliArgs logger otherLuts ast env
 
 
-    let private runCausalityCheck logger inputFile tyCtx blechModule =
+    let runCausalityCheck logger inputFile tyCtx blechModule =
         Logging.log2 "Main" ("checking causality in " + inputFile) 
         Causality.checkPackCausality logger tyCtx blechModule
 
