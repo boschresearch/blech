@@ -454,7 +454,7 @@ module ExportInference =
         
     let private checkTransparentImplicitName exp (ctx: ExportContext) (name: Name) =
         if Env.isHiddenImplicitMember ctx.environment name.id then
-            Dummy (name.Range, sprintf "Implicit name '.%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
+            Dummy (name.Range, sprintf "Implicit name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
             |> logExportError ctx 
         else 
             ctx
@@ -478,6 +478,7 @@ module ExportInference =
         match exp.visibility with
         | Transparent ->
             checkTransparentDynamicName exp ctx firstName
+            |> checkTransparentImplicitName exp <| firstName
             |> exportNameIfOpaqueSingletonSignature <| firstName
             |> requireImportIfImported <| firstName
         | _ ->

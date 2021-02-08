@@ -994,5 +994,5 @@ module SymbolTable =
                 findFirstName env name
                 |> Result.bind (nextStaticScope env name dotNames) 
             | [] ->
-                failwith "Leading names of a dynamic access path are never empty"
+                failwith "The names in a static access path are never empty"
             |> Result.bind (fun scope -> Ok env)        

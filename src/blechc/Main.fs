@@ -91,7 +91,7 @@ module Main =
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
             
 
-    let private runExportInference logger symboltableEnv fileName singletons ast = 
+    let runExportInference logger symboltableEnv fileName singletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
         ExportInference.inferExports logger symboltableEnv singletons ast 
         

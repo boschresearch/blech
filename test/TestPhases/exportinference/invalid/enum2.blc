@@ -5,4 +5,4 @@ enum Color : nat8
     Blue = 2 default
 end
 
-const RED = .Red
+const RED = Red

@@ -18,33 +18,77 @@ module ExportInferenceTest
 
 open NUnit.Framework
 
+open System.IO
 open Blech.Common
-open Blech.Frontend
+open Blech.Compiler
 
 
-let runExportInference implOrIface moduleName filePath =
+let private parseHandleImportsNameCheckAndInferSingletons logger implOrIface moduleName fileName =
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    let importChain = CompilationUnit.ImportChain.Empty
+    let fileContents = File.ReadAllText <| Path.GetFullPath fileName
+    
+    let resultWorkflow = ResultBuilder()
+    resultWorkflow {
+        let! ast =
+            Main.runParser 
+                logger 
+                implOrIface
+                moduleName 
+                fileContents 
+                fileName
+
+        let! imports =
+            Main.runImportCompilation 
+                pkgCtx 
+                logger 
+                importChain
+                moduleName 
+                fileName
+                ast
+
+        let! symTable =
+            Main.runNameResolution 
+                logger 
+                moduleName 
+                fileName 
+                imports.GetLookupTables
+                imports.GetExportScopes
+                ast
+
+        let! singletons = 
+            Main.runSingletonInference 
+                logger 
+                fileName 
+                imports.GetSingletons 
+                ast
+                symTable
+        
+        return ast, symTable, singletons
+    }
+
+
+let runExportInference implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
 
-    let resultWorkflow = ResultBuilder ()
-    resultWorkflow
-        {
-            let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-            
-            let! env = 
-                let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-                Blech.Frontend.NameChecking.checkDeclaredness ctx ast
-            
-            let! inferredSingleton = 
-                let importedSingletons = List.empty
-                SingletonInference.inferSingletons logger env importedSingletons ast
-
-            return!
-                ExportInference.inferExports 
-                    logger 
-                    env
-                    inferredSingleton
-                    ast
-        }
+    match parseHandleImportsNameCheckAndInferSingletons logger implOrIface moduleName fileName with
+    | Ok (ast, symTable, singletons) -> 
+        Main.runExportInference 
+            logger 
+            symTable 
+            fileName 
+            singletons // subsumes imported singletons
+            ast
+    | Error logger ->
+        printfn "Did not expect to find errors during parsing, name checking, singleton inference or in imported files!\n" 
+        Diagnostics.Emitter.printDiagnostics logger
+        Assert.False true
+        Error logger
 
 
 [<TestFixture>]
@@ -57,7 +101,7 @@ type Test() =
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member __.InferExportsValidFiles (implOrIface, moduleName, filePath) =
+    member __.ExportInferencValidFiles (implOrIface, moduleName, filePath) =
         match runExportInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
@@ -73,7 +117,7 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member __.InferExportsInvalidInputs (implOrIface, moduleName, filePath) =
+    member __.ExportInferenceInvalidFiles (implOrIface, moduleName, filePath) =
         match runExportInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 
