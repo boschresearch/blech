@@ -1,0 +1,16 @@
+
+function f (i: bool) returns bool
+    return i
+end
+
+param t = true
+
+struct S 
+    var b: bool = f(t) // singleton in static initialiser -> non-determinism
+end 
+
+@[EntryPoint]
+activity Main ()
+    var s: S
+    await s.b
+end
