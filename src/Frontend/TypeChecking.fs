@@ -727,6 +727,8 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         |> List.map (recVarDecl lut) // type check field declarations as variable declarations
         // make sure they are of value type
         |> List.map (Result.bind (fun v -> if v.datatype.IsValueType then Ok v else Error[ValueStructContainsRef (std.name, v)]))
+        // ensure the initialisers (if present) do not call functions (this is until we implement compile-time evaluated functions)
+        |> List.map (Result.bind (fun v -> if isStaticExpr lut v.initValue then Ok v else Error [StructMustHaveStaticInit(v.pos, v.name, v.initValue)]))
         |> contract
 
     let checkAllFields fields =
