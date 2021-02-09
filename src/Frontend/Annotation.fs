@@ -73,9 +73,9 @@ module Annotation =
             Ok (CFunctionPrototype(binding, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source) 
-                                                  value = AST.String(value = source)) ] ) ->
-            Ok (CFunctionWrapper source)
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source)) ] ) ->
+            //Ok (CFunctionWrapper source)
+            Error [DeprecatedCFunctionWrapper anno.Range ]
 
         | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
@@ -172,8 +172,13 @@ module Annotation =
         
         let checkParameterIndex (fpattr : FunctionPrototype)  =
             match fpattr.TryGetCBinding with
-            | Some cbinding -> 
-                let maxIndex = List.length fp.inputs + List.length fp.outputs
+            | Some cbinding ->
+                let returnIdx = // if extern function returns a complex value, 
+                                // we assume there is an extra parameter for this in the C function
+                    match fp.result with 
+                    | None -> 0
+                    | Some r -> if r.datatype.IsSimple then 0 else 1
+                let maxIndex = List.length fp.inputs + List.length fp.outputs + returnIdx
                 let idcsOutOfBounds = List.filter (fun i -> i < 1 || i > maxIndex) (Bindings.getParameterIndices cbinding)
                 if List.isEmpty idcsOutOfBounds then
                     Ok fpattr

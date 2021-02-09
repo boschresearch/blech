@@ -209,6 +209,9 @@ type TyCheckError =
     | ReceiverForVoidReturn of range * ProcedurePrototype
     | MissingReceiver of range * ProcedurePrototype
 
+    // deprecated, legacy
+    | DeprecatedCFunctionWrapper of range
+
     // --- Dummy error, just for development purposes ---
     | Dummy of range * string
 
@@ -427,6 +430,8 @@ type TyCheckError =
             // --- result receivers ---
             | ReceiverForVoidReturn (p, activity) -> p, "No receiver for void return allowed."
             | MissingReceiver (p, activity) -> p, sprintf "The returned value of '%s' must be ignored explicitly." (activity.name.ToString())
+
+            | DeprecatedCFunctionWrapper pos -> pos, sprintf "The %s annotation using the 'source' key is deprecated. Implement a wrapper and use a 'binding' instead." Attribute.cfunction
 
             // --- Dummy error, just for development purposes ---
             | Dummy (p, msg) -> p, msg

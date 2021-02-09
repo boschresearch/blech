@@ -197,6 +197,12 @@ and DataType =
             -> r   
         | TypeName path 
             -> path.Range
+
+    member this.IsSimple =
+        match this with
+        | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _
+        | FloatType _ -> true
+        | ArrayType _ | SliceType _ | Signal _ | TypeName _ -> false
         
 /// Declarations //////////////////////////////////////////////////////////
 

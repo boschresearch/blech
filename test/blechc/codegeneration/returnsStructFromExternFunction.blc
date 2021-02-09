@@ -9,7 +9,7 @@ struct S
     var a: [LEN]Foo
 end
 
-@[CFunction(source="returnsStructFromExternFunction.ext.c")]
+@[CFunction(binding="rrr_impl($1, $2)", header="returnsStructFromExternFunction.ext.h")]
 extern function rrr(a: bool) returns S
     
    

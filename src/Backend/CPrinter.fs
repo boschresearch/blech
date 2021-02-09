@@ -284,16 +284,20 @@ let internal cpExternFunction tcc docs name iface (returns: ValueTypes) =
 
 let internal cpDirectCCall tcc (fp: ProcedurePrototype) =
     let args =
-        List.map (fun (p: ParamDecl) -> (cpName (Some Current) tcc p.name).Render) (fp.inputs @ fp.outputs) 
+        fp.inputs @ fp.outputs
+        |> List.map (fun p -> (renderCName Current tcc p.name))
+    let argsWithReturn =
+        if fp.returns.IsPrimitive then args
+        else args @ [txt "retvar"]
     let cbinding = fp.annotation.TryGetCBinding
     let call = 
-        let sargs = List.map (fun doc -> render None doc) args
+        let sargs = List.map (render None) argsWithReturn
         Bindings.replaceParameters (Option.get cbinding) sargs
         |> Bindings.toDoc
     let macro = 
         (txt "#define"
-        <+> (cpName (Some Current) tcc fp.name).Render
-        <^> dpCommaSeparatedInParens args
+        <+> cpStaticName fp.name
+        <^> dpCommaSeparatedInParens argsWithReturn
         <.> (cpIndent call))
         |> groupWith (txt " \\")
 

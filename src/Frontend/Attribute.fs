@@ -194,13 +194,6 @@ module Attribute =
         | _ ->
             None
 
-    let private tryGetCSource (attr: Attribute) =
-        match attr with
-        | CFunctionWrapper (source = source) ->
-            Some source
-        | _ ->
-            None
-
 
     //---
     // Declaration attributes

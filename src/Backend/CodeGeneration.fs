@@ -232,11 +232,6 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         |> dpBlock
     
     let importIncludes = generateSubmoduleIncludes importedModules
-    
-    let directCCalls = 
-        cCalls
-        |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
-        |> dpToplevel
 
     // Translated subprograms
     let code = 
@@ -289,8 +284,8 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
 
       Comment.cConstants
       externConstMacros
-      Comment.cFunctions
-      directCCalls
+      //Comment.cFunctions // already part of *.h
+      //directCCalls
       //Comment.constants
       //userConst
       Comment.parameters

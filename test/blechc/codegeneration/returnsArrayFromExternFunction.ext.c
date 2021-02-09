@@ -2,9 +2,9 @@
 
 #include "blech.h"
 
-#include "returnsArrayFromExternFunction.h"
+#include "returnsArrayFromExternFunction.ext.h"
 
-void blc_returnsArrayFromExternFunction_rrr (const blc_bool blc_a,
+void rrr_impl (const blc_bool blc_a,
                      struct blc_returnsArrayFromExternFunction_Foo blc_lala[3],
                      struct blc_returnsArrayFromExternFunction_Foo blc_retvar[3]) {
     struct blc_returnsArrayFromExternFunction_Foo blc_s;

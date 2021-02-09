@@ -2,9 +2,9 @@
 
 #include "blech.h"
 
-#include "appWithExternFun.h"
+#include "appWithExternFun.ext.h"
 
 static int x = 0;
-blc_int32 blc_appWithExternFun_myExternFun (void){
+blc_int32 increase_global_state (void){
     return ++x;
 }

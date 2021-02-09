@@ -11,7 +11,7 @@ end
 
 const LEN: int8 = 3
 
-@[CFunction(source="returnsArrayFromExternFunction.ext.c")]
+@[CFunction(binding="rrr_impl($1, $2, $3)", header="returnsArrayFromExternFunction.ext.h")]
 extern function rrr(a: bool)(lala: [LEN]Foo) returns [LEN]Foo
 
 
