@@ -1,0 +1,7 @@
+import I "../imports/importMe"
+import I "../imports/methods"
+
+@[EntryPoint]
+activity Main () ()
+    await true
+end

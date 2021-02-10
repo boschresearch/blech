@@ -1,4 +1,4 @@
-import p "pair"
+import p "../imports/pair"
 
 @[EntryPoint]
 activity Main ()

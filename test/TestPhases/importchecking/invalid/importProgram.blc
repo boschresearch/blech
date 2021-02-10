@@ -1,0 +1,7 @@
+import Program "../valid/imports/program"
+
+@[EntryPoint]
+activity Main ()
+    run Program.AnAct()
+    await true
+end

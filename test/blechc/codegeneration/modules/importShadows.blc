@@ -1,7 +1,0 @@
-import I "importMe"
-import I "foo_import/foofoo"
-
-@[EntryPoint]
-activity Main () ()
-    await true
-end

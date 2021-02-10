@@ -1,7 +1,0 @@
-import Program "./importOne"
-
-@[EntryPoint]
-activity Main ()
-    run Program.Main()
-    await true
-end
