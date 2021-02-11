@@ -2,13 +2,8 @@ import p "../imports/pair"
 
 @[EntryPoint]
 activity Main ()
-    var ab: p.Pair = p.set.fst(1,2)  // lookup in closed scope: param fst
+    var ab: p.Pair = p.set(1,2)
 
-    var b: p.Both 
-    b.one = b.f
-
-    var i = p.fst(ab)
-    var j = p.snd(ab)
-    var k = b.one
+    let f: p.Pair.T = 42 // illegal access to typealias in extension for abstract type T
     await true
 end

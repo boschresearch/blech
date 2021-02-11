@@ -287,8 +287,7 @@ module Main =
                             imports
 
                 do // this do is required in a workflow, otherwise a Result<_> type expr is expected
-                    let isMainProgram = Option.isSome blechModule.entryPoint
-                    if not isMainProgram then
+                    if ast.IsModule then
                         Logging.log2 "Main" ("writing signature for " + fileName)
                         do writeSignature cliArgs moduleName exports ast
 

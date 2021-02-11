@@ -710,6 +710,8 @@ module SignaturePrinter =
             match mbr with
             | AST.Member.Subprogram sp ->
                 psSubProgram sp
+            | AST.Member.TypeAlias ta ->
+                bpTypeAliasDecl ta
             | _ ->
                 failwith "Extensions are preliminary and only used to test implicit member access"
 

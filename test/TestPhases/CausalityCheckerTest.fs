@@ -87,25 +87,6 @@ let runCausalityAnalysis implOrIface moduleName fileName =
         Assert.False true
         Error logger
 
-    
-    //let resultWorkflow = new Blech.Common.ResultBuilder()
-    //resultWorkflow
-    //    {
-    //        let! ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
-    //        let! env = 
-    //            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName Map.empty Map.empty
-    //            Blech.Frontend.NameChecking.checkDeclaredness ctx ast
-    //        let! lut, blechModule = 
-    //            Blech.Frontend.TypeChecking.typeCheck cliContext logger [] ast env
-                    
-    //        return!
-    //            Blech.Intermediate.Causality.checkPackCausality
-    //                logger
-    //                lut
-    //                blechModule
-    //    }
-
-
 
 [<TestFixture>]
 type Test() =
