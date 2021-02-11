@@ -163,7 +163,7 @@ module PathRegex =
 type PackageName = string
 
 type TranslationUnitPath = 
-    {   // TODO: add protocol "bl:" to this type, in case we need more than one protocol. fjg. 15.10.20
+    {   // TODO: add protocol "box:" to this type, in case we need more than one protocol. fjg. 15.10.20
         package: string option
         dirs: string list
         file: string 
@@ -173,7 +173,7 @@ type TranslationUnitPath =
     override this.ToString () =
         let prefix = 
             match this.package with | None -> "" | Some _ -> box
-        prefix + (this.AsList |> String.concat (string slash))
+        prefix + "/" + (this.AsList |> String.concat (string slash))
 
     member this.ToDoc = 
         txt <| string this
