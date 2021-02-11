@@ -243,9 +243,20 @@ module SignaturePrinter =
         dpName td.name <+> bpEnumRawValue td.rawvalue <+> bpEnumIsDefault td.isDefault
         |> gnest dpTabsize
         
-    and bpEnumTypeDecl memberDocs (et : AST.EnumTypeDecl) =
+    and bpEnumTypeDecl optExtensionDocs (et : AST.EnumTypeDecl) =
         let optRef = 
             if et.isReference then Some <| txt "ref" else None
+
+        let optExt =
+            match optExtensionDocs with
+            | None ->
+                txt "end"
+            | Some extDocs ->
+                txt "extension"
+                <.> ( extDocs
+                      |> vsep
+                      |> indent dpTabsize )
+                <.> txt "end"
 
         let enumDecl =
             txt "enum"
@@ -253,9 +264,7 @@ module SignaturePrinter =
             <^> bpEnumRawType et.rawtype
             <.> indent dpTabsize (List.map bpTagDecl et.tags |> vsep)
             // extensions are preliminaryfor now
-            <.> match et.members with | [] -> empty | _ -> txt "extension"
-            <.> indent dpTabsize (memberDocs |> vsep)
-            <.> txt "end"
+            <.> optExt
 
         bpOptAnnotations et.annotations 
         |> dpOptLinePrefix
@@ -281,18 +290,27 @@ module SignaturePrinter =
             failwith "Unexpected dynamic member"
 
 
-    and bpStructTypeDecl memberDocs (st : AST.StructTypeDecl) =
+    and bpStructTypeDecl optExtensionDocs (st : AST.StructTypeDecl) =
         let optRef = 
             if st.isReference then Some <| txt "ref" else None
+
+        let optExt =
+            match optExtensionDocs with
+            | None ->
+                txt "end"
+            | Some extDocs ->
+                txt "extension"
+                <.> ( extDocs
+                      |> vsep
+                      |> indent dpTabsize )
+                <.> txt "end"
 
         let structDecl =
             txt "struct"
             <+> dpName st.name
             <.> indent dpTabsize (List.map bpDynamicMember st.fields |> vsep)
             // extensions are preliminaryfor now
-            <.> match st.members with | [] -> empty | _ -> txt "extension"
-            <.> indent dpTabsize (memberDocs |> vsep)
-            <.> txt "end"
+            <.> optExt
 
         bpOptAnnotations st.annotations 
         |> dpOptLinePrefix
@@ -556,13 +574,21 @@ module SignaturePrinter =
             <+> bpDataType param.datatype
 
 
-    let private bpOptReturns prefix = function
+    let private bpOptReturns prefix optReturns =
+        match optReturns with
         | None -> prefix
         | Some doc -> prefix <.> doc
+
     
-    
+    let private bpOutputs prefix outputs =
+        match outputs with
+        | [] -> 
+            prefix
+        | outputs ->
+            prefix <.> dpArguments outputs
+
+
     let private bpReturnDecl (ret: AST.ReturnDecl) = 
-            // TODO: improve formatting for missing ref and sharing - now creates blanks because of <+>, fjg 24.01.19    
             let ref = 
                 if ret.isReference then txt "ref" <+> empty 
                 else empty
@@ -593,7 +619,7 @@ module SignaturePrinter =
         let externPrototype =
             txt "extern" <+> txt "function" <+> bpName ef.name <^>
                 (dpArguments inputs
-                |> dpOptArguments <| outputs
+                |> bpOutputs <| outputs
                 |> bpOptReturns <| optReturns
                 |> align
                 |> group) 
@@ -661,7 +687,7 @@ module SignaturePrinter =
 
             subprog <+> bpName name <+>
             (dpArguments inputs
-                |> dpOptArguments <| outputs
+                |> bpOutputs <| outputs
                 |> bpOptReturns <| optReturns
                 |> align
                 |> group) 
@@ -715,6 +741,26 @@ module SignaturePrinter =
             | _ ->
                 failwith "Extensions are preliminary and only used to test implicit member access"
 
+
+        let psOptExtensions (extensionMembers: AST.Member list) = 
+            match extensionMembers with
+            | [] -> 
+                None
+            | mbrs ->
+                List.map psExtensionMember mbrs
+                |> Some 
+            
+            
+        let psStructTypeDecl (st: AST.StructTypeDecl) =
+            psOptExtensions st.members
+            |> bpStructTypeDecl <|st
+
+
+        let psEnumTypeDecl (st: AST.EnumTypeDecl) =
+            psOptExtensions st.members
+            |> bpEnumTypeDecl <|st
+
+
         let psMember (ctx : ExportInference.ExportContext) (mbr : AST.Member) =
             
             match mbr with
@@ -724,8 +770,7 @@ module SignaturePrinter =
                         let absType = Option.get <| ctx.TryGetAbstractType et.name
                         psAbstractType et.annotations absType et.isReference et.name 
                     else
-                        let memberDocs = List.map psExtensionMember et.members 
-                        bpEnumTypeDecl memberDocs et 
+                        psEnumTypeDecl et 
                 else empty  
             
             | AST.Member.StructType st ->
@@ -734,8 +779,7 @@ module SignaturePrinter =
                         let absType = Option.get <| ctx.TryGetAbstractType st.name
                         psAbstractType st.annotations absType st.isReference st.name 
                     else 
-                        let memberDocs = List.map psExtensionMember st.members
-                        bpStructTypeDecl memberDocs st
+                        psStructTypeDecl st
                 else empty  
 
             | AST.Member.TypeAlias ta ->
