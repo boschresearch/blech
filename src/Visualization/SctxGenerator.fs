@@ -40,6 +40,7 @@ module Blech.Visualization.SctxGenerator
         blank + inOrOut + " host \"" + param.TypeName + "\" " + param.Name + lnbreak            
 
     /// Method that converts a list of params to a string (sctx style).
+    /// TODO convert to fold.
     let rec private listParams (paramList : ParamList) (isInput : bool): string =
         match paramList with 
             | head :: tail ->(listParam head isInput) + listParams tail isInput
@@ -59,8 +60,8 @@ module Blech.Visualization.SctxGenerator
     let rec private listLocalVars (vars : string list ) : string = 
         List.collect listLocalVar vars |> List.distinct |> List.fold (+) ""
 
-    /// Construct a string representing a single edge.
-    let private singleEdge(edge : BlechEdge) (target : int): string =
+    /// Construct a string representing a single edge. Target is the combination of statecount and secondary id.
+    let private singleEdge(edge : BlechEdge) (target : string): string =
         match edge.Payload.Property with 
             | IsAwait ->  "if true go to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
             | IsConditional ->  "immediate if true go to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
@@ -71,7 +72,7 @@ module Blech.Visualization.SctxGenerator
 
     /// Folding function that is used to fold a set of edges into their corresponding sctx strings.
     let rec foldEdges (accumulator : EdgeAccumulator) (edge : BlechEdge) : EdgeAccumulator =
-        let singleEdgeString = singleEdge edge edge.Target.Payload.StateCount
+        let singleEdgeString = singleEdge edge ((string edge.Target.Payload.StateCount) + (string edge.Target.Payload.SecondaryId))
 
         // Only visualize node if it has not been visualized yet.
         let recursiveOnTargetNodes = 
@@ -99,7 +100,7 @@ module Blech.Visualization.SctxGenerator
         final + "region" + blank + "{" + lnbreak + bodyToSctx (fst branch) + lnbreak + "}"
 
     /// Iterates recursevily over cobegin branches and transforms them to a .sctx string.
-    and private cobeginBranchesToString (branchList : CobeginPayload) : string =
+    and private cobeginBranchesToString (branchList : (VisGraph * Strength) list) : string =
         match branchList with 
             | [head] -> cobeginBranchToString head
             | head :: tail -> cobeginBranchToString head + lnbreak + cobeginBranchesToString tail
@@ -135,7 +136,7 @@ module Blech.Visualization.SctxGenerator
         let initOrFinal : string = (match node.Payload.IsInitOrFinal.Init with | IsInit -> blank + "initial" | IsNotInit -> "") +
                                    (match node.Payload.IsInitOrFinal.Final with | IsFinal -> blank + "final" | IsNotFinal -> "")
 
-        let stateString = blank + initOrFinal + " state s" + string node.Payload.StateCount + stateLabel 
+        let stateString = blank + initOrFinal + " state s" + string node.Payload.StateCount + string node.Payload.SecondaryId + stateLabel 
         node.Payload.Visualize
 
         // Hierarchical states. Check if it is hierarchical, then match for regular body or activity.
@@ -144,7 +145,7 @@ module Blech.Visualization.SctxGenerator
                                                                 | IsActivity _ -> "{"  + lnbreak + activityToSctx node.Payload  + lnbreak + "}" + lnbreak
                                                                 | IsNotActivity -> "{"  + lnbreak + bodyToSctx cmplx.Body  + lnbreak + "}" + lnbreak
                                         | IsSimple -> "" // Ok. Do nothing.
-                                        | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn + lnbreak + "}" + lnbreak
+                                        | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn.Content + lnbreak + "}" + lnbreak
                                         | IsActivityCall (input, output) -> actCallToString input output node.Payload.Label
         
         // If the node is a final node, we are finished, as there are no subsequent nodes.

@@ -6,19 +6,20 @@ module Blech.Visualization.Translation
     open Blech.Visualization.BlechVisGraph
     open Blech.Frontend.CommonTypes
 
-    /// Unique id.
-    let mutable bracketId = 0
-
+    // Default id for secondary state id.
+    let private defaultSecondaryId = 0
+    
     /// Checks a string from TypedRhs to a more presentable form.
     /// Identifies single words separated by round brackets and blanks and renders them.
     /// Special treatment of curly brackets.
     let rec renderRhsRhlString (toCheck : string) : string =
+        let filterEmpty = fun s -> match s with "" -> false | _ -> true
         match toCheck.Contains '{' && toCheck.Contains '}' with
-            | true ->   bracketId <- bracketId + 1
-                        "curlyBracket" + string bracketId
+            | true ->   // Curly brackets cant be processed in sctx. Filter it out an let the core info be preserved through the label.
+                        let separated = List.filter filterEmpty (Seq.toList (toCheck.Split([|'{';'}';' ';'=';','|])))
+                        "struct" + String.concat "" separated
             | false ->  // Split on round and cornered brackets and blanks.
                         // This method will add an empty string if two separating delimeters follow directly after each other. Need to filter this out.
-                        let filterEmpty = fun s -> match s with "" -> false | _ -> true
                         let separated = List.filter filterEmpty (Seq.toList (toCheck.Split([|'(';')';' ';'[';']'|])))
                         // Render single words.
                         let originalAndRenderedWords = List.map renderRhsRhlWordInitial separated
@@ -76,7 +77,8 @@ module Blech.Visualization.Translation
         let newNode = graph.AddNode{Label = ""; 
                                     IsComplex = IsSimple; 
                                     IsInitOrFinal = NeitherInitOrFinal;
-                                    StateCount = stateCount; 
+                                    StateCount = stateCount;
+                                    SecondaryId = defaultSecondaryId;
                                     WasVisualized = NotVisualized; 
                                     WasHierarchyOptimized = NotHierarchyOptimized}
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} prevNode newNode |> ignore
@@ -99,16 +101,18 @@ module Blech.Visualization.Translation
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
                                             StateCount = stateCount + 3; 
+                                            SecondaryId = defaultSecondaryId;
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
         let ifComplex : ComplexOrSimpleOrCobegin = 
-            IsComplex {Body = frst3 ifBody ; IsActivity = IsNotActivity; CaseClosingNode = Some caseClosingNode; IsAbort = Neither}
+            IsComplex {Body = frst3 ifBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = Neither}
 
         // TODO only connect if complex state has final state.
         let ifNode = graph.AddNode {Label = ""; 
                                     IsComplex = ifComplex; 
                                     IsInitOrFinal = NeitherInitOrFinal; 
                                     StateCount = stateCount + 1; 
+                                    SecondaryId = defaultSecondaryId;
                                     WasVisualized = NotVisualized;
                                     WasHierarchyOptimized = NotHierarchyOptimized}
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
@@ -123,11 +127,12 @@ module Blech.Visualization.Translation
                    (graph, Some caseClosingNode, scnd3 ifBody, thrd3 ifBody)
             | _ -> let elseBody = synthesizeComplexBody elseBlock (scnd3 ifBody + 1) (thrd3 ifBody)
                    let elseComplex : ComplexOrSimpleOrCobegin = 
-                        IsComplex {Body = frst3 elseBody ; IsActivity = IsNotActivity; CaseClosingNode = Some caseClosingNode; IsAbort = IsAbort.Neither}
+                        IsComplex {Body = frst3 elseBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = IsAbort.Neither}
                    let elseNode = graph.AddNode{Label = ""; 
                                                 IsComplex = elseComplex; 
                                                 IsInitOrFinal = NeitherInitOrFinal; 
                                                 StateCount = stateCount + 2; 
+                                                SecondaryId = defaultSecondaryId;
                                                 WasVisualized = NotVisualized;
                                                 WasHierarchyOptimized = NotHierarchyOptimized}      
                    
@@ -191,18 +196,23 @@ module Blech.Visualization.Translation
                 | false ->  let caseClosingNode = graph.AddNode {Label = "";
                                                                  IsComplex = IsSimple; 
                                                                  IsInitOrFinal = NeitherInitOrFinal; 
-                                                                 StateCount = stateCount + 2; 
+                                                                 StateCount = stateCount + 2;
+                                                                 SecondaryId = defaultSecondaryId;
                                                                  WasVisualized = NotVisualized; 
                                                                  WasHierarchyOptimized = NotHierarchyOptimized}
                             Some caseClosingNode
-           
+        let caseClosingIdPair = match caseClosingNodeMaybe with
+                                    | Some node -> {Opt = Some (findIds node)}
+                                    | None -> {Opt = None}
+
         //Construct complex node based on calculated data.
         let complexNode = 
                 graph.AddNode { Label = ""; 
                                 IsComplex = 
-                                    IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = caseClosingNodeMaybe; IsAbort = Neither};
+                                    IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = caseClosingIdPair; IsAbort = Neither};
                                 IsInitOrFinal = NeitherInitOrFinal; 
-                                StateCount = stateCount + 1; 
+                                StateCount = stateCount + 1;
+                                SecondaryId = defaultSecondaryId; 
                                 WasVisualized = NotVisualized; 
                                 WasHierarchyOptimized = NotHierarchyOptimized}
 
@@ -243,13 +253,18 @@ module Blech.Visualization.Translation
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
-                                            StateCount = stateCount + 2; 
+                                            StateCount = stateCount + 2;
+                                            SecondaryId = defaultSecondaryId; 
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
         let complexNode = graph.AddNode{Label = ""; 
-                                        IsComplex = IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = Some caseClosingNode; IsAbort = abortType};
+                                        IsComplex = IsComplex {Body = frst3 bodyOfLoop; 
+                                                               IsActivity = IsNotActivity; 
+                                                               CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; 
+                                                               IsAbort = abortType};
                                         IsInitOrFinal = NeitherInitOrFinal; 
-                                        StateCount = stateCount + 1; 
+                                        StateCount = stateCount + 1;
+                                        SecondaryId = defaultSecondaryId;
                                         WasVisualized = NotVisualized;
                                         WasHierarchyOptimized = NotHierarchyOptimized}
         
@@ -292,18 +307,21 @@ module Blech.Visualization.Translation
         
         // Construct branches, nodes and edges.
         let branches = convertListToCobeginPayload strengthsAndStmts (stateCount + 3) [] (frth graphBuilder)
-        let complexNode = graph.AddNode{Label = ""; 
-                                        IsComplex = IsCobegin( frst3 branches); 
-                                        IsInitOrFinal = NeitherInitOrFinal; 
-                                        StateCount = stateCount + 1; 
-                                        WasVisualized = NotVisualized; 
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
-                                            StateCount = stateCount + 2; 
+                                            StateCount = stateCount + 2;
+                                            SecondaryId = defaultSecondaryId; 
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
+        let complexNode = graph.AddNode{Label = ""; 
+                                        IsComplex = 
+                                            IsCobegin{Content = frst3 branches; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}}; 
+                                        IsInitOrFinal = NeitherInitOrFinal;
+                                        SecondaryId = defaultSecondaryId;
+                                        StateCount = stateCount + 1; 
+                                        WasVisualized = NotVisualized; 
+                                        WasHierarchyOptimized = NotHierarchyOptimized}
 
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
@@ -325,13 +343,15 @@ module Blech.Visualization.Translation
         let complexNode = graph.AddNode{Label = actName; 
                                         IsComplex = cmplx ; 
                                         IsInitOrFinal = NeitherInitOrFinal; 
-                                        StateCount = stateCount + 1; 
+                                        StateCount = stateCount + 1;
+                                        SecondaryId = defaultSecondaryId; 
                                         WasVisualized = NotVisualized; 
-                                         WasHierarchyOptimized = NotHierarchyOptimized}
+                                        WasHierarchyOptimized = NotHierarchyOptimized}
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
-                                            StateCount = stateCount + 2; 
+                                            StateCount = stateCount + 2;
+                                            SecondaryId = defaultSecondaryId;
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
 
@@ -370,7 +390,8 @@ module Blech.Visualization.Translation
         let init = graph.AddNode{Label = ""; 
                                 IsComplex = IsSimple; 
                                 IsInitOrFinal = InitNotFinal; 
-                                StateCount = stateCount + 1; 
+                                StateCount = stateCount + 1;
+                                SecondaryId = defaultSecondaryId; 
                                 WasVisualized = NotVisualized; 
                                 WasHierarchyOptimized = NotHierarchyOptimized}
         let graphBuilder = synthesizeStatements stmts (graph, Some init, stateCount + 3, neededVars)
@@ -383,7 +404,8 @@ module Blech.Visualization.Translation
                                                 Label = ""; 
                                                 IsComplex = IsSimple; 
                                                 IsInitOrFinal = FinalNotInit; 
-                                                StateCount = stateCount + 2; 
+                                                StateCount = stateCount + 2;
+                                                SecondaryId = defaultSecondaryId;
                                                 WasVisualized = NotVisualized; 
                                                 WasHierarchyOptimized = NotHierarchyOptimized}
                                         updatedGraph.AddEdge {
@@ -428,12 +450,13 @@ module Blech.Visualization.Translation
         let complexNode : ComplexOrSimpleOrCobegin = 
             IsComplex { Body = frst3 bodyStatecountAndVars; 
                         IsActivity = IsActivity {InputParams = iparam; OutputParams = oparam; LocalVars = localVars}; 
-                        CaseClosingNode = None; IsAbort = Neither}
+                        CaseClosingNode = {Opt = None}; IsAbort = Neither}
         (Node<NodePayload, _>.Create
             {Label = name; 
             IsComplex = complexNode; 
             IsInitOrFinal = NeitherInitOrFinal; 
-            StateCount = stateCount; 
+            StateCount = stateCount;
+            SecondaryId = defaultSecondaryId; 
             WasVisualized = NotVisualized;
             WasHierarchyOptimized = NotHierarchyOptimized},
             scnd3 bodyStatecountAndVars)

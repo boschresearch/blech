@@ -3,7 +3,6 @@
     open Blech.Frontend
     open Blech.Frontend.BlechTypes
     open Blech.Common
-    open Blech.Common.GenericGraph
     open Blech.Visualization.BlechVisGraph
     open Blech.Visualization.Translation
     open Blech.Visualization.Optimization
@@ -28,7 +27,9 @@
 
         // Optimizations take place here.
         printfn "Optimizing.."
-        let optimizedNodes : BlechNode list = optimize activityNodes
+        // TODO without entry point, just do no inlining of activities.
+        let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name else failwith "Need entry point for visualization."
+        let optimizedNodes : BlechNode list = optimize (entryPointName.ToString()) activityNodes
 
         // Generate sctx content.
         printfn "Generating .sctx.."
