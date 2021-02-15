@@ -1,0 +1,10 @@
+import ns "../imports/noscopes" 
+
+const c : int32 = 42
+
+@[EntryPoint]
+activity Main ()
+    var x: c.T = 42 // c is not a scope
+    var y: ns.c.T   // ns.c is not a scope
+    await true 
+end

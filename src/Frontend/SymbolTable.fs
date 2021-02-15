@@ -261,6 +261,7 @@ module SymbolTable =
         | NonUniqueMember of usage: Name * decls: (Name * Scope) list
         | ExposedImportNotAccessible of exposed: Name * import: AST.ModulePath
         | ExposedDeclarationNotFound of exposed: Name
+        | NoScope of name: Name
         | Dummy of range: Range.range * msg: string   // just for development purposes
 
         interface Diagnostics.IDiagnosable with
@@ -293,7 +294,10 @@ module SymbolTable =
                       message = sprintf "the member '%s' is not accessible in module %s" <| string exposed <| string import.path }
                 | ExposedDeclarationNotFound exposed ->
                     { range = exposed.Range
-                      message = sprintf "exposed member '%s' is not declared" <| string exposed }
+                      message = sprintf "the exposed member '%s' is not declared" <| string exposed }
+                | NoScope name ->
+                    { range = name.Range
+                      message = sprintf "the name '%s' is not a scope" <| string name}
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
@@ -327,6 +331,8 @@ module SymbolTable =
                       { range = import.Range; message = string import.path; isPrimary = false } ]
                 | ExposedDeclarationNotFound exposed ->
                     [ { range = exposed.Range; message = "no declaration"; isPrimary = true } ]
+                | NoScope name ->
+                    [ { range = name.Range; message = "no scope"; isPrimary = true } ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -914,13 +920,10 @@ module SymbolTable =
             let openInnerScopes = 
                 Map.fold (fun oiss _ s -> if s.access = Accessibility.Open then oiss @ [s] else oiss) [] openScope.innerscopes
 
-            // printfn "Open inner scopes: %A" openInnerScopes 
-
             let foundDeclarations = List.fold probeDeclaration [] openInnerScopes
             
             match foundDeclarations with
             | [] ->
-                // printfn "Here is it"
                 Error (NoDeclaration usage) 
             | [(decl, scope)] ->
                 addUsage env usage decl
@@ -935,7 +938,8 @@ module SymbolTable =
                 probeOpenInnerDeclaration env (getModuleScope env) firstName
             | Some declScope ->
                 findDeclaration env declScope firstName
-                
+
+
         let private findDotNameInScope env (dotName : Name) scope = 
             assert Scope.isOpen scope
             match Scope.tryFindSymbol scope dotName.id with
@@ -944,7 +948,8 @@ module SymbolTable =
             | Some symbol ->
                 do addUsage env dotName symbol.name
                 Ok scope
-                
+
+
         let rec private recurseDynamic env (names: Name list) result : Result<Scope, NameCheckError> = 
             match result, names with
             | Error err, _ -> 
@@ -956,7 +961,8 @@ module SymbolTable =
                 |> Result.bind (nextDynamicScope env dotName tail) 
             | Ok scope, _ ->
                 Ok scope
-                   
+
+
         and private nextDynamicScope env dotName otherNames scope =  
             match Scope.tryFindInnerScope scope dotName.id with
             | None ->
@@ -984,7 +990,7 @@ module SymbolTable =
                 if List.isEmpty otherNames then 
                     Ok scope
                 else
-                    Error (Dummy (dotName.Range, "no scope to go on")) // no scope to go on
+                    Error <| NoScope dotName  // no scope to go on
             | Some innerscope ->
                 recurseStatic env otherNames (Ok innerscope)    
 
