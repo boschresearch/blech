@@ -1,0 +1,11 @@
+module exposes f, // no declaration 
+               Two // can only be exposed implicitly with Count
+
+
+enum Count
+    One
+    Two
+end
+
+function ff()
+end

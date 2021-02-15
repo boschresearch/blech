@@ -260,6 +260,7 @@ module SymbolTable =
         | NonUniqueImplicitMember of usage: AST.StaticNamedPath * decls: Name list list   // static path * declaration names
         | NonUniqueMember of usage: Name * decls: (Name * Scope) list
         | ExposedImportNotAccessible of exposed: Name * import: AST.ModulePath
+        | ExposedDeclarationNotFound of exposed: Name
         | Dummy of range: Range.range * msg: string   // just for development purposes
 
         interface Diagnostics.IDiagnosable with
@@ -290,6 +291,9 @@ module SymbolTable =
                 | ExposedImportNotAccessible (exposed, import) ->
                     { range = exposed.Range
                       message = sprintf "the member '%s' is not accessible in module %s" <| string exposed <| string import.path }
+                | ExposedDeclarationNotFound exposed ->
+                    { range = exposed.Range
+                      message = sprintf "exposed member '%s' is not declared" <| string exposed }
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
@@ -321,6 +325,8 @@ module SymbolTable =
                 | ExposedImportNotAccessible (exposed, import) ->
                     [ { range = exposed.Range; message = "not accessible"; isPrimary = true } 
                       { range = import.Range; message = string import.path; isPrimary = false } ]
+                | ExposedDeclarationNotFound exposed ->
+                    [ { range = exposed.Range; message = "no declaration"; isPrimary = true } ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -631,8 +637,7 @@ module SymbolTable =
                 do env.lookupTable.addExposed exposedName declSymbol.name 
                 Ok env
             | None -> 
-                Error <| Dummy (exposedName.Range, sprintf "Exported id '%s' not found" exposedName.id)
-                
+                Error <| ExposedDeclarationNotFound exposedName
 
 
         let private enterInnerScope env id access recursion =
