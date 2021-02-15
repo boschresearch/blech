@@ -258,7 +258,8 @@ module SymbolTable =
         | NoDeclarationInStaticAccess of usage:Name * access: AST.StaticNamedPath
         | NoImplicitMemberDeclaration of access: AST.StaticNamedPath
         | NonUniqueImplicitMember of usage: AST.StaticNamedPath * decls: Name list list   // static path * declaration names
-        | NonUniqueMember of usage: Name * decls: (Name * Scope) list  
+        | NonUniqueMember of usage: Name * decls: (Name * Scope) list
+        | ExposedImportNotAccessible of exposed: Name * import: AST.ModulePath
         | Dummy of range: Range.range * msg: string   // just for development purposes
 
         interface Diagnostics.IDiagnosable with
@@ -286,6 +287,9 @@ module SymbolTable =
                 | NonUniqueMember (usage = name) ->
                     { range = name.range
                       message = sprintf "the declaration for '%s' is not unique" (string name) }
+                | ExposedImportNotAccessible (exposed, import) ->
+                    { range = exposed.Range
+                      message = sprintf "the member '%s' is not accessible in module %s" <| string exposed <| string import.path }
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
@@ -314,6 +318,9 @@ module SymbolTable =
                     //|> List.append [ { range = r; message = "this is a test"; isPrimary = true } ] 
                 | NonUniqueMember (usage, decls) ->
                     []  // TODO: Give more context information, fjg. 29.01.21
+                | ExposedImportNotAccessible (exposed, import) ->
+                    [ { range = exposed.Range; message = "not accessible"; isPrimary = true } 
+                      { range = import.Range; message = string import.path; isPrimary = false } ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -372,7 +379,7 @@ module SymbolTable =
                 failwith "Imported Module Scope should always exist"
 
 
-        let exposeImportedMember env (moduleName: Name) (modulePath: TranslationUnitPath) (exposedName: Name) = 
+        let exposeImportedMember env (moduleName: Name) (modulePath: AST.ModulePath) (exposedName: Name) = 
             let globalScope = getGlobalScope env    
             let impModScp = getImportedModuleScope env moduleName.id
             
@@ -397,9 +404,8 @@ module SymbolTable =
                     do env.lookupTable.addExposed exposedName declSymbol.name  // TODO: this is a side effect make it functional
                     Ok { env with path = [globScp] }
                 | None ->
-                    // TODO: Error: ExpositionNotExported
-                    Error <| Dummy (exposedName.Range, sprintf "Member '%s' is not accessible in module \"%s\"" exposedName.id <| string modulePath )
-            
+                    Error <| ExposedImportNotAccessible (exposedName, modulePath)
+                    
               
             checkShadowing env
             |> Result.bind addImportedExposedMemberToGlobalScope
