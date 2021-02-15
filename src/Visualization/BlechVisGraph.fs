@@ -157,14 +157,14 @@ module Blech.Visualization.BlechVisGraph
     /// Starts the search of the first await on a path, given by a node starting the path. 
     /// The nodes that are allowed to be in the path are given by the list of state count integers.
     /// Successors of the nodes and its successors might be invalid and should not be considered, hence the list.
-    /// Returns all valid nodes in the path that follow the first found await statement. Second element is the already checked nodes so far.
+    /// Returns all valid nodes in the path that follow the first found await statement. Second element is the actual first awaiting node. Third element is the already checked nodes so far.
     /// If there is an await edge going out of the current node, we reached the first await.
     /// If the current node is an activity (call), it must contain an await, and is thus the first await statement.
     /// Hierarchies are broken from the inside out. Hence, if a complex is met, it is expected to have an await in it.
     let rec findFirstAwaitNodeOnEveryPath (entryPoint : BlechNode) 
                                           (validNodes : (StateCount * StateCount) list)
                                           (checkedNodes : (StateCount * StateCount) list)
-                                          : BlechNode list * (StateCount * StateCount) list =
+                                          : BlechNode list * Option<BlechNode> *  (StateCount * StateCount) list =
         let isActivityCallOrOtherComplex = match entryPoint.Payload.IsComplex with
                                             | IsSimple _ -> false
                                             | _ -> true
@@ -174,21 +174,27 @@ module Blech.Visualization.BlechVisGraph
         let validSuccessors = List.filter (validAndNotYetChecked) (Seq.toList entryPoint.Successors)
 
         let listAndChecked = match isAwaitEdge || isActivityCallOrOtherComplex with
-                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint], checkedNodes)
+                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint], Some entryPoint, checkedNodes)
                                 // Found first await, just add all subsequent nodes to the list.
                                 | false -> checkNodesForAwaitsInPath validSuccessors validNodes checkedNodes
-        (List.distinct (fst listAndChecked), snd listAndChecked) 
+        let distinctAndFilteredListOfValidNodes = if (scnd3 listAndChecked).IsSome then
+                                                        List.filter (fun n -> not (matchNodes n (scnd3 listAndChecked).Value)) (List.distinct (frst3 listAndChecked))
+                                                   else 
+                                                        (List.distinct (frst3 listAndChecked))
+        (distinctAndFilteredListOfValidNodes, scnd3 listAndChecked, thrd3 listAndChecked) 
     
     /// Recursively checks single nodes in a list of nodes for their first await.
+    /// Returns: valid nodes after first await, first await node, and all checked nodes so far.
     and private checkNodesForAwaitsInPath (nodes : BlechNode list) 
                                           (validNodes : (int*int) list)
                                           (checkedNodes : (StateCount * StateCount) list)
-                                          : BlechNode list * (StateCount * StateCount) list =
+                                          : BlechNode list * Option<BlechNode> *  (StateCount * StateCount) list =
         match nodes with
             | head :: tail -> let headChecked = findFirstAwaitNodeOnEveryPath head validNodes (findIds head::checkedNodes)
-                              let tailChecked = checkNodesForAwaitsInPath tail validNodes (snd headChecked)
-                              ((fst headChecked) @ (fst tailChecked), snd tailChecked)
-            | [] -> ([], checkedNodes)
+                              let tailChecked = checkNodesForAwaitsInPath tail validNodes (thrd3 headChecked)
+                              let firstAwait = if (scnd3 headChecked).IsSome then scnd3 headChecked elif (scnd3 tailChecked).IsSome then scnd3 tailChecked else None
+                              ((frst3 headChecked) @ (frst3 tailChecked), firstAwait, thrd3 tailChecked)
+            | [] -> ([], None ,checkedNodes)
 
     /// Checks a list of edges, whether or not there is an await edges among them.
     and private checkEdgesForAwait (edges: BlechEdge list) : bool =
@@ -201,6 +207,7 @@ module Blech.Visualization.BlechVisGraph
     /// Constructs a list of the given nodes and all subsequent nodes (that are valid).
     /// Valid nodes are ones that were in the subgraph and have not been checked yet.
     /// Nodes to check do not need to be filtered, as they have already been checked beforehand.
+    /// The accumulator accumulates the subsequent nodes.
     and private addAllSubsequentNodes (nodesToCheck : BlechNode list) (validNodes: (int*int) list) (accumulator : BlechNode list): BlechNode list = 
         match nodesToCheck with
             | head :: tail -> let validnessCheck = fun node -> isValidNode validNodes node && not (isValidNode (List.map findIds accumulator) node)
@@ -289,12 +296,6 @@ module Blech.Visualization.BlechVisGraph
         let cond3 = List.fold edgeTerminalOrImmediate true sourceOutgoings && List.fold edgeTerminalOrImmediate true targetIncomings
 
         cond1 && cond2 && cond3
-
-    /// Gets the first edge out of the given set that matches the given property, if present.
-    let getEdgeOutOfSet (edges : HashSet<BlechEdge>) (property : EdgeProperty) : Option<BlechEdge> =
-        edges 
-        |> Seq.toList 
-        |> List.tryFind (fun (e:BlechEdge) -> e.Payload.Property = property)
 
     /// Finds for a node that is calling an activity, whether said activity contains a final node.
     /// This is given by the list of pairs, pairing the acitvity names with the presence indicator.
