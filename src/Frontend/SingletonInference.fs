@@ -88,17 +88,23 @@ module SingletonInference =
 
 
     type SingletonError = 
+        | NotASingleton of usage: AST.StaticNamedPath
         | Dummy of range: Range.range * msg: string   // just for development purposes
     
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
                 match err with
+                | NotASingleton usage ->
+                    { range = usage.Range
+                      message = sprintf "the declarared singleton usage '%s' is not a singleton" usage.dottedPathToString}
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
     
             member err.ContextInformation  = 
                 match err with
+                | NotASingleton usage ->
+                    [ { range = usage.Range; message = "not a singleton"; isPrimary = true } ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
     
@@ -125,7 +131,7 @@ module SingletonInference =
     let private addSingletonUsageDeclaration (ctx : SingletonContext) (snp : AST.StaticNamedPath) = 
         let lastName = List.last snp.names
         if not <| ctx.IsSingleton lastName then 
-            Dummy (snp.Range, sprintf "Declared singleton usage '.%s' is not a singleton" snp.dottedPathToString )
+            NotASingleton snp
             |> logSingletonError ctx 
         else
             { ctx with calledSingletons = snp.names :: ctx.calledSingletons }
