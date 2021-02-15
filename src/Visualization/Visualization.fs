@@ -8,7 +8,7 @@
     open Blech.Visualization.Optimization
 
     /// Synthesis start. Has side effects: prints file to current folder.
-    let startSynthesis (arg : Result<TypeCheckContext * BlechModule, Diagnostics.Logger>) (fileName : string )= 
+    let startSynthesis (cliContext: Arguments.BlechCOptions) (arg : Result<TypeCheckContext * BlechModule, Diagnostics.Logger>) (fileName : string )= 
 
         // Access values.
         let resultTuple : TypeCheckContext*BlechModule = 
@@ -28,8 +28,9 @@
         // Optimizations take place here.
         printfn "Optimizing.."
         // TODO without entry point, just do no inlining of activities.
-        let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name else failwith "Need entry point for visualization."
-        let optimizedNodes : BlechNode list = optimize (entryPointName.ToString()) activityNodes
+        let inlineActivites = cliContext.breakHierOnActCalls && (if blechModule.entryPoint.IsSome then true else printfn "No entry point given, no inlining of activities possible."; false)
+        let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name.ToString() else ""
+        let optimizedNodes : BlechNode list = optimize inlineActivites entryPointName activityNodes
 
         // Generate sctx content.
         printfn "Generating .sctx.."

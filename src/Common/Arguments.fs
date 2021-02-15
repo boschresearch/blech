@@ -59,6 +59,8 @@ module Arguments =
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
+        | [<Unique; AltCommandLine("-vis")>] Visualize
+        | [<Unique; AltCommandLine("-breakRunStmt")>] BreakRunStatement
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
@@ -95,7 +97,10 @@ module Arguments =
                     "pass Blech input arguments of primitive type by address."
                 | Input _ -> 
                     "file <name> to be compiled."
-
+                | Visualize _ ->
+                    "outputs a .sctx file in the current directory that visualizes an abstract (stateful) view of the code in the given file."
+                | BreakRunStatement _ ->
+                    "indicates, whether a generated abstract visualization of the code should break the hierarchies on run statements."
 
     type WordSize = 
         | W8 | W16 | W32 | W64
@@ -129,6 +134,8 @@ module Arguments =
             wordSize: WordSize
             passPrimitiveByAddress: bool
             verbosity: Verbosity
+            visualize: bool
+            breakHierOnActCalls: bool
         }
         static member Default = {
                 inputFile = ""
@@ -143,6 +150,8 @@ module Arguments =
                 wordSize = W32
                 passPrimitiveByAddress = false
                 verbosity = Quiet
+                visualize = false
+                breakHierOnActCalls = false
             }
 
         
@@ -176,6 +185,10 @@ module Arguments =
             { opts with trace = true }
         | Pass_Primitive_By_Address ->
             { opts with passPrimitiveByAddress = true }
+        | Visualize _ ->
+            { opts with visualize = true }
+        | BreakRunStatement _ ->
+            { opts with breakHierOnActCalls = true }
 
     let private parseWordSize ws = 
         if ws = 8 || ws = 16 || ws = 32 || ws = 64 then

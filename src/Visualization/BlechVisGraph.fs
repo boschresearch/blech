@@ -59,6 +59,7 @@ module Blech.Visualization.BlechVisGraph
                 | IsComplex cmplx -> IsComplex (cmplx.SetSecondaryIdOfCaseClosingNode i)
                 | IsCobegin cbgn-> IsCobegin (cbgn.SetSecondaryIdOfCaseClosingNode i)
                 | _ -> x
+        member x.GetBody = match x with IsComplex x -> x.Body | _ -> failwith "error error"
 
     /// Determines if a node is an initial node.
     and IsInit = IsInit | IsNotInit
@@ -70,6 +71,7 @@ module Blech.Visualization.BlechVisGraph
     and InitOrFinalOrNeither = {Init : IsInit; Final : IsFinal} with 
         member x.ToString = (match x.Init with IsInit -> "init" | IsNotInit -> "not init") + " " + (match x.Final with IsFinal -> "final" | IsNotFinal -> "not final")
         member x.IsFinalBool = match x.Final with IsFinal -> true | IsNotFinal -> false
+        member x.IsInitBool = match x.Init with IsInit -> true | IsNotInit -> false
 
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
     and WasVisualized = Visualized | NotVisualized
@@ -90,6 +92,7 @@ module Blech.Visualization.BlechVisGraph
                         mutable WasHierarchyOptimized: WasHierarchyOptimized} with
         member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.Visualize = x.WasVisualized <- Visualized
+        member x.GetBody = x.IsComplex.GetBody
         member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
         member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
@@ -225,6 +228,7 @@ module Blech.Visualization.BlechVisGraph
             |> List.tryFind fnct 
             |> (fun option -> match option.IsSome with true -> option.Value | false -> failwith("No node with the specified properties found in this graph."))
 
+
     /// Finds the node that has Property Init set to true and returns it.
     let findInitNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =
             findNodeInHashSet nodes (fun node -> match node.Payload.IsInitOrFinal.Init with IsInit -> true | _ -> false)
@@ -343,7 +347,7 @@ module Blech.Visualization.BlechVisGraph
    /////////////////// DEBUG ______________________
     let rec listNodes (nodes : BlechNode list) =
         match nodes with 
-            | head :: tail ->   printfn "node s%i, second %i" head.Payload.StateCount head.Payload.SecondaryId
+            | head :: tail ->   printfn "node s%i, second %i - %b" head.Payload.StateCount head.Payload.SecondaryId head.Payload.IsInitOrFinal.IsInitBool
                                 listNodes tail
             | [] -> printf ""
 

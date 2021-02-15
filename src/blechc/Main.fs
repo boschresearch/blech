@@ -159,7 +159,10 @@ module Main =
         //| Some _ -> ()
     
         // dalu - start scchart synthesis for visualization
-        Visualization.startSynthesis tyAstAndLutRes inputFile
+        match cliContext.visualize with 
+            | true -> Logging.log2 "Main" ("checking causality in " + inputFile) 
+                      Visualization.startSynthesis cliContext tyAstAndLutRes inputFile
+            | false -> ()
 
         // create program graphs and check their causality
         Logging.log2 "Main" ("checking causality in " + inputFile) 
