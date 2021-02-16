@@ -64,7 +64,7 @@ module PathRegex =
     // `identifier` taken from https://www.quanttec.com/fparsec/tutorial.html#parsing-string-data
     let private identifier =
         let isIdentifierFirstChar c = isLetter c || c = '_'
-        let isIdentifierChar c = isLetter c || isDigit c || c = '_' || c = '.'
+        let isIdentifierChar c = isLetter c || isDigit c || c = '_'
     
         many1Satisfy2L // _L version of the parser additionally expects an error "label"
             isIdentifierFirstChar 
