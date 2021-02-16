@@ -32,28 +32,27 @@ type private ExportContext = ExportInference.ExportContext
 type ModuleInfo = 
     {
         dependsOn: TranslationUnitPath list
+        astIsProgram: bool
         nameCheck: Environment
         singletons : Singletons
-        // exportInference: ExportContext
-        // exports : SymbolTable.Scope
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
     }
 
-    static member Make imports symbolTable singletons // exportScope 
-                        typecheckContext blechModule =
+    static member Make imports 
+                       isProgram 
+                       symbolTable 
+                       singletons 
+                       typecheckContext 
+                       blechModule =
         { 
             dependsOn = imports
+            astIsProgram = isProgram
             nameCheck = symbolTable
             singletons = singletons
-            // exportInference = exportContext
-            // exports = exportScope
             typeCheck = typecheckContext
             typedModule = blechModule
         }
-
-    member this.IsCompiledProgram = 
-        this.typedModule.IsAProgram
 
     member this.GetModuleName : TranslationUnitPath = 
         this.typedModule.name
@@ -64,20 +63,45 @@ type ModuleInfo =
     member this.GetExportScope : SymbolTable.Scope = 
         SymbolTable.Environment.getModuleScope this.nameCheck
 
+    member this.IsProgram = this.astIsProgram
     
 type ImportError = 
+    | CyclicImport of range: Range.range * path: TranslationUnitPath
+    | MultipleImport of range: Range.range * path: TranslationUnitPath
+    | ProgramImport of range: Range.range * path: TranslationUnitPath
+    | CannotCompileImport of range: Range.range * path: TranslationUnitPath
     | Dummy of range: Range.range * msg: string   // just for development purposes
 
     interface Diagnostics.IDiagnosable with
         
         member err.MainInformation =
             match err with
+            | CyclicImport (rng, path) ->
+                { range = rng 
+                  message = sprintf "the import of module '%s' is cyclic" <| string path }
+            | MultipleImport (rng, path) ->
+                { range = rng 
+                  message = sprintf "the module '%s' is imported more than once" <| string path }
+            | ProgramImport (rng, path) ->
+                { range = rng 
+                  message = sprintf "the import '%s' is a program and cannot be imported" <| string path }
+            | CannotCompileImport (rng, path) ->
+                { range = rng 
+                  message = sprintf "cannot compile import '%s'" <| string path }
             | Dummy (rng, msg) ->
                 { range = rng
                   message = sprintf "Dummy error: %s" msg }
 
         member err.ContextInformation  = 
             match err with
+            | CyclicImport (range = rng) ->
+                [ { range = rng; message = "cyclic import"; isPrimary = true }]
+            | MultipleImport (range = rng) ->
+                [ { range = rng; message = "multiple import"; isPrimary = true }]
+            | ProgramImport (range = rng) ->
+                [ { range = rng; message = "program import"; isPrimary = true }]
+            | CannotCompileImport (range = rng) ->
+                [ { range = rng; message = "not compileable"; isPrimary = true }]
             | Dummy (range = rng) ->
                 [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -91,27 +115,20 @@ type Imports =
         // imports: TranslationUnitPath list
         moduleName: TranslationUnitPath
         importChain: CompilationUnit.ImportChain
-        importPaths: TranslationUnitPath Set
         compiledImports: Dictionary<TranslationUnitPath, ModuleInfo>
     }
     
     static member Initialise importChain moduleName = 
         { moduleName = moduleName
           importChain = importChain
-          importPaths = Set.empty
+          // importPaths = Set.empty
           compiledImports = Dictionary() }
     
     member this.ExtendImportChain moduleName = 
         { this with importChain = this.importChain.Extend moduleName }
 
-    //member this.DecreaseImportChain =
-    //    { this with importChain = this.importChain.Decrease}
-
     member this.GetImportedModuleNames : TranslationUnitPath list = 
         Seq.toList ( this.compiledImports.Keys )
-
-    member this.AddImportPath moduleName =
-        { this with importPaths = this.importPaths.Add moduleName }
 
     member this.AddCompiledImport moduleName moduleInfo =
         ignore <| this.compiledImports.TryAdd(moduleName, moduleInfo)  // The same module might be added more than once
@@ -120,18 +137,11 @@ type Imports =
     member this.GetImports : ModuleInfo list = 
         Seq.toList this.compiledImports.Values
 
-    //member this.GetNameCheckEnvironments : Map<TranslationUnitPath, Environment> =
-    //    Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv) ]
-
     member this.GetLookupTables : Map<TranslationUnitPath, SymbolTable.LookupTable> = 
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetEnv.GetLookupTable) ]
 
     member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetExportScope) ]
-
-    //member this.GetAbstractTypes : ExportInference.AbstractTypes list = 
-    //    this.GetImports
-    //    |> List.map (fun import -> import.exportInference.GetAbstractTypes)
         
     member this.GetSingletons : SingletonInference.Singletons list = 
         this.GetImports
@@ -153,7 +163,7 @@ let private checkCyclicImport (importedModule: AST.ModulePath) logger (imports: 
     let modName = importedModule.path
     let srcRng = importedModule.Range
     if imports.importChain.Contains importedModule.path then
-        Dummy (srcRng, sprintf "Import of module '%s' is cyclic " <| string modName) 
+        CyclicImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
     else
@@ -161,23 +171,23 @@ let private checkCyclicImport (importedModule: AST.ModulePath) logger (imports: 
 
 
 // check if a module is imported multiple times 
-let private checkMultipleImport (importedModule: AST.ModulePath) logger (imports: Imports) =
+let private checkMultipleImport (pkgCtx : CompilationUnit.Context<ModuleInfo>) (importedModule: AST.ModulePath) logger (imports: Imports) =
     let modName = importedModule.path
     let srcRng = importedModule.Range
-    if imports.importPaths.Contains modName then
-        Dummy (srcRng, sprintf "Multiple import of module '%s'" <| string modName) 
+    if pkgCtx.IsLoaded modName then // this also true, if compilation of import resulted in an error
+        MultipleImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
     else
-        Ok <| imports.AddImportPath modName
-
+        Ok imports
 
 // check if the imported and compiled module is NOT a program
 let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledModule: CompilationUnit.Module<ModuleInfo>) (imports: Imports) =
     let modName = modul.path
     let srcRng = modul.Range
-    if compiledModule.info.IsCompiledProgram then
-        Dummy (srcRng, sprintf "Program '%s' cannot be imported." <| string modName) 
+    printfn "Check import is not a program"
+    if compiledModule.info.IsProgram then
+        ProgramImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
     else
@@ -200,20 +210,23 @@ let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) (imports
         checkImportIsNotAProgram logger modul compiledModule imports  // log error to the importing module's logger
 
     | Error _ ->
-        Dummy (srcRng, "Could not compile module " + string modName) 
+        CannotCompileImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
 
 
 
 // Check one import
-let private checkImport (pkgCtx: CompilationUnit.Context<ModuleInfo>) logger (imports: Imports) (import: AST.Import) : Imports = 
+let private checkImport (pkgCtx : CompilationUnit.Context<ModuleInfo>) 
+                        logger 
+                        (imports : Imports) 
+                        (import : AST.Import) : Imports = 
     let returnImports = function 
         | Ok updatedImports -> updatedImports
         | Error _ -> imports
 
     checkCyclicImport import.modulePath logger imports
-    |> Result.bind (checkMultipleImport import.modulePath logger)
+    |> Result.bind (checkMultipleImport pkgCtx import.modulePath logger)
     |> Result.bind (compileImportedModule pkgCtx logger import.modulePath)
     |> returnImports 
     

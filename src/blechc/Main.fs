@@ -293,7 +293,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules symTable singletons lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons lut blechModule
             }
 
                 
@@ -370,7 +370,7 @@ module Main =
                             symTable
 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules symTable singletons lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons lut blechModule
             }
 
 

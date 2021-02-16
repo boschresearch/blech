@@ -1,4 +1,4 @@
-import c "imports/constant" exposes FortyTwo
+import c "../imports/constant" exposes FortyTwo
 
 module exposes incr42
 

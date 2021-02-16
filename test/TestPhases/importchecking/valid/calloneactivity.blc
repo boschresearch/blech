@@ -1,4 +1,4 @@
-import o "imports/oneactivity" 
+import o "../imports/oneactivity" 
 
 @[EntryPoint]
 activity Main () ()

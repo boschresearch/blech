@@ -4,18 +4,18 @@ module exposes aSingletonFunction,
                ASingletonActivity,
                NotASingletonActivity
 
-singleton function aSingletonFunction()
+singleton function aSingletonFunction ()
 end
 
 function notASingletonFunction ()
 end
 
-activity ASingletonActivity()
+activity ASingletonActivity ()
     @[COutput (binding ="<c-variable>", header = "<c-header>.h")]
     extern var b: bool
     await true
 end
 
-activity NotASingletonActivity()
+activity NotASingletonActivity ()
     await true
 end

@@ -164,6 +164,7 @@ type PackageName = string
 
 type TranslationUnitPath = 
     {   // TODO: add protocol "box:" to this type, in case we need more than one protocol. fjg. 15.10.20
+        // TODO: consider adding the occurence range in order to generate better error messages. fjg, 16.02.20
         package: string option
         dirs: string list
         file: string 

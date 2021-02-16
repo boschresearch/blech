@@ -1,4 +1,4 @@
-import u "imports/upstream" exposes T, f, A  // namechecking still missing
+import u "../imports/upstream" exposes T, f, A  // namechecking still missing
 
 module exposes Main
 

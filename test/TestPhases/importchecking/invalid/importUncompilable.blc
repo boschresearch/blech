@@ -1,7 +1,6 @@
-import p "../imports/program"
+import uc "../imports/uncompilable"
 
 @[EntryPoint]
 activity Main ()
-    run p.AnAct()
     await true
 end

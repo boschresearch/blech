@@ -1,9 +1,0 @@
-import dummy "imports/constant"
-
-module 
-
-enum Test
-    FortyTwo
-end
-
-const incr42 = FortyTwo + 1

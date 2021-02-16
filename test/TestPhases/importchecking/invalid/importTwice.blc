@@ -1,5 +1,5 @@
-import I1 "../valid/imports/importMe"
-import I2 "../valid/imports/importMe"
+import I1 "../imports/importMe"
+import I2 "../imports/importMe"
 
 @[EntryPoint]
 activity Main () ()

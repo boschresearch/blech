@@ -100,12 +100,12 @@ module CompilationUnit =
     type TranslatedUnit =
         | Implementation of TranslationUnitPath
         | Interface of TranslationUnitPath
-        | Program of TranslationUnitPath
-        
-    
+
+
     type ImplOrIface =
         | Blc
         | Blh
+
 
     let loadWhat (file: string) =
         if isImplementation file then
@@ -146,6 +146,10 @@ module CompilationUnit =
                     oks.Add (pairs.Key, Result.getOk pairs.Value)
             oks
 
+        member this.IsLoaded moduleName = 
+            this.loaded.ContainsKey <| Implementation moduleName
+            || this.loaded.ContainsKey <| Interface moduleName
+
         member this.GetLoaded =
             Seq.toList (this.loaded.Values)
 
@@ -155,7 +159,7 @@ module CompilationUnit =
     /// try to determine a TranslationUnitName for it and load it
     let load (ctx: Context<'info>) logger (importChain: ImportChain) (fileName: string)
             : Result<Module<'info>, Diagnostics.Logger> =
-        // let logger = ctx.logger
+        
         let optLw = loadWhat fileName
         
         // file exists and is readable?
@@ -203,63 +207,45 @@ module CompilationUnit =
     /// requires an imported module for compilation
     /// Given a context (including loaded translation units) and the 
     /// TranslationUnitPath to a translation unit to be loaded
-    /// load the unit, compile it and return the compilation result for imported usage
+    /// load the unit, compile it, cache it 
+    /// generate the signature, compile it, cache it
+    /// and return the compilation result for imported usage
     let require (ctx: Context<'info>) logger importChain (requiredModule: TranslationUnitPath) (importRange: Range.range)
             : Result<Module<'info>, Diagnostics.Logger> =
+        let translatedMod = Implementation requiredModule
         let translatedSig = Interface requiredModule
         if ctx.loaded.ContainsKey translatedSig then
             // printfn "Use compiled module: %A" translatedSig
             ctx.loaded.[translatedSig]
         else
             let blcFile = searchImplementation ctx.sourcePath requiredModule
-            // let blhFile = searchInterface ctx.outDir requiredModule
-            //match blhFile, blcFile with
-            //| Ok blh, Ok blc ->
-            //    ctx.loader ctx logger importChain Blc requiredModule blc
-                
-            //| Error _, Ok blc ->
-            //    ctx.loader ctx logger importChain Blc requiredModule blc
-                
-            //| _ , Error triedBlcs ->
-            //    let sigFile = searchInterface ctx.blechPath requiredModule 
-            //    match sigFile with
-            //    | Ok blh ->
-            //        ctx.loader ctx logger importChain Blh requiredModule blh
-            //    | Error triedBlhs ->
-            //        Diagnostics.Logger.logFatalError 
-            //        <| logger
-            //        <| Diagnostics.Phase.Compiling
-            //        <| ModuleNotFound (requiredModule, importRange, triedBlcs @ triedBlhs) 
-            //        Error logger
             
             match blcFile with
             | Ok blc ->
-                let translatedMod = Implementation requiredModule
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
-                // printfn "Add compiled module: %A" translatedMod
                 do ctx.loaded.Add (translatedMod, compiledBlcRes)
-                
-                if Result.isOk compiledBlcRes then    
+
+                // if Result.isOk compiledBlcRes then 
+                match compiledBlcRes with 
+                | Ok moduleInfo -> 
                     let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
                     match blhFile with
-                    | Ok blh ->
-                        let compiledBlh = ctx.loader ctx logger importChain Blh requiredModule blh
-                        // printfn "Add compiled signature: %A" translatedSig
-                        do ctx.loaded.Add (translatedSig, compiledBlh)
-                        compiledBlh           
-                    | Error triedBlhs ->
-                        Diagnostics.Logger.logFatalError 
-                        <| logger
-                        <| Diagnostics.Phase.Compiling
-                        <| ModuleNotFound (requiredModule, importRange, triedBlhs) 
-                        Error logger
-                else
-                    compiledBlcRes // contains Error logger
+                    | Ok blh -> 
+                        // signature found
+                        let compiledBlhRes = ctx.loader ctx logger importChain Blh requiredModule blh
+                        do ctx.loaded.Add (translatedSig, compiledBlhRes)
+                        compiledBlhRes           
+                    | Error _ ->
+                        // no generated signature implies .blc must be a program
+                        // TODO: This is a dangerous conclusion if .blh is missing due to other reasons
+                        // TODO: Make this safer, fjg 16.02.21
+                        Ok moduleInfo
+                | Error reqLgr ->
+                    Error reqLgr // logger of required module
             
             | Error triedBlcs ->
-                Diagnostics.Logger.logFatalError 
-                <| logger
-                <| Diagnostics.Phase.Compiling
-                <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
-                Error logger
+                do Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling
+                    <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
+                do ctx.loaded.Add(translatedMod, Error logger) // errors must be cached, too
+                Error logger // logger of importing module 
 

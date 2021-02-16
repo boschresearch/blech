@@ -1,4 +1,4 @@
-import C "imports/constant"
+import C "../imports/constant"
 
 module 
 
