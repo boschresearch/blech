@@ -19,8 +19,10 @@ let C_SUFFIX = ".c"
 let OBJ_SUFFIX = ".obj"
 let EXE_SUFFIX = ".exe"
 let EXT_SUFFIX = ".ext"
+let IMP_SUFFIX = ".imp"
 let EXT_C = EXT_SUFFIX + ".c"
 let EXT_H = EXT_SUFFIX + ".h"
+let IMP_C = IMP_SUFFIX + ".c"
 let APP_NAME = "App"
 let SPEC_SUFFIX = ".spec.json"
 let TEST_SUFFIX = ".test.json"
@@ -293,6 +295,10 @@ module CompilationProcedures =
         let maybeExtern =
             if System.IO.File.Exists cExtern then cExtern
             else ""
+        let cImported = moduleName + IMP_C
+        let maybeImported =
+            if System.IO.File.Exists cImported then cImported
+            else ""
         let cApp = moduleName + APP_NAME + C_SUFFIX
         
         if System.IO.File.Exists cApp then
@@ -302,10 +308,12 @@ module CompilationProcedures =
                 | CL ->
                     config.extraCargs
                     + " /I " + incDir 
+                    + " /I " + outDir
                     + " /Fo" + outDir + @"\" 
                     + " /Fe" + outDir + @"\" 
                     + " " + cApp
                     + " " + maybeExtern
+                    + " " + maybeImported
                 | GCC ->
                     config.extraCargs
                     + " -I " + incDir 
@@ -313,6 +321,7 @@ module CompilationProcedures =
                     + " -o" + app
                     + " " + cApp
                     + " " + maybeExtern
+                    + " " + maybeImported
             let outputMsgs, errorMsgs = execInCLI config.cc args CUR_DIR
             // glue messages together, if they contain at least one line saying "error" or "warning", print them
             let allMsgs = Seq.concat [outputMsgs; errorMsgs]
@@ -324,9 +333,12 @@ module CompilationProcedures =
             exit 0
         // clean obj files
         let objFile = moduleName + OBJ_SUFFIX
+        let objImport = moduleName + IMP_SUFFIX + OBJ_SUFFIX
         let objAppFile = moduleName + APP_NAME + OBJ_SUFFIX
         if System.IO.File.Exists objFile then
             System.IO.File.Delete objFile
+        if System.IO.File.Exists objImport then
+            System.IO.File.Delete objImport
         if System.IO.File.Exists objAppFile then
             System.IO.File.Delete objAppFile
     
