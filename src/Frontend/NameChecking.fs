@@ -110,7 +110,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     
     let private addExposedImportedMember (import: AST.Import) (ctx: NameCheckContext) (exposedImportedMember: Name) =
         let modName = import.localName
-        let modPath = import.modulePath.path
+        let modPath = import.modulePath
         match Env.exposeImportedMember ctx.env modName modPath exposedImportedMember with
         | Ok env ->
             { ctx with env = env }

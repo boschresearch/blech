@@ -26,7 +26,7 @@ open Blech.Compiler
 let private parseNameCheckAndHandleImports logger implOrIface moduleName fileName =
     let cliContext = 
         { 
-            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
+            TestFiles.makeCliContext TestFiles.SingletonInference.Directory fileName with 
                 isFrontendTest = true // stop before typecheck for imports
         }
     let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
@@ -60,7 +60,6 @@ let private parseNameCheckAndHandleImports logger implOrIface moduleName fileNam
                 imports.GetLookupTables
                 imports.GetExportScopes
                 ast
-        
         return ast, imports, symTable
     }
 

@@ -1,0 +1,18 @@
+import sp "../imports/subprograms"
+
+module exposes f
+
+function s ()
+end
+
+singleton [sp.aSingletonFunction] function t ()
+    s()
+end
+
+function f()
+    t()
+end
+
+singleton [sp.ASingletonActivity] activity a ()
+    run sp.ASingletonActivity()
+end

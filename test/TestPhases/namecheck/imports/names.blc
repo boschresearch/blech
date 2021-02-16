@@ -1,0 +1,20 @@
+module exposes S, 
+               A
+
+struct S  
+    var b: bool
+end
+
+function f() returns S 
+    return { b = true } 
+end
+
+struct T 
+    var b: bool
+end
+
+activity A() returns T
+    var s: S  
+    await s.b 
+    return {b = false}
+end
