@@ -45,7 +45,7 @@ let rec private stmtType stmt =
     match stmt with
     // atomic statements, except "return" and "run"
     | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _ | Await _ 
-    | Stmt.ExternalVarDecl _ | FunctionCall _ -> 
+    | Stmt.ExternalVarDecl _ | FunctionCall _ | StatementPragma _ -> 
         Ok NoReturn
     // Must, if "return run"
     | ActivityCall (_, _, receiverOpt, _, _) ->
@@ -238,6 +238,7 @@ let rec private checkAbsenceOfSyncStmts stmts =
             |> Option.defaultValue (Ok ())
         | Stmt.ExternalVarDecl v ->
             Error [ExternalsInFunction v.pos]
+        | Stmt.StatementPragma _ -> Ok ()
         // synchronous statements
         | Await (p,_) | ActivityCall (p,_,_,_,_) | Preempt (p,_,_,_,_) | Cobegin (p,_)
         | RepeatUntil (p,_,_, true) -> // we do not care about prev in args when the stmt is sychronous
@@ -272,7 +273,7 @@ let private checkStmtsWillPause p name stmts =
         // immediate statements
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _ 
-        | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
+        | WhileRepeat _ | StatementPragma _ -> false // a while could be skipped over (we do not try to evaluate the condition)
         // delay statements
         | Await _ | ActivityCall _ -> true
         // statements containing statements
@@ -318,7 +319,7 @@ let private determineGlobalOutputs lut bodyRes =
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
-        | Await _ -> [],[],[]
+        | Await _ | StatementPragma _ -> [],[],[]
         // note that since external variables cannot appear inside functions, we ignore function calls
         // on the statement level AND all expressions that could call functions
         // statements containing statements
@@ -431,7 +432,8 @@ let private determineCalledSingletons lut bodyRes =
         | Assume (_,rhs,_)
         | Await (_,rhs) -> singletonCalls rhs
         | Stmt.Print (_, _, rhss) -> List.collect singletonCalls rhss
-        | Stmt.ExternalVarDecl _ -> []
+        | Stmt.ExternalVarDecl _ 
+        | StatementPragma _ -> []
         | Return (_,rhsOpt) -> 
             rhsOpt
             |> Option.map singletonCalls 
@@ -1129,7 +1131,9 @@ let private fReturn retTypOpt pos exprOpt =
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
     | Some tr, None -> tr |> Result.bind (fun t -> Error [VoidReturnStmtMustReturn(pos,t)])
 
-let private fPragma = unsupported1 "pragma inside stmt sequence"
+let private fPragma anno =
+    Annotation.checkStatementPragma anno
+    |> Result.map Stmt.StatementPragma
 
 let private fNothing = unsupported1 "the empty statement" Range.range0
 
@@ -1217,7 +1221,7 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
         fReturn retTypOpt range 
         <| Option.map (checkExpr lut >> Result.map(tryEvalConst lut)) optExpr 
     | ASTStmt.Pragma anno ->
-        fPragma anno.Range
+        fPragma anno
     | ASTStmt.Nothing ->
         fNothing
 

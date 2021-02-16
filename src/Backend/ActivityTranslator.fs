@@ -44,6 +44,8 @@ open CPrinter
 let rec private cpAction ctx curComp action =
     match action with
     | Action.Nothing -> txt ""
+    | Action.StatementPragma p ->
+        cpStatementPragma p
     | Action.VarDecl v ->
         // If this declares a constant, do not generate any code here. The
         // declaration will appear on the top level.
@@ -794,8 +796,9 @@ let private collectVarsToPrev2 pg =
         match node.Payload.Typ with
         | ActionLocation action ->
             match action with
-            | Nothing -> []
-            | ExternalVarDecl _ -> [] // has not init value, if prev'ed it appears in some rhs
+            | Nothing 
+            | StatementPragma _
+            | ExternalVarDecl _ -> [] // has no init value, if prev'ed it appears in some rhs
             | VarDecl v -> processExpr v.initValue
             | Assert (_, expr, _)
             | Assume (_, expr, _)

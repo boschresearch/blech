@@ -198,7 +198,8 @@ type TyCheckError =
     | IllegalEntryPoint of range * AST.Package
     | BindingIndexOutOfBounds of range * string list
     // pragmas
-    | UnknownPragma of range
+    | UnknownMemberPragma of range
+    | UnknownStatementPragma of range
     
     // --- result receivers ---
     | ReceiverForVoidReturn of range * FunctionPrototype
@@ -413,7 +414,8 @@ type TyCheckError =
             | BindingIndexOutOfBounds (p, indices) -> p, sprintf "Parameter index: %s, out-of bounds." <| String.concat ", " indices
             
             // pragmas
-            | UnknownPragma p -> p, "Unknown pragma."
+            | UnknownMemberPragma p -> p, "Unknown pragma."
+            | UnknownStatementPragma p -> p, "Unknown pragma."
 
 
             // --- result receivers ---
@@ -563,7 +565,9 @@ type TyCheckError =
             | MultipleEntryPoints (first, second) -> 
                 [ { range = first; message = "definition"; isPrimary = false} 
                   { range = second; message = "redefinition"; isPrimary = true } ]
-            | UnknownPragma range -> 
+            | UnknownMemberPragma range -> 
+                [ { range = range; message = "not known"; isPrimary = true} ]
+            | UnknownStatementPragma range -> 
                 [ { range = range; message = "not known"; isPrimary = true} ]
             | BindingIndexOutOfBounds (range, _) ->
                 [ { range = range; message = "wrong indexing"; isPrimary = true} ]
@@ -667,8 +671,10 @@ type TyCheckError =
                 [ "This Blech attribute is not supported here, check the spelling." ]
             | MultipleEntryPoints _ -> 
                 [ "Delete one of the annotations." ]
-            | UnknownPragma _ ->
-                [ "This is not a defined Blech pragma attribute, check the spelling." ]
+            | UnknownMemberPragma _ ->
+                [ "This is not a defined top level pragma attribute, or it was misspelled." ]
+            | UnknownStatementPragma _ ->
+                [ "This pragma either must not occur on the statement level or was misspelled." ]
             | BindingIndexOutOfBounds (range, _) ->
                 [ "$1 is the first input parameter."
                   "$<max> is the last output parameter." ]

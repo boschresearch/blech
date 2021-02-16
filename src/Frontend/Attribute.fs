@@ -14,336 +14,362 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace Blech.Frontend
+module Blech.Frontend.Attribute
 
-module Attribute =
-    
-    open Blech.Common.PPrint
-    open PrettyPrint.DocPrint
-    
-    // sub programs
-    [<Literal>] 
-    let entrypoint = "EntryPoint"
+open PrettyPrint.DocPrint
 
-    // function prototypes
-    [<Literal>] 
-    let cfunction = "CFunction"
-    
-    // var decls
-    [<Literal>] 
-    let cconst = "CConst"
-    [<Literal>] 
-    let cparam = "CParam"
-    [<Literal>] 
-    let coutput = "COutput"
-    [<Literal>] 
-    let cinput = "CInput"
-    
-    // c pragmas
-    [<Literal>]
-    let cinclude = "CInclude"
-    [<Literal>]
-    let ccompile = "CCompile"
-
-    module Key =
-
-        // C bindings
-        [<Literal>] 
-        let binding = "binding"
-        [<Literal>] 
-        let header = "header"
-        [<Literal>] 
-        let source = "source"
-
-
-        // doc comments
-        [<Literal>] 
-        let linedoc = "linedoc"
-        [<Literal>] 
-        let blockdoc = "blockdoc"
+open Blech.Common.PPrint
+open Blech.Common.Range
 
     
-    type Attribute =
-        // declaration attributes
-        | EntryPoint
+// sub programs
+[<Literal>] 
+let entrypoint = "EntryPoint"
 
-        | CConst of binding: string * header: string option
-        | CParam of binding: string * header: string option
-        | COutput of binding: string * header: string option
-        | CInput of binding: string * header: string option
-
-        | CFunctionPrototype of binding: string * header: string option
-        | CFunctionWrapper of source: string
-
-        | LineDoc of linedoc: string
-        | BlockDoc of blockdoc: string
+// function prototypes
+[<Literal>] 
+let cfunction = "CFunction"
     
-        member attr.ToDoc =
-            let dpStructured key attrs =
-                key <+> dpCommaSeparatedInParens attrs
+// var decls
+[<Literal>] 
+let cconst = "CConst"
+[<Literal>] 
+let cparam = "CParam"
+[<Literal>] 
+let coutput = "COutput"
+[<Literal>] 
+let cinput = "CInput"
+    
+// c pragmas
+[<Literal>]
+let cinclude = "CInclude"
+[<Literal>]
+let ccompile = "CCompile"
+
+module Key =
+
+    // C bindings
+    [<Literal>] 
+    let binding = "binding"
+    [<Literal>] 
+    let header = "header"
+    [<Literal>] 
+    let source = "source"
+    [<Literal>] 
+    let label = "label"
+
+    // doc comments
+    [<Literal>] 
+    let linedoc = "linedoc"
+    [<Literal>] 
+    let blockdoc = "blockdoc"
+
+    
+type Attribute =
+    // declaration attributes
+    | EntryPoint
+
+    | CConst of binding: string * header: string option
+    | CParam of binding: string * header: string option
+    | COutput of binding: string * header: string option
+    | CInput of binding: string * header: string option
+
+    | CFunctionPrototype of binding: string * header: string option
+    | CFunctionWrapper of source: string
+
+    | LineDoc of linedoc: string
+    | BlockDoc of blockdoc: string
+    
+    member attr.ToDoc =
+        let dpStructured key attrs =
+            key <+> dpCommaSeparatedInParens attrs
             
-            let dpKeyValue key value = 
-                key <+> chr '=' <+> value
+        let dpKeyValue key value = 
+            key <+> chr '=' <+> value
             
-            let dpAnno attr = 
-                chr '@' <^> brackets attr
+        let dpAnno attr = 
+            chr '@' <^> brackets attr
             
-            let dpCBinding key cbinding optCheader =
-                let attrs = 
-                    match optCheader with   
-                    | Some cheader ->
-                        [ dpKeyValue (txt Key.binding) cbinding 
-                          dpKeyValue (txt Key.header) (dquotes cheader) ]
-                    | None ->
-                        [ dpKeyValue (txt Key.binding) cbinding ]
+        let dpCBinding key cbinding optCheader =
+            let attrs = 
+                match optCheader with   
+                | Some cheader ->
+                    [ dpKeyValue (txt Key.binding) cbinding 
+                      dpKeyValue (txt Key.header) (dquotes cheader) ]
+                | None ->
+                    [ dpKeyValue (txt Key.binding) cbinding ]
                         
-                dpStructured key attrs
-                |> dpAnno
+            dpStructured key attrs
+            |> dpAnno
 
-            let optStringToDoc optString = 
-                match optString with
-                | Some s -> Some <| txt s
-                | None -> None
+        let optStringToDoc optString = 
+            match optString with
+            | Some s -> Some <| txt s
+            | None -> None
 
-            match attr with
-            | EntryPoint ->
-                txt entrypoint |> dpAnno
+        match attr with
+        | EntryPoint ->
+            txt entrypoint |> dpAnno
             
-            | CConst (binding, header)->
-                dpCBinding (txt cconst) (txt binding) (optStringToDoc header)
-            | CParam (binding, header)->
-                dpCBinding (txt cparam) (txt binding) (optStringToDoc header)
-            | COutput (binding, header)->
-                dpCBinding (txt coutput) (txt binding) (optStringToDoc header)
-            | CInput (binding, header)->
-                dpCBinding (txt cinput) (txt binding) (optStringToDoc header)
+        | CConst (binding, header)->
+            dpCBinding (txt cconst) (txt binding) (optStringToDoc header)
+        | CParam (binding, header)->
+            dpCBinding (txt cparam) (txt binding) (optStringToDoc header)
+        | COutput (binding, header)->
+            dpCBinding (txt coutput) (txt binding) (optStringToDoc header)
+        | CInput (binding, header)->
+            dpCBinding (txt cinput) (txt binding) (optStringToDoc header)
             
-            | CFunctionPrototype (binding, header) ->
-                dpCBinding (txt cfunction) (txt binding) (optStringToDoc header)
-            | CFunctionWrapper source ->
-                dpCBinding (txt cfunction) (txt source) None
+        | CFunctionPrototype (binding, header) ->
+            dpCBinding (txt cfunction) (txt binding) (optStringToDoc header)
+        | CFunctionWrapper source ->
+            dpCBinding (txt cfunction) (txt source) None
                 
-            | LineDoc doc ->
-                txt "///" <+> txt doc
-            | BlockDoc doc ->
-                txt "/**" <^> txt doc <^> txt "*/"
+        | LineDoc doc ->
+            txt "///" <+> txt doc
+        | BlockDoc doc ->
+            txt "/**" <^> txt doc <^> txt "*/"
                 
-        override attr.ToString() =
-            render None <| attr.ToDoc
+    override attr.ToString() =
+        render None <| attr.ToDoc
 
 
-    //--- 
-    //  Helper functions for printing declaration attributes 
-    // ---
+//--- 
+//  Helper functions for printing declaration attributes 
+// ---
 
-    let private dpAttrList attrs = 
-        List.map (fun (attr: Attribute) -> attr.ToDoc) attrs
+let private dpAttrList attrs = 
+    List.map (fun (attr: Attribute) -> attr.ToDoc) attrs
         
  
-    let private declToDoc (docs: Attribute list) (optAttr: Attribute option) =
-        match optAttr with
-        | Some attr ->
-            dpAttrList docs @ [attr.ToDoc]
-        | None ->
-            dpAttrList docs
+let private declToDoc (docs: Attribute list) (optAttr: Attribute option) =
+    match optAttr with
+    | Some attr ->
+        dpAttrList docs @ [attr.ToDoc]
+    | None ->
+        dpAttrList docs
 
-    let private dpStructured key attrs =
-        key <+> dpCommaSeparatedInParens attrs
+let private dpStructured key attrs =
+    key <+> dpCommaSeparatedInParens attrs
             
-    let private dpKeyValue key value = 
-        key <+> chr '=' <+> value
+let private dpKeyValue key value = 
+    key <+> chr '=' <+> value
 
-    //---
-    // Helper function for accessing c bindings
-    //---
+let private dpPragma attr =
+    txt "@@" <^> brackets attr
 
-    let private tryGetCBinding (attr: Attribute) =
-        match attr with
-        | CConst (binding = binding)
-        | CParam (binding = binding)
-        | COutput (binding = binding)
-        | CInput (binding = binding)
-        | CFunctionPrototype (binding = binding) ->
-            Some binding
+//---
+// Helper function for accessing c bindings
+//---
+
+let private tryGetCBinding (attr: Attribute) =
+    match attr with
+    | CConst (binding = binding)
+    | CParam (binding = binding)
+    | COutput (binding = binding)
+    | CInput (binding = binding)
+    | CFunctionPrototype (binding = binding) ->
+        Some binding
+    | _ ->
+        None
+
+let private tryGetCHeader (attr: Attribute) =
+    match attr with
+    | CConst (header = Some header)
+    | CParam (header = Some header)
+    | COutput (header = Some header)
+    | CInput (header = Some header)
+    | CFunctionPrototype (header = Some header) ->
+        Some header
+    | _ ->
+        None
+
+let private tryGetCSource (attr: Attribute) =
+    match attr with
+    | CFunctionWrapper (source = source) ->
+        Some source
+    | _ ->
+        None
+
+
+//---
+// Declaration attributes
+// ---
+
+/// Attributes for typed subprograms
+type SubProgram = 
+    {
+        doc: Attribute list
+        entryPoint: Attribute option
+    }
+    static member Empty = 
+        { doc = []
+          entryPoint = None }
+
+    member this.ToDoc = 
+        declToDoc this.doc this.entryPoint
+            
+    override this.ToString() =
+        this.ToDoc
+        |> vsep
+        |> render None
+
+
+/// Attributes for typed function prototypes   
+type FunctionPrototype = 
+    {
+        doc: Attribute list
+        cfunction: Attribute option
+    }
+    static member Empty = 
+        { doc = []
+          cfunction = None }
+
+    member this.ToDoc = 
+        declToDoc this.doc this.cfunction
+
+    override this.ToString() =
+        this.ToDoc
+        |> vsep
+        |> render None
+
+    member fpanno.isDirectCCall =
+        match fpanno.cfunction with
+        | Some (CFunctionPrototype (binding = _)) ->
+            true
+        | _ ->
+            false
+
+    member fpanno.TryGetCHeader =
+        match fpanno.cfunction with
+        | Some cattr ->
+            tryGetCHeader cattr
+        | _ ->
+            None
+        
+    member fpanno.TryGetCBinding = 
+        match fpanno.cfunction with
+        | Some cattr ->
+            tryGetCBinding cattr
         | _ ->
             None
 
-    let private tryGetCHeader (attr: Attribute) =
+/// Attribute for typed variable declarations
+type VarDecl = 
+    {
+        doc: Attribute list
+        cvardecl: Attribute option
+    }
+    static member Empty = 
+        { doc = []
+          cvardecl = None }
+
+    member this.ToDoc = 
+        declToDoc this.doc this.cvardecl
+
+    override this.ToString() =
+        this.ToDoc
+        |> vsep
+        |> render None
+
+    member this.TryGetCHeader =
+        match this.cvardecl with
+        | Some cattr  ->
+            tryGetCHeader cattr
+        | _ ->
+            None
+
+    member fpanno.TryGetCBinding = 
+        match fpanno.cvardecl with
+        | Some cattr ->
+            tryGetCBinding cattr
+        | _ ->
+            None
+
+/// Used as a general purpose type for any other annotateable declaration
+type OtherDecl = 
+    { 
+        doc: Attribute list
+    }
+    static member Empty = 
+        { doc = [] }
+        
+    member this.ToDoc = 
+        declToDoc this.doc None
+
+    override this.ToString() =
+        this.ToDoc 
+        |> vsep
+        |> render None
+
+
+//---
+// Member level attributes - pragmas
+// ---
+    
+type MemberPragma = 
+    | CInclude of header: string
+    | CCompile of source: string
+
+    member attr.ToDoc =
+        let dpCInclude cheader =
+            ( dpStructured 
+                <| txt cinclude
+                <| [ dpKeyValue (txt Key.header) (dquotes <| cheader) ] )                
+            |> dpPragma
+
+        let dpCCompile csource =
+            ( dpStructured 
+                <| txt ccompile
+                <| [ dpKeyValue (txt Key.source) (dquotes <| csource) ] )                
+            |> dpPragma
+
         match attr with
-        | CConst (header = Some header)
-        | CParam (header = Some header)
-        | COutput (header = Some header)
-        | CInput (header = Some header)
-        | CFunctionPrototype (header = Some header) ->
+        | CInclude header ->
+            dpCInclude (txt header)
+        | CCompile source ->
+            dpCCompile (txt source)
+                
+    override attr.ToString() =
+        render None <| attr.ToDoc
+
+    member this.IsInclude =
+        match this with
+        | CInclude _ -> true
+        | _ -> false
+        
+    member this.IsCompile =
+        match this with
+        | CCompile _ -> true
+        | _ -> false
+
+    member this.TryGetCHeader = 
+        match this with
+        | CInclude header ->
             Some header
         | _ ->
             None
 
-    let private tryGetCSource (attr: Attribute) =
-        match attr with
-        | CFunctionWrapper (source = source) ->
-            Some source
-        | _ ->
-            None
+//---
+// Statement level attributes - pragmas
+// ---
 
+type StatementPragma = 
+    | Label of range * string // label
 
-    //---
-    // Declaration attributes
-    // ---
+    override this.ToString() =
+        render None <| this.ToDoc
 
-    /// Attributes for typed subprograms
-    type SubProgram = 
-        {
-            doc: Attribute list
-            entryPoint: Attribute option
-        }
-        static member Empty = 
-            { doc = []
-              entryPoint = None }
+    member this.ToDoc =
+        match this with
+        | Label (_,lab) ->
+            lab 
+            |> txt 
+            |> dquotes
+            |> dpKeyValue (txt Key.label) 
+            |> dpPragma
 
-        member this.ToDoc = 
-            declToDoc this.doc this.entryPoint
-            
-        override this.ToString() =
-            this.ToDoc
-            |> vsep
-            |> render None
-
-
-     /// Attributes for typed function prototypes   
-     type FunctionPrototype = 
-        {
-            doc: Attribute list
-            cfunction: Attribute option
-        }
-        static member Empty = 
-            { doc = []
-              cfunction = None }
-
-        member this.ToDoc = 
-            declToDoc this.doc this.cfunction
-
-        override this.ToString() =
-            this.ToDoc
-            |> vsep
-            |> render None
-
-        member fpanno.isDirectCCall =
-            match fpanno.cfunction with
-            | Some (CFunctionPrototype (binding = _)) ->
-                true
-            | _ ->
-                false
-
-        member fpanno.TryGetCHeader =
-            match fpanno.cfunction with
-            | Some cattr ->
-                tryGetCHeader cattr
-            | _ ->
-                None
-        
-        member fpanno.TryGetCBinding = 
-            match fpanno.cfunction with
-            | Some cattr ->
-                tryGetCBinding cattr
-            | _ ->
-                None
-
-    /// Attribute for typed variable declarations
-    type VarDecl = 
-        {
-            doc: Attribute list
-            cvardecl: Attribute option
-        }
-        static member Empty = 
-            { doc = []
-              cvardecl = None }
-
-        member this.ToDoc = 
-            declToDoc this.doc this.cvardecl
-
-        override this.ToString() =
-            this.ToDoc
-            |> vsep
-            |> render None
-
-        member this.TryGetCHeader =
-            match this.cvardecl with
-            | Some cattr  ->
-                tryGetCHeader cattr
-            | _ ->
-                None
-
-        member fpanno.TryGetCBinding = 
-            match fpanno.cvardecl with
-            | Some cattr ->
-                tryGetCBinding cattr
-            | _ ->
-                None
-
-    /// Used as a general purpose type for any other annotateable declaration
-    type OtherDecl = 
-        { 
-            doc: Attribute list
-        }
-        static member Empty = 
-            { doc = [] }
-        
-        member this.ToDoc = 
-            declToDoc this.doc None
-
-        override this.ToString() =
-            this.ToDoc 
-            |> vsep
-            |> render None
-
-
-    //---
-    // Member level attributes - pragmas
-    // ---
+    member this.Range =
+        match this with
+        | Label (r,_) -> r
     
-    type MemberPragma = 
-        | CInclude of header: string
-        | CCompile of source: string
-
-        member attr.ToDoc =
-            let dpPragma attr =
-                txt "@@" <^> brackets attr
-
-            let dpCInclude cheader =
-                ( dpStructured 
-                  <| txt cinclude
-                  <| [ dpKeyValue (txt Key.header) (dquotes <| cheader) ] )                
-                |> dpPragma
-
-            let dpCCompile csource =
-                ( dpStructured 
-                  <| txt ccompile
-                  <| [ dpKeyValue (txt Key.source) (dquotes <| csource) ] )                
-                |> dpPragma
-
-            match attr with
-            | CInclude header ->
-                dpCInclude (txt header)
-            | CCompile source ->
-                dpCCompile (txt source)
-                
-        override attr.ToString() =
-            render None <| attr.ToDoc
-
-        member this.IsInclude =
-            match this with
-            | CInclude _ -> true
-            | _ -> false
-        
-        member this.IsCompile =
-            match this with
-            | CCompile _ -> true
-            | _ -> false
-
-        member this.TryGetCHeader = 
-            match this with
-            | CInclude header ->
-                Some header
-            | _ ->
-                None

@@ -46,22 +46,37 @@ let cpGeneratedComment info =
 // Some allowed Blech doc comments generate illegal C comments, like
 // /**/mydoc*/ -- not allowed in C but in Blech
 // /// mydoc */  -- creates /**  mydoc */ */, which closes too early
-let cpDocComment (dc: Attribute.Attribute) = 
+// this function takes measures to prevent this
+let private cpComment cmtOpenTokenOpt (str: string) =
+    let contents = 
+        let cleanStr = str.Replace("*/", "  ") // mitigate /// mydoc */
+        if cleanStr.StartsWith "/" then " " + cleanStr // adds extra ' ' in /** /mydoc */
+        else cleanStr
+        |> txt
+    let startCmt =
+        match cmtOpenTokenOpt with
+        | None -> txt "/*" // single line comments are not allowed in C89
+        | Some x -> txt x
+    startCmt <^> contents <^> txt "*/" 
+
+let private processDocComment (dc: Attribute.Attribute) = 
     match dc with
-    | Attribute.LineDoc doc ->
-        txt "/**" <+> txt doc <+> txt "*/" // end of line comments are not allowed in C89
-    | Attribute.BlockDoc doc ->
-        txt "/**" <^> txt doc <^> txt "*/" // <+> prevents pathologic doc comments like /**/mydoc */
+    | Attribute.LineDoc str
+    | Attribute.BlockDoc str ->
+        cpComment (Some "/*") str
     | _ ->
         empty
         
-
 let cpOptDocComments (docs: Attribute.Attribute list) =
     match docs with
     | [] ->
         None
     | _ ->
-        Some (dpToplevelClose <| Seq.map cpDocComment docs)
+        docs
+        |> Seq.map processDocComment
+        |> dpToplevelClose
+        |> Some
+
         
 //=============================================================================
 // Atomic language elements
@@ -239,6 +254,11 @@ let internal cpRepeatUntil cond body =
     txt "do {"
     <.> cpIndent body
     <.> txt "} while (" <+> cond <+> txt ")" <^> semi
+
+let internal cpStatementPragma p =
+    match p with
+    | Attribute.Label (_, lab) ->
+        cpComment None lab        
 
 
 //=============================================================================

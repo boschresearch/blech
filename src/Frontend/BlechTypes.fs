@@ -788,6 +788,7 @@ and Stmt =
     | Assert of range * TypedRhs * string
     | Assume of range * TypedRhs * string
     | Print of range * string * (TypedRhs list)
+    | StatementPragma of Attribute.StatementPragma // special marker on statement level for mode diagrams
     // pause
     | Await of range * TypedRhs
     // control flow
@@ -815,6 +816,7 @@ and Stmt =
             txt "printf" 
             <+> ( txt m :: (rs |> List.map (fun r -> r.ToDoc)) 
                   |> dpCommaSeparatedInParens)
+        | StatementPragma s -> s.ToDoc
         | Await (_, c) -> txt "await" <+> c.ToDoc
         | ITE (_, c, bIf, bElse) ->
             txt "if" <+> c.ToDoc <+> txt "then"

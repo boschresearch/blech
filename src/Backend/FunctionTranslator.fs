@@ -69,6 +69,7 @@ and private translateFunctionStatement ctx curComp stmt =
     | Stmt.Assert _
     | Stmt.Assume _
     | Stmt.Print _ -> failwith "Print, Assert, Assume not implemented yet."
+    | Stmt.StatementPragma p -> cpStatementPragma p
     // control flow
     | ITE (_, cond, ifBranch, elseBranch) -> // line, condition, if-block, else-block (each possibly empty!)
         let {prereqStmts=prereqStmts; cExpr=transCond} = cpExpr ctx.tcc cond
