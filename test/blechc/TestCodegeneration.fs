@@ -19,8 +19,10 @@ let C_SUFFIX = ".c"
 let OBJ_SUFFIX = ".obj"
 let EXE_SUFFIX = ".exe"
 let EXT_SUFFIX = ".ext"
+let IMP_SUFFIX = "_imp"
 let EXT_C = EXT_SUFFIX + ".c"
 let EXT_H = EXT_SUFFIX + ".h"
+let IMP_C = IMP_SUFFIX + ".c"
 let APP_NAME = "App"
 let SPEC_SUFFIX = ".spec.json"
 let TEST_SUFFIX = ".test.json"
@@ -247,7 +249,7 @@ module CompilationProcedures =
         outputs, errors
     
     let runBLCcompiler config (testcase: string) outDir =
-        let inputFile = testcase
+        let inputFile = System.IO.Path.GetFileName(testcase)
         let inputModule = System.IO.Path.GetFileNameWithoutExtension(testcase)
         let sourcePath = System.IO.Path.GetDirectoryName(testcase)
         let appName = inputModule + APP_NAME
@@ -271,14 +273,13 @@ module CompilationProcedures =
         // now compile the test case
         let dotnet = "dotnet"
         let args =  config.blechc
-                    + " --source-path " + sourcePath 
+                    // no need to set the source path as we run the CLI in the source path, see below
                     + " --out-dir " + outDir 
                     + " --app=" + appName
                     + " --trace"
                     + " " + inputFile
-        let out, _ = execInCLI dotnet args CUR_DIR
+        let out, _ = execInCLI dotnet args sourcePath
         out |> String.concat "\n" |> printf "%s" 
-    
         ()
         
     
@@ -294,6 +295,10 @@ module CompilationProcedures =
         let maybeExtern =
             if System.IO.File.Exists cExtern then cExtern
             else ""
+        let cImported = moduleName + IMP_C
+        let maybeImported =
+            if System.IO.File.Exists cImported then cImported
+            else ""
         let cApp = moduleName + APP_NAME + C_SUFFIX
         
         if System.IO.File.Exists cApp then
@@ -303,10 +308,12 @@ module CompilationProcedures =
                 | CL ->
                     config.extraCargs
                     + " /I " + incDir 
+                    + " /I " + outDir
                     + " /Fo" + outDir + @"\" 
                     + " /Fe" + outDir + @"\" 
                     + " " + cApp
                     + " " + maybeExtern
+                    + " " + maybeImported
                 | GCC ->
                     config.extraCargs
                     + " -I " + incDir 
@@ -314,6 +321,7 @@ module CompilationProcedures =
                     + " -o" + app
                     + " " + cApp
                     + " " + maybeExtern
+                    + " " + maybeImported
             let outputMsgs, errorMsgs = execInCLI config.cc args CUR_DIR
             // glue messages together, if they contain at least one line saying "error" or "warning", print them
             let allMsgs = Seq.concat [outputMsgs; errorMsgs]
@@ -325,9 +333,12 @@ module CompilationProcedures =
             exit 0
         // clean obj files
         let objFile = moduleName + OBJ_SUFFIX
+        let objImport = moduleName + IMP_SUFFIX + OBJ_SUFFIX
         let objAppFile = moduleName + APP_NAME + OBJ_SUFFIX
         if System.IO.File.Exists objFile then
             System.IO.File.Delete objFile
+        if System.IO.File.Exists objImport then
+            System.IO.File.Delete objImport
         if System.IO.File.Exists objAppFile then
             System.IO.File.Delete objAppFile
     
@@ -430,8 +441,10 @@ let createConfig() =
         let defaultBlechcLocation = 
             System.IO.Path.Combine [| "..";"..";"src";"blechc";"bin";"Debug";
                                       "netcoreapp3.1";"blechc.dll" |]
+            |> System.IO.Path.GetFullPath
         let defaultIncludeLocation =
             System.IO.Path.Combine [| "..";"..";"src";"blechc";"include" |]
+            |> System.IO.Path.GetFullPath
         System.Console.WriteLine ("Writing default location of blechc compiler to config: \n\t" + defaultBlechcLocation)
         writer.WriteLine defaultBlechcLocation
         System.Console.WriteLine ("Writing default include path of blech headers to config: \n\t" + defaultIncludeLocation)
@@ -480,19 +493,21 @@ let main argv =
     let config = parseConfig()
     
     let path = programArgs.[0]
-    let outputPath = programArgs.[1]
-    
-    // Ensure the output directory exists
-    if System.IO.Directory.Exists outputPath then
-        // ok!
-        ()
-    else
-        try
-            System.IO.Directory.CreateDirectory outputPath |> ignore
-        with
-        | _ ->
-            printfn "Cannot create output path %s." outputPath
-            exit 0
+    let outputPath = 
+        let givenOutPath = programArgs.[1]
+        // Ensure the output directory exists
+        if System.IO.Directory.Exists givenOutPath then
+            // ok!
+            givenOutPath
+            |> System.IO.Path.GetFullPath
+        else
+            try
+                System.IO.Directory.CreateDirectory givenOutPath 
+                |> (fun info -> info.FullName)
+            with
+            | _ ->
+                printfn "Cannot create output path %s." givenOutPath
+                exit 0
     
     // determine whether we are in single file or whole folder mode
     if System.IO.Directory.Exists path then

@@ -48,6 +48,9 @@ dotnet run -- codegeneration tmp
 echo *** Run tests for entry point activities with parameters
 dotnet run -- codegeneration/blechAccess tmp/blechAccess
 
+echo *** Run tests for module imports
+dotnet run -- codegeneration/modules tmp/modules
+
 echo *** Run tests according to Scode analysis
 dotnet run -- codegeneration/88problemsbutastructaintone tmp/88problemsbutastructaintone
 
