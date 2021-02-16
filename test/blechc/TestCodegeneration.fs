@@ -247,7 +247,7 @@ module CompilationProcedures =
         outputs, errors
     
     let runBLCcompiler config (testcase: string) outDir =
-        let inputFile = testcase
+        let inputFile = System.IO.Path.GetFileName(testcase)
         let inputModule = System.IO.Path.GetFileNameWithoutExtension(testcase)
         let sourcePath = System.IO.Path.GetDirectoryName(testcase)
         let appName = inputModule + APP_NAME
@@ -271,14 +271,13 @@ module CompilationProcedures =
         // now compile the test case
         let dotnet = "dotnet"
         let args =  config.blechc
-                    + " --source-path " + sourcePath 
+                    // no need to set the source path as we run the CLI in the source path, see below
                     + " --out-dir " + outDir 
                     + " --app=" + appName
                     + " --trace"
                     + " " + inputFile
-        let out, _ = execInCLI dotnet args CUR_DIR
+        let out, _ = execInCLI dotnet args sourcePath
         out |> String.concat "\n" |> printf "%s" 
-    
         ()
         
     
@@ -430,8 +429,10 @@ let createConfig() =
         let defaultBlechcLocation = 
             System.IO.Path.Combine [| "..";"..";"src";"blechc";"bin";"Debug";
                                       "netcoreapp3.1";"blechc.dll" |]
+            |> System.IO.Path.GetFullPath
         let defaultIncludeLocation =
             System.IO.Path.Combine [| "..";"..";"src";"blechc";"include" |]
+            |> System.IO.Path.GetFullPath
         System.Console.WriteLine ("Writing default location of blechc compiler to config: \n\t" + defaultBlechcLocation)
         writer.WriteLine defaultBlechcLocation
         System.Console.WriteLine ("Writing default include path of blech headers to config: \n\t" + defaultIncludeLocation)
@@ -480,19 +481,21 @@ let main argv =
     let config = parseConfig()
     
     let path = programArgs.[0]
-    let outputPath = programArgs.[1]
-    
-    // Ensure the output directory exists
-    if System.IO.Directory.Exists outputPath then
-        // ok!
-        ()
-    else
-        try
-            System.IO.Directory.CreateDirectory outputPath |> ignore
-        with
-        | _ ->
-            printfn "Cannot create output path %s." outputPath
-            exit 0
+    let outputPath = 
+        let givenOutPath = programArgs.[1]
+        // Ensure the output directory exists
+        if System.IO.Directory.Exists givenOutPath then
+            // ok!
+            givenOutPath
+            |> System.IO.Path.GetFullPath
+        else
+            try
+                System.IO.Directory.CreateDirectory givenOutPath 
+                |> (fun info -> info.FullName)
+            with
+            | _ ->
+                printfn "Cannot create output path %s." givenOutPath
+                exit 0
     
     // determine whether we are in single file or whole folder mode
     if System.IO.Directory.Exists path then
