@@ -85,3 +85,5 @@ let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
     { Arguments.BlechCOptions.Default with inputFile = inputfile
                                            sourcePath = projectDir 
                                            projectDir = projectDir }
+
+

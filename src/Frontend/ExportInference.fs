@@ -77,11 +77,9 @@ module ExportInference =
    
     type AbstractTypes = Map<Name, AbstractType>
     
-    // type OpaqueSingletons = Set<Name> 
-
     type RequiredImports = Map<Identifier, Identifier option>
 
-    // --- Singleton Handling
+    // --- Singletons
 
     type SingletonUsage = LongIdentifier list // in order of appearance
 
@@ -91,81 +89,7 @@ module ExportInference =
     
     type SingletonSignatures = Map<Name, SingletonSignature>
 
-    // --- Singleton handling
     
-    //type private Path = Name list
-     
-    
-    //type Singletons = 
-    //    private {
-    //        calledSingletons : Path list       // accumulator for called singletons in a subprogram
-    //        singletons : Map<Name, Path list>  // declaration name |-> singleton uses (multiple occurences of the same singleton possible)
-    //        signatures : Map<Name, SingletonSignature>
-    //    }
-
-    //    static member Empty = 
-    //        { calledSingletons = List.empty
-    //          singletons = Map.empty
-    //          signatures = Map.empty }
-
-    //    member this.AddCalledSingleton (env : SymbolTable.Environment) (path : Path) =
-    //        assert this.IsSingleton env path
-    //        { this with calledSingletons = path :: this.calledSingletons }  
-
-    //    member this.HasCalledSingletons = 
-    //        not <| List.isEmpty this.calledSingletons
-
-    //    // Assume, that all called singletons have been collected
-    //    //member this.AddSingleton declName =
-    //    //    { this with 
-    //    //        singletons = this.singletons.Add (declName, this.calledSingletons) 
-    //    //        calledSingletons = List.empty }       
-
-    //    member this.IsSingleton (env : SymbolTable.Environment) (path : Path) =
-    //        let lastName = List.last path
-    //        let declName = Env.getDeclName env lastName
-    //        this.singletons.ContainsKey declName
-
-    //    //member this.IsSingleton (declName : Name) =
-    //    //    this.singletons.ContainsKey declName
-
-
-    //    member private this.CalledToSignature : LongIdentifier list = 
-    //        let pathToLongid path = List.map (fun name -> name.id) path
-    //        this.calledSingletons
-    //        |> List.map pathToLongid
-    //        |> List.distinct
-
-    //    //member this.AddTranslucentSingleton declName = 
-    //    //    { calledSingletons = List.empty
-    //    //      singletons = this.singletons.Add (declName, this.calledSingletons)
-    //    //      signatures = this.signatures.Add (declName, Translucent this.CalledToSignature) }
-
-    //    member this.AddSingleton declName signatureCase = 
-    //        { calledSingletons = List.empty
-    //          singletons = this.singletons.Add (declName, this.calledSingletons)
-    //          signatures = this.signatures.Add (declName, signatureCase this.CalledToSignature) }
-
-
-    //    member this.HasSignature declName =
-    //        Option.isSome <| this.signatures.TryFind declName
-
-    //    member this.GetSignature declName =
-    //        this.signatures.Item declName
-
-    //    member this.CollectSingletons (env : SymbolTable.Environment) declName : QName list =     
-    //        let rec recurse path =
-    //            let lastname = List.last path
-    //            let declname = Env.getDeclName env lastname
-    //            let qname = (Env.getLookupTable env).nameToQname declname
-    //            match this.singletons.Item declname with
-    //            | [] -> [qname]
-    //            | singletons -> 
-    //                qname :: List.collect recurse singletons
-
-    //        List.collect recurse (this.singletons.Item declName)
-    //        |> List.distinct
-
 
     type ExportContext = 
         private {
@@ -173,10 +97,7 @@ module ExportInference =
             environment : SymbolTable.Environment
             singletons : SingletonInference.Singletons
 
-            abstractTypes : AbstractTypes
-            // opaqueSingletons : OpaqueSingletons 
-            // singletons : Singletons
-            
+            abstractTypes : AbstractTypes    
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
             singletonSignatures : SingletonSignatures
@@ -186,8 +107,6 @@ module ExportInference =
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
                                  (singletons: SingletonInference.Singletons) =
-                                 // (importedAbstractTypes : AbstractTypes list) = 
-                                 // (importedSingletons: SingletonInference.Singletons list) =
             {   
                 // inputs
                 environment = env
@@ -195,7 +114,6 @@ module ExportInference =
                 singletons = singletons
         
                 // results
-                // abstractTypes = Map.collect importedAbstractTypes 
                 abstractTypes = Map.empty
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
@@ -218,16 +136,6 @@ module ExportInference =
                 singletonSignatures = Map.empty
             }
 
-
-        //member this.AddAbstractType name abstype = 
-        //    { this with abstractTypes = this.abstractTypes.Add (name, abstype) }
-
-        //member this.AddOpaqueSingleton name = 
-        //    { this with opaqueSingletons = this.opaqueSingletons.Add name }
-
-        //member this.AddSingleton name =
-        //    this.singletons.AddSingleton name
-
         member this.AddRequiredImports (id: Identifier) =
             if Env.isImportedName this.environment id then
                 match Env.tryGetImportForMember this.environment id with
@@ -242,10 +150,6 @@ module ExportInference =
         member this.IsAbstractType name = 
             let declName = Env.getDeclName this.environment name
             this.abstractTypes.ContainsKey declName
-
-        //member this.IsOpaqueSingleton name = 
-        //    let declName = Env.getDeclName this.environment name
-        //    this.opaqueSingletons.Contains declName
 
         member this.TryGetAbstractType name =
             let declName = Env.getDeclName this.environment name
@@ -311,33 +215,35 @@ module ExportInference =
         member this.GetSingletonSignatures = 
             this.singletonSignatures
 
-        // TODO: remove this
-        //member this.GetUsedSingletons declName = 
-        //    assert Env.isDeclName this.environment declName
-        //    match Map.tryFind declName this.singletonSignatures with
-        //    | Some (Opaque usedSingletons)
-        //    | Some (Translucent usedSingletons) ->
-        //        usedSingletons
-        //    | None ->
-        //        List.empty
-
-        
         member this.GetRequiredImports = 
             this.requiredImports
 
             
     type ExportError = 
+        | NameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
+        | ImplicitNameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
         | Dummy of range: Range.range * msg: string   // just for development purposes
     
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
                 match err with
+                | NameLessAccessible (usage = name; topLevelDecl = tldecl) ->
+                    { range = name.range 
+                      message = sprintf "name '%s' is less accessible than declaration '%s'" <| string name <| string tldecl }
+                | ImplicitNameLessAccessible (usage = name; topLevelDecl = tldecl) ->
+                    { range = name.range 
+                      message = sprintf "implicit name '%s' is less accessible than declaration '%s'" <| string name <| string tldecl }
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
     
             member err.ContextInformation  = 
                 match err with
+                | ImplicitNameLessAccessible (usage, decl, topLevelDecl)
+                | NameLessAccessible (usage, decl, topLevelDecl) ->
+                    [ { range = usage.Range; message = "hidden"; isPrimary = true }
+                      { range = decl.Range; message = "hidden declaration"; isPrimary = false}
+                      { range = topLevelDecl.Range; message = "exposed declaration"; isPrimary = false} ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
     
@@ -430,6 +336,7 @@ module ExportInference =
         | _ ->
             ctx
 
+
     let private exportNameIfOpaqueSingletonSignature (ctx: ExportContext) (name: Name) =
         if ctx.HasOpaqueSingletonSignature name then
             // printfn "Export opaque singleton: %s" name.id
@@ -438,23 +345,29 @@ module ExportInference =
         else    
             ctx
 
+
     let private checkTransparentStaticName exp (ctx: ExportContext) (name: Name) = 
         if Env.isHiddenToplevelMember ctx.environment name.id then
-            Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id )
+            let decl = Env.getDeclName ctx.environment name
+            NameLessAccessible (name, decl, exp.topLevelMember)
             |> logExportError ctx 
         else 
             ctx
 
+
     let private checkTransparentDynamicName exp (ctx: ExportContext) (name: Name) = 
         if Env.isHiddenToplevelMember ctx.environment name.id then
-            Dummy (name.Range, sprintf "Name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
+            let decl = Env.getDeclName ctx.environment name
+            NameLessAccessible (name, decl, exp.topLevelMember)
             |> logExportError ctx 
         else 
             ctx
-        
+
+
     let private checkTransparentImplicitName exp (ctx: ExportContext) (name: Name) =
         if Env.isHiddenImplicitMember ctx.environment name.id then
-            Dummy (name.Range, sprintf "Implicit name '%s' is less accessible than declaration '%s'" name.id exp.topLevelMember.id)
+            let decl = Env.getDeclName ctx.environment name
+            ImplicitNameLessAccessible (name, decl, exp.topLevelMember)
             |> logExportError ctx 
         else 
             ctx
@@ -486,19 +399,6 @@ module ExportInference =
             let maybeImportedSingleton = List.last dap.leadingNames
             exportNameIfOpaqueSingletonSignature ctx firstName
             |> requireImportIfCalledSingleton <| firstName <| maybeImportedSingleton
-            // ctx
-
-
-    //let private inferImplicitMember exp ctx (snp: AST.StaticNamedPath) = 
-    //    let firstName = List.head snp.names
-    //    match exp.visibility with
-    //    | Transparent ->
-    //        checkTransparentImplicitName exp ctx firstName
-    //        |> exportNameIfOpaqueSingletonSignature <| firstName
-    //        |> requireImportForMemberIfImported <| firstName
-    //    | _ ->
-    //        exportNameIfOpaqueSingletonSignature ctx firstName
-    //        // ctx
 
 
     let private inferNameInCurrentScope exp ctx (sharing: Name) = 
@@ -775,7 +675,7 @@ module ExportInference =
 
 
     let private inferFunctionPrototype exp ctx (fp: Prototype) =
-        printfn "Infer function Prototype: %A" fp.name
+        //printfn "Infer function Prototype: %A" fp.name
         List.fold (inferStaticNamedPath exp) ctx fp.singletons
         |> List.fold (inferParamDecl exp) <| fp.inputs
         |> List.fold (inferParamDecl exp) <| fp.outputs

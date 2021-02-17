@@ -196,13 +196,13 @@ module CompilationUnit =
                         <| Diagnostics.Phase.Compiling
                         <| IllegalModuleFileName (fileName, wrongIds)
                         Error logger
-                    | Ok moduleName ->
+                    | Ok translationUnit ->
                         // a valid TranslationUnitPath has been constructed
                         // now load it
                         // TODO: check if file is already compiled
-                        let initialImportChain = importChain.Extend moduleName
-                        ctx.loader ctx logger initialImportChain loadWhat moduleName fileName
-
+                        let initialImportChain = importChain.Extend translationUnit
+                        ctx.loader ctx logger initialImportChain loadWhat translationUnit fileName
+                        
 
     /// requires an imported module for compilation
     /// Given a context (including loaded translation units) and the 

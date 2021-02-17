@@ -23,13 +23,7 @@ open Blech.Common
 open Blech.Compiler
 
 
-let private parseHandleImportsNameCheckAndInferSingletons logger implOrIface moduleName fileName =
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
-                isFrontendTest = true // stop before typecheck for imports
-        }
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+let private parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIface moduleName fileName =
     let importChain = CompilationUnit.ImportChain.Empty
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
     
@@ -73,10 +67,16 @@ let private parseHandleImportsNameCheckAndInferSingletons logger implOrIface mod
     }
 
 
-let runExportInference implOrIface moduleName fileName =
+let inferExports implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.ExportInference.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
 
-    match parseHandleImportsNameCheckAndInferSingletons logger implOrIface moduleName fileName with
+    match parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIface moduleName fileName with
     | Ok (ast, symTable, singletons) -> 
         Main.runExportInference 
             logger 
@@ -84,9 +84,16 @@ let runExportInference implOrIface moduleName fileName =
             fileName 
             singletons // subsumes imported singletons
             ast
+    
     | Error logger ->
+        let printImportDiagnostics translatedUnit importLogger =
+            System.Console.Out.WriteLine(sprintf "\nImported Module: %s \n" <| string translatedUnit)
+            Diagnostics.Emitter.printDiagnostics importLogger
+
         printfn "Did not expect to find errors during parsing, name checking, singleton inference or in imported files!\n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        do List.iter (fun importErrs -> printImportDiagnostics <|| importErrs) pkgCtx.GetErrorImports
+        do Diagnostics.Emitter.printDiagnostics logger
+        
         Assert.False true
         Error logger
 
@@ -102,7 +109,7 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member __.ExportInferencValidFiles (implOrIface, moduleName, filePath) =
-        match runExportInference implOrIface moduleName filePath with
+        match inferExports implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
             Diagnostics.Emitter.printDiagnostics logger
@@ -118,7 +125,7 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member __.ExportInferenceInvalidFiles (implOrIface, moduleName, filePath) =
-        match runExportInference implOrIface moduleName filePath with
+        match inferExports implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 
             Diagnostics.Emitter.printDiagnostics logger

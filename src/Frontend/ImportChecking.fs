@@ -185,7 +185,7 @@ let private checkMultipleImport (pkgCtx : CompilationUnit.Context<ModuleInfo>) (
 let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledModule: CompilationUnit.Module<ModuleInfo>) (imports: Imports) =
     let modName = modul.path
     let srcRng = modul.Range
-    printfn "Check import is not a program"
+    // printfn "Check import is not a program"
     if compiledModule.info.IsProgram then
         ProgramImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing

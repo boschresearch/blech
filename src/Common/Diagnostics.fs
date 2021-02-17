@@ -323,11 +323,15 @@ module Diagnostics =
         let getDiagnostics (dl: Logger) =
             dl.diagnostics
 
+
+    // Helpers for type checking, TODO: clean this up. fjg 17.02.21
+
     let wrapErrsInLogger logger phase errs =
         // let errLogger = Logger.create()
         let logError e = Logger.logError logger phase e
         do List.iter logError errs
         logger
+
 
     let printErrors logger phase errs =
         wrapErrsInLogger logger phase errs

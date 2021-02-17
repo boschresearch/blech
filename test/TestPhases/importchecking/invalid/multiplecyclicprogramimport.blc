@@ -1,4 +1,5 @@
 import mcpi "multiplecyclicprogramimport"
+import mcpi2 "multiplecyclicprogramimport"
 
 @[EntryPoint]
 activity Main ()

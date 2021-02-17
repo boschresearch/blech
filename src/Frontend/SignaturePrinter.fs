@@ -795,8 +795,10 @@ module SignaturePrinter =
                 failwith "this should not occur"
             
             | AST.Member.Var vdecl ->
-                bpStaticVarDecl vdecl
-            
+                if ctx.IsExported vdecl.name then 
+                    bpStaticVarDecl vdecl
+                else empty
+
             | AST.Member.Subprogram sp ->
                 if ctx.IsExported sp.name then
                     if ctx.HasOpaqueSingletonSignature sp.name then
