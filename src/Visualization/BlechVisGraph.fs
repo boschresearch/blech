@@ -5,6 +5,21 @@ module Blech.Visualization.BlechVisGraph
     open System.Collections.Generic
     open Blech.Frontend.CommonTypes
 
+    //____________________ General.____________________________
+    /// Gives the xth element of a 4-tuple or triple.
+    let frst3 (a,_,_)  = a
+    let scnd3 (_,b,_)  = b
+    let thrd3 (_,_,c)  = c
+    let frst4 (a,_,_,_) = a
+    let scnd4 (_,b,_,_) = b
+    let thrd4 (_,_,c,_) = c  
+    let frth4 (_,_,_,d) = d
+    let frst5 (a,_,_,_,_) = a
+    let scnd5 (_,b,_,_,_) = b
+    let thrd5 (_,_,c,_,_) = c  
+    let frth5 (_,_,_,d,_) = d
+    let ffth5 (_,_,_,_,e) = e
+
     //____________________ Types.____________________________
     /// Specifies a (input or output parameter). First String specifies the type of the Parameter, second String specifies the name.
     type Param = { TypeName: string; Name: string}
@@ -41,7 +56,9 @@ module Blech.Visualization.BlechVisGraph
     and IsActivity = IsActivity of ActivityPayload | IsNotActivity
 
     /// Run statement, calling an activity. In- and output variables.
-    and IsActivityCall = (string list * string list)
+    and IsActivityCall = {origName : string; iovars : (string list * string list)} with
+        member x.GetIns = fst x.iovars
+        member x.GetOuts = snd x.iovars
 
     /// Specifies a complex node to a specific abort type. The strings are the abort labels.
     and IsAbort = AbortWhen of string | AbortRepeat of string | Neither
@@ -59,7 +76,6 @@ module Blech.Visualization.BlechVisGraph
                 | IsComplex cmplx -> IsComplex (cmplx.SetSecondaryIdOfCaseClosingNode i)
                 | IsCobegin cbgn-> IsCobegin (cbgn.SetSecondaryIdOfCaseClosingNode i)
                 | _ -> x
-        member x.GetBody = match x with IsComplex x -> x.Body | _ -> failwith "error error"
 
     /// Determines if a node is an initial node.
     and IsInit = IsInit | IsNotInit
@@ -71,7 +87,6 @@ module Blech.Visualization.BlechVisGraph
     and InitOrFinalOrNeither = {Init : IsInit; Final : IsFinal} with 
         member x.ToString = (match x.Init with IsInit -> "init" | IsNotInit -> "not init") + " " + (match x.Final with IsFinal -> "final" | IsNotFinal -> "not final")
         member x.IsFinalBool = match x.Final with IsFinal -> true | IsNotFinal -> false
-        member x.IsInitBool = match x.Init with IsInit -> true | IsNotInit -> false
 
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
     and WasVisualized = Visualized | NotVisualized
@@ -90,14 +105,23 @@ module Blech.Visualization.BlechVisGraph
                         SecondaryId : StateCount;
                         mutable WasVisualized : WasVisualized;
                         mutable WasHierarchyOptimized: WasHierarchyOptimized} with
+        // TODO rename these functions. Setting might be misleading, as a newly changed payload is copied.
         member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        // TODO why are these two handled with mutable variables?
+        member x.IsCobegin = match x.IsComplex with IsCobegin cgbn -> true | _ -> false // DEBUG
+        member x.IsCobeginString = match x.IsComplex with IsCobegin cgbn -> "true" | _ -> "false" // DEBUG
+        member x.GetCobegin = match x.IsComplex with IsCobegin cgbn -> cgbn | _ -> failwith "error" // DEBUG
+        member x.GetBody = match x.IsComplex with IsComplex cmplx -> cmplx.Body | _ -> failwith "error" // DEBUG
+        member x.HasBody = match x.IsComplex with IsComplex cmplx -> true | _ -> false // DEBUG
         member x.Visualize = x.WasVisualized <- Visualized
-        member x.GetBody = x.IsComplex.GetBody
         member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
+        member x.SetComplex cmplx = {Label = x.Label; IsComplex = cmplx; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetLabel i = {Label = i; IsComplex = x.IsComplex; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
     and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
@@ -123,24 +147,30 @@ module Blech.Visualization.BlechVisGraph
     /// Type for sequentially constructing the graph. Consists of: current graph, previous available node for connection and current state count (for distinct state identifiers.)
     /// Fourth element is a list of strings that contains the names of all parameters needed to make function calls in this scope. 
     /// Fourth element is used to compare to the list of defined in- and output variables to determine the missing variables that have to be defined.
+    /// Fifth element is the last specified label in the code. Might be empty, if a label has been used or there isn't one present.
     /// Can later be used for implementation of actual local variables.
-    and GraphBuilder = VisGraph * (Option<BlechNode>) * int * string list
+    /// TODO? why is this a tuple? 
+    and GraphBuilder = VisGraph * (Option<BlechNode>) * int * string list * Option<string>
+
+    /// Sets the label option of the given GraphBuilder to None.
+    let setLabelOptionToNone (before : GraphBuilder) : GraphBuilder = (frst5 before, scnd5 before, thrd5 before, frth5 before, None)
+    /// Sets the label option of the given GraphBuilder to the given string.
+    let attachToLabelOption (before : GraphBuilder) (label : string) : GraphBuilder =
+        let newLabel = match ffth5 before with
+                        | Some value -> Some (value + " " + label)
+                        | None -> Some label
+        (frst5 before, scnd5 before, thrd5 before, frth5 before, newLabel)
+    /// Returns, if the label option of the given GraphBuilder has a value.
+    let hasLabel (gb : GraphBuilder) : bool = (ffth5 gb).IsSome
+    /// Returns the value of the given GraphBuilder, if present. Returns empty string otherwise.
+    let returnLabel (gb : GraphBuilder) : string = match hasLabel gb with true -> (ffth5 gb).Value | false -> ""
 
     let NeitherInitOrFinal = {Init = IsNotInit; Final = IsNotFinal}
     let InitNotFinal = {Init = IsInit; Final = IsNotFinal}
     let FinalNotInit = {Init = IsNotInit; Final = IsFinal}
     let InitAndFinal = {Init = IsInit; Final = IsFinal}
 
-    //____________________ Unspecified helping methods.____________________________
-    /// Gives the xth element of a 4-tuple or triple.
-    let frst3 (a,_,_)  = a
-    let scnd3 (_,b,_)  = b
-    let thrd3 (_,_,c)  = c
-    let frst (a,_,_,_) = a
-    let scnd (_,b,_,_) = b
-    let thrd (_,_,c,_) = c  
-    let frth (_,_,_,d) = d
-
+    //____________________ Unspecified helping methods.___________________________
     /// Returns the ids as a pair for a Blech node.
     let findIds = (fun (n:BlechNode) -> (n.Payload.StateCount, n.Payload.SecondaryId))
 
@@ -213,7 +243,7 @@ module Blech.Visualization.BlechVisGraph
     /// The accumulator accumulates the subsequent nodes.
     and private addAllSubsequentNodes (nodesToCheck : BlechNode list) (validNodes: (int*int) list) (accumulator : BlechNode list): BlechNode list = 
         match nodesToCheck with
-            | head :: tail -> let validnessCheck = fun node -> isValidNode validNodes node && not (isValidNode (List.map findIds accumulator) node)
+            | head :: tail -> let validnessCheck = fun (node:BlechNode) ->isValidNode validNodes node && not (isValidNode (List.map findIds accumulator) node)
                               let validSuccessors = List.filter validnessCheck (Seq.toList head.Successors)
                               //printfn "s%i%i, length vs %i, length valid nodes %i, length acc %i" head.Payload.StateCount head.Payload.SecondaryId validSuccessors.Length validNodes.Length accumulator.Length
                               //List.map (fun (s:BlechNode) -> printfn "s%s%s" (string s.Payload.StateCount) (string s.Payload.SecondaryId)) accumulator |> ignore
@@ -261,13 +291,12 @@ module Blech.Visualization.BlechVisGraph
          |> (fun option -> 
                 match option.IsSome with true -> Some (option.Value.Payload.StateCount, option.Value.Payload.SecondaryId) | _ -> None)
 
-    /// Determines if apart of this edge, another edge between source and target is present.
-    /// Edge list should, as peer previous conditions in the code be a list of two. Asserting this fact nonetheless.
-    /// One edge should be an abort edge, the other one of the specified property.
-    let specifiedAndAbortEdge (property : EdgeProperty) (edge : BlechEdge) (edges : BlechEdge list) : bool =
+    /// Determines if apart of this edge, other edges between source and target are present.
+    /// One edge should be an abort edge, the others of the specified property.
+    let multSpecifiedAndSingleOtherEdge (propertyMult : EdgeProperty) (propertySingle : EdgeProperty) (edge : BlechEdge) (edges : BlechEdge list) : bool =
         if (not (List.contains edge edges)) then failwith "Expected given edge to be part of given list. Was not the case."
 
-        // Now check if both edges have same source and target.
+        // Now check if edges have same source and target.
         let counter = 
             fun (tuple: int * BlechEdge list) (e:BlechEdge) -> 
                 if matchNodes e.Source edge.Source && matchNodes e.Target edge.Target then 
@@ -276,11 +305,12 @@ module Blech.Visualization.BlechVisGraph
                     (fst tuple, snd tuple)
         let count = List.fold counter (0, []) edges
         let detectedEdges = snd count
-        let countAbort = List.fold (fun (acc:int) (e:BlechEdge) -> match e.Payload.Property with IsAbort -> acc + 1 | _ -> acc) 0 detectedEdges
-        let countOther = List.fold (fun (acc:int) (e:BlechEdge) -> match e.Payload.Property = property with true -> acc + 1 | false -> acc) 0 detectedEdges
+        let foldMatchProp = (fun (prop : EdgeProperty) (acc:int) (e:BlechEdge) -> match e.Payload.Property = prop with true -> acc + 1 | false -> acc)
+        let countSingle = List.fold (foldMatchProp propertySingle) 0 detectedEdges
+        let countMult = List.fold (foldMatchProp propertyMult) 0 detectedEdges
         
         // We want exactly two edges between source and target. One abort and one immediate, others are unknown and unconsidered cases.
-        (fst count) = 2 && countAbort = 1 && countOther = 1
+        (fst count) > 1 && countSingle = 1 && countMult > 0
 
     /// Checks whether the source and target of the edge have only edges between then regarding outgoing and incoming. All the edges are immediates for true.
     let onlyImmediatesOrConditionals (edge : BlechEdge) : bool = 
@@ -306,8 +336,8 @@ module Blech.Visualization.BlechVisGraph
     /// If node is activity call, and called activity has final node, return true, else false.
     let nodeIsActivityCallAndHasFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
         match current.Payload.IsComplex with
-            | IsActivityCall _->let pair = List.find (fun e -> current.Payload.Label = fst e) pairs
-                                snd pair
+            | IsActivityCall call -> let pair = List.find (fun e -> call.origName = fst e) pairs
+                                     snd pair
             | _ -> false
 
     /// Finds for a node that is calling an activity, whether said activity contains a final node.
@@ -315,10 +345,8 @@ module Blech.Visualization.BlechVisGraph
     /// If node is activity call, and called activity has NO final node, return true, else false.
     let nodeIsActivityCallAndHasNoFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
         match current.Payload.IsComplex with
-            | IsActivityCall _->let pair = List.find (fun e -> current.Payload.Label = fst e) pairs
-                                //List.map (fun e -> printfn "%s %b" (fst e) (snd e)) pairs |> ignore
-                                //printfn "snd pair notted %b" (not (snd pair))
-                                not (snd pair)
+            | IsActivityCall call -> let pair = List.find (fun e -> call.origName = fst e) pairs
+                                     not (snd pair)
             | _ -> false
 
     //____________________________________Remove element in list.
@@ -347,12 +375,19 @@ module Blech.Visualization.BlechVisGraph
    /////////////////// DEBUG ______________________
     let rec listNodes (nodes : BlechNode list) =
         match nodes with 
-            | head :: tail ->   printfn "node s%i, second %i - %b" head.Payload.StateCount head.Payload.SecondaryId head.Payload.IsInitOrFinal.IsInitBool
+            | head :: tail ->   printfn "node s%i, second %i - cbgn? %s - out %i - %b" head.Payload.StateCount head.Payload.SecondaryId head.Payload.IsCobeginString (Seq.toList head.Outgoing).Length (match head.Payload.WasVisualized with Visualized -> true | _ -> false)
+                                if head.Payload.IsCobegin then printfn "cbgn bodies"; List.map (fun (b : VisGraph * Strength) -> printfn "one region"; listNodes (Seq.toList (fst b).Nodes); printfn "edges"; listEdges (Seq.toList (fst b).Edges); printfn "region end") head.Payload.GetCobegin.Content |> ignore
                                 listNodes tail
             | [] -> printf ""
 
-    let rec listEdges (edges : BlechEdge list) =
+    and listEdges (edges : BlechEdge list) =
         match edges with 
-            | head :: tail ->   printfn "edge from s%i%i to s%i%i" head.Source.Payload.StateCount head.Source.Payload.SecondaryId head.Target.Payload.StateCount head.Target.Payload.SecondaryId
+            | head :: tail ->   printfn "edge from s%i%i to s%i%i - source out %i - target in %i" head.Source.Payload.StateCount head.Source.Payload.SecondaryId head.Target.Payload.StateCount head.Target.Payload.SecondaryId (Seq.toList head.Source.Outgoing).Length (Seq.toList head.Target.Incoming).Length
                                 listEdges tail
             | [] -> printf ""
+
+    and countNodes (nodes : BlechNode list) =
+        printfn "nodes length %i" nodes.Length
+
+    and countEdges (edges : BlechEdge list) =
+        printfn "edges length %i" edges.Length

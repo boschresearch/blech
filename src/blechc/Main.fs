@@ -158,7 +158,7 @@ module Main =
         //    failwith "No entry point given. Please annotate one activity with @[EntryPoint]"
         //| Some _ -> ()
     
-        // dalu - start scchart synthesis for visualization
+        // Visualization module.
         match cliContext.visualize with 
             | true -> Logging.log2 "Main" ("checking causality in " + inputFile) 
                       Visualization.startSynthesis cliContext tyAstAndLutRes inputFile

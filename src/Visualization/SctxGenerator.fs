@@ -78,7 +78,7 @@ module Blech.Visualization.SctxGenerator
         let recursiveOnTargetNodes = 
             match edge.Target.Payload.WasVisualized with
                 | Visualized -> "" // ok do not visualize this node.
-                | NotVisualized ->  addNodesAndEdges edge.Target
+                | NotVisualized -> addNodesAndEdges edge.Target
 
         (fst accumulator + singleEdgeString, snd accumulator + recursiveOnTargetNodes)
 
@@ -96,7 +96,6 @@ module Blech.Visualization.SctxGenerator
         let final = match snd branch with
                         | Strong -> ""
                         | Weak -> "final" + blank
-        
         final + "region" + blank + "{" + lnbreak + bodyToSctx (fst branch) + lnbreak + "}"
 
     /// Iterates recursevily over cobegin branches and transforms them to a .sctx string.
@@ -146,19 +145,19 @@ module Blech.Visualization.SctxGenerator
                                                                 | IsNotActivity -> "{"  + lnbreak + bodyToSctx cmplx.Body  + lnbreak + "}" + lnbreak
                                         | IsSimple -> "" // Ok. Do nothing.
                                         | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn.Content + lnbreak + "}" + lnbreak
-                                        | IsActivityCall (input, output) -> actCallToString input output node.Payload.Label
+                                        | IsActivityCall actCall -> actCallToString actCall.GetIns actCall.GetOuts node.Payload.Label
         
         // If the node is a final node, we are finished, as there are no subsequent nodes.
         let edgeStringsAndRecursiveNodes =  match node.Payload.IsInitOrFinal.Final with
                                                 | IsFinal -> ""
                                                 | _ ->  // Add and illustrate edges. Calls method recursively to add the target states and their subsequent edges.
+                                                        //printfn "edges of node %s" stateString; listEdges (Seq.toList node.Outgoing)
                                                         addEdges node.Outgoing
 
         stateString + blank + complexState + blank + edgeStringsAndRecursiveNodes
 
     /// Converts the body of an activity (or any other complex state) to a sctx-conform string.
     and private bodyToSctx (body : BlechVisGraph.VisGraph) : string =
-        //BlechVisGraph.listNodes (Seq.toList body.Nodes)
         //BlechVisGraph.listEdges (Seq.toList body.Edges)
         // Find init node.
         //printfn "i get here"
@@ -194,7 +193,7 @@ module Blech.Visualization.SctxGenerator
 
     /// Generate sctx file content.
     let rec generate (activities : BlechNode list) : string =
-        // Generates activities one by one and concats the single strings together
+        // Generates activities one by one and concats the single strings together.
         // TODO We need to add variables in the beginning. Right now working with conditions as labels. In "if elses", we lose the information which comes first.
         match activities with 
             | head :: tail -> activityToSctx head.Payload + generate tail

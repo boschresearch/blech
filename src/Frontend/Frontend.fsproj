@@ -1,10 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <None Include="BlechLexer.fsl" />
     <FsLex Include="BlechLexer.fsl">
@@ -35,20 +33,16 @@
     <Compile Include="Annotation.fs" />
     <Compile Include="TypeChecking.fs" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="FsLexYacc" Version="10.0.0" />
     <PackageReference Include="FsLexYacc.Runtime" Version="10.0.0" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.fsproj" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Update="FSharp.Core" Version="4.7.0" />
   </ItemGroup>
-
   <!-- 
     Copyright (c) 2019 - for information on the respective copyright owner
     see the NOTICE file and/or the repository 
@@ -66,5 +60,4 @@
     See the License for the specific language governing permissions and
     limitations under the License.
   -->
-  
 </Project>

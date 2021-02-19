@@ -43,21 +43,6 @@ module Blech.Visualization.Translation
                               match head with '.' -> renderRhsRhlWord stringTail stringTail | _ -> renderRhsRhlWord (stringTail) original
             | [] -> original // Did not contain a dot.
 
-    /// Recursively check for statefullness in body and subsequent complex nodes.
-    /// TODO delete since it is not being used.
-    let rec isStateful(stmts : Stmt list) : bool =
-        let checkListAndCallRec = 
-            fun acc (stmt : Stmt) -> match stmt with
-                                        | Await _ -> true
-                                        | ITE (_, _, ifStmts, elseStmts)-> acc || isStateful ifStmts || isStateful elseStmts 
-                                        | RepeatUntil (_, stmtList, _, _) -> acc || isStateful stmtList
-                                        | Preempt (_, _, _, _, stmtList) -> acc || isStateful stmtList
-                                        | StmtSequence (stmtList) -> acc || isStateful stmtList
-                                        | Cobegin (_, listOfStrengthAndStmts) -> acc || isStateful (List.collect (fun (e:Strength * Stmt list) -> snd e) listOfStrengthAndStmts)
-                                        | ActivityCall (_, qName, _, typedRhsList, typedLhsList) -> true
-                                        | _ -> acc || false
-        List.fold checkListAndCallRec false stmts
-
     /// Functions for transforming Blech paremters to my own parameter type.    
     let paramToParam = fun (paramDec : ParamDecl) -> {TypeName = paramDec.datatype.ToString(); Name = paramDec.name.basicId}
     let extParamToParam = fun (extVarDecl : ExternalVarDecl) -> {TypeName = extVarDecl.datatype.ToString(); Name = extVarDecl.name.basicId}
@@ -66,14 +51,20 @@ module Blech.Visualization.Translation
     let rhsToString = fun (rhs : TypedRhs) -> renderRhsRhlString (rhs.ToString())
     let lhsToString = fun (lhs : TypedLhs) -> renderRhsRhlString (lhs.ToString())
 
+    /// Updated the given node in the graph with the given information of the graphbuilder.
+    let updateLabelOfNode (node:BlechNode) (gb:GraphBuilder) (graph:VisGraph) = graph.ReplacePayloadInByAndReturn node (node.Payload.SetLabel (returnLabel gb))
+
     /// Add an await statement to the graph connecting to the previous node. According to the proposal in the thesis.
     let private synthesizeAwait (graphBuilder : GraphBuilder) (rhs : TypedRhs) : GraphBuilder =
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder + 1
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder + 1
 
-        // New node and edge
+        // Update label of previous node.
+        let updatedPrevNode = updateLabelOfNode prevNode graphBuilder graph
+
+        // New node and edge.
         let newNode = graph.AddNode{Label = ""; 
                                     IsComplex = IsSimple; 
                                     IsInitOrFinal = NeitherInitOrFinal;
@@ -81,21 +72,21 @@ module Blech.Visualization.Translation
                                     SecondaryId = defaultSecondaryId;
                                     WasVisualized = NotVisualized; 
                                     WasHierarchyOptimized = NotHierarchyOptimized}
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} prevNode newNode |> ignore
+        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} updatedPrevNode newNode |> ignore
 
-        (graph, Some newNode, stateCount, frth graphBuilder) 
+        (graph, Some newNode, stateCount, frth5 graphBuilder, None) 
 
     /// Add an if-else statement to the graph connecting to the previous node. According to the proposal in the thesis.
     // StateCount: If-Node +1, Else-Node +2, Closing-Node +3, if-Body +4 , Else-Body If-Body+1, Return Else-Body
-    let rec private synthesizeIte (graphBuilder : GraphBuilder) (rhs : TypedRhs) (ifBlock : Stmt list) (elseBlock : Stmt list ): GraphBuilder =
+    let rec private synthesizeIte (graphBuilder : GraphBuilder) (rhs : TypedRhs) (ifBlock : Stmt list) (elseBlock : Stmt list): GraphBuilder =
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder
 
         // New node for each branch. Init their bodies and connect the nodes to the case-closing node. 
         // Else is only needed, if there are statements in the else-block. (TODO is this enough?)
-        let ifBody = synthesizeComplexBody ifBlock (stateCount + 4) (frth graphBuilder)
+        let ifBody = synthesizeComplexBody ifBlock (stateCount + 4) (frth5 graphBuilder) (ffth5 graphBuilder)
 
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
@@ -105,7 +96,7 @@ module Blech.Visualization.Translation
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
         let ifComplex : ComplexOrSimpleOrCobegin = 
-            IsComplex {Body = frst3 ifBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = Neither}
+            IsComplex {Body = frst4 ifBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = Neither}
 
         // TODO only connect if complex state has final state.
         let ifNode = graph.AddNode {Label = ""; 
@@ -124,10 +115,11 @@ module Blech.Visualization.Translation
         // Else-path gets a complex state, if the else block contains code.
         match elseBlock.Length with
             | 0 -> graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode caseClosingNode |> ignore
-                   (graph, Some caseClosingNode, scnd3 ifBody, thrd3 ifBody)
-            | _ -> let elseBody = synthesizeComplexBody elseBlock (scnd3 ifBody + 1) (thrd3 ifBody)
+                   (graph, Some caseClosingNode, scnd4 ifBody, thrd4 ifBody, frth4 ifBody)
+            | _ -> // Extract label, if present from if block statement list.
+                   let elseBody = synthesizeComplexBody elseBlock (scnd4 ifBody + 1) (thrd4 ifBody) (ffth5 graphBuilder)
                    let elseComplex : ComplexOrSimpleOrCobegin = 
-                        IsComplex {Body = frst3 elseBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = IsAbort.Neither}
+                        IsComplex {Body = frst4 elseBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = Neither}
                    let elseNode = graph.AddNode{Label = ""; 
                                                 IsComplex = elseComplex; 
                                                 IsInitOrFinal = NeitherInitOrFinal; 
@@ -136,57 +128,32 @@ module Blech.Visualization.Translation
                                                 WasVisualized = NotVisualized;
                                                 WasHierarchyOptimized = NotHierarchyOptimized}      
                    
-                   graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode elseNode |> ignore
+                   graph.AddEdge {Label = " " ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode elseNode |> ignore
                    graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} elseNode caseClosingNode |> ignore
 
-                   (graph, Some caseClosingNode, scnd3 elseBody, thrd3 elseBody)
-
-    // While-loops are optimized in previous compiler steps. The visualization only receives repeat statements. Caution: this method is not optimized!
-    /// Synthesize while statement.
-    /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
-    (*and private synthesizeWhileRepeat (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) : GraphBuilder =
-        Extract.
-        let graph = frst graphBuilder
-        let prevNode = scnd graphBuilder
-        let stateCount = thrd graphBuilder
-
-        // TODO closing node only if there is a final node.
-        let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth graphBuilder)
-        let caseClosingNode = graph.AddNode{Label = ""; 
-                                            IsComplex = IsSimple; 
-                                            IsInitOrFinal = NeitherInitOrFinal; 
-                                            StateCount = stateCount + 2; 
-                                            WasVisualized = NotVisualized; 
-                                            WasHierarchyOptimized = NotHierarchyOptimized}
-        let complexNode = graph.AddNode{Label = ""; 
-                                        IsComplex = IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; 
-                                        CaseClosingNode = Some caseClosingNode;
-                                        IsAbort = Neither}; 
-                                        IsInitOrFinal = NeitherInitOrFinal; 
-                                        StateCount = stateCount + 1; 
-                                        WasVisualized = NotVisualized;
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()) (rhs.ToString()); 
-                       Property = IsConditional; 
-                       WasOptimized = NotOptimized} 
-                       prevNode complexNode |> ignore
-        graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode prevNode |> ignore
-        graph.AddEdge {Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} prevNode caseClosingNode |> ignore
-
-        (graph, caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)*)
+                   // Potential carry over labels from if- and else branch are merched.
+                   let carryOverLabelIf = match frth4 ifBody with
+                                            | Some label -> label + " "
+                                            | None -> ""
+                   let carryOverLabelElse = match frth4 elseBody with
+                                                | Some label -> label
+                                                | None -> ""
+                   let carryOverLabel = match carryOverLabelIf + carryOverLabelElse with
+                                            | "" -> None
+                                            | _ -> Some (carryOverLabelIf + carryOverLabelElse)
+                   (graph, Some caseClosingNode, scnd4 elseBody, thrd4 elseBody, carryOverLabel)
 
     /// Synthesize repeat statement.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
-    /// TODO add that a loop can be endless
     and private synthesizeRepeatUntil (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) (isEndless : bool): GraphBuilder =
         //printfn "yea %b" isEndless
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder
 
         // Synthesize body.
-        let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth graphBuilder)
+        let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth5 graphBuilder) (ffth5 graphBuilder)
 
         // Is there a case closing node?
         // While true loops are transformed to isEndless = false repeats, with the condition "false".." || (renderRhsRhlString (rhs.ToString()) (rhs.ToString())).Equals "false"
@@ -209,7 +176,7 @@ module Blech.Visualization.Translation
         let complexNode = 
                 graph.AddNode { Label = ""; 
                                 IsComplex = 
-                                    IsComplex {Body = frst3 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = caseClosingIdPair; IsAbort = Neither};
+                                    IsComplex {Body = frst4 bodyOfLoop ; IsActivity = IsNotActivity; CaseClosingNode = caseClosingIdPair; IsAbort = Neither};
                                 IsInitOrFinal = NeitherInitOrFinal; 
                                 StateCount = stateCount + 1;
                                 SecondaryId = defaultSecondaryId; 
@@ -227,7 +194,7 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode complexNode |> ignore
 
-        (graph, caseClosingNodeMaybe, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
+        (graph, caseClosingNodeMaybe, scnd4 bodyOfLoop, thrd4 bodyOfLoop, frth4 bodyOfLoop)
 
     /// Determines what a preemption depending on the type.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body + 1.
@@ -237,9 +204,9 @@ module Blech.Visualization.Translation
             | _ -> () // Ok, do nothing.
         
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder
 
         // Determine the target node of the preemption.
         let abortLabel = renderRhsRhlString (rhs.ToString())
@@ -249,7 +216,7 @@ module Blech.Visualization.Translation
                             | Suspend -> failwith "Unreachable case."
 
         // TODO closing node only if there is a final node.
-        let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth graphBuilder)
+        let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth5 graphBuilder) (ffth5 graphBuilder)
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
@@ -258,7 +225,7 @@ module Blech.Visualization.Translation
                                             WasVisualized = NotVisualized; 
                                             WasHierarchyOptimized = NotHierarchyOptimized}
         let complexNode = graph.AddNode{Label = ""; 
-                                        IsComplex = IsComplex {Body = frst3 bodyOfLoop; 
+                                        IsComplex = IsComplex {Body = frst4 bodyOfLoop; 
                                                                IsActivity = IsNotActivity; 
                                                                CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; 
                                                                IsAbort = abortType};
@@ -278,35 +245,52 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = abortLabel; Property = IsAbort; WasOptimized = NotOptimized} complexNode abortTarget |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
 
-        (graph, Some caseClosingNode, scnd3 bodyOfLoop, thrd3 bodyOfLoop)
+        (graph, Some caseClosingNode, scnd4 bodyOfLoop, thrd4 bodyOfLoop, frth4 bodyOfLoop)
 
     /// Method that converts a single strength and statement to (Visgraph * Strength). Also returns the state count and the list of needed vars.
+    /// Also carries over a potential label.
     and private convertSingleToCobeginPayload 
-        (strengthsAndStmt : Strength * Stmt list) (stateCount : int) (neededVars : string list) : 
-        (VisGraph * Strength * int * string list) =
-        let result = synthesizeComplexBody (snd strengthsAndStmt) stateCount neededVars
-        (frst3 result, fst strengthsAndStmt, scnd3 result, thrd3 result)
+        (strengthsAndStmt : Strength * Stmt list) (stateCount : int) (neededVars : string list) (carryOverLabel : Option<string>): 
+        (VisGraph * Strength * int * string list * Option<string>) =
+        let result = synthesizeComplexBody (snd strengthsAndStmt) stateCount neededVars carryOverLabel
+        (frst4 result, fst strengthsAndStmt, scnd4 result, thrd4 result, frth4 result)
 
-    /// Method that converts a list of strength and statement lists to a cobegin payload. Returns the highest state count. And the list of needed variables.
+    /// Method that converts a list of strength and statement lists to a cobegin payload, also keeps track of carryOverLabels from cobegin branches.
+    /// Returns the highest state count. And the list of needed variables.
     and private convertListToCobeginPayload 
-        (strengthsAndStmts : (Strength * Stmt list) list) (stateCount : int) (accumulator : (VisGraph * Strength) list) (neededVars : string list) :
-        ((VisGraph * Strength) list * int * string list)=
+        (strengthsAndStmts : (Strength * Stmt list) list) (stateCount : int) 
+        (accumulator : ((VisGraph * Strength) list) * Option<string>) (neededVars : string list) (carryOverLabel: Option<string>) :
+        ((VisGraph * Strength) list * int * string list * Option<string>) =
         match strengthsAndStmts with 
-            | head :: tail -> let result = convertSingleToCobeginPayload head (stateCount + 1) neededVars
-                              convertListToCobeginPayload tail (thrd result) ((frst result, scnd result) :: accumulator) (frth result)
-            | [] -> (accumulator, stateCount, neededVars)
+            | head :: tail -> let result = convertSingleToCobeginPayload head (stateCount + 1) neededVars carryOverLabel
+                              let carryOverLabelSingleCbgn = 
+                                match ffth5 result with
+                                            | Some label -> label + ""
+                                            | None -> ""
+                              // ACCUMULATOR MATCHEN              
+                              let carryOverLabelCbgn = 
+                                match snd accumulator with
+                                            | Some label -> label
+                                            | None -> ""
+                              let carryOverAccumulator = 
+                                match carryOverLabelSingleCbgn + carryOverLabelCbgn with 
+                                            | "" -> None
+                                            | _ -> Some (carryOverLabelSingleCbgn + carryOverLabelCbgn)    
+                              let updatedAcc = ((frst5 result, scnd5 result) :: (fst accumulator), carryOverAccumulator)
+                              convertListToCobeginPayload tail (thrd5 result) updatedAcc (frth5 result) carryOverLabel
+            | [] -> (fst accumulator, stateCount, neededVars, snd accumulator) // Last string option now returns the accumulated label !!
 
     /// Synthezises a cobegin construct.
     /// State Count: Complex State - statecount + 1, closing node - state count + 2,
     /// body of complex node state count + 3, and then + 1 on every branch added to the previous branch.
     and private synthesizeCobegin (graphBuilder : GraphBuilder) (strengthsAndStmts : (Strength * Stmt list) list) : GraphBuilder = 
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder
         
         // Construct branches, nodes and edges.
-        let branches = convertListToCobeginPayload strengthsAndStmts (stateCount + 3) [] (frth graphBuilder)
+        let branches = convertListToCobeginPayload strengthsAndStmts (stateCount + 3) ([], None) (frth5 graphBuilder) (ffth5 graphBuilder)
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
@@ -316,7 +300,7 @@ module Blech.Visualization.Translation
                                             WasHierarchyOptimized = NotHierarchyOptimized}
         let complexNode = graph.AddNode{Label = ""; 
                                         IsComplex = 
-                                            IsCobegin{Content = frst3 branches; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}}; 
+                                            IsCobegin{Content = frst4 branches; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}}; 
                                         IsInitOrFinal = NeitherInitOrFinal;
                                         SecondaryId = defaultSecondaryId;
                                         StateCount = stateCount + 1; 
@@ -326,20 +310,20 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
 
-        (graph, Some caseClosingNode, scnd3 branches, thrd3 branches)
+        (graph, Some caseClosingNode, scnd4 branches, thrd4 branches, frth4 branches)
 
     /// Synthesizes a run statement. A node that references an activity.
     and private activityCalled (graphBuilder : GraphBuilder) (actName : string) (typedRhsList : TypedRhs list) (typedLhsList: TypedLhs list): GraphBuilder = 
         // Extract.
-        let graph = frst graphBuilder
-        let prevNode = (scnd graphBuilder).Value
-        let stateCount = thrd graphBuilder
+        let graph = frst5 graphBuilder
+        let prevNode = (scnd5 graphBuilder).Value
+        let stateCount = thrd5 graphBuilder
         
         let inputList = List.map rhsToString typedRhsList
         let outputList = List.map lhsToString typedLhsList
-        let neededVars = List.append (frth graphBuilder) (List.append inputList outputList)
+        let neededVars = List.append (frth5 graphBuilder) (List.append inputList outputList)
 
-        let cmplx = IsActivityCall(inputList, outputList)
+        let cmplx = IsActivityCall{origName = actName; iovars = (inputList, outputList)}
         let complexNode = graph.AddNode{Label = actName; 
                                         IsComplex = cmplx ; 
                                         IsInitOrFinal = NeitherInitOrFinal; 
@@ -358,10 +342,9 @@ module Blech.Visualization.Translation
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
         
-        (graph, Some caseClosingNode, stateCount + 2, neededVars)
+        (graph, Some caseClosingNode, stateCount + 2, neededVars, ffth5 graphBuilder)
 
     /// Synthesization of a single statement.
-    /// TODO Labels for states.
     and private synthesizeStatement (stmt : Stmt) (graphBuilder : GraphBuilder): GraphBuilder =
         match stmt with 
             | Await (_, typedRhs) -> synthesizeAwait graphBuilder typedRhs
@@ -372,6 +355,7 @@ module Blech.Visualization.Translation
             | StmtSequence (stmtList) -> synthesizeStatements stmtList graphBuilder
             | Cobegin (_, listOfStrengthAndStmts) -> synthesizeCobegin graphBuilder listOfStrengthAndStmts
             | ActivityCall (_, qName, _, typedRhsList, typedLhsList) -> activityCalled graphBuilder (qName.ToString()) typedRhsList typedLhsList
+            | StatementPragma stmtPragma -> attachToLabelOption graphBuilder (stmtPragma.GetLabel)
             | _ -> graphBuilder // ignore all other statements and just return the construct as it was before.
 
     /// Synthesis of a multiple statements.
@@ -384,7 +368,9 @@ module Blech.Visualization.Translation
     /// Synthesis of the body of a complex node.
     /// State Count: +1 for Init, +2 for Final and +3 as Start for internal behaviour.
     /// Returns the body as graph as well as the highest state count for the internal behaviour. Needed for distinct identifiers. Also returns a list of need variables.
-    and private synthesizeComplexBody (stmts : Stmt list) (stateCount : int) (neededVars : string list) : VisGraph * int * string list =
+    /// Fourth return element is a potential carry over label.
+    and private synthesizeComplexBody (stmts : Stmt list) (stateCount : int) (neededVars : string list) (carryOverLabel : Option<string>) 
+        : VisGraph * int * string list * Option<string> =
         // Init.
         let graph = VisGraph.Empty()
         let init = graph.AddNode{Label = ""; 
@@ -394,11 +380,11 @@ module Blech.Visualization.Translation
                                 SecondaryId = defaultSecondaryId; 
                                 WasVisualized = NotVisualized; 
                                 WasHierarchyOptimized = NotHierarchyOptimized}
-        let graphBuilder = synthesizeStatements stmts (graph, Some init, stateCount + 3, neededVars)
+        let graphBuilder = synthesizeStatements stmts (graph, Some init, stateCount + 3, neededVars, carryOverLabel)
 
         // Only add final node if previous statements resulted in a caseClosing node.
-        let updatedGraph = match (scnd graphBuilder).IsSome with 
-                            | true ->   let updatedGraph = frst graphBuilder
+        let updatedGraph = match (scnd5 graphBuilder).IsSome with 
+                            | true ->   let updatedGraph = frst5 graphBuilder
                                         let final = 
                                             updatedGraph.AddNode{
                                                 Label = ""; 
@@ -409,11 +395,11 @@ module Blech.Visualization.Translation
                                                 WasVisualized = NotVisualized; 
                                                 WasHierarchyOptimized = NotHierarchyOptimized}
                                         updatedGraph.AddEdge {
-                                            Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd graphBuilder).Value final |> ignore
+                                            Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd5 graphBuilder).Value final |> ignore
                                         updatedGraph
-                            | false -> frst graphBuilder
+                            | false -> frst5 graphBuilder
         
-        (updatedGraph, thrd graphBuilder, frth graphBuilder)
+        (updatedGraph, thrd5 graphBuilder, frth5 graphBuilder, ffth5 graphBuilder)
    
     // Checks whether given variable is a member if the in- and output list. If yes, empty string is returned, if not, the variable name is returned.
     let rec private isVarInInAndOutput (inAndOutputVariables : ParamList) (variable : string) : string =
@@ -441,14 +427,14 @@ module Blech.Visualization.Translation
         let iparam = List.map paramToParam entryPoint.inputs
         let oparam = List.map paramToParam entryPoint.outputs 
 
-        let bodyStatecountAndVars = synthesizeComplexBody entryPoint.body (stateCount + 1) []
+        let bodyStatecountAndVars = synthesizeComplexBody entryPoint.body (stateCount + 1) [] None
 
         // Determine needed local variable (name)s, by comparing the needed variables given by analyzing the body and the given input and output parameters.
-        let localVars = determineLocalVars (List.append iparam oparam) (thrd3 bodyStatecountAndVars) []
+        let localVars = determineLocalVars (List.append iparam oparam) (thrd4 bodyStatecountAndVars) []
 
         // Init Graph.
         let complexNode : ComplexOrSimpleOrCobegin = 
-            IsComplex { Body = frst3 bodyStatecountAndVars; 
+            IsComplex { Body = frst4 bodyStatecountAndVars; 
                         IsActivity = IsActivity {InputParams = iparam; OutputParams = oparam; LocalVars = localVars}; 
                         CaseClosingNode = {Opt = None}; IsAbort = Neither}
         (Node<NodePayload, _>.Create
@@ -459,7 +445,7 @@ module Blech.Visualization.Translation
             SecondaryId = defaultSecondaryId; 
             WasVisualized = NotVisualized;
             WasHierarchyOptimized = NotHierarchyOptimized},
-            scnd3 bodyStatecountAndVars)
+            scnd4 bodyStatecountAndVars)
 
     /// Synthesis entry point. Pours the Blech code into a graph data modell (given by GenericGraph.fs).
     let rec synthesize (programs: SubProgramDecl list) (accumulator : BlechNode list): (BlechNode list) =

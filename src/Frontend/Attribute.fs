@@ -372,4 +372,8 @@ type StatementPragma =
     member this.Range =
         match this with
         | Label (r,_) -> r
+
+    member this.GetLabel =
+        match this with
+        | Label (_,l) -> l
     
