@@ -141,8 +141,8 @@ module Blech.Visualization.BlechVisGraph
     /// Edge of a graph extracted from Blech code.
     and BlechEdge = Edge<NodePayload, EdgePayload>
 
-    /// Type for an edge accumulator. Edge String * Recursive Node Strings.
-    and EdgeAccumulator = string * string
+    /// Type for an edge accumulator. Edge String * Recursive Node Strings * edge priority count.
+    and EdgeAccumulator = string * string * int
 
     /// Type for sequentially constructing the graph. Consists of: current graph, previous available node for connection and current state count (for distinct state identifiers.)
     /// Fourth element is a list of strings that contains the names of all parameters needed to make function calls in this scope. 

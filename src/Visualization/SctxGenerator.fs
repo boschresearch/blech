@@ -61,18 +61,23 @@ module Blech.Visualization.SctxGenerator
         List.collect listLocalVar vars |> List.distinct |> List.fold (+) ""
 
     /// Construct a string representing a single edge. Target is the combination of statecount and secondary id.
-    let private singleEdge(edge : BlechEdge) (target : string): string =
+    let private singleEdge(edge : BlechEdge) (targetIds : string) (prio : int) : string =
+        let prioLabel = string prio + ": "
         match edge.Payload.Property with 
-            | IsAwait ->  "if true go to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsConditional ->  "immediate if true go to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsImmediate -> "immediate go to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsAbort -> "if true abort to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsTerminal -> "join to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsConditionalTerminal -> "immediate if true join to s" + string target + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            | IsAwait ->  "if true go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            | IsAbort -> "if true abort to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            | IsTerminal -> "join to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            | IsImmediate -> "immediate go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            // Include prio.
+            | IsConditional ->  "immediate if true go to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
+            | IsConditionalTerminal -> "immediate if true join to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
 
     /// Folding function that is used to fold a set of edges into their corresponding sctx strings.
     let rec foldEdges (accumulator : EdgeAccumulator) (edge : BlechEdge) : EdgeAccumulator =
-        let singleEdgeString = singleEdge edge ((string edge.Target.Payload.StateCount) + (string edge.Target.Payload.SecondaryId))
+        let currPrio = match edge.Payload.Property with 
+                            | IsAwait | IsAbort | IsImmediate | IsTerminal -> thrd3 accumulator
+                            | IsConditional | IsConditionalTerminal -> (thrd3 accumulator) + 1
+        let singleEdgeString = singleEdge edge ((string edge.Target.Payload.StateCount) + (string edge.Target.Payload.SecondaryId)) currPrio
 
         // Only visualize node if it has not been visualized yet.
         let recursiveOnTargetNodes = 
@@ -80,16 +85,16 @@ module Blech.Visualization.SctxGenerator
                 | Visualized -> "" // ok do not visualize this node.
                 | NotVisualized -> addNodesAndEdges edge.Target
 
-        (fst accumulator + singleEdgeString, snd accumulator + recursiveOnTargetNodes)
+        (frst3 accumulator + singleEdgeString, scnd3 accumulator + recursiveOnTargetNodes, currPrio)
 
     /// Constructs the string for the edges and recursively calls the the illustration methods for the target nodes.
     and private addEdges (edges : HashSet<BlechEdge>) : string =
         // Accumulator is a triple consisting of (edgeStrings, recursiveNodeString, stateCount).
         // Accumulate the strings over the edges.
-        let edgesAndRecursiveAccumulator = List.fold foldEdges ("","") (orderEdgeList (Seq.toList edges))
+        let edgesAndRecursiveAccumulator = List.fold foldEdges ("","",0) (orderEdgeList (Seq.toList edges))
 
         // Put together the pieces and return ist.
-        fst edgesAndRecursiveAccumulator + snd edgesAndRecursiveAccumulator
+        frst3 edgesAndRecursiveAccumulator + scnd3 edgesAndRecursiveAccumulator
 
     /// Transforms a single cobegin branch to a string.
     and private cobeginBranchToString (branch :  VisGraph * Strength) : string =
