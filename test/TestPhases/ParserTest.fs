@@ -30,7 +30,7 @@ type Test() =
     /// run parseValidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.parseValidFiles (implOrIface, moduleName, filePath) =
+    member __.ParseValidFiles (implOrIface, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
         let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         if Result.isError ast then
@@ -46,7 +46,7 @@ type Test() =
     /// run parseInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.parseInvalidInputs (implOrIface, moduleName, filePath) =
+    member __.ParseInvalidInputs (implOrIface, moduleName, filePath) =
         try
             let logger = Diagnostics.Logger.create ()
             let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
