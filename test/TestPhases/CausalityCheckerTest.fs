@@ -60,7 +60,13 @@ let parseHandleImportsNameCheckAndTypeCheck logger implOrIface moduleName fileNa
                 imports.GetExportScopes
                 ast
 
-        // no singleton inference needed
+        let! singletons = 
+            Main.runSingletonInference 
+                logger 
+                fileName 
+                imports.GetSingletons 
+                ast
+                symTable
         // no export inference needed
 
         let! lut, blechModule = 
@@ -71,6 +77,7 @@ let parseHandleImportsNameCheckAndTypeCheck logger implOrIface moduleName fileNa
                 imports.GetTypeCheckContexts
                 ast
                 symTable
+                singletons
 
         return lut, blechModule
     }

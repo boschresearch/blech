@@ -30,6 +30,23 @@ module SingletonInference =
     type private SingletonUse = Name list 
     type Singletons = Map<Name, SingletonUse list> // declaration name |-> singleton calls (multiple occurences of the same singleton possible)
 
+    /// Given a name (of a procedure [prototype]), find all 
+    /// names of singletons in the call tree of that given procedure
+    /// (including itself) if there are any
+    let collectSingletons env (allSingletonDict: Singletons) declName =
+        let rec recurse path = 
+            let lastname = List.last path
+            let callerName = Env.getDeclName env lastname
+            let qname = (Env.getLookupTable env).nameToQname callerName
+            match allSingletonDict.TryGetValue callerName with
+            | false, _ -> []
+            | true,[] -> [qname]
+            | true,usedSingletons -> 
+                qname :: List.collect recurse usedSingletons
+
+        recurse [declName]
+        |> List.distinct
+
     type SingletonContext = 
         private {
             logger : Diagnostics.Logger
@@ -51,19 +68,9 @@ module SingletonInference =
                 singletons = Map.collectWithOverride importedSingletons // might contain duplicates
             }
 
-        member this.CollectSingletons declName : QName list = 
-            let env = this.environment
-            let rec recurse path =
-                let lastname = List.last path
-                let declname = Env.getDeclName env lastname
-                let qname = (Env.getLookupTable env).nameToQname declname
-                match this.singletons.Item declname with
-                | [] -> [qname]
-                | singletons -> 
-                    qname :: List.collect recurse singletons
-
-            List.collect recurse (this.singletons.Item declName)
-            |> List.distinct
+        // unused
+        member this.CollectSingletons declName : QName list =
+            collectSingletons this.environment this.singletons declName
         
         member this.IsSingleton name = 
             if Env.isStaticName this.environment name then 
@@ -122,7 +129,6 @@ module SingletonInference =
 
     let private addToSingletons isDeclaredSingleton (ctx: SingletonContext) (name: Name) : SingletonContext =
         if isDeclaredSingleton || ctx.HasCalledSingletons || ctx.UsesExternVar then
-            // printfn "Add singleton: %s" name.id
             ctx.AddSingleton name
         else
             ctx

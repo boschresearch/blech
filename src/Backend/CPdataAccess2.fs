@@ -233,9 +233,9 @@ let renderCName tp tcc name =
 
 /// Shorthand for cpName None Empty name
 /// |> Render
-let cpStaticName = 
-    cpName None TypeCheckContext.Empty
-    >> (fun x -> x.Render)
+let cpStaticName q = 
+    cpName None (TypeCheckContext.Empty q.moduleName) q
+    |> (fun x -> x.Render)
 
 /// Given QName of calle and arguments as Doc list
 /// return Doc of "callee(arg1,arg2,...)"

@@ -99,27 +99,30 @@ type Declarable =
 type TypeCheckContext = 
     { 
         cliContext: Arguments.BlechCOptions
-        ncEnv: SymbolTable.LookupTable
+        ncEnv: SymbolTable.Environment
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
         // range is needed for language services
         userTypes: Dictionary<QName, (Range.range * Types)> 
         // member pragmas are collected in order to do annotation checking
-        memberPragmas: ResizeArray<Attribute.MemberPragma> 
+        memberPragmas: ResizeArray<Attribute.MemberPragma>
+        singletons: SingletonInference.Singletons
     }
-    static member Empty =
+    static member Empty modName =
         { cliContext = Arguments.BlechCOptions.Default
-          ncEnv = SymbolTable.LookupTable.Empty
+          ncEnv = SymbolTable.Environment.init modName
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
-          memberPragmas = ResizeArray() }
+          memberPragmas = ResizeArray()
+          singletons = Map.empty }
 
-    static member Init cliContext (ncEnv: SymbolTable.Environment) =
+    static member Init cliContext (ncEnv: SymbolTable.Environment) singletons =
         { cliContext = cliContext
-          ncEnv = SymbolTable.Environment.getLookupTable ncEnv
+          ncEnv = ncEnv
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
-          memberPragmas = ResizeArray() }
+          memberPragmas = ResizeArray() 
+          singletons = singletons }
 
 
 module TypeCheckContext =

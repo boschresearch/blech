@@ -56,10 +56,17 @@ let parseHandleImportsAndNameCheck cliContext logger implOrIface moduleName file
                 imports.GetExportScopes
                 ast
 
-        // no singleton inference needed
+        let! singletons = 
+            Main.runSingletonInference 
+                logger 
+                fileName 
+                imports.GetSingletons 
+                ast
+                symTable
+
         // no export inference needed
     
-        return ast, imports, symTable
+        return ast, imports, symTable, singletons
     }
 
 
@@ -71,12 +78,13 @@ let runTypeChecker logger implOrIface moduleName fileName =
         }
     
     match parseHandleImportsAndNameCheck cliContext logger implOrIface moduleName fileName with
-    | Ok (ast, imports, symTable) -> 
+    | Ok (ast, imports, symTable, singletons) -> 
         TypeChecking.typeCheckUnLogged
             cliContext
             imports.GetTypeCheckContexts 
             ast 
             symTable
+            singletons
     | Error logger ->
         printfn "Did not expect to find errors during parsing, name checking, or in imported files!\n" 
         Diagnostics.Emitter.printDiagnostics logger

@@ -1327,7 +1327,7 @@ let rec private checkAggregateLiteral lut al r =
 
 /// Translate a dynamic access path to a typed memory location
 and private checkUntimedDynamicAccessPath lut dname =
-    let qname, subexpr = lut.ncEnv.decomposeDpath dname
+    let qname, subexpr = lut.ncEnv.GetLookupTable.decomposeDpath dname
     let tmlInit =
         combine 
         <| Ok (Loc qname) 
@@ -1571,7 +1571,7 @@ and internal checkDataType lut utyDataType =
         // look up given static name in the dict of known named types (user types)
         // TODO: Create a lookup function in TypeCheckContext and return the result here, fjg. 24.02.20
         let found, res =
-            lut.ncEnv.spathToQname spath
+            lut.ncEnv.GetLookupTable.spathToQname spath
             |> lut.userTypes.TryGetValue
         if found then Ok (snd res)
         else Error [ NotInLUTPrevError spath.dottedPathToString ]
@@ -1627,7 +1627,7 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
     match fp with
     | AST.Procedure dname ->
         ensureCurrent dname
-        |> Result.map lut.ncEnv.dpathToQname
+        |> Result.map lut.ncEnv.GetLookupTable.dpathToQname
         |> Result.bind (getSubProgDeclAsPrototype lut pos)
         |> Result.bind (fun decl ->
             checkIsFunction decl

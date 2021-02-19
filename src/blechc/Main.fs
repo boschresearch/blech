@@ -80,16 +80,16 @@ module Main =
     let runSingletonInference logger fileName importedSingletons ast symboltableEnv = 
         Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
         SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
-            
+                    
 
     let runExportInference logger symboltableEnv fileName singletons ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
         ExportInference.inferExports logger symboltableEnv singletons ast 
     
     
-    let runTypeChecking cliArgs logger inputFile otherLuts ast env =
+    let runTypeChecking cliArgs logger inputFile otherLuts ast env singletons =
         Logging.log2 "Main" ("performing type checking on " + inputFile)
-        TypeChecking.typeCheck cliArgs logger otherLuts ast env
+        TypeChecking.typeCheck cliArgs logger otherLuts ast env singletons
 
 
     let runCausalityCheck logger inputFile tyCtx blechModule =
@@ -148,7 +148,7 @@ module Main =
 
     /// create a empty typecheck result, which is not supposed to be used
     let private createTypecheckDummyResult moduleName = 
-        let dummyLut = TypeCheckContext.Empty
+        let dummyLut = TypeCheckContext.Empty moduleName
         let dummyBlechModule = BlechTypes.BlechModule.MakeEmpty moduleName
         Ok (dummyLut, dummyBlechModule)
 
@@ -159,7 +159,8 @@ module Main =
                             fileName
                             ast
                             symTable
-                            (imports : ImportChecking.Imports) = 
+                            (imports : ImportChecking.Imports)
+                            singletons = 
         let resultWorkflow = ResultBuilder()    
         resultWorkflow {
             let! lut, blechModule = 
@@ -170,6 +171,7 @@ module Main =
                     imports.GetTypeCheckContexts 
                     ast 
                     symTable
+                    singletons
                 
             let! pgs = 
                 runCausalityCheck 
@@ -285,6 +287,7 @@ module Main =
                             ast
                             symTable
                             imports
+                            singletons
 
                 do // this do is required in a workflow, otherwise a Result<_> type expr is expected
                     if ast.IsModule then
@@ -368,6 +371,7 @@ module Main =
                             imports.GetTypeCheckContexts 
                             ast 
                             symTable
+                            singletons
 
                 let importedModules = imports.GetImportedModuleNames
                 return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons lut blechModule
