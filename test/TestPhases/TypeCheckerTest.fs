@@ -23,8 +23,7 @@ open Blech.Common
 open Blech.Compiler
 open Blech.Frontend
 
-let parseHandleImportsAndNameCheck cliContext logger implOrIface moduleName fileName = 
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+let parseHandleImportsAndNameCheck pkgCtx logger implOrIface moduleName fileName = 
     let importChain = CompilationUnit.ImportChain.Empty
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
 
@@ -76,8 +75,9 @@ let runTypeChecker logger implOrIface moduleName fileName =
             TestFiles.makeCliContext TestFiles.Typechecker.Directory fileName with
                 isDryRun = true // no code generation necessary
         }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
     
-    match parseHandleImportsAndNameCheck cliContext logger implOrIface moduleName fileName with
+    match parseHandleImportsAndNameCheck pkgCtx logger implOrIface moduleName fileName with
     | Ok (ast, imports, symTable, singletons) -> 
         TypeChecking.typeCheckUnLogged
             cliContext
@@ -85,9 +85,11 @@ let runTypeChecker logger implOrIface moduleName fileName =
             ast 
             symTable
             singletons
+
     | Error logger ->
         printfn "Did not expect to find errors during parsing, name checking, or in imported files!\n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
         Assert.False true
         Error []
 

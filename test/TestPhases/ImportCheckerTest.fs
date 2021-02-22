@@ -38,23 +38,17 @@ let private parseFile logger implOrIface moduleName fileName =
         return ast
     }
     
-let private runImportChecking implOrIface moduleName fileName = 
+let private runImportChecking pkgCtx implOrIface moduleName fileName = 
     let logger = Diagnostics.Logger.create ()
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.ImportChecker.Directory fileName with
-                isFrontendTest = true // no need for type checking and following phases
-        }
-                            
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
     let importChain = CompilationUnit.ImportChain.Empty
     
     match parseFile logger implOrIface moduleName fileName with
     | Ok ast -> 
         Main.runImportCompilation pkgCtx logger importChain moduleName fileName ast 
     | Error logger ->
-        printfn "Did not expect to find errors during parsing \n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        printfn "Did not expect to find errors during parsing\n" 
+        do Diagnostics.Emitter.printDiagnostics logger
+        
         Assert.False true
         Error logger
       
@@ -65,14 +59,25 @@ type Test() =
     /// load test cases for nameCheckValidFiles test
     static member validFiles =
         TestFiles.validFiles TestFiles.ImportChecker
-        
+    
+    
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
     member __.ImportCheckerValidFiles (implOrIface, moduleName, filePath) =
-        match runImportChecking implOrIface moduleName filePath with
+        let cliContext = 
+            { 
+                TestFiles.makeCliContext TestFiles.ImportChecker.Directory filePath with
+                    isFrontendTest = true // no need for type checking and following phases
+            }
+                            
+        let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+        match runImportChecking pkgCtx implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
+            do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+            
             Assert.False true
         | Ok imports ->
             Assert.True true
@@ -85,9 +90,19 @@ type Test() =
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
     member __.ImportCheckerInvalidInputs (implOrIface, moduleName, filePath) =
-        match runImportChecking implOrIface moduleName filePath with
+        let cliContext = 
+            { 
+                TestFiles.makeCliContext TestFiles.ImportChecker.Directory filePath with
+                    isFrontendTest = true // no need for type checking and following phases
+            }
+                            
+        let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+        match runImportChecking pkgCtx implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
+            do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+            
             Assert.True true
         | Ok imports ->
             Assert.False true

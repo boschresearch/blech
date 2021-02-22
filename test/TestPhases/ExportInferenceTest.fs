@@ -86,13 +86,9 @@ let inferExports implOrIface moduleName fileName =
             ast
     
     | Error logger ->
-        let printImportDiagnostics translatedUnit importLogger =
-            System.Console.Out.WriteLine(sprintf "\nImported Module: %s \n" <| string translatedUnit)
-            Diagnostics.Emitter.printDiagnostics importLogger
-
         printfn "Did not expect to find errors during parsing, name checking, singleton inference or in imported files!\n" 
-        do List.iter (fun importErrs -> printImportDiagnostics <|| importErrs) pkgCtx.GetErrorImports
         do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
         
         Assert.False true
         Error logger

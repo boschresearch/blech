@@ -87,3 +87,6 @@ let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
                                            projectDir = projectDir }
 
 
+let printImportDiagnostics (translatedUnit, importLogger) = 
+    printfn "Imported Module: %s \n" <| string translatedUnit
+    Diagnostics.Emitter.printDiagnostics importLogger

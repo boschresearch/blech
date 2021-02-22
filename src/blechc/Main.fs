@@ -390,10 +390,10 @@ module Main =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Blc->
-                printfn "Compile implementation: '%s'" infile
+                printfn "Compile implementation: '%s'\n" infile
                 compileFromFile options packageContext logger importChain moduleName infile
             | CompilationUnit.Blh ->
-                printfn "Compile interface: '%s'" infile
+                printfn "Compile interface: '%s'\n" infile
                 compileInterfaceFromFile options packageContext logger importChain moduleName infile
                 
         Result.bind (CompilationUnit.Module<_>.Make moduleName infile) compilationRes 

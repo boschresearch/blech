@@ -22,13 +22,7 @@ open System.IO
 open Blech.Common
 open Blech.Compiler
 
-let parseHandleImportsNameCheckAndTypeCheck logger implOrIface moduleName fileName = 
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.Causality.Directory fileName with 
-                isDryRun = true // no code generation necessary        
-        }
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+let parseHandleImportsNameCheckAndTypeCheck logger cliContext pkgCtx implOrIface moduleName fileName = 
     let importChain = CompilationUnit.ImportChain.Empty
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
 
@@ -85,12 +79,21 @@ let parseHandleImportsNameCheckAndTypeCheck logger implOrIface moduleName fileNa
 
 let runCausalityAnalysis implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
-    match parseHandleImportsNameCheckAndTypeCheck logger implOrIface moduleName fileName with
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Causality.Directory fileName with 
+                isDryRun = true // no code generation necessary        
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+    match parseHandleImportsNameCheckAndTypeCheck logger cliContext pkgCtx implOrIface moduleName fileName with
     | Ok (lut, blechModule) ->
         Main.runCausalityCheck logger fileName lut blechModule
     | Error logger ->
         printfn "Did not expect to find errors during parsing, name checking, typeChecking or in imported files!\n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+        
         Assert.False true
         Error logger
 
@@ -114,6 +117,7 @@ type Test() =
             Assert.True true
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
+
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True false
 

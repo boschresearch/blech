@@ -23,13 +23,7 @@ open Blech.Common
 open Blech.Compiler
 //open Blech.Frontend
 
-let private parseNameCheckAndHandleImports logger implOrIface moduleName fileName =
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.SingletonInference.Directory fileName with 
-                isFrontendTest = true // stop before typecheck for imports
-        }
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+let private parseNameCheckAndHandleImports logger pkgCtx implOrIface moduleName fileName =
     let importChain = CompilationUnit.ImportChain.Empty
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
     
@@ -65,8 +59,14 @@ let private parseNameCheckAndHandleImports logger implOrIface moduleName fileNam
 
 let runSingletonInference implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
-
-    match parseNameCheckAndHandleImports logger implOrIface moduleName fileName with
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.SingletonInference.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+    match parseNameCheckAndHandleImports logger pkgCtx implOrIface moduleName fileName with
     | Ok (ast, imports, symTable) -> 
         Main.runSingletonInference
             logger 
@@ -76,7 +76,9 @@ let runSingletonInference implOrIface moduleName fileName =
             symTable
     | Error logger ->
         printfn "Did not expect to find errors during parsing, name checking, or in imported files!\n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+        
         Assert.False true
         Error logger
 

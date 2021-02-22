@@ -79,7 +79,8 @@ module CompilationUnit =
             { chain = [] }
         
         member this.Extend moduleName =
-            { chain = moduleName :: this.chain }
+            if List.contains moduleName this.chain then this // no need to extend when interface is compiled after implementation
+            else { chain = moduleName :: this.chain }
 
         member this.Contains moduleName =  // detects a cyclic import
             List.contains moduleName this.chain
@@ -101,6 +102,13 @@ module CompilationUnit =
         | Implementation of TranslationUnitPath
         | Interface of TranslationUnitPath
 
+        override this.ToString () =
+            match this with
+            | Interface modName ->
+                sprintf "Interface \"%s\"" <| string modName
+            | Implementation modName ->
+                sprintf "Implementation \"%s\"" <| string modName
+                        
 
     type ImplOrIface =
         | Blc
@@ -199,9 +207,9 @@ module CompilationUnit =
                     | Ok translationUnit ->
                         // a valid TranslationUnitPath has been constructed
                         // now load it
-                        // TODO: check if file is already compiled
-                        let initialImportChain = importChain.Extend translationUnit
-                        ctx.loader ctx logger initialImportChain loadWhat translationUnit fileName
+                        // TODO: check if file is already compiled and has not changed, fjg 22.02.21
+                        // let initialImportChain = importChain.Extend translationUnit
+                        ctx.loader ctx logger ImportChain.Empty loadWhat translationUnit fileName
                         
 
     /// requires an imported module for compilation
@@ -212,20 +220,19 @@ module CompilationUnit =
     /// and return the compilation result for imported usage
     let require (ctx: Context<'info>) logger importChain (requiredModule: TranslationUnitPath) (importRange: Range.range)
             : Result<Module<'info>, Diagnostics.Logger> =
-        let translatedMod = Implementation requiredModule
-        let translatedSig = Interface requiredModule
-        if ctx.loaded.ContainsKey translatedSig then
-            // printfn "Use compiled module: %A" translatedSig
-            ctx.loaded.[translatedSig]
+        let moduleUnit = Implementation requiredModule
+        let signatureUnit = Interface requiredModule
+        if ctx.loaded.ContainsKey signatureUnit then
+            // printfn "Use compiled module: %A" signatureUnit
+            ctx.loaded.[signatureUnit] // use already compiled signature
         else
             let blcFile = searchImplementation ctx.sourcePath requiredModule
             
             match blcFile with
             | Ok blc ->
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
-                do ctx.loaded.Add (translatedMod, compiledBlcRes)
+                do ctx.loaded.Add (moduleUnit, compiledBlcRes)
 
-                // if Result.isOk compiledBlcRes then 
                 match compiledBlcRes with 
                 | Ok moduleInfo -> 
                     let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
@@ -233,7 +240,7 @@ module CompilationUnit =
                     | Ok blh -> 
                         // signature found
                         let compiledBlhRes = ctx.loader ctx logger importChain Blh requiredModule blh
-                        do ctx.loaded.Add (translatedSig, compiledBlhRes)
+                        do ctx.loaded.Add (signatureUnit, compiledBlhRes)
                         compiledBlhRes           
                     | Error _ ->
                         // no generated signature implies .blc must be a program
@@ -246,6 +253,6 @@ module CompilationUnit =
             | Error triedBlcs ->
                 do Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling
                     <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
-                do ctx.loaded.Add(translatedMod, Error logger) // errors must be cached, too
+                do ctx.loaded.Add(moduleUnit, Error logger) // errors must be cached, too
                 Error logger // logger of importing module 
 

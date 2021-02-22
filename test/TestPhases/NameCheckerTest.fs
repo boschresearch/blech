@@ -23,13 +23,7 @@ open Blech.Compiler
 open Blech.Common
 
 
-let private parseFileAndHandleImports logger implOrIface moduleName fileName =
-    let cliContext = 
-        { 
-            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
-                isFrontendTest = true // stop before typecheck for imports
-        }
-    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+let private parseFileAndHandleImports logger pkgCtx implOrIface moduleName fileName =
     let importChain = CompilationUnit.ImportChain.Empty
     let fileContents = File.ReadAllText <| Path.GetFullPath fileName
     
@@ -57,8 +51,14 @@ let private parseFileAndHandleImports logger implOrIface moduleName fileName =
 
 let private runNameChecking implOrIface moduleName fileName = 
     let logger = Diagnostics.Logger.create ()
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
     
-    match parseFileAndHandleImports logger implOrIface moduleName fileName with
+    match parseFileAndHandleImports logger pkgCtx implOrIface moduleName fileName with
     | Ok (ast, imports) -> 
         Main.runNameResolution 
             logger 
@@ -69,7 +69,9 @@ let private runNameChecking implOrIface moduleName fileName =
             ast
     | Error logger ->
         printfn "Did not expect to find errors during parsing or in imported files!\n" 
-        Diagnostics.Emitter.printDiagnostics logger
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+        
         Assert.False true
         Error logger
       
