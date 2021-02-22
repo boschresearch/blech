@@ -142,6 +142,19 @@ let rec private printTml level lut isLast tml (pos: range) =
         else "\\\"" + innerIdent + "\\\": "
     let tabs = String.replicate level "\\t"
     match dty with
+    | ValueTypes (OpaqueSimple typname)
+    | ValueTypes (OpaqueComplex typname) ->
+        // do the printing
+        let format = 
+            sprintf "\\n\\t\\t\\t\\t%s" tabs
+            + ident
+            + "%s"
+            + if isLast then "" 
+              else ","
+        let args = 
+            "\"opaque\""
+        cCodePrintf format [args]
+        |> txt
     | ValueTypes _ when dty.IsPrimitive ->
         // do the printing
         let format = 
