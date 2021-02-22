@@ -381,7 +381,7 @@ let rec private fDataType = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
-let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
+let private fVarDecl insideTypeDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
     let mutability =
         match permission with 
         | AST.ReadOnly (ro, _) ->
@@ -421,7 +421,7 @@ let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno
         v
 
     let dtyAndInit = 
-        alignOptionalTypeAndValue pos name.id dtyOpt initValOpt
+        alignOptionalTypeAndValue insideTypeDecl pos name.id dtyOpt initValOpt
         |> Result.bind checkMutabilityCompliance
         
     Ok (lut.ncEnv.GetLookupTable.nameToQname name)
@@ -471,9 +471,9 @@ let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt v
     |> combine <| checkNoInit
     |> Result.map createExternalVarDecl
 
-let private recVarDecl lut (v: AST.VarDecl) =
+let private recVarDecl insideTypeDecl lut (v: AST.VarDecl) =
     assert (not v.isExtern)
-    fVarDecl lut v.range v.name v.permission
+    fVarDecl insideTypeDecl lut v.range v.name v.permission
     <| Option.map (fDataType lut) v.datatype
     <| Option.map (checkExpr lut) v.initialiser
     <| Annotation.checkVarDecl lut v 
@@ -606,7 +606,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         // ensure the fields are all variable declarations
         |> List.choose (function | AST.Member.Var v -> Some v | _ -> None) 
         // typify struct fields
-        |> List.map (recVarDecl lut) // type check field declarations as variable declarations
+        |> List.map (recVarDecl true lut) // type check field declarations as variable declarations
         // make sure they are of value type
         |> List.map (Result.bind (fun v -> if v.datatype.IsValueType then Ok v else Error[ValueStructContainsRef (std.name, v)]))
         // ensure the initialisers (if present) do not call functions (this is until we implement compile-time evaluated functions)
@@ -618,7 +618,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         // ensure the fields are all variable declarations
         |> List.choose (function | AST.Member.Var v -> Some v | _ -> None) 
         // typify struct fields
-        |> List.map (recVarDecl lut) // type check field declarations as variable declarations
+        |> List.map (recVarDecl true lut) // type check field declarations as variable declarations
         |> contract // here we do not care, if the datatype is value or reference type
         
         // note, that QNames for the fields are added when checking the individual vardecls
@@ -999,7 +999,7 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
             chkExternalVarDecl lut vdecl
             |> Result.map (Stmt.ExternalVarDecl)
         else
-            recVarDecl lut vdecl
+            recVarDecl false lut vdecl
             |> Result.map (Stmt.VarDecl)
     | AST.Assign (range, lhs, rhs) ->
         fAssign lut range
@@ -1035,14 +1035,14 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
         <| List.isEmpty conds // endless loop if there are no conditions
     | AST.NumericFor (range, var, init, limit, step, body) ->
         fNumericFor range
-        <| recVarDecl lut var
+        <| recVarDecl false lut var
         <| (checkExpr lut init |> Result.map(tryEvalConst lut))
         <| (checkExpr lut limit |> Result.map(tryEvalConst lut))
         <| Option.map (checkExpr lut >> Result.map(tryEvalConst lut)) step
         <| List.map (recStmt lut retTypOpt) body
     | AST.IteratorFor (range, var, iterator, iterable, body) ->
         fIteratorFor range iterator
-        <| recVarDecl lut var
+        <| recVarDecl false lut var
         <| (checkExpr lut iterable |> Result.map(tryEvalConst lut))
         <| List.map (recStmt lut retTypOpt) body
     // observation
@@ -1196,7 +1196,7 @@ let private fPackage lut (pack: AST.CompilationUnit) =
                     chkExternalVarDecl lut v
                     |> typedMembers.AddExternalVariable
                 else
-                    recVarDecl lut v
+                    recVarDecl false lut v
                     |> typedMembers.AddVariable
             | AST.Member.Subprogram a ->
                 let retTypOpt = Option.map (recReturnDecl lut) a.result

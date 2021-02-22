@@ -447,7 +447,10 @@ and internal amendRhsExpr lTyp (rExpr: TypedRhs) =
     // this is the case with struct literals or reset literals, array literals
     // these have to be filled up and their type needs to be updated
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
-        amendCompoundLiteral lTyp rExpr
+        if lTyp.IsOpaque then 
+            Error [OpaqueInitialiserMustBeConcrete(rExpr.Range, lTyp.ToString())]
+        else
+            amendCompoundLiteral lTyp rExpr
     else
         Error [TypeMismatch(lTyp, rExpr)]
 
@@ -455,7 +458,15 @@ and internal amendRhsExpr lTyp (rExpr: TypedRhs) =
 /// Poor man's type deduction for variable initialisation.
 /// If either type or initial value is given, infer the other one if possible.
 /// If both are given, check that the types agree.
-let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt = 
+// insideTypeDecl - boolean flag, indicates whether we are checking a variable declaration 
+//                  inside a (struct) type declaration. In such case opaque types do not
+//                  require an initialiser since the instatiation of this struct will
+//                  provide an initial value for an opaque field.
+//                  Since this function must return a pair of type and value, we create a
+//                  dummy value which will not be used in subsequent phases. This is because
+//                  this is a type declaration and the init values set here will only be used
+//                  if the user does not provide an initial value - which however he must do for opaque fields.
+let internal alignOptionalTypeAndValue insideTypeDecl pos name dtyOpt initValOpt = 
     let inferFromRhs (expr: TypedRhs) =
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)
@@ -477,19 +488,21 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
     | Some dtyRes, None ->
         dtyRes 
         |> Result.bind (fun (typ: Types) ->
-            if typ.IsOpaque then 
-                Error [OpaqueMustHaveInitialiser(pos, name)]
-            else
-                getInitValueWithoutZeros pos name typ
+            if insideTypeDecl && typ.IsOpaque then
+                // in this special case, opaque typed struct fields do not need a initial value
+                // create dummy init
+                Ok {rhs = ResetConst; typ = AnyComposite; range = pos}
                 |> combine dtyRes
-            )
+            else
+                if typ.IsOpaque then 
+                    Error [OpaqueMustHaveInitialiser(pos, name)]
+                else
+                    getInitValueWithoutZeros pos name typ
+                    |> combine dtyRes
+                )
     | Some dtyRes, Some vRes ->
         combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
-            if dty.IsOpaque && not v.typ.IsOpaque then 
-                printfn "%A" v.typ
-                Error [OpaqueInitialiserMustBeConcrete(pos, name)]
-            else
                 amendRhsExpr dty v
                 |> Result.map (fun amendedV -> (dty, amendedV))
         )
