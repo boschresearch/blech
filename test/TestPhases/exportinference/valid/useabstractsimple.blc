@@ -1,0 +1,7 @@
+import s "../imports/abstractsimple"
+
+@[EntryPoint]
+activity Main()
+    var x : s.T = s.f()
+    await true
+end
