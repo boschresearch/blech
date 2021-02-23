@@ -1438,6 +1438,7 @@ ExtensionMemberDecl
     : Prototype                                 { $1 }
     | ExternalFunction                          { $1 }    // Question: Should this be removed? Only necessary for definitions?, fjg. 15.01.20   
     | Constant                                  { $1 }
+    | ExternalConstant                          { $1 } 
     | TypeAliasDecl                             { $1 }
 
 ExtensionMemberDecls
