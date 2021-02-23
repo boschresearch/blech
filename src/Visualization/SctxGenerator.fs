@@ -57,7 +57,7 @@ module Blech.Visualization.SctxGenerator
                        List.map (fun var -> "host \"localVar\" " + var + lnbreak) expressionFiltered
 
     /// Converts a list of local variables to a .sctx string. Filters duplicates.
-    let rec private listLocalVars (vars : string list ) : string = 
+    let rec private listLocalVars (vars : string list) : string = 
         List.collect listLocalVar vars |> List.distinct |> List.fold (+) ""
 
     /// Construct a string representing a single edge. Target is the combination of statecount and secondary id.
@@ -66,17 +66,17 @@ module Blech.Visualization.SctxGenerator
         match edge.Payload.Property with 
             | IsAwait ->  "if true go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
             | IsAbort -> "if true abort to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsTerminal -> "join to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
-            | IsImmediate -> "immediate go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
             // Include prio.
+            | IsTerminal -> "join to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
+            | IsImmediate -> "immediate go to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
             | IsConditional ->  "immediate if true go to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
             | IsConditionalTerminal -> "immediate if true join to s" + string targetIds + " label \"" + prioLabel + edge.Payload.Label + "\"" + lnbreak
 
     /// Folding function that is used to fold a set of edges into their corresponding sctx strings.
     let rec foldEdges (accumulator : EdgeAccumulator) (edge : BlechEdge) : EdgeAccumulator =
         let currPrio = match edge.Payload.Property with 
-                            | IsAwait | IsAbort | IsImmediate | IsTerminal -> thrd3 accumulator
-                            | IsConditional | IsConditionalTerminal -> (thrd3 accumulator) + 1
+                            | IsAwait | IsAbort -> thrd3 accumulator
+                            | IsImmediate | IsTerminal | IsConditional | IsConditionalTerminal -> (thrd3 accumulator) + 1
         let singleEdgeString = singleEdge edge ((string edge.Target.Payload.StateCount) + (string edge.Target.Payload.SecondaryId)) currPrio
 
         // Only visualize node if it has not been visualized yet.
@@ -139,8 +139,11 @@ module Blech.Visualization.SctxGenerator
         let stateLabel : string = blank + "\"" + node.Payload.Label + "\""
         let initOrFinal : string = (match node.Payload.IsInitOrFinal.Init with | IsInit -> blank + "initial" | IsNotInit -> "") +
                                    (match node.Payload.IsInitOrFinal.Final with | IsFinal -> blank + "final" | IsNotFinal -> "")
+        let isConnector : string = match node.Payload.IsComplex with
+                                        | IsConnector -> " connector"
+                                        | _ -> ""      
 
-        let stateString = blank + initOrFinal + " state s" + string node.Payload.StateCount + string node.Payload.SecondaryId + stateLabel 
+        let stateString = blank + initOrFinal + isConnector + " state s" + string node.Payload.StateCount + string node.Payload.SecondaryId + stateLabel 
         node.Payload.Visualize
 
         // Hierarchical states. Check if it is hierarchical, then match for regular body or activity.
@@ -148,7 +151,7 @@ module Blech.Visualization.SctxGenerator
                                         | IsComplex cmplx -> match cmplx.IsActivity with 
                                                                 | IsActivity _ -> "{"  + lnbreak + activityToSctx node.Payload  + lnbreak + "}" + lnbreak
                                                                 | IsNotActivity -> "{"  + lnbreak + bodyToSctx cmplx.Body  + lnbreak + "}" + lnbreak
-                                        | IsSimple -> "" // Ok. Do nothing.
+                                        | IsSimple | IsConnector -> "" // Ok. Do nothing.
                                         | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn.Content + lnbreak + "}" + lnbreak
                                         | IsActivityCall actCall -> actCallToString actCall.GetIns actCall.GetOuts node.Payload.Label
         

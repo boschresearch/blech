@@ -61,16 +61,17 @@ module Blech.Visualization.BlechVisGraph
         member x.GetOuts = snd x.iovars
 
     /// Specifies a complex node to a specific abort type. The strings are the abort labels.
-    and IsAbort = AbortWhen of string | AbortRepeat of string | Neither
+    and IsAbort = AbortWhen of string | AbortRepeat of string | WeakAbort | Neither
    
     /// Content of a complex node.
     and ComplexNode = {Body : VisGraph; IsActivity : IsActivity; CaseClosingNode : IdPairOpt; IsAbort : IsAbort} with
+        member x.isWeakAbort = match x.IsAbort with WeakAbort -> true | _ -> false
         member x.SetSecondaryIdOfCaseClosingNode i = 
             {Body = x.Body; IsActivity = x.IsActivity; CaseClosingNode = x.CaseClosingNode.UpdateSecondary i;IsAbort = x.IsAbort}
     
     /// Type to match whether a node is simple or complex or a cobegin node. Cobegin nodes are very different from others due to their concurrenc nature.
     /// IsActivityCall consists of the input and output variable names.
-    and ComplexOrSimpleOrCobegin = IsComplex of ComplexNode | IsSimple | IsCobegin of CobeginPayload | IsActivityCall of IsActivityCall with
+    and ComplexOrSimpleOrCobegin = IsComplex of ComplexNode | IsSimple | IsConnector | IsCobegin of CobeginPayload | IsActivityCall of IsActivityCall with
         member x.SetSecondaryIdOfCaseClosingNode i = 
             match x with 
                 | IsComplex cmplx -> IsComplex (cmplx.SetSecondaryIdOfCaseClosingNode i)
@@ -85,7 +86,6 @@ module Blech.Visualization.BlechVisGraph
 
     /// Determines whether something is "Initial" or "Final".
     and InitOrFinalOrNeither = {Init : IsInit; Final : IsFinal} with 
-        member x.ToString = (match x.Init with IsInit -> "init" | IsNotInit -> "not init") + " " + (match x.Final with IsFinal -> "final" | IsNotFinal -> "not final")
         member x.IsFinalBool = match x.Final with IsFinal -> true | IsNotFinal -> false
 
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
@@ -110,17 +110,18 @@ module Blech.Visualization.BlechVisGraph
         // TODO why are these two handled with mutable variables?
         member x.IsCobegin = match x.IsComplex with IsCobegin cgbn -> true | _ -> false // DEBUG
         member x.IsCobeginString = match x.IsComplex with IsCobegin cgbn -> "true" | _ -> "false" // DEBUG
-        member x.GetCobegin = match x.IsComplex with IsCobegin cgbn -> cgbn | _ -> failwith "error" // DEBUG
         member x.GetBody = match x.IsComplex with IsComplex cmplx -> cmplx.Body | _ -> failwith "error" // DEBUG
         member x.HasBody = match x.IsComplex with IsComplex cmplx -> true | _ -> false // DEBUG
         member x.Visualize = x.WasVisualized <- Visualized
         member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
+        member x.GetCobeginFromComplex = match x.IsComplex with IsCobegin cgbn -> Some cgbn | _ -> None
         member x.SetComplex cmplx = {Label = x.Label; IsComplex = cmplx; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetLabel i = {Label = i; IsComplex = x.IsComplex; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetComplexToConnector = {Label = x.Label; IsComplex = IsConnector; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
@@ -313,7 +314,7 @@ module Blech.Visualization.BlechVisGraph
         (fst count) > 1 && countSingle = 1 && countMult > 0
 
     /// Checks whether the source and target of the edge have only edges between then regarding outgoing and incoming. All the edges are immediates for true.
-    let onlyImmediatesOrConditionals (edge : BlechEdge) : bool = 
+    let onlyImmediatesTerminalsOrConditionals (edge : BlechEdge) : bool = 
         let source = edge.Source
         let target = edge.Target
         let sourceOutgoings = (Seq.toList source.Outgoing)
@@ -376,7 +377,7 @@ module Blech.Visualization.BlechVisGraph
     let rec listNodes (nodes : BlechNode list) =
         match nodes with 
             | head :: tail ->   printfn "node s%i, second %i - cbgn? %s - out %i - %b" head.Payload.StateCount head.Payload.SecondaryId head.Payload.IsCobeginString (Seq.toList head.Outgoing).Length (match head.Payload.WasVisualized with Visualized -> true | _ -> false)
-                                if head.Payload.IsCobegin then printfn "cbgn bodies"; List.map (fun (b : VisGraph * Strength) -> printfn "one region"; listNodes (Seq.toList (fst b).Nodes); printfn "edges"; listEdges (Seq.toList (fst b).Edges); printfn "region end") head.Payload.GetCobegin.Content |> ignore
+                                //if head.Payload.IsCobegin then printfn "cbgn bodies"; List.map (fun (b : VisGraph * Strength) -> printfn "one region"; listNodes (Seq.toList (fst b).Nodes); printfn "edges"; listEdges (Seq.toList (fst b).Edges); printfn "region end") head.Payload.GetCobegin.Content |> ignore
                                 listNodes tail
             | [] -> printf ""
 

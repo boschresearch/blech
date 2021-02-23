@@ -23,22 +23,24 @@
         printfn "Found %i functions or activities." (blechModule.funacts.Length)
 
         // Synthesize the activities.
-        let activityNodes : BlechNode list = synthesize blechModule.funacts []
+        let activityNodes : BlechNode list = synthesize cliContext.vis_useConnector blechModule.funacts []
 
         printfn "Synthesized %i activities." (activityNodes.Length)
 
         // Optimizations take place here.
         printfn "Optimizing.."
-        let inlineActivites = cliContext.breakHierOnActCalls && (if blechModule.entryPoint.IsSome then true else printfn "No entry point given, no inlining of activities possible."; false)
+        let inlineActivites = cliContext.vis_breakHierOnActCalls && (if blechModule.entryPoint.IsSome then true else printfn "No entry point given, no inlining of activities possible."; false)
         let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name.ToString() else ""
-        let optimizedNodes : BlechNode list = optimize inlineActivites entryPointName activityNodes
+        let optimizedNodes : BlechNode list = optimize cliContext.vis_noCbgnPattern cliContext.vis_cbgnPatternWithHier inlineActivites entryPointName activityNodes
 
         // Generate sctx content.
         printfn "Generating .sctx.."
         let sctxString = SctxGenerator.generate optimizedNodes
 
         //Read file content for documentation purposes
-        let origProDoc = "/** \n " + File.ReadAllText(fileName) + "\n */ \n"
+        let origProDoc = match cliContext.vis_noOrigCode with
+                            | true -> ""
+                            | false -> "/** \n " + File.ReadAllText(fileName) + "\n */ \n"
 
         // Print sctx content to a file.
         SctxToFile.putToFile (origProDoc + sctxString) fileName

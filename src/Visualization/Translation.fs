@@ -6,6 +6,9 @@ module Blech.Visualization.Translation
     open Blech.Visualization.BlechVisGraph
     open Blech.Frontend.CommonTypes
 
+    /// Keeping track if a connector state is to be used if possible.
+    let mutable useConnectorState = false
+
     // Default id for secondary state id.
     let private defaultSecondaryId = 0
     
@@ -81,7 +84,11 @@ module Blech.Visualization.Translation
     let rec private synthesizeIte (graphBuilder : GraphBuilder) (rhs : TypedRhs) (ifBlock : Stmt list) (elseBlock : Stmt list): GraphBuilder =
         // Extract.
         let graph = frst5 graphBuilder
-        let prevNode = (scnd5 graphBuilder).Value
+        let prevNodeBefore = (scnd5 graphBuilder).Value
+        let prevNode = if useConnectorState && prevNodeBefore.Payload.IsComplex = IsSimple then
+                            graph.ReplacePayloadInByAndReturn prevNodeBefore (prevNodeBefore.Payload.SetComplexToConnector)
+                       else 
+                            prevNodeBefore
         let stateCount = thrd5 graphBuilder
 
         // New node for each branch. Init their bodies and connect the nodes to the case-closing node. 
@@ -448,9 +455,10 @@ module Blech.Visualization.Translation
             scnd4 bodyStatecountAndVars)
 
     /// Synthesis entry point. Pours the Blech code into a graph data modell (given by GenericGraph.fs).
-    let rec synthesize (programs: SubProgramDecl list) (accumulator : BlechNode list): (BlechNode list) =
+    let rec synthesize (useConnector : bool) (programs: SubProgramDecl list) (accumulator : BlechNode list): (BlechNode list) =
+        useConnectorState <- useConnector
         match programs with 
             | head :: tail -> match head.isFunction with
-                                    | true -> synthesize tail accumulator // not visualising functions
-                                    | false -> synthesize tail (fst (synthesizeActivity head 0) :: accumulator)
+                                    | true -> synthesize useConnector tail accumulator // not visualising functions
+                                    | false -> synthesize useConnector tail (fst (synthesizeActivity head 0) :: accumulator)
             | [] -> accumulator
