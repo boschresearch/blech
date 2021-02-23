@@ -209,6 +209,7 @@ module CompilationUnit =
                         // now load it
                         // TODO: check if file is already compiled and has not changed, fjg 22.02.21
                         // let initialImportChain = importChain.Extend translationUnit
+                        Logging.log2 "CompilationUnit" <| sprintf "Compile file: %s" fileName
                         ctx.loader ctx logger ImportChain.Empty loadWhat translationUnit fileName
                         
 
@@ -230,6 +231,7 @@ module CompilationUnit =
             
             match blcFile with
             | Ok blc ->
+                Logging.log2 "CompilationUnit" <| sprintf "Compile import: %s" (string moduleUnit)
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
                 do ctx.loaded.Add (moduleUnit, compiledBlcRes)
 
@@ -239,6 +241,7 @@ module CompilationUnit =
                     match blhFile with
                     | Ok blh -> 
                         // signature found
+                        Logging.log2 "CompilationUnit" <| sprintf "Compile import: %s" (string signatureUnit)
                         let compiledBlhRes = ctx.loader ctx logger importChain Blh requiredModule blh
                         do ctx.loaded.Add (signatureUnit, compiledBlhRes)
                         compiledBlhRes           
