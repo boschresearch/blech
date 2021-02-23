@@ -270,10 +270,10 @@ let rec internal cpType typ =
         | FloatType.Float32 -> txt "blc_float32"
         | FloatType.Float64 -> txt "blc_float64"
     | ValueTypes (ValueTypes.StructType (typeName, _))
-    | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
-        txt "struct" <+> (cpStaticName typeName)
+    | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_))
     | ValueTypes (OpaqueSimple typeName)
-    | ValueTypes (OpaqueComplex typeName) -> cpStaticName typeName
+    | ValueTypes (OpaqueComplex typeName) -> 
+        cpStaticName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | Any
@@ -365,6 +365,7 @@ let getValueFromName timepoint tcc name : CBlob =
     let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
     | Some(ValueTypes (ValueTypes.StructType _)),_ ->
+    //| Some(ValueTypes (ValueTypes.OpaqueComplex _)),_
         ValueOf (Loc (Name cName))
     | Some typ, true when typ.IsPrimitive && timepoint.Equals Current ->
         // primitive typed, output parameter

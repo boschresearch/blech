@@ -76,9 +76,11 @@ let internal cpUserType typ =
                 cpArrayDeclDoc nameDoc field.datatype <^> semi
             | _ ->
                 cpType field.datatype <+> txt field.name.basicId <^> semi
-        cpType typ <+> txt "{"
+        txt "typedef struct {"
         <.> (List.map cpField fields |> dpBlock |> cpIndent)
-        <.> txt "};"
+        <.> txt "}"
+        <+> cpType typ
+        <^> semi
     | _ -> failwith "The only printable user defined type is a value struct."
 
 //=============================================================================

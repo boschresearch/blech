@@ -335,7 +335,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
         ctx.tcc.userTypes
         |> Seq.choose (fun kvp -> if kvp.Key.moduleName = moduleName then Some kvp.Value else None) // make sure only this module's types are printed
         |> Seq.map (snd >> cpUserType)
-        |> dpBlock
+        |> vsep // keep empty lines
 
     // Activity Contexts
     let activityContexts =
