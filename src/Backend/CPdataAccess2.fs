@@ -272,7 +272,8 @@ let rec internal cpType typ =
     | ValueTypes (ValueTypes.StructType (typeName, _))
     | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_))
     | ValueTypes (OpaqueSimple typeName)
-    | ValueTypes (OpaqueComplex typeName) -> 
+    | ValueTypes (OpaqueArray typeName)
+    | ValueTypes (OpaqueStruct typeName) -> 
         cpStaticName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
@@ -281,11 +282,13 @@ let rec internal cpType typ =
     | AnyInt | AnyBits | AnyFloat -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
 
-let rec internal sizeofMacro = function
-| ValueTypes (ArrayType(size, elemTyp)) ->
-    size |> string |> txt <+> txt "*" <+> sizeofMacro (ValueTypes elemTyp)
-| x ->
-    txt "sizeof" <^> parens (cpType x)
+let rec internal sizeofMacro =
+    function
+    | ValueTypes (ArrayType(size, elemTyp)) ->
+        size |> string |> txt <+> txt "*" <+> sizeofMacro (ValueTypes elemTyp)
+        // opaque arrays have a name and are therefore treated like any other named type
+    | x ->
+        txt "sizeof" <^> parens (cpType x)
 
 
 let private cpMemSetDoc typ lhsDoc =
@@ -364,8 +367,8 @@ let getValueFromName timepoint tcc name : CBlob =
         | _ -> None, false
     let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
-    | Some(ValueTypes (ValueTypes.StructType _)),_ ->
-    //| Some(ValueTypes (ValueTypes.OpaqueComplex _)),_
+    | Some(ValueTypes (ValueTypes.StructType _)),_
+    | Some(ValueTypes (ValueTypes.OpaqueStruct _)),_ ->
         ValueOf (Loc (Name cName))
     | Some typ, true when typ.IsPrimitive && timepoint.Equals Current ->
         // primitive typed, output parameter
@@ -664,7 +667,8 @@ and cpExpr tcc expr : PrereqExpression =
         | AnyBits
         | AnyFloat
         | ValueTypes (OpaqueSimple _)
-        | ValueTypes (OpaqueComplex _) -> failwith "Error in type checker. Trying to compare void, opaque or not fully typed expressions."
+        | ValueTypes (OpaqueArray _)
+        | ValueTypes (OpaqueStruct _) -> failwith "Error in type checker. Trying to compare void, opaque or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     // arithmetic
     | Add (s1, s2) -> binExpr tcc s1 s2 "+"
@@ -677,7 +681,8 @@ and cpInputArg tcc expr : PrereqExpression =
     // if expr is a structured literal, make a new name for it
     let singleArgLocation: PrereqExpression = makeTmpForComplexConst tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.StructType _) ->
+    | ValueTypes (ValueTypes.StructType _)
+    | ValueTypes (OpaqueStruct _) ->
         // if struct, then prepend &
         let cExpr = 
             match getCExpr singleArgLocation with
@@ -692,7 +697,9 @@ and cpOutputArg tcc expr : PrereqExpression =
     // unless array, prepend &
     let pe = cpLexpr tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.ArrayType _) -> pe
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) -> 
+        pe
     | _ ->
         let cExpr = 
             match getCExpr pe with
@@ -715,6 +722,7 @@ and cpArrayDeclDoc name typ =
         | ValueTypes (ArrayType(size, elemTyp)) ->
             let nameAndType, length = cpRecArrayDeclDoc n (ValueTypes elemTyp)
             nameAndType, brackets (size |> string |> txt) <^> length
+            // opaque arrays have a name and are therefore treated like any other named type
         | _ ->
             cpType t <+> n, empty
     cpRecArrayDeclDoc name typ ||> (<^>)
@@ -731,15 +739,17 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
         let lhsTyp = expr.typ
         let tmpDecl = cpArrayDeclDoc (auxiliaryName lhsName) lhsTyp <^> semi
         let init =
-            match expr.typ with
-            | ValueTypes (ValueTypes.StructType _) ->
+            match expr.typ with // regarding opaque expr see comment below
+            | ValueTypes (ValueTypes.StructType _)
+            | ValueTypes (OpaqueStruct _) ->
                 cpMemSetDoc expr.typ (txt "&" <^> auxiliaryName lhsName)
-            | ValueTypes (ValueTypes.ArrayType _) ->
+            | ValueTypes (ValueTypes.ArrayType _)
+            | ValueTypes (OpaqueArray _) ->
                 cpMemSetDoc expr.typ (auxiliaryName lhsName)
             | _ ->
                 empty //failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
         let lhs = {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = expr.typ; range = range0}
-        let assignments = 
+        let assignments = // why not use cpAssign here?
             normaliseAssign tcc (range0, lhs, expr)
             |> List.map (function 
                 | Stmt.Assign(_, lhs, rhs) -> 
@@ -754,7 +764,9 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
 
     match expr.typ with
     | ValueTypes (ValueTypes.StructType _)
-    | ValueTypes (ValueTypes.ArrayType _) ->
+    | ValueTypes (ValueTypes.ArrayType _)
+    | ValueTypes (OpaqueStruct _)
+    | ValueTypes (OpaqueArray _) -> // do opaque compile time constants actually exist?
         match expr.rhs with
         | StructConst _ 
         | ArrayConst _ ->
@@ -840,9 +852,10 @@ let rec cpAssign tcc left right =
         | _ -> // x = y needs no rewriting, assign directly
             let a, b = directAssignment rightRE
             mkRenderedStmt a b 
-    | ValueTypes (OpaqueComplex _) -> // treat like an array, memcpy
+    | ValueTypes (OpaqueArray _) ->
         let a, b = directArrayAssignment rightRE
         mkRenderedStmt a b 
+    | ValueTypes (OpaqueStruct _) // for opaque structs use direct assignment
     | ValueTypes Void 
     | ValueTypes BoolType 
     | ValueTypes (IntType _)
@@ -922,7 +935,8 @@ let private assignPrevInActivity tcc qname =
     let prevname = (cpName (Some Previous) tcc qname).Render
     let initvalue = (getValueFromName Current tcc qname).Render
     match dty with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         txt "memcpy"
         <+> dpCommaSeparatedInParens
             [ prevname
@@ -942,6 +956,7 @@ let cpAssignPrevInActivity tcc qname =
         match dty with
         | ValueTypes (ArrayType _) ->
             cpArrayDeclDoc prevname dty <^> semi
+            // opaque arrays have a name and are therefore treated like any other named type using cpType
         | _ ->
             cpType dty
     declaration <+> assignPrevInActivity tcc qname

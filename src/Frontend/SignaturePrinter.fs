@@ -642,16 +642,17 @@ module SignaturePrinter =
         let psAbstractType annotations abstractType isRef (name: Name) =
             let optAnnos = 
                 bpOptAnnotations annotations
-            let optSimple = 
+            let abstractKind = 
                 match abstractType with
-                | ExportInference.Simple -> Some <| txt "@[SimpleType]"
-                | ExportInference.Complex -> Some <| txt "@[ComplexType]"
+                | ExportInference.Simple -> Attribute.SimpleType.ToDoc
+                | ExportInference.Array -> Attribute.OpaqueArray.ToDoc
+                | ExportInference.Struct -> Attribute.OpaqueStruct.ToDoc
             let optRef =
                 if isRef then Some <| txt "ref" else None
                 
             txt "type" <+> dpName name
             |> dpOptSpacePrefix optRef
-            |> dpOptLinePrefix optSimple
+            |> dpOptLinePrefix (Some abstractKind)
             |> dpOptLinePrefix optAnnos
 
         let psIdentifier (id : Identifier) = 

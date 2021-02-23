@@ -47,7 +47,9 @@ module Attribute =
 
     // opaque types qualification
     [<Literal>] 
-    let complexType = "ComplexType"
+    let opaqueStruct = "OpaqueStruct"
+    [<Literal>] 
+    let opaqueArray = "OpaqueArray"
     [<Literal>] 
     let simpleType = "SimpleType"
 
@@ -84,7 +86,8 @@ module Attribute =
         | LineDoc of linedoc: string
         | BlockDoc of blockdoc: string
 
-        | ComplexType
+        | OpaqueArray
+        | OpaqueStruct
         | SimpleType
     
         member attr.ToDoc =
@@ -137,10 +140,12 @@ module Attribute =
             | BlockDoc doc ->
                 txt "/**" <^> txt doc <^> txt "*/"
 
-            | ComplexType ->
-                txt "ComplexType" |> dpAnno
+            | OpaqueStruct ->
+                txt opaqueStruct |> dpAnno
+            | OpaqueArray ->
+                txt opaqueArray |> dpAnno
             | SimpleType ->
-                txt "SimpleType" |> dpAnno
+                txt simpleType |> dpAnno
 
 
         override attr.ToString() =

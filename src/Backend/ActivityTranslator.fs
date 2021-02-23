@@ -136,7 +136,8 @@ let private cpCopyInGlobal tcc (v: ExternalVarDecl) =
         |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
         |> txt
     match v.datatype with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         let declare = cpArrayDeclDoc name v.datatype <^> semi
         let memcpy =
             txt "memcpy"
@@ -159,7 +160,8 @@ let private cpCopyOutGlobal tcc (v: ExternalVarDecl) =
         |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
         |> txt
     match v.datatype with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         let memcpy =
             txt "memcpy"
             <+> dpCommaSeparatedInParens

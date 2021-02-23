@@ -72,7 +72,8 @@ module ExportInference =
     
     
     type AbstractType =
-        | Complex
+        | Array
+        | Struct
         | Simple
    
     type AbstractTypes = Map<Name, AbstractType>
@@ -706,18 +707,20 @@ module ExportInference =
         Option.fold (inferDataType rawExp) ctx etd.rawtype    
         |> List.fold (inferTagDecl rawExp) <| etd.tags  // raw values must not contain abstract types
         |> List.fold (inferExtensionMember exp)  <| etd.members
-        |> exportTypeDecl Complex <| etd.name
+        |> exportTypeDecl Struct <| etd.name
 
 
     and private inferStructType exp ctx (std: AST.StructTypeDecl) =
         List.fold (inferFieldDecl exp) ctx std.fields  // infer fields first, before typename becomes visible  
         |> List.fold (inferExtensionMember exp) <| std.members
-        |> exportTypeDecl Complex <| std.name
+        |> exportTypeDecl Struct <| std.name
 
 
     and private inferOpaqueType exp ctx (ntd: AST.OpaqueTypeDecl) =
         List.fold (inferExtensionMember exp)  ctx ntd.members
-        |> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
+        |> exportTypeDecl Struct <| ntd.name // TODO: discern the kind of opaque type here: simple, array, struct
+        // TODO: this has been wrong already before making an opaque simple type automatically a complex when exporting, see below!!!
+        //|> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
 
 
     and private inferTypeAlias exp (ctx: ExportContext) (tad: AST.TypeAliasDecl) =
@@ -725,12 +728,14 @@ module ExportInference =
             match tad.aliasfor with
             | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> 
                 Simple
+            | ArrayType _ ->
+                Array
             | TypeName snp ->
                 match ctx.TryGetAbstractType (List.last snp.names) with
                 | Some absTyp -> absTyp
-                | None -> Complex
+                | None -> Struct
             | _ -> 
-                Complex
+                Struct // slice, signal treated as struct here
 
         inferDataType exp ctx tad.aliasfor
         |> List.fold (inferExtensionMember exp) <| tad.members  // TODO: change this to something like inferMethod

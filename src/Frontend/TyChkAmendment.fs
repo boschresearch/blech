@@ -140,7 +140,8 @@ let rec getDefaultValueFor pos name dty =
             |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
             |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
         | OpaqueSimple _
-        | OpaqueComplex _ ->
+        | OpaqueArray _
+        | OpaqueStruct _ ->
             Error [NoDefaultValueForOpaque (pos, name)]
        
     | ReferenceTypes s ->

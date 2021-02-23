@@ -650,21 +650,28 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         
 let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OtherDecl, _>) =
     let mkOpaqueType (n, (a: Attribute.OtherDecl)) =
-        let isComplex =
+        let isArray =
             a.doc 
-            |> List.exists (function | Attribute.ComplexType -> true | _ -> false)
+            |> List.exists (function | Attribute.OpaqueArray -> true | _ -> false)
+        let isStruct =
+            a.doc
+            |> List.exists (function | Attribute.OpaqueStruct -> true | _ -> false)
         let isSimple = 
             a.doc 
             |> List.exists (function | Attribute.SimpleType -> true | _ -> false)
         let newType =
-            match isComplex, isSimple with
-            | true, true ->
+            match isArray, isStruct, isSimple with
+            | true, true, _
+            | true, _, true
+            | _, true, true ->
                 Error [OpaqueConflictingAnnotations pos]
-            | false, false ->
+            | false, false, false ->
                 Error [OpaqueNeedsAnnotation pos]
-            | true, false ->
-                Ok <| ValueTypes (ValueTypes.OpaqueComplex n)
-            | false, true ->
+            | true, false, false ->
+                Ok <| ValueTypes (ValueTypes.OpaqueArray n)
+            | false, true, false ->
+                Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
+            | false, false, true ->
                 Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
         // add type declaration to lookup table
         match newType with
@@ -702,14 +709,7 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             BlechTypes.VarDecl.name = qualifiedName
             datatype = dty
             mutability = mutability
-            initValue = 
-                match dty with
-                | ValueTypes (ValueTypes.OpaqueSimple _) ->
-                    {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // 0 for simple types
-                | ValueTypes (ValueTypes.OpaqueComplex _) ->
-                    {rhs = ArrayConst [Constants.SizeOne, {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos}]; typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); range = pos} // {0} for complex types
-                | _ ->
-                    initVal
+            initValue = initVal
             annotation = anno
             allReferences = HashSet()
         }    
@@ -726,8 +726,13 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             match dty with
             | ValueTypes (ValueTypes.OpaqueSimple _) ->
                 Ok {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // 0 for simple types
-            | ValueTypes (ValueTypes.OpaqueComplex _) ->
-                Ok {rhs = ArrayConst [Constants.SizeOne, {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos}]; typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); range = pos} // {0} for complex types
+            | ValueTypes (ValueTypes.OpaqueArray _)
+            | ValueTypes (ValueTypes.OpaqueStruct _) ->
+                Ok { rhs = ArrayConst [Constants.SizeOne, { rhs = NatConst Constants.Nat.Zero8; 
+                                                         typ = ValueTypes (NatType Nat8); 
+                                                         range = pos }]; 
+                     typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); 
+                     range = pos } // {0} for complex types
             | _ ->
                 getInitValueWithoutZeros Range.range0 "" dty
             )

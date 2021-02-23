@@ -86,7 +86,8 @@ type ValueTypes =
     | StructType of name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
     | OpaqueSimple of QName
-    | OpaqueComplex of QName
+    | OpaqueArray of QName
+    | OpaqueStruct of QName
     
     member this.ToDoc = txt <| this.ToString()
     
@@ -100,17 +101,18 @@ type ValueTypes =
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
         | StructType (q, _) -> q.ToString()
-        | OpaqueComplex n -> sprintf "type %s" (n.ToString())
-        | OpaqueSimple n -> sprintf "simpletype %s" (n.ToString())
+        | OpaqueArray n
+        | OpaqueStruct n
+        | OpaqueSimple n -> sprintf "type %s" (n.ToString())
     
     member this.IsPrimitive =
         match this with
         | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple _ -> true
-        | ArrayType _ | StructType _ | OpaqueComplex _ -> false
+        | ArrayType _ | StructType _ | OpaqueArray _ | OpaqueStruct _ -> false
 
     member this.IsOpaque =
         match this with
-        | OpaqueComplex _ | OpaqueSimple _ -> true
+        | OpaqueArray _ | OpaqueStruct _ | OpaqueSimple _ -> true
         | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _
         | ArrayType _ | StructType _ -> false
     

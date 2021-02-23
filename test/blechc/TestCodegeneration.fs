@@ -365,26 +365,30 @@ module RunTests =
     let processFile config outputDir (file: string) =
         let noPathFile = System.IO.Path.GetFileName file
         let noPathNoExtensionFile = System.IO.Path.GetFileNameWithoutExtension file
-        printfn "Processing %s." noPathFile
-        // check that a spec trace exists
-        let extensionLength = BLECH_SUFFIX.Length
-        let noExtensionFile = file.Remove(file.Length - extensionLength, extensionLength)
-        let specjson = noExtensionFile + SPEC_SUFFIX
-        let testjson = System.IO.Path.Combine(outputDir, noPathNoExtensionFile + TEST_SUFFIX)
-        if System.IO.File.Exists (specjson) then
-            // compile and generate trace, compare with spec trace
-            runBLCcompiler config file outputDir
-            runCcompiler config file outputDir
-            runTestcase file outputDir
-            if System.IO.File.Exists (testjson) then
-                let specification = getTrace (specjson)
-                let testResult = getTrace (testjson)
-                ignore <| diff specification testResult
-                // no charting done to make this script portable
-            else
-                printfn "Compiled %s but no trace has been generated." file
+        // ignore _imp files
+        if noPathNoExtensionFile.EndsWith IMP_SUFFIX then
+            printfn "Ignoring imported module %s." noPathFile
         else
-            printfn "Skipping %s because the specified trace to test against was not found." file
+            // check that a spec trace exists
+            let extensionLength = BLECH_SUFFIX.Length
+            let noExtensionFile = file.Remove(file.Length - extensionLength, extensionLength)
+            let specjson = noExtensionFile + SPEC_SUFFIX
+            let testjson = System.IO.Path.Combine(outputDir, noPathNoExtensionFile + TEST_SUFFIX)
+            if System.IO.File.Exists (specjson) then
+                printfn "Processing %s." noPathFile
+                // compile and generate trace, compare with spec trace
+                runBLCcompiler config file outputDir
+                runCcompiler config file outputDir
+                runTestcase file outputDir
+                if System.IO.File.Exists (testjson) then
+                    let specification = getTrace (specjson)
+                    let testResult = getTrace (testjson)
+                    ignore <| diff specification testResult
+                    // no charting done to make this script portable
+                else
+                    printfn "Compiled %s but no trace has been generated." file
+            else
+                printfn "Skipping %s because the specified trace to test against was not found." file
     // if difference found, report and plot
 
     let processFiles c fs d = 
