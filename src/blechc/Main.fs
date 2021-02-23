@@ -390,12 +390,10 @@ module Main =
         let compilationRes = 
             match implOrIface with
             | CompilationUnit.Blc->
-                printfn "Compile implementation: '%s'\n" infile
                 compileFromFile options packageContext logger importChain moduleName infile
             | CompilationUnit.Blh ->
-                printfn "Compile interface: '%s'\n" infile
                 compileInterfaceFromFile options packageContext logger importChain moduleName infile
-                
+                      
         Result.bind (CompilationUnit.Module<_>.Make moduleName infile) compilationRes 
 
 
@@ -431,7 +429,6 @@ module Main =
                 | Error logger ->
                     Diagnostics.Emitter.printDiagnostics logger
                     // print errors for all imported modules with errors - each has a logger
-
                     let errImps = pkgCtx.GetErrorImports
                     let printImportDiagnostics (moduleName, logger) =
                         System.Console.Out.WriteLine(sprintf "\nImported Module: \"%s\"\n" <| string moduleName)
