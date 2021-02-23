@@ -1,0 +1,23 @@
+module exposes mkO, A, B
+
+struct O
+    var payload: nat32
+end
+
+function mkO () returns O
+    return {payload = 1}
+end
+
+activity A (i: O)(o: nat32)
+    repeat
+        o = i.payload
+        await true
+    end
+end
+
+activity B (i: nat32)(o: O)
+    repeat 
+        o.payload = o.payload + i
+        await true
+    end
+end
