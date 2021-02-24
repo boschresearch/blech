@@ -1,0 +1,9 @@
+import aoea "aliasofenumalias"
+
+module exposes init
+
+typealias T = aoea.AE
+
+function init() returns T 
+    return aoea.init()
+end

@@ -1,0 +1,12 @@
+module exposes init
+
+
+enum E 
+    Tag
+end
+
+typealias AE = E
+
+function init() returns AE
+    return Tag
+end

@@ -1,0 +1,6 @@
+import aoa "../types/abstractofimportedconcrete"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

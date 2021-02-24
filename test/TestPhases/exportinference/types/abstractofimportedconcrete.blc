@@ -1,0 +1,29 @@
+import c "concrete"
+
+module exposes makeEnum, makeStruct, makeArray, makeBool
+
+typealias Enum = c.Enum
+
+function makeEnum() returns Enum 
+    return c.Tag
+end
+
+typealias Struct = c.Struct
+
+function makeStruct() returns Struct 
+    return { b = false }
+end
+
+
+typealias Array = c.Array
+
+function makeArray() returns Array 
+    return { 42 }
+end
+
+
+typealias Bool = c.Bool
+
+function makeBool() returns Bool 
+    return true
+end

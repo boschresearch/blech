@@ -707,7 +707,7 @@ module ExportInference =
         Option.fold (inferDataType rawExp) ctx etd.rawtype    
         |> List.fold (inferTagDecl rawExp) <| etd.tags  // raw values must not contain abstract types
         |> List.fold (inferExtensionMember exp)  <| etd.members
-        |> exportTypeDecl Struct <| etd.name
+        |> exportTypeDecl Simple <| etd.name  // TODO: This is preliminary as long as enums are not implemented in the typechecker, fjg. 24.02.20
 
 
     and private inferStructType exp ctx (std: AST.StructTypeDecl) =
@@ -717,9 +717,10 @@ module ExportInference =
 
 
     and private inferOpaqueType exp ctx (ntd: AST.OpaqueTypeDecl) =
-        List.fold (inferExtensionMember exp)  ctx ntd.members
-        |> exportTypeDecl Struct <| ntd.name // TODO: discern the kind of opaque type here: simple, array, struct
-        // TODO: this has been wrong already before making an opaque simple type automatically a complex when exporting, see below!!!
+        failwith "No export inference for opaque types necessary" // they occur only in signatures, which do not need export inference
+        //List.fold (inferExtensionMember exp)  ctx ntd.members
+        //|> exportTypeDecl Struct <| ntd.name // TODO: discern the kind of opaque type here: simple, array, struct
+        //// TODO: this has been wrong already before making an opaque simple type automatically a complex when exporting, see below!!!
         //|> exportTypeDecl Complex <| ntd.name   // TODO: toplevel type should be encoded into the AST
 
 
