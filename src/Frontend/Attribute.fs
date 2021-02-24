@@ -47,9 +47,9 @@ module Attribute =
 
     // opaque types qualification
     [<Literal>] 
-    let opaqueStruct = "OpaqueStruct"
+    let opaqueStruct = "StructType"
     [<Literal>] 
-    let opaqueArray = "OpaqueArray"
+    let opaqueArray = "ArrayType"
     [<Literal>] 
     let simpleType = "SimpleType"
 
