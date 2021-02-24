@@ -1,0 +1,9 @@
+import aoa "aliasofabstract"
+
+module exposes init
+
+typealias T = aoa.T 
+
+function init() returns T 
+    return aoa.init()
+end

@@ -1,0 +1,13 @@
+import aoa "../imports/aliasofabstract"
+import aoea "../imports/aliasofenumalias"
+import aosa "../imports/aliasofstructalias"
+import aoaa "../imports/aliasofarrayalias"
+import aoia "../imports/aliasofimportedabstract"
+import aoiaa "../imports/aliasofimportedarrayalias"
+import aoiea "../imports/aliasofimportedenumalias"
+import aoisa "../imports/aliasofimportedstructalias"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end
