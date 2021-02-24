@@ -198,7 +198,7 @@ module TypeCheckContext =
             | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
             | Declarable.ProcedureImpl _ 
-            | Declarable.ProcedurePrototype _ -> Error [IllegalAccessOfTypeInfo (name.ToString())]
+            | Declarable.ProcedurePrototype _ -> Error [ProcedureNameUsedLikeAVariable (name.ToString())]
         else
             Error [NotInLUTPrevError (name.ToString())]
 

@@ -39,7 +39,7 @@ type TyCheckError =
     | ImpossibleCase of obj
     | UnsupportedFeature of range * string
     | UnsupportedTuple of range
-    | IllegalAccessOfTypeInfo of string
+    | ProcedureNameUsedLikeAVariable of string
     | ExpectedSubProgDecl of range * string
     | AmendBroken of Types * TypedRhs
     //| MissingQName of range * Identifier
@@ -222,7 +222,6 @@ type TyCheckError =
             | ImpossibleCase o -> Range.range0, sprintf "Seems like some of the DUs in the type checker are not up-to-date. Ran into an seemingly impossible case: %A." o
             | UnsupportedFeature (p, s) -> p, sprintf "Sorry, currently the type checker does not support %s." s
             | UnsupportedTuple p -> p, sprintf "Multiple-return types, assignments or tuples are not supported."
-            | IllegalAccessOfTypeInfo s -> Range.range0, sprintf "Internal error: tried to lookup data type for identifier %s which does not represent data." s
             | ExpectedSubProgDecl (p, n) -> p, sprintf "Internal error: expected a subprogram for lookup table entry %s." n
             | AmendBroken (t, r) -> r.Range, sprintf "Could not amend. Type %s Expression %s." (t.ToString()) (r.ToString())
             //| MissingQName (p, id) -> p, sprintf "Internal error: Expected a qualified identifier for %s but found none, buggy name resolution?" id
@@ -276,6 +275,7 @@ type TyCheckError =
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
             | StructMustHaveStaticInit(pos, name, initValue) -> pos, sprintf "The struct field %s must be declared with a static initialiser." (name.basicId)
+            | ProcedureNameUsedLikeAVariable s -> Range.range0, sprintf "The lookup of the data type for %s indicates that this is a name of a procedure. Maybe the () are missing?" s
 
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)

@@ -132,7 +132,6 @@ type Test() =
                 | ImpossibleCase _ 
                 | UnsupportedFeature _ 
                 | UnsupportedTuple _
-                | IllegalAccessOfTypeInfo _ 
                 | ExpectedSubProgDecl _ 
                 | AmendBroken _
                 //| MissingQName _
