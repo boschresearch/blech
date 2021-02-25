@@ -241,7 +241,7 @@ module Blech.Visualization.Optimization
                                     match sourceOrTarget with
                                         | Source -> // If the final node of an complex body becomes a node that is the source of conditionals, it is a connector really.
                                                     let updatedSource = 
-                                                        if newTargetOrSource.Payload.IsComplex = IsSimple && payload.Property = IsConditional then
+                                                        if newTargetOrSource.Payload.IsComplex = IsSimple && payload.Property = IsConditional && useConnectorState then
                                                             graph.ReplacePayloadInByAndReturn newTargetOrSource newTargetOrSource.Payload.SetComplexToConnector
                                                         else
                                                             newTargetOrSource
