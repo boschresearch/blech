@@ -95,7 +95,9 @@ type TyCheckError =
     | StructMustHaveStaticInit of range * QName * TypedRhs
     // calls
     | FunCallToAct of range * ProcedurePrototype
+    | FunNotExist of range * ProcedurePrototype
     | RunAFun of range * ProcedurePrototype
+    | ActNotExist of range * ProcedurePrototype
     
     // simple types
     | ExpectedBoolExpr of range * TypedRhs
@@ -279,7 +281,9 @@ type TyCheckError =
 
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
+            | FunNotExist (p, decl) -> p, sprintf "Function %s is not visible in this scope. Ensure that the module %s exposes it." (decl.name.ToString()) (decl.name.moduleName.ToString())
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
+            | ActNotExist (p, decl) -> p, sprintf "Activity %s is not visible in this scope. Ensure that the module %s exposes it." (decl.name.ToString()) (decl.name.moduleName.ToString())
             
             // simple types
             | ExpectedBoolExpr (p, r) -> p, sprintf "Expression '%s' must be boolean." (r.ToString())

@@ -828,7 +828,10 @@ let private checkAssignReceiver pos lut (rcvOpt: AST.Receiver option) decl =
 let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
     let checkIsActivity (decl: ProcedurePrototype) =
         if decl.IsActivity then Ok()
-        else Error [RunAFun(pos, decl)]
+        elif decl.IsFunction then
+            Error [RunAFun(pos, decl)]
+        else
+            Error [ActNotExist(pos, decl)]
     
     let createCall name (((_, ins), outs), retvar) =
         ActivityCall (pos, name, retvar, ins, outs)

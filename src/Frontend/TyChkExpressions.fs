@@ -1609,7 +1609,10 @@ and internal checkAssignLExpr lut lhs =
 and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code) (inputs: Result<_,_> list) (outputs: Result<_,_> list) =
     let checkIsFunction (decl: ProcedurePrototype) =
         if decl.IsFunction then Ok()
-        else Error [FunCallToAct(pos, decl)]
+        elif decl.IsActivity then
+            Error [FunCallToAct(pos, decl)]
+        else
+            Error [FunNotExist(pos, decl)]
 
     let checkReturnType declName declReturns =
         if isStatement then
@@ -1637,62 +1640,6 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
             |> Result.map (createCall (decl.name, decl.returns))
             )
 
-
-/// Type check activity calls.
-/// An activity may return a value that is stored in resStorage upon termination.
-/// This is different to a function call which 
-
-// MOVED TO TYPECHECKING BECAUSE IT IS A STATEMENT
-//let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_> list) outputs =
-//    let checkIsActivity decl =
-//        if not decl.isFunction then Ok()
-//        else Error [RunAFun(pos, decl)]
-//    let checkReturnType storage declName declReturns =
-//        match storage with
-//        | None ->
-//            match declReturns with
-//            | Void -> Ok None
-//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
-//        | Some leftExprRes ->
-//            leftExprRes |> Result.bind (
-//                fun lexpr -> 
-//                    match lexpr.typ with 
-//                    | Any -> // wildcard
-//                        Ok None
-//                    | ValueTypes _ ->
-//                        Ok (Some lexpr) 
-//                    | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
-//                )
-//        |> Result.bind (
-//            function
-//            | None -> Ok None
-//            | Some (lexpr: TypedLhs) ->
-//                let typ = lexpr.typ
-//                if isLhsMutable lut lexpr.lhs then
-//                    if lexpr.typ.IsAssignable then
-//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-//                            Ok (Some lexpr) 
-//                        else 
-//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
-//                    else
-//                        Error [AssignmentToLetFields (pos, lexpr.ToString())]
-//                else Error [AssignmentToImmutable (pos, lexpr.ToString())]
-//                )
-//    let createCall name (((_, ins), outs), retvar) =
-//        ActivityCall (pos, name, retvar, ins, outs)
-    
-//    match ap with
-//    | AST.Procedure dname ->
-//        ensureCurrent dname
-//        |> Result.map lut.ncEnv.dpathToQname
-//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-//        |> Result.bind (fun decl ->
-//            checkIsActivity decl
-//            |> combine <| checkInputs pos inputs decl.name decl.inputs
-//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-//            |> combine <| checkReturnType resStorage decl.name decl.returns
-//            |> Result.map (createCall decl.name)
-//            )
 
 /// Check that condition is a boolean, side-effect free expression
 let internal fCondition lut cond = 
