@@ -55,10 +55,7 @@ module Blech.Visualization.Optimization
                        // Doing it twice. Activities are optimized sequentially. Some information is different, after a activity was updated.
                        // TODO make this functionally? So that the part where the updated information is needed is done only?
                        let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode firstIt
-                       let secondIt = List.map (optimizeSingleActivity firstIt actNameAndFinalNodesPairs) firstIt
-                       // third times a charm?
-                       let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode secondIt
-                       List.map (optimizeSingleActivity firstIt actNameAndFinalNodesPairs) secondIt
+                       List.map (optimizeSingleActivity firstIt actNameAndFinalNodesPairs) firstIt
 
     /// Optimizes a single activity node.
     and private optimizeSingleActivity (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (activityNode: BlechNode) : BlechNode =
@@ -102,11 +99,11 @@ module Blech.Visualization.Optimization
                             | IsActivityCall _ -> match inlineActs with
                                                     |true -> secondaryId <- secondaryId + 1
                                                              flattenHierarchyActivityCall activityNodes currentNode graph
-                                                    | false -> graph
+                                                    | false -> currentNode.Payload.SetHierarchyOptimized; graph
                             | IsCobegin cmplx -> flattenHierarchyCobegin activityNodes currentNode cmplx graph
                             | IsComplex cmplx -> // Do not flatten if weak abort.
                                                  match cmplx.IsAbort with
-                                                    | WeakAbort -> graph
+                                                    | WeakAbort -> currentNode.Payload.SetHierarchyOptimized; graph
                                                     | _ -> flattenHierarchy activityNodes currentNode cmplx graph
 
         callFlatHierarchyOnNodes activityNodes unoptedSuccesssors currentGraph
