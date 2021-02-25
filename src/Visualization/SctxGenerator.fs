@@ -159,28 +159,19 @@ module Blech.Visualization.SctxGenerator
         let edgeStringsAndRecursiveNodes =  match node.Payload.IsInitOrFinal.Final with
                                                 | IsFinal -> ""
                                                 | _ ->  // Add and illustrate edges. Calls method recursively to add the target states and their subsequent edges.
-                                                        //printfn "edges of node %s" stateString; listEdges (Seq.toList node.Outgoing)
                                                         addEdges node.Outgoing
 
         stateString + blank + complexState + blank + edgeStringsAndRecursiveNodes
 
     /// Converts the body of an activity (or any other complex state) to a sctx-conform string.
     and private bodyToSctx (body : BlechVisGraph.VisGraph) : string =
-        //BlechVisGraph.listEdges (Seq.toList body.Edges)
         // Find init node.
-        //printfn "i get here"
-        //List.map (fun (n:BlechNode) -> printfn "s%i - %s" n.Payload.StateCount n.Payload.IsInitOrFinal.ToString) (Seq.toList body.Nodes) |> ignore 
         let initNode = findInitNodeInHashSet body.Nodes
-        //printfn "starter s%i" initNode.Payload.StateCount
-        //List.map (fun (n:BlechNode) -> printfn "s%i" n.Payload.StateCount) (Seq.toList initNode.Successors) |> ignore 
-        //printfn "i dont get here"
-        
         // Add nodes and edges recursively. 
         addNodesAndEdges initNode
 
     /// Generates the sctx for an activity. Returns a string for this particular activity. Might be called recursively. Hence, it is its own method.
     and private activityToSctx (activityNode : NodePayload) : string = 
-        //printfn "printing %s" activityNode.Label
         // Safety assert. Init with empty Payload.
         let complexNode = match(activityNode.IsComplex) with
                             | IsComplex a -> a

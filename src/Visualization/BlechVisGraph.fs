@@ -105,16 +105,12 @@ module Blech.Visualization.BlechVisGraph
                         SecondaryId : StateCount;
                         mutable WasVisualized : WasVisualized;
                         mutable WasHierarchyOptimized: WasHierarchyOptimized} with
-        // TODO rename these functions. Setting might be misleading, as a newly changed payload is copied.
-        member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         // TODO why are these two handled with mutable variables?
-        member x.IsCobegin = match x.IsComplex with IsCobegin cgbn -> true | _ -> false // DEBUG
-        member x.IsCobeginString = match x.IsComplex with IsCobegin cgbn -> "true" | _ -> "false" // DEBUG
-        member x.GetBody = match x.IsComplex with IsComplex cmplx -> cmplx.Body | _ -> failwith "error" // DEBUG
-        member x.HasBody = match x.IsComplex with IsComplex cmplx -> true | _ -> false // DEBUG
         member x.Visualize = x.WasVisualized <- Visualized
         member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
         member x.GetCobeginFromComplex = match x.IsComplex with IsCobegin cgbn -> Some cgbn | _ -> None
+        // TODO rename these functions. Setting might be misleading, as a newly changed payload is copied.
+        member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetComplex cmplx = {Label = x.Label; IsComplex = cmplx; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetLabel i = {Label = i; IsComplex = x.IsComplex; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
@@ -155,14 +151,17 @@ module Blech.Visualization.BlechVisGraph
 
     /// Sets the label option of the given GraphBuilder to None.
     let setLabelOptionToNone (before : GraphBuilder) : GraphBuilder = (frst5 before, scnd5 before, thrd5 before, frth5 before, None)
+
     /// Sets the label option of the given GraphBuilder to the given string.
     let attachToLabelOption (before : GraphBuilder) (label : string) : GraphBuilder =
         let newLabel = match ffth5 before with
                         | Some value -> Some (value + " " + label)
                         | None -> Some label
         (frst5 before, scnd5 before, thrd5 before, frth5 before, newLabel)
+
     /// Returns, if the label option of the given GraphBuilder has a value.
     let hasLabel (gb : GraphBuilder) : bool = (ffth5 gb).IsSome
+    
     /// Returns the value of the given GraphBuilder, if present. Returns empty string otherwise.
     let returnLabel (gb : GraphBuilder) : string = match hasLabel gb with true -> (ffth5 gb).Value | false -> ""
 
@@ -246,8 +245,6 @@ module Blech.Visualization.BlechVisGraph
         match nodesToCheck with
             | head :: tail -> let validnessCheck = fun (node:BlechNode) ->isValidNode validNodes node && not (isValidNode (List.map findIds accumulator) node)
                               let validSuccessors = List.filter validnessCheck (Seq.toList head.Successors)
-                              //printfn "s%i%i, length vs %i, length valid nodes %i, length acc %i" head.Payload.StateCount head.Payload.SecondaryId validSuccessors.Length validNodes.Length accumulator.Length
-                              //List.map (fun (s:BlechNode) -> printfn "s%s%s" (string s.Payload.StateCount) (string s.Payload.SecondaryId)) accumulator |> ignore
                               addAllSubsequentNodes (validSuccessors@tail) validNodes (head:: accumulator)
             | [] ->  accumulator
 
@@ -319,8 +316,7 @@ module Blech.Visualization.BlechVisGraph
         let target = edge.Target
         let sourceOutgoings = (Seq.toList source.Outgoing)
         let targetIncomings = (Seq.toList target.Incoming)
-        //printfn "source out %i" sourceOutgoings.Length
-        //printfn "target in %i" targetIncomings.Length
+
         let cond1 = sourceOutgoings.Length = targetIncomings.Length && sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2
         let edgesEqualToEdge = 
             (fun acc (e:BlechEdge) -> acc && matchNodes e.Source source && matchNodes e.Target target)
@@ -372,23 +368,3 @@ module Blech.Visualization.BlechVisGraph
     /// Finds a specific Blechnode in a given list of nodes, specified by the StateCount of the desired node and the secondary identifier.
     and findNodeByStateCount (desiredCount: int) (desiredSecondary : int) (graph: VisGraph) : BlechNode =
         graph.Nodes |> Seq.find (fun n -> n.Payload.StateCount = desiredCount && n.Payload.SecondaryId = desiredSecondary)
-
-   /////////////////// DEBUG ______________________
-    let rec listNodes (nodes : BlechNode list) =
-        match nodes with 
-            | head :: tail ->   printfn "node s%i, second %i - cbgn? %s - out %i - %b" head.Payload.StateCount head.Payload.SecondaryId head.Payload.IsCobeginString (Seq.toList head.Outgoing).Length (match head.Payload.WasVisualized with Visualized -> true | _ -> false)
-                                //if head.Payload.IsCobegin then printfn "cbgn bodies"; List.map (fun (b : VisGraph * Strength) -> printfn "one region"; listNodes (Seq.toList (fst b).Nodes); printfn "edges"; listEdges (Seq.toList (fst b).Edges); printfn "region end") head.Payload.GetCobegin.Content |> ignore
-                                listNodes tail
-            | [] -> printf ""
-
-    and listEdges (edges : BlechEdge list) =
-        match edges with 
-            | head :: tail ->   printfn "edge from s%i%i to s%i%i - source out %i - target in %i" head.Source.Payload.StateCount head.Source.Payload.SecondaryId head.Target.Payload.StateCount head.Target.Payload.SecondaryId (Seq.toList head.Source.Outgoing).Length (Seq.toList head.Target.Incoming).Length
-                                listEdges tail
-            | [] -> printf ""
-
-    and countNodes (nodes : BlechNode list) =
-        printfn "nodes length %i" nodes.Length
-
-    and countEdges (edges : BlechEdge list) =
-        printfn "edges length %i" edges.Length

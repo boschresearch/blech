@@ -31,7 +31,12 @@
         printfn "Optimizing.."
         let inlineActivites = cliContext.vis_breakHierOnActCalls && (if blechModule.entryPoint.IsSome then true else printfn "No entry point given, no inlining of activities possible."; false)
         let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name.ToString() else ""
-        let optimizedNodes : BlechNode list = optimize cliContext.vis_noCbgnPattern cliContext.vis_cbgnPatternWithHier inlineActivites entryPointName activityNodes
+        let optimizedNodes : BlechNode list = optimize cliContext.vis_useConnector 
+                                                       cliContext.vis_noCbgnPattern 
+                                                       cliContext.vis_cbgnPatternWithHier 
+                                                       inlineActivites 
+                                                       entryPointName 
+                                                       activityNodes
 
         // Generate sctx content.
         printfn "Generating .sctx.."

@@ -80,7 +80,7 @@ module Blech.Visualization.Translation
         (graph, Some newNode, stateCount, frth5 graphBuilder, None) 
 
     /// Add an if-else statement to the graph connecting to the previous node. According to the proposal in the thesis.
-    // StateCount: If-Node +1, Else-Node +2, Closing-Node +3, if-Body +4 , Else-Body If-Body+1, Return Else-Body
+    /// StateCount: If-Node +1, Else-Node +2, Closing-Node +3, if-Body +4 , Else-Body If-Body+1, Return Else-Body
     let rec private synthesizeIte (graphBuilder : GraphBuilder) (rhs : TypedRhs) (ifBlock : Stmt list) (elseBlock : Stmt list): GraphBuilder =
         // Extract.
         let graph = frst5 graphBuilder
@@ -153,7 +153,6 @@ module Blech.Visualization.Translation
     /// Synthesize repeat statement.
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body.
     and private synthesizeRepeatUntil (graphBuilder : GraphBuilder) (rhs : TypedRhs) (stmts : Stmt list) (isEndless : bool): GraphBuilder =
-        //printfn "yea %b" isEndless
         // Extract.
         let graph = frst5 graphBuilder
         let prevNode = (scnd5 graphBuilder).Value
@@ -207,7 +206,7 @@ module Blech.Visualization.Translation
     /// State Count: ComplexNode - statecount +1, Closing node: statecount + 2, Complex Body, statecount + 3, return count - complex body + 1.
     and private synthesizePreempt (graphBuilder : GraphBuilder) (preemtpion : Preemption) (rhs : TypedRhs) (stmts : Stmt list) : GraphBuilder =
         match preemtpion with 
-            | Suspend -> printfn "Caution suspend preemption not supported.";
+            | Suspend -> printfn "Caution - suspend preemption not supported.";
             | _ -> () // Ok, do nothing.
         
         // Extract.
@@ -222,7 +221,6 @@ module Blech.Visualization.Translation
                             | Reset -> AbortRepeat abortLabel
                             | Suspend -> failwith "Unreachable case."
 
-        // TODO closing node only if there is a final node.
         let bodyOfLoop = synthesizeComplexBody stmts (stateCount + 3) (frth5 graphBuilder) (ffth5 graphBuilder)
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
@@ -320,6 +318,7 @@ module Blech.Visualization.Translation
         (graph, Some caseClosingNode, scnd4 branches, thrd4 branches, frth4 branches)
 
     /// Synthesizes a run statement. A node that references an activity.
+    /// Complex node: state count + 1, case closing node: state count + 2
     and private activityCalled (graphBuilder : GraphBuilder) (actName : string) (typedRhsList : TypedRhs list) (typedLhsList: TypedLhs list): GraphBuilder = 
         // Extract.
         let graph = frst5 graphBuilder
@@ -356,14 +355,13 @@ module Blech.Visualization.Translation
         match stmt with 
             | Await (_, typedRhs) -> synthesizeAwait graphBuilder typedRhs
             | ITE (_, typedRhs, ifStmts, elseStmts)-> synthesizeIte graphBuilder typedRhs ifStmts elseStmts
-            //Unnötig, while is optimized in previous compiler steps. | WhileRepeat _ -> graphBuilder - synthesizeWhileRepeat graphBuilder typedRhs stmtList 
             | RepeatUntil (_, stmtList, typedRhs, bool) -> synthesizeRepeatUntil graphBuilder typedRhs stmtList bool
-            | Preempt (_, preemeption, typedRhs, _, stmtList) -> synthesizePreempt graphBuilder preemeption typedRhs stmtList // TODO Argument 4 - Moment needed?
+            | Preempt (_, preemeption, typedRhs, _, stmtList) -> synthesizePreempt graphBuilder preemeption typedRhs stmtList
             | StmtSequence (stmtList) -> synthesizeStatements stmtList graphBuilder
             | Cobegin (_, listOfStrengthAndStmts) -> synthesizeCobegin graphBuilder listOfStrengthAndStmts
             | ActivityCall (_, qName, _, typedRhsList, typedLhsList) -> activityCalled graphBuilder (qName.ToString()) typedRhsList typedLhsList
             | StatementPragma stmtPragma -> attachToLabelOption graphBuilder (stmtPragma.GetLabel)
-            | _ -> graphBuilder // ignore all other statements and just return the construct as it was before.
+            | _ -> graphBuilder // Ignore all other statements and just return the construct as it was before.
 
     /// Synthesis of a multiple statements.
     and private synthesizeStatements (stmts : Stmt list) (graphBuilder : GraphBuilder): GraphBuilder =

@@ -59,12 +59,12 @@ module Arguments =
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
-        | [<Unique; AltCommandLine("-VIS")>] Visualize
-        | [<Unique; AltCommandLine("-VIS_breakRunStmt")>] Vis_BreakRunStatement
-        | [<Unique; AltCommandLine("-VIS_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
-        | [<Unique; AltCommandLine("-VIS_NoCbgnPattern")>] Vis_NoCbgnPattern
-        | [<Unique; AltCommandLine("-VIS_noorigcode")>] Vis_NoIncludeOrigCode
-        | [<Unique; AltCommandLine("-VIS_useConnector")>] Vis_UseConnector
+        | [<Unique; AltCommandLine("-vis")>] Visualize
+        | [<Unique; AltCommandLine("-vis_breakRunStmt")>] Vis_BreakRunStatement
+        | [<Unique; AltCommandLine("-vis_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
+        | [<Unique; AltCommandLine("-vis_NoCbgnPattern")>] Vis_NoCbgnPattern
+        | [<Unique; AltCommandLine("-vis_noorigcode")>] Vis_NoIncludeOrigCode
+        | [<Unique; AltCommandLine("-vis_useConnector")>] Vis_UseConnector
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
