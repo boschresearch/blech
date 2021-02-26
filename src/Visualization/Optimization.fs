@@ -1,4 +1,6 @@
 module Blech.Visualization.Optimization
+    
+    open Blech.Common
     open Blech.Common.GenericGraph
     open Blech.Frontend.CommonTypes
     open Blech.Visualization.BlechVisGraph
@@ -24,6 +26,12 @@ module Blech.Visualization.Optimization
     /// Keeping track if a connector state is to be used if possible.
     let mutable useConnectorState = false
 
+    /// Keeping track if hierarchy is to broken.
+    let mutable noBreakHier = false
+
+    //// Keeping track if transient transitions are to be collapsed.
+    let mutable noCollTransient = false
+
     //______________________________CENTRAL FUNCTION_______________________________________________________
     // Checks an activity node, whether it has a final state. Returns the name of the activity and a boolean inidacting the presence of a final state.
     let private checkForNameAndFinalNode(activityNode : BlechNode) : string * bool = 
@@ -38,16 +46,16 @@ module Blech.Visualization.Optimization
     /// Optimizes the nodes and their contents according to the optimization steps introduced in the thesis.
     /// Optimizations steps: flatten hierarchy, collapsing transient states.
     /// 4 Bool flags, use conenction states on hierarchy collapse, no cobegin pattern, alternative cobegin pattern, inline activities.
-    let rec optimize (useConnState : bool)
-                     (noCbgnPattern: bool) 
-                     (cbgnPatternWithHier : bool)
+    let rec optimize (cliContext: Arguments.BlechCOptions)
                      (inlineActivities: bool)
                      (entryPointName : string)
                      (activityNodes: BlechNode list) : BlechNode list =
         inlineActs <- inlineActivities
-        noCobeginPattern <- noCbgnPattern
-        cbgnPatternWithHierarchy <- cbgnPatternWithHier
-        useConnectorState <- useConnState
+        noCobeginPattern <- cliContext.vis_noCbgnPattern
+        cbgnPatternWithHierarchy <- cliContext.vis_cbgnPatternWithHier
+        useConnectorState <- cliContext.vis_useConnector
+        noBreakHier <- cliContext.vis_disableBreakHier
+        noCollTransient <- cliContext.vis_disableCollapseTrans
         let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode activityNodes
         match inlineActivities with
             | true -> [optimizeSingleActivity activityNodes actNameAndFinalNodesPairs (List.find (fun (n:BlechNode) -> n.Payload.Label = entryPointName) activityNodes)]  
@@ -68,14 +76,20 @@ module Blech.Visualization.Optimization
         let actPayload = isComplex.IsActivity   
 
         //Flatten hierarchy inside activity.
-        let flattenedBody = flattenHierarchyIfComplex activityNodes (findInitNodeInHashSet body.Nodes) body
+        let flattenedBody = 
+            match noBreakHier with
+                | true -> body
+                | false -> flattenHierarchyIfComplex activityNodes (findInitNodeInHashSet body.Nodes) body
         
         // Collapse transient states.
         optimizedEdges <- []
-        let collapsenTransientStatesBody = collapseTransient finalNodeInfo flattenedBody
+        let collapsedTransientStatesBody = 
+            match noCollTransient with
+                | true -> flattenedBody
+                | false -> collapseTransient finalNodeInfo flattenedBody
 
         // Put changed body in new node and return it.
-        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = collapsenTransientStatesBody; IsActivity = actPayload; CaseClosingNode = {Opt = None}; IsAbort = Neither}
+        let newComplex : ComplexOrSimpleOrCobegin = IsComplex {Body = collapsedTransientStatesBody; IsActivity = actPayload; CaseClosingNode = {Opt = None}; IsAbort = Neither}
         BlechNode.Create{Label = actNodePayload.Label; 
                          IsComplex = newComplex; 
                          IsInitOrFinal = actNodePayload.IsInitOrFinal; 

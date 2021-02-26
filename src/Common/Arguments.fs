@@ -63,8 +63,10 @@ module Arguments =
         | [<Unique; AltCommandLine("-vis_breakRunStmt")>] Vis_BreakRunStatement
         | [<Unique; AltCommandLine("-vis_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
         | [<Unique; AltCommandLine("-vis_NoCbgnPattern")>] Vis_NoCbgnPattern
-        | [<Unique; AltCommandLine("-vis_noorigcode")>] Vis_NoIncludeOrigCode
+        | [<Unique; AltCommandLine("-vis_includeOrigcode")>] Vis_includeOrigCode
         | [<Unique; AltCommandLine("-vis_useConnector")>] Vis_UseConnector
+        | [<Unique; AltCommandLine("-vis_disableBreakHier")>] Vis_DisableBreakHier
+        | [<Unique; AltCommandLine("-vis_disableCollpaseTrans")>] Vis_DisableCollapseTrans
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
@@ -109,10 +111,14 @@ module Arguments =
                     "alternative improvement of cobegin pattern. Instead of breaking the hierarchy, a hierarchical node with weak abort transition is added."
                 | Vis_NoCbgnPattern _ ->
                     "turns off the cobegin pattern detection in the visualization."
-                | Vis_NoIncludeOrigCode _ ->
+                | Vis_includeOrigCode _ ->
                     "if this flag is set, the original BlechCode is not included in the resulting .sctx."
                 | Vis_UseConnector _ ->
                     "if used, tries to use a connector on if-elses if possible."
+                | Vis_DisableBreakHier _ ->
+                    "Disables the simplification step of breaking hierarchies. Not recommended."
+                | Vis_DisableCollapseTrans _ ->
+                    "Disables the simplification step of collapsing transient transitions. Not recommended."
 
     type WordSize = 
         | W8 | W16 | W32 | W64
@@ -150,8 +156,10 @@ module Arguments =
             vis_breakHierOnActCalls: bool
             vis_cbgnPatternWithHier : bool
             vis_noCbgnPattern : bool
-            vis_noOrigCode : bool
+            vis_includeOrigCode : bool
             vis_useConnector : bool
+            vis_disableBreakHier : bool 
+            vis_disableCollapseTrans : bool
         }
         static member Default = {
                 inputFile = ""
@@ -170,8 +178,10 @@ module Arguments =
                 vis_breakHierOnActCalls = false
                 vis_cbgnPatternWithHier = false
                 vis_noCbgnPattern = false
-                vis_noOrigCode = false
+                vis_includeOrigCode = false
                 vis_useConnector = false
+                vis_disableBreakHier = false
+                vis_disableCollapseTrans = false
             }
 
         
@@ -213,10 +223,14 @@ module Arguments =
             { opts with vis_cbgnPatternWithHier = true }
         | Vis_NoCbgnPattern _ ->
             { opts with vis_noCbgnPattern = true }
-        | Vis_NoIncludeOrigCode _ ->
-            { opts with vis_noOrigCode = true }
+        | Vis_includeOrigCode _ ->
+            { opts with vis_includeOrigCode = true }
         | Vis_UseConnector _ ->
             { opts with vis_useConnector = true }
+        | Vis_DisableBreakHier _ ->
+            { opts with vis_disableBreakHier = true }
+        | Vis_DisableCollapseTrans _ ->
+            { opts with vis_disableCollapseTrans = true }
 
     let private parseWordSize ws = 
         if ws = 8 || ws = 16 || ws = 32 || ws = 64 then
