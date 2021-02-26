@@ -23,7 +23,7 @@
         printfn "Found %i functions or activities." (blechModule.funacts.Length)
 
         // Synthesize the activities.
-        let activityNodes : BlechNode list = synthesize cliContext.vis_useConnector blechModule.funacts []
+        let activityNodes : BlechNode list = synthesize cliContext.vis_notUseConnector blechModule.funacts []
 
         printfn "Synthesized %i activities." (activityNodes.Length)
 

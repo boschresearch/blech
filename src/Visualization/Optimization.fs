@@ -53,7 +53,7 @@ module Blech.Visualization.Optimization
         inlineActs <- inlineActivities
         noCobeginPattern <- cliContext.vis_noCbgnPattern
         cbgnPatternWithHierarchy <- cliContext.vis_cbgnPatternWithHier
-        useConnectorState <- cliContext.vis_useConnector
+        useConnectorState <- not (cliContext.vis_notUseConnector)
         noBreakHier <- cliContext.vis_disableBreakHier
         noCollTransient <- cliContext.vis_disableCollapseTrans
         let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode activityNodes

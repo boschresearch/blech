@@ -64,7 +64,7 @@ module Arguments =
         | [<Unique; AltCommandLine("-vis_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
         | [<Unique; AltCommandLine("-vis_NoCbgnPattern")>] Vis_NoCbgnPattern
         | [<Unique; AltCommandLine("-vis_includeOrigcode")>] Vis_includeOrigCode
-        | [<Unique; AltCommandLine("-vis_useConnector")>] Vis_UseConnector
+        | [<Unique; AltCommandLine("-vis_notUseConnector")>] Vis_notUseConnector
         | [<Unique; AltCommandLine("-vis_disableBreakHier")>] Vis_DisableBreakHier
         | [<Unique; AltCommandLine("-vis_disableCollpaseTrans")>] Vis_DisableCollapseTrans
         | [<Unique>] Pass_Primitive_By_Address
@@ -113,7 +113,7 @@ module Arguments =
                     "turns off the cobegin pattern detection in the visualization."
                 | Vis_includeOrigCode _ ->
                     "if this flag is set, the original BlechCode is not included in the resulting .sctx."
-                | Vis_UseConnector _ ->
+                | Vis_notUseConnector _ ->
                     "if used, tries to use a connector on if-elses if possible."
                 | Vis_DisableBreakHier _ ->
                     "Disables the simplification step of breaking hierarchies. Not recommended."
@@ -157,7 +157,7 @@ module Arguments =
             vis_cbgnPatternWithHier : bool
             vis_noCbgnPattern : bool
             vis_includeOrigCode : bool
-            vis_useConnector : bool
+            vis_notUseConnector : bool
             vis_disableBreakHier : bool 
             vis_disableCollapseTrans : bool
         }
@@ -179,7 +179,7 @@ module Arguments =
                 vis_cbgnPatternWithHier = false
                 vis_noCbgnPattern = false
                 vis_includeOrigCode = false
-                vis_useConnector = false
+                vis_notUseConnector = false
                 vis_disableBreakHier = false
                 vis_disableCollapseTrans = false
             }
@@ -225,8 +225,8 @@ module Arguments =
             { opts with vis_noCbgnPattern = true }
         | Vis_includeOrigCode _ ->
             { opts with vis_includeOrigCode = true }
-        | Vis_UseConnector _ ->
-            { opts with vis_useConnector = true }
+        | Vis_notUseConnector _ ->
+            { opts with vis_notUseConnector = true }
         | Vis_DisableBreakHier _ ->
             { opts with vis_disableBreakHier = true }
         | Vis_DisableCollapseTrans _ ->

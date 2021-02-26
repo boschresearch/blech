@@ -453,10 +453,10 @@ module Blech.Visualization.Translation
             scnd4 bodyStatecountAndVars)
 
     /// Synthesis entry point. Pours the Blech code into a graph data modell (given by GenericGraph.fs).
-    let rec synthesize (useConnector : bool) (programs: SubProgramDecl list) (accumulator : BlechNode list): (BlechNode list) =
-        useConnectorState <- useConnector
+    let rec synthesize (notUseConnector : bool) (programs: SubProgramDecl list) (accumulator : BlechNode list): (BlechNode list) =
+        useConnectorState <- not (notUseConnector)
         match programs with 
             | head :: tail -> match head.isFunction with
-                                    | true -> synthesize useConnector tail accumulator // not visualising functions
-                                    | false -> synthesize useConnector tail (fst (synthesizeActivity head 0) :: accumulator)
+                                    | true -> synthesize useConnectorState tail accumulator // not visualising functions
+                                    | false -> synthesize useConnectorState tail (fst (synthesizeActivity head 0) :: accumulator)
             | [] -> accumulator
