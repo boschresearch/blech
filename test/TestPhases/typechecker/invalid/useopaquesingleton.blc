@@ -1,0 +1,7 @@
+import os "../imports/opaquesingleton"
+
+module exposes h
+
+singleton function h()
+    os.f()  // call to an opaque singleton
+end
