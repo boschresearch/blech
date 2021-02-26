@@ -66,7 +66,7 @@ module Arguments =
         | [<Unique; AltCommandLine("-vis_includeOrigcode")>] Vis_includeOrigCode
         | [<Unique; AltCommandLine("-vis_notUseConnector")>] Vis_notUseConnector
         | [<Unique; AltCommandLine("-vis_disableBreakHier")>] Vis_DisableBreakHier
-        | [<Unique; AltCommandLine("-vis_disableCollpapseTrans")>] Vis_DisableCollapseTrans
+        | [<Unique; AltCommandLine("-vis_disableCollapseTrans")>] Vis_DisableCollapseTrans
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
