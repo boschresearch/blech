@@ -117,12 +117,10 @@ module Blech.Visualization.BlechVisGraph
         member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetComplexToConnector = {Label = x.Label; IsComplex = IsConnector; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
-    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal with
-        member x.ToString = match x with IsAwait -> "IsAwait" | IsConditional -> "IsConditional" | IsImmediate -> "IsImmediate" | IsTerminal -> "IsTerminal" | IsAbort -> "IsAbort" | IsConditionalTerminal -> "IsConditionalTerminal"
+    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
 
     /// Payload for an edge.
     and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with
@@ -189,7 +187,7 @@ module Blech.Visualization.BlechVisGraph
     let private isValidTarget (validNodeIdList : (int*int) list) = fun (e : BlechEdge) -> List.contains (e.Target.Payload.StateCount, e.Target.Payload.SecondaryId) validNodeIdList
 
     /// Checks a list of edges, whether or not there is an await edges among them.
-    let rec private checkEdgesForAwait (edges: BlechEdge list) : bool =
+    let rec checkEdgesForAwait (edges: BlechEdge list) : bool =
         match edges with
             | head :: tail -> match head.Payload.Property with
                                 | IsAwait -> true
@@ -328,21 +326,22 @@ module Blech.Visualization.BlechVisGraph
         // We want exactly two edges between source and target. One abort and one immediate, others are unknown and unconsidered cases.
         (fst count) > 1 && countSingle = 1 && countMult > 0
 
-    /// Checks whether the source and target of the edge have only edges between then regarding outgoing and incoming. All the edges are immediates for true.
-    let onlyImmediatesTerminalsOrConditionals (edge : BlechEdge) : bool = 
+    /// Checks whether the source and target of the edge have only immediate edges between them.
+    /// Either focuses on source (focusOnSource = true) or target (false).
+    let onlyImmediatesTerminalsOrConditionals (edge : BlechEdge) (focusOnSource): bool = 
         let source = edge.Source
         let target = edge.Target
         let sourceOutgoings = (Seq.toList source.Outgoing)
         let targetIncomings = (Seq.toList target.Incoming)
 
-        let cond1 = sourceOutgoings.Length = targetIncomings.Length && sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2
+        let cond1 = sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2
         let edgesEqualToEdge = 
             (fun acc (e:BlechEdge) -> acc && matchNodes e.Source source && matchNodes e.Target target)
         let edgeTerminalOrImmediate =
             (fun acc (e:BlechEdge) -> 
-                acc && (e.Payload.Property = IsImmediate || e.Payload.Property = IsTerminal || e.Payload.Property = IsConditional || e.Payload.Property = IsConditionalTerminal))
-        let cond2 = List.fold edgesEqualToEdge true sourceOutgoings && List.fold edgesEqualToEdge true targetIncomings
-        let cond3 = List.fold edgeTerminalOrImmediate true sourceOutgoings && List.fold edgeTerminalOrImmediate true targetIncomings
+                acc && (e.Payload.Property = IsImmediate || e.Payload.Property = IsTerminal || e.Payload.Property = IsConditional || e.Payload.Property = IsConditionalTerminal))         
+        let cond2 = if focusOnSource then List.fold edgesEqualToEdge true sourceOutgoings else List.fold edgesEqualToEdge true targetIncomings 
+        let cond3 = if focusOnSource then List.fold edgeTerminalOrImmediate true sourceOutgoings else List.fold edgeTerminalOrImmediate true targetIncomings
 
         cond1 && cond2 && cond3
 
@@ -353,6 +352,12 @@ module Blech.Visualization.BlechVisGraph
         match current.Payload.IsComplex with
             | IsActivityCall call -> let pair = List.find (fun e -> call.origName = fst e) pairs
                                      not (snd pair)
+            | _ -> false
+
+    /// Checks if a node is a cobegin and if such has a final node in a region.
+    let nodeIsCbgnAndHasNoFinalNode (current: BlechNode) : bool =
+        match current.Payload.IsComplex with
+            | IsCobegin cbgn -> not (isThereFinalNodeInCobegin cbgn.Content)
             | _ -> false
 
     //____________________________________Remove element in list.

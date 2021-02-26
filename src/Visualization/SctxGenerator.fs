@@ -25,7 +25,7 @@ module Blech.Visualization.SctxGenerator
     let private lnbreak : string = "\n"
 
     /// Concats string with commata to be used in a fold.
-    let commaConcatination = fun elm acc -> acc + "," + elm
+    let commaConcatination = fun acc elm -> acc + "," + elm
 
     //______________________________SCTX GENERATION_______________________________________________________ 
     /// Converts a single param to a string.
@@ -125,7 +125,6 @@ module Blech.Visualization.SctxGenerator
         
         // Apply both functions.
         let filteredAndCleaned = List.map (workOnConditions >> replacePrev) (List.append input output)
-
         let arguments = match filteredAndCleaned.Length with 
                         | 0 -> ""
                         | 1 -> "(" + List.head filteredAndCleaned + ")"
