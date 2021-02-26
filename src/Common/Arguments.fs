@@ -112,9 +112,9 @@ module Arguments =
                 | Vis_NoCbgnPattern _ ->
                     "turns off the cobegin pattern detection in the visualization."
                 | Vis_includeOrigCode _ ->
-                    "if this flag is set, the original BlechCode is not included in the resulting .sctx."
+                    "if this flag is set, the original BlechCode is included as a comment in the resulting .sctx."
                 | Vis_notUseConnector _ ->
-                    "if used, tries to use a connector on if-elses if possible."
+                    "if used, connector states are not used."
                 | Vis_DisableBreakHier _ ->
                     "Disables the simplification step of breaking hierarchies. Not recommended."
                 | Vis_DisableCollapseTrans _ ->
