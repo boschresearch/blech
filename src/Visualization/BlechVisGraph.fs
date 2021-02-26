@@ -226,7 +226,7 @@ module Blech.Visualization.BlechVisGraph
         let validSuccessors = List.filter (validAndNotYetChecked) (Seq.toList entryPoint.Successors)
 
         let listAndChecked = match isAwaitEdge || isActivityCallOrOtherComplex with
-                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint], Some entryPoint, checkedNodes)
+                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint] [entryPoint], Some entryPoint, checkedNodes)
                                 // Found first await, just add all subsequent nodes to the list.
                                 | false -> checkNodesForAwaitsInPath validSuccessors validNodes checkedNodes
         let distinctAndFilteredListOfValidNodes = if (scnd3 listAndChecked).IsSome then
@@ -252,10 +252,10 @@ module Blech.Visualization.BlechVisGraph
     /// Valid nodes are ones that were in the subgraph and have not been checked yet.
     /// Nodes to check do not need to be filtered, as they have already been checked beforehand.
     /// The accumulator accumulates the subsequent nodes.
-    and private addAllSubsequentNodes (nodesToCheck : BlechNode list) (validNodes: (int*int) list) (accumulator : BlechNode list): BlechNode list = 
+    and private addAllSubsequentNodes (nodesToCheck : BlechNode list) (validNodes: (int*int) list) (checkedNodes : BlechNode list) (accumulator : BlechNode list): BlechNode list = 
         match nodesToCheck with
             | head :: tail -> // Determine valid successors to check.
-                              let isNodeValid = fun (n:BlechNode) -> isValidNode validNodes n && not (isValidNode (List.map findIds accumulator) n)
+                              let isNodeValid = fun (n:BlechNode) -> isValidNode validNodes n && not (isValidNode (List.map findIds checkedNodes) n)
                               let validSuccessors = List.filter isNodeValid (Seq.toList head.Successors)
 
                               // Current node is added to accumulator if it is stateful: is complex or has an outgoing await transition.
@@ -264,7 +264,7 @@ module Blech.Visualization.BlechVisGraph
                                     | true -> (head :: accumulator)
                                     | false -> accumulator
 
-                              addAllSubsequentNodes (validSuccessors@tail) validNodes updatedAcc
+                              addAllSubsequentNodes (validSuccessors@tail) validNodes (head :: checkedNodes) updatedAcc
             | [] ->  accumulator
 
     //____________________________________Find specific nodes/edges in hashset/list.

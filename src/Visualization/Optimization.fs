@@ -106,7 +106,7 @@ module Blech.Visualization.Optimization
             (fun (e : BlechNode) -> match e.Payload.WasHierarchyOptimized with HierarchyOptimized -> false | NotHierarchyOptimized -> true)
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
         let unoptedSuccesssors = List.filter filterForUnoptimized successorsWithoutCurrent
-        
+
         // Is current node complex? 
         let currentGraph = match currentNode.Payload.IsComplex with
                             | IsSimple | IsConnector -> currentNode.Payload.SetHierarchyOptimized; graph
@@ -190,7 +190,7 @@ module Blech.Visualization.Optimization
         let innerInitSecondaryId = replacedInit.Payload.SecondaryId
         let innerNodesIds = List.map findIds (Seq.toList innerGraph.Nodes)
         let finalNodePresent = isThereFinalNodeInHashSet innerGraph.Nodes
-        
+
         let initGraphPair = 
             match finalNodePresent with 
                 | true ->
@@ -215,7 +215,6 @@ module Blech.Visualization.Optimization
                     (updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph, newInit)
         let updatedGraph = fst initGraphPair
         let newInit = snd initGraphPair
-
         // Add abort transitions according to the concept from the inner graph to either the former initial state of the inner graph or the case closing state, depending on the abort.
         // TODO there has got to be some possible optimization here.
         match complex.IsAbort with
@@ -411,6 +410,7 @@ module Blech.Visualization.Optimization
             addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) graph updatedCurr
             graph
         else
+           currentNode.Payload.SetHierarchyOptimized
            graph
 
     //______________________________COLLAPSE IMMEDIATE TRANSITIONS_______________________________________________________ 
