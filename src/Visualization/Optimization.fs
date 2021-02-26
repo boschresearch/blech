@@ -68,6 +68,9 @@ module Blech.Visualization.Optimization
     /// Optimizes a single activity node.
     and private optimizeSingleActivity (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (activityNode: BlechNode) : BlechNode =
         let actNodePayload = activityNode.Payload
+        printfn "----------------------------"
+        printfn "act %s" actNodePayload.Label
+        printfn "----------------------------"
         // Extract body.
         let isComplex = match actNodePayload.IsComplex with 
                         | IsComplex a -> a
@@ -443,12 +446,14 @@ module Blech.Visualization.Optimization
                                         | _ -> current
 
         let bothChecked = match counterpart.Payload.IsInitOrFinal.Final with
-                            | IsFinal -> // If current is an activity call that has a final node, reassign final status. Without final node, do not reassign.
-                                         let reassignFinal = nodeIsActivityCallAndHasFinalNode current finalNodeInfo 
-                                         if reassignFinal then
-                                            graph.ReplacePayloadInByAndReturn initChecked (initChecked.Payload.SetFinalStatusOn)
-                                         else
+                            | IsFinal -> // If current is an activity call that does not have a final node, do not reassign final status.
+                                         let notReassignFinal = nodeIsActivityCallAndHasNoFinalNode current finalNodeInfo
+                                         if notReassignFinal then
+                                            printfn "not setting final"
                                             initChecked
+                                         else
+                                            printfn "setting final"
+                                            graph.ReplacePayloadInByAndReturn initChecked (initChecked.Payload.SetFinalStatusOn)
                             | _ -> initChecked
         bothChecked
 
@@ -467,6 +472,7 @@ module Blech.Visualization.Optimization
         let sourceOutgoings = (Seq.toList source.Outgoing)
         let target = edge.Target
         let targetIncomings = (Seq.toList target.Incoming)
+        printfn "edge s%i%i to s%i%i - %s" source.Payload.StateCount source.Payload.SecondaryId target.Payload.StateCount target.Payload.SecondaryId edge.Payload.Property.ToString
 
         // Mark the current edge as optimized.
         optimizedEdges <- convertToIdTuple edge :: optimizedEdges
@@ -479,7 +485,8 @@ module Blech.Visualization.Optimization
                             onlyImmediatesTerminalsOrConditionals edge &&
                             (not isSourceWeakAbort)
         // Special case, abort/await and termination transition. Termination transition origins in an activity call a complex node or a cobegin without final node.
-        // Only delete edge, if the current edge is the terminal edge.
+        // Only delete edge, if the current edge is the terminal edge. 
+        // Caution: If source has a conditional edge to a different edge.
         let specialCase2 =  (nodeIsActivityCallAndHasNoFinalNode source finalNodeInfo ||
                              (match source.Payload.IsComplex with
                                     | IsComplex cmplx ->not (isThereFinalNodeInHashSet cmplx.Body.Nodes)                    
@@ -498,6 +505,7 @@ module Blech.Visualization.Optimization
                             multSpecifiedAndSingleOtherEdge IsImmediate IsAbort edge targetIncomings
 
         if(specialCase1) then
+            printfn "1"
             if isSimpleOrConnector source then
                 handleSourceDeletion finalNodeInfo source target graph
             else if isSimpleOrConnector target then
@@ -505,9 +513,12 @@ module Blech.Visualization.Optimization
             else    
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
         elif(specialCase2) then
+            printfn "2"
+            printfn "remove edge !"
             graph.RemoveEdge edge
             callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
         elif(specialCase3) then
+            printfn "3"
             if isSimpleOrConnector source && (Seq.toList source.Outgoing).Length = 2 then
                 handleSourceDeletion finalNodeInfo source target graph
             else if isSimpleOrConnector target && (Seq.toList target.Incoming).Length = 2 then
@@ -520,6 +531,7 @@ module Blech.Visualization.Optimization
              edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal ||
              edge.Payload.Property = IsTerminal && not (edge.Payload.Label.Equals "") ||
              edge.Payload.Property = IsImmediate && not (edge.Payload.Label.Equals "")) then
+                printfn "4"
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
         else 
             // Can a) source or b) target be deleted (no label, no complexity)? If so, delete possible node. If not, immediate transition is not deleted.
@@ -527,6 +539,7 @@ module Blech.Visualization.Optimization
             // If target is deleted, change the source of outgoing nodes of the target to the source. If deleted source is final state, change source to final state.
             // If a final or initial state is removed, that status needs to be reassigned.
             // Target can not be deleted if it has multiple incomings, source can not be deleted if it has multiple outgoings.
+            printfn "5"
             if isSimpleOrConnector source && (Seq.toList source.Outgoing).Length = 1 then
                 handleSourceDeletion finalNodeInfo source target graph
             else if isSimpleOrConnector target && (Seq.toList target.Incoming).Length = 1 then
@@ -543,7 +556,7 @@ module Blech.Visualization.Optimization
                                     | "" -> statusChangedTarget
                                     | _ -> graph.ReplacePayloadInByAndReturn statusChangedTarget (addPrefixToNodeLabel source.Payload.Label statusChangedTarget) 
         let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) labelChangedTarget Target graph
-        
+        printfn "remove source s%i%i" source.Payload.StateCount source.Payload.SecondaryId
         graph.RemoveNode source
         callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList updatedTarget.Outgoing) graph
 
@@ -554,7 +567,7 @@ module Blech.Visualization.Optimization
                                     | "" -> statusChangedSource
                                     | _ -> graph.ReplacePayloadInByAndReturn statusChangedSource (addPostdixToNodeLabel target.Payload.Label statusChangedSource)
         let updatedSource = updateEdgesCollapseImmediate (Seq.toList target.Outgoing) labelChangedSource Source graph
-
+        printfn "remove target s%i%i" target.Payload.StateCount target.Payload.SecondaryId
         graph.RemoveNode target
         callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList updatedSource.Outgoing) graph
 

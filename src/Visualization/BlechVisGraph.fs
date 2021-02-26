@@ -121,7 +121,8 @@ module Blech.Visualization.BlechVisGraph
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
-    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
+    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal with
+        member x.ToString = match x with IsAwait -> "IsAwait" | IsConditional -> "IsConditional" | IsImmediate -> "IsImmediate" | IsTerminal -> "IsTerminal" | IsAbort -> "IsAbort" | IsConditionalTerminal -> "IsConditionalTerminal"
 
     /// Payload for an edge.
     and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with
@@ -290,7 +291,6 @@ module Blech.Visualization.BlechVisGraph
                 match option.IsSome with true -> Some (option.Value.Payload.StateCount, option.Value.Payload.SecondaryId) | _ -> None)
 
     /// Determines if apart of this edge, other edges between source and target are present.
-    /// One edge should be an abort edge, the others of the specified property.
     let multSpecifiedAndSingleOtherEdge (propertyMult : EdgeProperty) (propertySingle : EdgeProperty) (edge : BlechEdge) (edges : BlechEdge list) : bool =
         if (not (List.contains edge edges)) then failwith "Expected given edge to be part of given list. Was not the case."
 
@@ -328,16 +328,7 @@ module Blech.Visualization.BlechVisGraph
 
         cond1 && cond2 && cond3
 
-    /// Finds for a node that is calling an activity, whether said activity contains a final node.
-    /// This is given by the list of pairs, pairing the acitvity names with the presence indicator.
-    /// If node is activity call, and called activity has final node, return true, else false.
-    let nodeIsActivityCallAndHasFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
-        match current.Payload.IsComplex with
-            | IsActivityCall call -> let pair = List.find (fun e -> call.origName = fst e) pairs
-                                     snd pair
-            | _ -> false
-
-    /// Finds for a node that is calling an activity, whether said activity contains a final node.
+    /// Finds for a node that is calling an activity, whether said activity contains no final node.
     /// This is given by the list of pairs, pairing the acitvity names with the presence indicator.
     /// If node is activity call, and called activity has NO final node, return true, else false.
     let nodeIsActivityCallAndHasNoFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
