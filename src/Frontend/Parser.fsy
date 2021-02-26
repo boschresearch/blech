@@ -42,13 +42,10 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> ATAT
 
 /* ---- modules ---- */
-%token <range> MODULE SIGNATURE IMPORT EXPOSES
+%token <range> MODULE SIGNATURE IMPORT EXPOSES INTERNAL
 
 /* ---- name space ---- */
 %token <range> EXTENSION
-
-/* ---- paths ---- */
-/* %token <ModulePath> FROMPATH */
 
 /* ---- predefined types ---- */
 %token <range> BOOL
@@ -1336,6 +1333,10 @@ Extension
    ----- Modules in Blech implementation files .blc
    ---------------------------------------------------------------------------- */
 
+OptInternal
+    :                                           { None }
+    | INTERNAL                                  { Some $1 }
+
 ModuleHead 
     : MODULE Exposing                           { // TODO: Check module import from .blc
                                                   let rng = moduleHeadRange $1 $2
@@ -1362,7 +1363,7 @@ Import
                                                     localName = $2
                                                     modulePath = $3
                                                     exposing = $4 } } 
-    
+                                                    
     | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
                                                   { Import.range = unionRanges $1 $3
                                                     localName = Name.Empty

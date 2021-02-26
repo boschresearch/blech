@@ -37,6 +37,7 @@ let tokenTagToString token =
     | TOKEN_IMPORT -> "import"
     | TOKEN_EXPOSES -> "exposes"
     | TOKEN_SIGNATURE -> "signature"
+    | TOKEN_INTERNAL -> "internal"
     (* ---- name spaces ---- *)
     | TOKEN_EXTENSION -> "extension"
     (* --- doc comments --- *)
