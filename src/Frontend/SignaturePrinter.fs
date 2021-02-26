@@ -839,17 +839,19 @@ module SignaturePrinter =
 
 
         let psImportExposes requiredImports (exposing: AST.Exposing) =
-            let requiredExposedName name =
-                if Map.containsKey name.id requiredImports then dpName name
-                else empty
+            let requiredExposedNames =
+                List.filter (fun name -> Map.containsKey name.id requiredImports) exposing.names
 
-            txt "exposes" <.>
-            (List.map requiredExposedName exposing.names
-             |> dpRemoveEmpty
-             |> dpCommaSeparated)
-            |> align
-            |> group
-
+            if List.isEmpty requiredExposedNames then
+                empty
+            else
+                txt "exposes" <.> 
+                ( List.map dpName requiredExposedNames
+                  |> dpRemoveEmpty
+                  |> dpCommaSeparated )
+                |> align
+                |> group
+            
         let psImport requiredImports (imp: AST.Import) = 
             let requiredExposedNames = 
                 Option.map (psImportExposes requiredImports) imp.exposing
@@ -858,8 +860,7 @@ module SignaturePrinter =
                 txt "import" 
                 <+> dpModuleName imp.localName
                 <+> dquotes imp.modulePath.path.ToDoc
-                |> dpOptSpacePostfix <| requiredExposedNames
-                
+                |> dpOptSpacePostfix <| requiredExposedNames   
             else empty
 
         let imports = 

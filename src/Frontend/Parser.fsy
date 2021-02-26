@@ -156,8 +156,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
    ---------------------------------------------------------------------------- */
 
 Name
-    : ID                            { { Name.id = fst $1
-                                        range = snd $1 } }
+    : ID                            { ParserContext.mkName (fst $1) (snd $1) }
 
 NamePath
     : Name                          { ([$1], []) }
@@ -653,7 +652,7 @@ PrimaryExpr
     | Literal                                   { Const $1 }
 
     /* --- the error variable --- */            /* Todo: Add the error variable correctly to AST */
-  | ERROR                                       { Var { DynamicAccessPath.path = [ Name {Name.id = "error"; range = $1} ]
+    | ERROR                                     { Var { DynamicAccessPath.path = [ Name <| ParserContext.mkName "error" $1 ]
                                                         timepoint = Current
                                                         subexpr = ref []
                                                         qname = ref None } }
@@ -930,10 +929,10 @@ Stmt
 
     /* --- preemptions --- */
     | WHEN ConditionSeq Preemption Block END  
-                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
+                                                { makePreemption (unionRanges $1 $5) $3 $2 $4 }        
     
     | WHEN ConditionSeq Preemption Block THEN Block END   /* todo: add optional then block to AST, fjg 27.9.19 */
-                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
+                                                { makePreemption (unionRanges $1 $5) $3 $2 $4 }        
 
     | WHEN error END                            { logParserError $1;
                                                   Stmt.Nothing }        
@@ -1366,14 +1365,13 @@ Import
                                                     
     | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
                                                   { Import.range = unionRanges $1 $3
-                                                    localName = Name.Empty
+                                                    localName = ParserContext.mkEmptyName
                                                     modulePath = ModulePath.Empty
                                                     exposing = None } }
 
 NameOrWildcard
     : Name                                      { $1 }
-    | WILDCARD                                  { { Name.id = ParserContext.mkAuxIdentifierFromWildCard <| fst $1
-                                                    range = snd $1 } }
+    | WILDCARD                                  { ParserContext.mkNameFromWildcard (fst $1) (snd $1) }
 
 NameList
     : Name                                      { [$1] }

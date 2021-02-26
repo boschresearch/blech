@@ -94,10 +94,12 @@ module ExportInference =
 
     type ExportContext = 
         private {
+            // inputs
             logger : Diagnostics.Logger
             environment : SymbolTable.Environment
             singletons : SingletonInference.Singletons
 
+            // results 
             abstractTypes : AbstractTypes    
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod

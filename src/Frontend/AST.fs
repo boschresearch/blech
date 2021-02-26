@@ -970,18 +970,51 @@ let mkFromPointedNameAndOptArrayAccess temporalQualifier (staticPath: StaticName
     let nameList = List.map (fun x -> Access.Name x) staticPath.path
     nameList @ nameOrExList |> mkDynamicAccessPath temporalQualifier
 
-let mkPreemption range preemption conditionLst body =
-    match preemption with
-    | Abort ->
-        Stmt.Preempt(range, Abort, conditionLst, Before, body)
-    | Suspend -> // remove this case?
-        Stmt.Preempt(range, Suspend, conditionLst, Before, body)
-    | Reset -> // rewrite into abort in a loop
-        let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range}
+//let mkPreemption range preemption conditionLst body =
+//    match preemption with
+//    | Abort ->
+//        Stmt.Preempt(range, Abort, conditionLst, Before, body)
+//    | Suspend -> // remove this case?
+//        Stmt.Preempt(range, Suspend, conditionLst, Before, body)
+//    | Reset -> // rewrite into abort in a loop
+//        let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range; index = -1}
+//        let varDecl =
+//            LocalVar { 
+//                VarDecl.range = range
+//                name = name
+//                permission = ReadWrite(Mutable.Var, range = range)
+//                isReference = false
+//                isExtern = false
+//                datatype = Some (BoolType range)
+//                initialiser = None
+//                annotations = []
+//            }
+//        let dynPath = 
+//            { path = [Name(name)]
+//              timepoint = Current
+//              subexpr = ref []
+//              qname = ref None }
+//        let lhs = Loc dynPath
+//        let assignNotYetFinished = Stmt.Assign(range, lhs, Const (Bool(false, range)))
+//        let assignFinished = Stmt.Assign(range, lhs, Const (Bool(true, range)))
+//        let untilCond = Var dynPath
+//        let loop =
+//            Stmt.RepeatUntil (range, 
+//                              [Stmt.Preempt(range, 
+//                                            Abort, 
+//                                            conditionLst, 
+//                                            Before, 
+//                                            assignNotYetFinished :: body @ [assignFinished] )], 
+//                              [Cond untilCond])
+//        SubScope(range, [varDecl; loop]) // sub-scoping to match exptected return type Stmt
+
+
+let rewriteResetToAbortInLoop (abortFinished : Name) range conditionLst body =
+        //let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range; index = -1}
         let varDecl =
             LocalVar { 
                 VarDecl.range = range
-                name = name
+                name = abortFinished
                 permission = ReadWrite(Mutable.Var, range = range)
                 isReference = false
                 isExtern = false
@@ -990,7 +1023,7 @@ let mkPreemption range preemption conditionLst body =
                 annotations = []
             }
         let dynPath = 
-            { path = [Name(name)]
+            { path = [ Name (abortFinished) ]
               timepoint = Current
               subexpr = ref []
               qname = ref None }

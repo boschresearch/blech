@@ -27,7 +27,6 @@ module SyntaxErrors =
     open Blech.Common.Range
     
     type ParserError = 
-        | InconsistentModuleName of moduleName: AST.StaticNamedPath // TODO: dead code? fg 26.01.21
         | ImportPathMalformed of string * Range.range
         | NotUnitOne of number: string * range: Range.range
         | UnexpectedEOF of range: Range.range * expectedTokens: string list * start: Range.range
@@ -36,12 +35,7 @@ module SyntaxErrors =
                 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
-                match err with
-                | InconsistentModuleName moduleName ->
-                    { range = moduleName.Range 
-                      message = sprintf "module name '%s'is not consistent with the filesystem."
-                                <| moduleName.dottedPathToString } 
-                
+                match err with        
                 | ImportPathMalformed (msg, pos) ->
                     { range = pos
                       message = "malformed import path." }
@@ -65,11 +59,6 @@ module SyntaxErrors =
                 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
-                | InconsistentModuleName moduleName ->
-                    [ { range = moduleName.Range 
-                        message = "should map to file and/or directory."
-                        isPrimary = true } ]
-
                 | UnexpectedToken (_token, range, _, start) ->
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
@@ -84,9 +73,6 @@ module SyntaxErrors =
 
             member err.NoteInformation = 
                 match err with
-                | InconsistentModuleName _ ->
-                    [ "check file name and source path." ]
-                
                 | UnexpectedEOF (_, expectedTokens, _) ->
                     List.fold 
                     <| fun acc -> fun tok -> sprintf "expected '%s'," tok :: acc
@@ -257,35 +243,26 @@ module ParserUtils =
             expectedTokens: string list
         }
     
-    //type PackageHead = 
-    //    { 
-    //        currentModuleName: string
-    //        isSignature: bool 
-    //        range: Range.range 
-    //    }
-    //    static member Default = 
-    //        { currentModuleName = ""; isSignature = false; range = Range.rangeStartup }
-        
-        
+    
     type ParserContext = 
         {
             mutable currentModuleName: TranslationUnitPath
             mutable currentLoadWhat: CompilationUnit.ImplOrIface
-            //mutable packageHead: PackageHead
             mutable errorTokenAccepted: bool
             mutable errorInfo : ParserErrorInfo option
             mutable diagnosticsLogger: Diagnostics.Logger 
-            mutable auxIdIndex : int
+            mutable auxWildcardIndex : int  // unique for every compiled file
+            mutable nameIndex : int // unique for every recursive compilation
         }
 
         static member Default = {
                 currentModuleName = TranslationUnitPath.Empty
                 currentLoadWhat = CompilationUnit.Blc
-                // packageHead = PackageHead.Default 
                 errorTokenAccepted = false
                 errorInfo = None
                 diagnosticsLogger = Diagnostics.Logger.create()
-                auxIdIndex = 0
+                auxWildcardIndex = 0
+                nameIndex = 0
             }
     
             
@@ -299,11 +276,11 @@ module ParserUtils =
             parserContext <- 
                 { currentModuleName = moduleName
                   currentLoadWhat = loadWhat
-                  // packageHead = { PackageHead.Default with currentModuleName = moduleName } 
                   errorTokenAccepted = false
                   errorInfo = None
                   diagnosticsLogger = diagnosticsLogger 
-                  auxIdIndex = 0 }
+                  auxWildcardIndex = 0  // reinitialised for every compiled file
+                  nameIndex = parserContext.nameIndex}  // incremented for every name accross all file during recursive compilation
     
 
         let getDiagnosticsLogger () = parserContext.diagnosticsLogger, Diagnostics.Phase.Parsing
@@ -337,11 +314,43 @@ module ParserUtils =
         
         /// This never clashes with a Blech identifier
         /// Starts with '<wildcard>0' for every parsed file during a recursive compilation
-        let mkAuxIdentifierFromWildCard wildcard =
-            let cur = parserContext.auxIdIndex
-            parserContext.auxIdIndex <- cur + 1
-            // printfn "Aux index: %d" cur
-            sprintf "%s%s" wildcard (string cur) 
+        //let mkAuxIdentifierFromWildCard wildcard =
+        //    let cur = parserContext.auxWildcardIndex
+        //    parserContext.auxWildcardIndex <- cur + 1
+        //    // printfn "Aux index: %d" cur
+        //    sprintf "%s%s" wildcard (string cur) 
+
+        
+        let private newNameIndex () = 
+            parserContext.nameIndex <- parserContext.nameIndex + 1
+            parserContext.nameIndex
+
+        /// Creates a name with a unique index across all files during a recursive compilation
+        let mkName (id : Identifier) (range : Range.range) : Name = 
+            { id = id 
+              range = range 
+              index = newNameIndex () }
+
+        let mkEmptyName = 
+            { id = "" 
+              range = Range.range0 
+              index = -1 }
+
+        let private newWildcardIndex () = 
+            parserContext.auxWildcardIndex <- parserContext.auxWildcardIndex + 1
+            parserContext.auxWildcardIndex
+            
+
+        /// This never clashes with a Blech name
+        /// Starts with '<wildcard>1' for every parsed file during a recursive compilation
+        let mkNameFromWildcard (wildcard : Identifier) (range: Range.range) : Name =
+            let wcidx = newWildcardIndex()
+            { id = sprintf "%s%s" wildcard <| string wcidx 
+              range = range 
+              index = newNameIndex () }  
+
+        
+
 
         
     /// strips '_' from number, e.g. 100_000 -> 100000
@@ -537,7 +546,20 @@ module ParserUtils =
         AST.Annotation(keyValue, range)
 
     let lineDocToAnnotation = docToAnnotation Attribute.Key.linedoc
+    
     let blockDocToAnnotation = docToAnnotation Attribute.Key.blockdoc
+
+
+    let makePreemption range preemption conditions body = 
+        match preemption with
+        | CommonTypes.Abort ->
+            AST.Preempt (range, CommonTypes.Abort, conditions, CommonTypes.Before, body)
+        | CommonTypes.Suspend ->
+            AST.Preempt (range, CommonTypes.Suspend, conditions, CommonTypes.Before, body)
+        | CommonTypes.Reset -> 
+            let abortFinished = ParserContext.mkName (CommonTypes.mkPrefixIndexedNameFrom "abortFinished") range 
+            AST.rewriteResetToAbortInLoop abortFinished range conditions body
+
 
 
 module LexerUtils =
@@ -766,4 +788,5 @@ module LexerUtils =
     let unknownTokenInString lexbuf =
         unknownToken lexbuf  // TODO: separate error message
         tokenBuilder.Append (getLexemeAndRange lexbuf)
+
 
