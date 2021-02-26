@@ -184,14 +184,34 @@ module Blech.Visualization.BlechVisGraph
 
     //____________________ Find first await on every path in a graph.____________________________
     /// Function that determines whether a node (identified by its state count) is valid, because it is part of a list of valid ids.
-    let isValidNode (validNodeIdList : (int*int) list) = fun (n : BlechNode) -> List.contains (n.Payload.StateCount, n.Payload.SecondaryId) validNodeIdList
+    let private isValidNode (validNodeIdList : (int*int) list) = fun (n : BlechNode) -> List.contains (n.Payload.StateCount, n.Payload.SecondaryId) validNodeIdList
     /// Function that determines whether an edge (identified by state count of source and edge) is valid, because it is part of a list of valid ids.
-    let isValidTarget (validNodeIdList : (int*int) list) = fun (e : BlechEdge) -> List.contains (e.Target.Payload.StateCount, e.Target.Payload.SecondaryId) validNodeIdList
+    let private isValidTarget (validNodeIdList : (int*int) list) = fun (e : BlechEdge) -> List.contains (e.Target.Payload.StateCount, e.Target.Payload.SecondaryId) validNodeIdList
+
+    /// Checks a list of edges, whether or not there is an await edges among them.
+    let rec private checkEdgesForAwait (edges: BlechEdge list) : bool =
+        match edges with
+            | head :: tail -> match head.Payload.Property with
+                                | IsAwait -> true
+                                | _ -> checkEdgesForAwait tail
+            | [] -> false
+
+    /// Checks if a node is stateful (not a simple state).
+    let private isActivityCallOrOtherComplex = 
+        fun (n:BlechNode) -> 
+            match n.Payload.IsComplex with
+               | IsSimple | IsConnector _ -> false
+               | _ -> true
+
+    /// Checks if a node has an outgoing await edge to a valid target.
+    let private isAwaitNode = fun (validNodes : (StateCount * StateCount) list) (n:BlechNode) -> 
+        checkEdgesForAwait (List.filter (isValidTarget validNodes) (Seq.toList n.Outgoing))
 
     /// Starts the search of the first await on a path, given by a node starting the path. 
     /// The nodes that are allowed to be in the path are given by the list of state count integers.
     /// Successors of the nodes and its successors might be invalid and should not be considered, hence the list.
-    /// Returns all valid nodes in the path that follow the first found await statement. Second element is the actual first awaiting node. Third element is the already checked nodes so far.
+    /// Returns all valid nodes in the path that follow the first found await statement. Returned nodes have to be stateful.
+    /// Second element is the actual first awaiting node. Third element is the already checked nodes so far.
     /// If there is an await edge going out of the current node, we reached the first await.
     /// If the current node is an activity (call), it must contain an await, and is thus the first await statement.
     /// Hierarchies are broken from the inside out. Hence, if a complex is met, it is expected to have an await in it.
@@ -199,10 +219,8 @@ module Blech.Visualization.BlechVisGraph
                                           (validNodes : (StateCount * StateCount) list)
                                           (checkedNodes : (StateCount * StateCount) list)
                                           : BlechNode list * Option<BlechNode> *  (StateCount * StateCount) list =
-        let isActivityCallOrOtherComplex = match entryPoint.Payload.IsComplex with
-                                            | IsSimple _ -> false
-                                            | _ -> true
-        let isAwaitEdge = checkEdgesForAwait (List.filter (isValidTarget validNodes) (Seq.toList entryPoint.Outgoing))
+        let isActivityCallOrOtherComplex = isActivityCallOrOtherComplex entryPoint
+        let isAwaitEdge = isAwaitNode validNodes entryPoint
 
         let validAndNotYetChecked = fun n -> isValidNode validNodes n && not (isValidNode checkedNodes n)
         let validSuccessors = List.filter (validAndNotYetChecked) (Seq.toList entryPoint.Successors)
@@ -230,23 +248,23 @@ module Blech.Visualization.BlechVisGraph
                               ((frst3 headChecked) @ (frst3 tailChecked), firstAwait, thrd3 tailChecked)
             | [] -> ([], None ,checkedNodes)
 
-    /// Checks a list of edges, whether or not there is an await edges among them.
-    and private checkEdgesForAwait (edges: BlechEdge list) : bool =
-        match edges with
-            | head :: tail -> match head.Payload.Property with
-                                | IsAwait -> true
-                                | _ -> checkEdgesForAwait tail
-            | [] -> false
-
-    /// Constructs a list of the given nodes and all subsequent nodes (that are valid).
+    /// Constructs a list of the given nodes and all subsequent nodes (that are valid) and stateful.
     /// Valid nodes are ones that were in the subgraph and have not been checked yet.
     /// Nodes to check do not need to be filtered, as they have already been checked beforehand.
     /// The accumulator accumulates the subsequent nodes.
     and private addAllSubsequentNodes (nodesToCheck : BlechNode list) (validNodes: (int*int) list) (accumulator : BlechNode list): BlechNode list = 
         match nodesToCheck with
-            | head :: tail -> let validnessCheck = fun (node:BlechNode) ->isValidNode validNodes node && not (isValidNode (List.map findIds accumulator) node)
-                              let validSuccessors = List.filter validnessCheck (Seq.toList head.Successors)
-                              addAllSubsequentNodes (validSuccessors@tail) validNodes (head:: accumulator)
+            | head :: tail -> // Determine valid successors to check.
+                              let isNodeValid = fun (n:BlechNode) -> isValidNode validNodes n && not (isValidNode (List.map findIds accumulator) n)
+                              let validSuccessors = List.filter isNodeValid (Seq.toList head.Successors)
+
+                              // Current node is added to accumulator if it is stateful: is complex or has an outgoing await transition.
+                              let updatedAcc = 
+                                match isAwaitNode validNodes head || isActivityCallOrOtherComplex head with
+                                    | true -> (head :: accumulator)
+                                    | false -> accumulator
+
+                              addAllSubsequentNodes (validSuccessors@tail) validNodes updatedAcc
             | [] ->  accumulator
 
     //____________________________________Find specific nodes/edges in hashset/list.
