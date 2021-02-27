@@ -209,14 +209,14 @@ module Blech.Visualization.BlechVisGraph
     /// The nodes that are allowed to be in the path are given by the list of state count integers.
     /// Successors of the nodes and its successors might be invalid and should not be considered, hence the list.
     /// Returns all valid nodes in the path that follow the first found await statement. Returned nodes have to be stateful.
-    /// Second element is the actual first awaiting node. Third element is the already checked nodes so far.
+    /// Second element is the actual first awaiting node of every path. Third element is the already checked nodes so far.
     /// If there is an await edge going out of the current node, we reached the first await.
     /// If the current node is an activity (call), it must contain an await, and is thus the first await statement.
     /// Hierarchies are broken from the inside out. Hence, if a complex is met, it is expected to have an await in it.
     let rec findFirstAwaitNodeOnEveryPath (entryPoint : BlechNode) 
                                           (validNodes : (StateCount * StateCount) list)
                                           (checkedNodes : (StateCount * StateCount) list)
-                                          : BlechNode list * Option<BlechNode> *  (StateCount * StateCount) list =
+                                          : BlechNode list * (Option<BlechNode> list) * (StateCount * StateCount) list =
         let isActivityCallOrOtherComplex = isActivityCallOrOtherComplex entryPoint
         let isAwaitEdge = isAwaitNode validNodes entryPoint
 
@@ -224,13 +224,19 @@ module Blech.Visualization.BlechVisGraph
         let validSuccessors = List.filter (validAndNotYetChecked) (Seq.toList entryPoint.Successors)
 
         let listAndChecked = match isAwaitEdge || isActivityCallOrOtherComplex with
-                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint] [entryPoint], Some entryPoint, checkedNodes)
+                                | true -> (addAllSubsequentNodes validSuccessors validNodes [entryPoint] [entryPoint], [Some entryPoint], checkedNodes)
                                 // Found first await, just add all subsequent nodes to the list.
                                 | false -> checkNodesForAwaitsInPath validSuccessors validNodes checkedNodes
-        let distinctAndFilteredListOfValidNodes = if (scnd3 listAndChecked).IsSome then
-                                                        List.filter (fun n -> not (matchNodes n (scnd3 listAndChecked).Value)) (List.distinct (frst3 listAndChecked))
-                                                   else 
-                                                        (List.distinct (frst3 listAndChecked))
+                                
+        let distinctAndFilteredListOfValidNodes = if List.exists (fun (e:Option<_>) -> e.IsSome) (scnd3 listAndChecked) then
+                                                    let distinctFollowUpList = List.distinct (frst3 listAndChecked)
+                                                    let firstAwaits = (scnd3 listAndChecked)
+                                                    // Filter the distinct follow up list from the nodes that are first await nodes.
+                                                    // An element stays in the list if the element is NOT found in the list of first awaits.
+                                                    let filterList = fun followUpNode -> not (List.exists (fun (firstAwait:Option<_>) -> if firstAwait.IsSome then matchNodes followUpNode firstAwait.Value else false) firstAwaits)
+                                                    List.filter filterList distinctFollowUpList
+                                                  else 
+                                                    (List.distinct (frst3 listAndChecked))
         (distinctAndFilteredListOfValidNodes, scnd3 listAndChecked, thrd3 listAndChecked) 
     
     /// Recursively checks single nodes in a list of nodes for their first await.
@@ -238,13 +244,12 @@ module Blech.Visualization.BlechVisGraph
     and private checkNodesForAwaitsInPath (nodes : BlechNode list) 
                                           (validNodes : (int*int) list)
                                           (checkedNodes : (StateCount * StateCount) list)
-                                          : BlechNode list * Option<BlechNode> *  (StateCount * StateCount) list =
+                                          : BlechNode list * (Option<BlechNode> list) * (StateCount * StateCount) list =
         match nodes with
             | head :: tail -> let headChecked = findFirstAwaitNodeOnEveryPath head validNodes (findIds head::checkedNodes)
                               let tailChecked = checkNodesForAwaitsInPath tail validNodes (thrd3 headChecked)
-                              let firstAwait = if (scnd3 headChecked).IsSome then scnd3 headChecked elif (scnd3 tailChecked).IsSome then scnd3 tailChecked else None
-                              ((frst3 headChecked) @ (frst3 tailChecked), firstAwait, thrd3 tailChecked)
-            | [] -> ([], None ,checkedNodes)
+                              (frst3 headChecked @ frst3 tailChecked, scnd3 headChecked @ scnd3 tailChecked , thrd3 tailChecked)
+            | [] -> ([], [None] ,checkedNodes)
 
     /// Constructs a list of the given nodes and all subsequent nodes (that are valid) and stateful.
     /// Valid nodes are ones that were in the subgraph and have not been checked yet.
@@ -255,7 +260,6 @@ module Blech.Visualization.BlechVisGraph
             | head :: tail -> // Determine valid successors to check.
                               let isNodeValid = fun (n:BlechNode) -> isValidNode validNodes n && not (isValidNode (List.map findIds checkedNodes) n)
                               let validSuccessors = List.filter isNodeValid (Seq.toList head.Successors)
-
                               // Current node is added to accumulator if it is stateful: is complex or has an outgoing await transition.
                               let updatedAcc = 
                                 match isAwaitNode validNodes head || isActivityCallOrOtherComplex head with

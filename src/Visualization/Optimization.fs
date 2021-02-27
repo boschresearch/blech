@@ -218,21 +218,28 @@ module Blech.Visualization.Optimization
                     (updateEdgesFlattenHierarchy (Seq.toList currentNode.Incoming) newInit Target joinedGraph, newInit)
         let updatedGraph = fst initGraphPair
         let newInit = snd initGraphPair
+
         // Add abort transitions according to the concept from the inner graph to either the former initial state of the inner graph or the case closing state, depending on the abort.
         // TODO there has got to be some possible optimization here.
         match complex.IsAbort with
             | AbortWhen label -> let caseClosingNode = findNodeByStateCount (complex.CaseClosingNode.StateCount) (complex.CaseClosingNode.SecondaryId) updatedGraph
                                  let firstAwaitAndSubsequentConstruct = findFirstAwaitNodeOnEveryPath newInit innerNodesIds [findIds newInit]
                                  let subsequentNodes = frst3 firstAwaitAndSubsequentConstruct
-                                 match scnd3 firstAwaitAndSubsequentConstruct with 
-                                        | Some a -> addEdgeToNode caseClosingNode IsAbort label updatedGraph a
-                                        | None -> () // Do nothing.       
+                                 let addEdgeToEveryFirstAwait = 
+                                    fun (o:Option<BlechNode>) -> 
+                                        match o with 
+                                            | Some a -> addEdgeToNode caseClosingNode IsAbort label updatedGraph a
+                                            | None -> () // Do nothing.   
+                                 List.map addEdgeToEveryFirstAwait (scnd3 firstAwaitAndSubsequentConstruct) |> ignore
                                  List.map (addEdgeToNode caseClosingNode IsAbort label updatedGraph) subsequentNodes |> ignore
             | AbortRepeat label -> let firstAwaitAndSubsequentConstruct = findFirstAwaitNodeOnEveryPath newInit innerNodesIds [findIds newInit]
                                    let subsequentNodes = frst3 firstAwaitAndSubsequentConstruct
-                                   match scnd3 firstAwaitAndSubsequentConstruct with 
-                                        | Some a -> addEdgeToNode newInit IsAbort label updatedGraph a
-                                        | None -> () // Do nothing. 
+                                   let addEdgeToEveryFirstAwait = 
+                                        fun (o:Option<BlechNode>) -> 
+                                            match o with 
+                                                | Some a -> addEdgeToNode newInit IsAbort label updatedGraph a  
+                                                | None -> () // Do nothing.   
+                                   List.map addEdgeToEveryFirstAwait (scnd3 firstAwaitAndSubsequentConstruct) |> ignore
                                    List.map (addEdgeToNode newInit IsAbort label updatedGraph) subsequentNodes |> ignore
             | WeakAbort | Neither -> () // Do nothing.
 
@@ -374,20 +381,24 @@ module Blech.Visualization.Optimization
             let caseClosingNode = findNodeByStateCount (complex.CaseClosingNode.StateCount) (complex.CaseClosingNode.SecondaryId) updatedGraph
             let findFirstAwaitConstruct = (findFirstAwaitNodeOnEveryPath newInit innerNodesIds [findIds newInit])
             let allAwaitAndSubsequentNodesInSupgraph = frst3 findFirstAwaitConstruct
+            
             // First await.
-            match scnd3 findFirstAwaitConstruct with | Some a -> addEdgeToNode caseClosingNode IsAwait (fst (snd orderedPairOfRegions)) updatedGraph a
-                                                     | None -> () // Do nothing.                  
-            //All nodes after first await.
+            let addEdgeToEveryFirstAwait = 
+                                        fun (o:Option<BlechNode>) -> 
+                                            match o with 
+                                                | Some a -> addEdgeToNode caseClosingNode IsAwait (fst (snd orderedPairOfRegions)) updatedGraph a  
+                                                | None -> () // Do nothing.   
+            List.map addEdgeToEveryFirstAwait (scnd3 findFirstAwaitConstruct) |> ignore               
+            //All nodes after first await. Add edge manually for very last node, if present.
             List.map (addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) updatedGraph) allAwaitAndSubsequentNodesInSupgraph |> ignore
-
-            // Add edge from last to case closing, depending on strength of await-region. Edge is a conditionsless edge. ( Is termination edge if source is complex.)
-            if (snd (snd orderedPairOfRegions)) = Weak && finalNodePresent then
+            if (finalNodePresent) then 
                 let innerStateIds = innerFinalStateCountAndSecondaryIfPresent.Value
-                addImmedOrTerminEdgeToNode 
-                    caseClosingNode
-                    ""
-                    updatedGraph 
-                    (findNodeByStateCount (fst innerStateIds) (snd innerStateIds) updatedGraph)
+                let innerFinalNode = findNodeByStateCount (fst innerStateIds) (snd innerStateIds) updatedGraph
+                addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) updatedGraph innerFinalNode
+
+                // Add edge from last to case closing, depending on strength of await-region. Edge is a conditionsless edge. ( Is termination edge if source is complex.)
+                if (snd (snd orderedPairOfRegions)) = Weak then
+                    addImmedOrTerminEdgeToNode caseClosingNode "" updatedGraph innerFinalNode
 
             let nodeToRemove = List.find (matchNodes currentNode) (Seq.toList updatedGraph.Nodes)
             updatedGraph.RemoveNode nodeToRemove
