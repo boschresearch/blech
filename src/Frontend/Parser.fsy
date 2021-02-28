@@ -42,7 +42,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> ATAT
 
 /* ---- modules ---- */
-%token <range> MODULE SIGNATURE IMPORT EXPOSES INTERNAL
+%token <range> MODULE SIGNATURE IMPORT EXPOSES INSIDE OUTSIDE
 
 /* ---- name space ---- */
 %token <range> EXTENSION
@@ -1332,18 +1332,22 @@ Extension
    ----- Modules in Blech implementation files .blc
    ---------------------------------------------------------------------------- */
 
-OptInternal
+OptInside
     :                                           { None }
-    | INTERNAL                                  { Some $1 }
+    | INSIDE                                    { Some $1 }
+
+OptOutside
+    :                                           { None }
+    | OUTSIDE                                   { Some $1 }
 
 ModuleHead 
-    : MODULE Exposing                           { // TODO: Check module import from .blc
-                                                  let rng = moduleHeadRange $1 $2
+    : OptOutside MODULE Exposing                { // TODO: Add OptOutside, fjg. 28.02.21
+                                                  let rng = moduleHeadRange $2 $3
                                                   { ModuleSpec.range = rng
                                                     isSignature = false
-                                                    exposing = $2 } }
+                                                    exposing = $3 } }
 
-    | MODULE ErrorBeforeEOL EOL                 { logParserError $1
+    | OptOutside MODULE ErrorBeforeEOL EOL      { logParserError $2
                                                   ModuleSpec.Nothing }
 
 Exposing
@@ -1357,14 +1361,14 @@ ModulePath
     : STRING                                    { parseImportPath (snd $1) (fst $1) } /* range string */
 
 Import
-    : IMPORT NameOrWildcard ModulePath Exposing 
-                                                { { Import.range = importRange $1 $3.Range $4
-                                                    localName = $2
-                                                    modulePath = $3
-                                                    exposing = $4 } } 
+    : OptInside IMPORT NameOrWildcard ModulePath Exposing // TODO: Add OptInside, fjg. 28.02.21
+                                                { { Import.range = importRange $2 $4.Range $5
+                                                    localName = $3
+                                                    modulePath = $4
+                                                    exposing = $5 } } 
                                                     
-    | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
-                                                  { Import.range = unionRanges $1 $3
+    | OptInside IMPORT ErrorBeforeEOL EOL       { logParserError $2
+                                                  { Import.range = unionRanges $2 $4
                                                     localName = ParserContext.mkEmptyName
                                                     modulePath = ModulePath.Empty
                                                     exposing = None } }
@@ -1409,7 +1413,7 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : SIGNATURE                                 { { ModuleSpec.range = $1
+    : OptOutside SIGNATURE                      { { ModuleSpec.range = $2   // TODO: Add OptOutside, fjg. 28.02.21
                                                     isSignature = true
                                                     exposing = Option.None } }
 

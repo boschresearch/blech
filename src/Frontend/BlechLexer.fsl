@@ -149,9 +149,10 @@ rule Token = parse
     | "module"              { MODULE (getRange lexbuf) }
     | "import"              { IMPORT (getRange lexbuf) }
     | "exposes"             { EXPOSES (getRange lexbuf) }
-    | "internal"            { INTERNAL (getRange lexbuf) }
     | "signature"           { SIGNATURE (getRange lexbuf) }
-
+    | "inside"              { INSIDE (getRange lexbuf) }
+    | "outside"             { OUTSIDE (getRange lexbuf) }
+    
     (* --- extensions --- *)
     
     | "extension"           { EXTENSION (getRange lexbuf) }
