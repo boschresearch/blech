@@ -342,7 +342,6 @@ module ExportInference =
 
     let private exportNameIfOpaqueSingletonSignature (ctx: ExportContext) (name: Name) =
         if ctx.HasOpaqueSingletonSignature name then
-            // printfn "Export opaque singleton: %s" name.id
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
         else    
@@ -385,6 +384,7 @@ module ExportInference =
             |> requireImportIfImported <| firstName
         | Semitransparent ->
             exportNameIfAbstractType ctx firstName
+            |> exportNameIfOpaqueSingletonSignature <| firstName
             |> requireImportIfImported <| firstName
         | _ ->
             ctx
