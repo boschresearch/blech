@@ -30,6 +30,15 @@ module SingletonInference =
     type private SingletonUse = Name list 
     type Singletons = Map<Name, SingletonUse list> // declaration name |-> singleton calls (multiple occurences of the same singleton possible)
 
+    type AbstractType =
+           | Array
+           | Struct
+           | Simple
+      
+    type AbstractTypes = Map<Name, AbstractType>
+
+
+
     /// Given a name (of a procedure [prototype]), find all 
     /// names of singletons in the call tree of that given procedure
     /// (including itself) if there are any
@@ -54,11 +63,13 @@ module SingletonInference =
             calledSingletons : SingletonUse list // accumulator for singleton calls, in reverse order of appearance
             usesExternVar : bool                 // flags declaration of local extern var
             singletons : Singletons
+            abstractTypes : AbstractTypes
         }
 
         static member Initialise (logger: Diagnostics.Logger) 
                                  (env: SymbolTable.Environment) 
-                                 (importedSingletons: Singletons list) = 
+                                 (importedSingletons: Singletons list) 
+                                 (importedAbstractTypes: AbstractTypes list) = 
             {   
                 logger = logger
                 environment = env
@@ -66,6 +77,7 @@ module SingletonInference =
                 calledSingletons = List.Empty
                 usesExternVar = false
                 singletons = Map.collectWithOverride importedSingletons // might contain duplicates
+                abstractTypes = Map.collectWithOverride importedAbstractTypes // might contain duplicates
             }
 
         // unused
@@ -92,6 +104,15 @@ module SingletonInference =
                 singletons = Map.add declName this.calledSingletons this.singletons 
                 calledSingletons = List.empty 
                 usesExternVar = false }
+
+        member this.AddAbstractType abstractType declName = 
+            assert Env.isDeclName this.environment declName
+            { this with
+                abstractTypes = Map.add declName abstractType this.abstractTypes }
+
+        member this.TryGetAbstractType name =
+            let declName = Env.getDeclName this.environment name
+            this.abstractTypes.TryFind declName
 
 
     type SingletonError = 
@@ -162,6 +183,9 @@ module SingletonInference =
     let private inferDynamicNamePath =
         addSingletonCall
         
+
+    let private addToAbstractTypes abstractType (ctx : SingletonContext) (name : Name) : SingletonContext = 
+        ctx.AddAbstractType abstractType name
     
     // TODO: Singletons should not be usable as function references, i.e. they become 2nd class subprograms
     let private inferNameInCurrentScope ctx (sharing: Name) = 
@@ -450,23 +474,51 @@ module SingletonInference =
     //        ctx
 
     let rec private inferEnumType ctx (etd: AST.EnumTypeDecl) =
+        addToAbstractTypes Simple ctx etd.name // TODO: Simple is preliminary as long as enums are not implemented in the typechecker, fjg. 02.03.21
         //Option.fold inferDataType ctx etd.rawtype    
         //|> List.fold inferTagDecl <| etd.tags  // raw values must be checked
-        List.fold inferExtensionMember ctx etd.members
+        |> List.fold inferExtensionMember <| etd.members
         
 
     and private inferStructType ctx (std: AST.StructTypeDecl) =
+        addToAbstractTypes Struct ctx std.name
         // List.fold inferFieldDecl ctx std.fields  // infer fields because of initialisers  
-        List.fold inferExtensionMember ctx std.members
+        |> List.fold inferExtensionMember <| std.members
         
 
-    and private inferOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
-        List.fold inferExtensionMember ctx ntd.members
+    and private inferOpaqueType ctx (otd: AST.OpaqueTypeDecl) =
+        let abstractType = 
+            match (List.last otd.annotations).Attribute with // the abstract type annotation is always generated as the last annotation
+            | AST.Key ( key = AST.Ident(text = Attribute.opaqueArray) ) -> Array
+            | AST.Key ( key = AST.Ident(text = Attribute.opaqueStruct) ) -> Struct
+            | AST.Key ( key = AST.Ident(text = Attribute.simpleType) ) -> Simple
+            | _ ->
+                failwith "This cannot happen because the attribute is generated for the signature"
+    
+        addToAbstractTypes abstractType ctx otd.name
+        |> List.fold inferExtensionMember <| otd.members
         
 
     and private inferTypeAlias (ctx: SingletonContext) (tad: AST.TypeAliasDecl) =
-        // inferDataType ctx tad.aliasfor
-        List.fold inferExtensionMember ctx tad.members  // TODO: change this to something like inferMethod
+        let inferalias = 
+            match tad.aliasfor with
+            | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> 
+                addToAbstractTypes Simple ctx tad.name
+            | ArrayType _ ->
+                addToAbstractTypes Array ctx tad.name                
+            | TypeName snp ->
+                match ctx.TryGetAbstractType (List.last snp.names) with
+                | None -> 
+                    printfn "------> Abstract Types: %A" ctx.abstractTypes
+                    Dummy (tad.aliasfor.Range, sprintf "not a type name: %s" <| string snp)
+                    |> logSingletonError ctx
+                | Some at ->
+                    addToAbstractTypes at ctx tad.name
+            | _ -> 
+                addToAbstractTypes Struct ctx tad.name // TODO: slice, signal treated as struct here as long as they are not type checked, fjg. 02.03.21
+
+        inferalias 
+        |> List.fold inferExtensionMember <| tad.members  // TODO: change this to something like infermethod
         
 
     // TODO: Rethink extension subprogram members
@@ -546,14 +598,15 @@ module SingletonInference =
     
     let inferSingletons logger (env: SymbolTable.Environment) 
                                (importedSingletons : Singletons list)
+                               (importedAbstractTypes : AbstractTypes list)
                                (cu: AST.CompilationUnit) =
         let ctx =
-            SingletonContext.Initialise logger env importedSingletons
+            SingletonContext.Initialise logger env importedSingletons importedAbstractTypes
             |> inferCompilationUnit <| cu
         // just for debugging
         // printfn "Singletons: \n %A" ctx.singletons
         if Diagnostics.Logger.hasErrors ctx.logger then
             Error ctx.logger
         else
-            Ok ctx.singletons
+            Ok (ctx.singletons, ctx.abstractTypes)
 

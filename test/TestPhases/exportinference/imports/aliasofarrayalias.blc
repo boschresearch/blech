@@ -3,6 +3,7 @@ module exposes init
 
 typealias A = [4]int32// this is allowed
 
+/// mal sehen
 typealias AT = A
 
 function init() returns AT

@@ -631,7 +631,7 @@ module SignaturePrinter =
 
 
     /// Prints the blech source code for a signature file from namechecking lookuptable and an AST
-    let printSignature (exportContext : ExportInference.ExportContext) (ast : AST.CompilationUnit) =
+    let printSignature (ctx : ExportInference.ExportContext) (ast : AST.CompilationUnit) =
         assert ast.IsModule // only modules have signatures
 
         // ----------------------------------------------
@@ -644,9 +644,9 @@ module SignaturePrinter =
                 bpOptAnnotations annotations
             let abstractKind = 
                 match abstractType with
-                | ExportInference.Simple -> Attribute.SimpleType.ToDoc
-                | ExportInference.Array -> Attribute.OpaqueArray.ToDoc
-                | ExportInference.Struct -> Attribute.OpaqueStruct.ToDoc
+                | SingletonInference.Simple -> Attribute.SimpleType.ToDoc
+                | SingletonInference.Array -> Attribute.OpaqueArray.ToDoc
+                | SingletonInference.Struct -> Attribute.OpaqueStruct.ToDoc
             let optRef =
                 if isRef then Some <| txt "ref" else None
                 
@@ -762,13 +762,13 @@ module SignaturePrinter =
             |> bpEnumTypeDecl <|st
 
 
-        let psMember (ctx : ExportInference.ExportContext) (mbr : AST.Member) =
+        let psMember (mbr : AST.Member) =
             
             match mbr with
             | AST.Member.EnumType et -> 
                 if ctx.IsExported et.name then 
-                    if ctx.IsAbstractType et.name then
-                        let absType = Option.get <| ctx.TryGetAbstractType et.name
+                    if ctx.IsOpaqueType et.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType et.name
                         psAbstractType et.annotations absType et.isReference et.name 
                     else
                         psEnumTypeDecl et 
@@ -776,8 +776,8 @@ module SignaturePrinter =
             
             | AST.Member.StructType st ->
                 if ctx.IsExported st.name then 
-                    if ctx.IsAbstractType st.name then
-                        let absType = Option.get <| ctx.TryGetAbstractType st.name
+                    if ctx.IsOpaqueType st.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType st.name
                         psAbstractType st.annotations absType st.isReference st.name 
                     else 
                         psStructTypeDecl st
@@ -785,8 +785,8 @@ module SignaturePrinter =
 
             | AST.Member.TypeAlias ta ->
                 if ctx.IsExported ta.name then 
-                    if ctx.IsAbstractType ta.name then
-                        let absType = Option.get <| ctx.TryGetAbstractType ta.name
+                    if ctx.IsOpaqueType ta.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType ta.name
                         psAbstractType ta.annotations absType ta.isReference ta.name 
                     else 
                         bpTypeAliasDecl ta
@@ -838,9 +838,9 @@ module SignaturePrinter =
                 failwith "this should have been removed"
 
 
-        let psImportExposes requiredImports (exposing: AST.Exposing) =
+        let psImportExposes (exposing: AST.Exposing) =
             let requiredExposedNames =
-                List.filter (fun name -> Map.containsKey name.id requiredImports) exposing.names
+                List.filter ctx.IsRequiredImport exposing.names
 
             if List.isEmpty requiredExposedNames then
                 empty
@@ -852,11 +852,11 @@ module SignaturePrinter =
                 |> align
                 |> group
             
-        let psImport requiredImports (imp: AST.Import) = 
+        let psImport (imp: AST.Import) = 
             let requiredExposedNames = 
-                Option.map (psImportExposes requiredImports) imp.exposing
+                Option.map psImportExposes imp.exposing
 
-            if Map.containsKey imp.localName.id requiredImports then
+            if ctx.IsRequiredImport imp.localName  then
                 txt "import" 
                 <+> dpModuleName imp.localName
                 <+> dquotes imp.modulePath.path.ToDoc
@@ -864,14 +864,14 @@ module SignaturePrinter =
             else empty
 
         let imports = 
-            List.map (psImport exportContext.GetRequiredImports) ast.imports
+            List.map psImport ast.imports
             |> dpRemoveEmpty
             |> dpToplevelClose
 
         let spec = txt "signature"
 
         let members = 
-            List.map (psMember exportContext) ast.members
+            List.map psMember ast.members
             |> dpRemoveEmpty
             |> dpToplevel
         

@@ -77,9 +77,9 @@ module Main =
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
 
 
-    let runSingletonInference logger fileName importedSingletons ast symboltableEnv = 
+    let runSingletonInference logger fileName importedSingletons importedAbstractTypes ast symboltableEnv = 
         Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
-        SingletonInference.inferSingletons logger symboltableEnv importedSingletons ast 
+        SingletonInference.inferSingletons logger symboltableEnv importedSingletons importedAbstractTypes ast 
                     
 
     let runExportInference logger symboltableEnv fileName singletons ast = 
@@ -260,11 +260,12 @@ module Main =
                         imports.GetExportScopes
                         ast
 
-                let! singletons = 
+                let! singletons, abstractTypes = 
                     runSingletonInference 
                         logger 
                         fileName 
                         imports.GetSingletons 
+                        imports.GetAbstractTypes
                         ast
                         symTable
 
@@ -273,7 +274,8 @@ module Main =
                         logger 
                         symTable 
                         fileName 
-                        singletons 
+                        singletons
+                        abstractTypes
                         ast
 
                 let! lut, blechModule = 
@@ -296,7 +298,7 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons abstractTypes lut blechModule
             }
 
                 
@@ -351,11 +353,12 @@ module Main =
                         imports.GetExportScopes
                         ast
 
-                let! singletons = 
+                let! singletons, abstractTypes = 
                     runSingletonInference 
                         logger 
                         fileName 
-                        imports.GetSingletons 
+                        imports.GetSingletons
+                        imports.GetAbstractTypes
                         ast
                         symTable
 
@@ -374,7 +377,7 @@ module Main =
                             singletons
 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons abstractTypes lut blechModule
             }
 
 

@@ -27,7 +27,7 @@ open Blech.Common
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 type private Environment = SymbolTable.Environment
 type private Singletons = SingletonInference.Singletons
-type private ExportContext = ExportInference.ExportContext
+type private AbstractTypes = SingletonInference.AbstractTypes
 
 type ModuleInfo = 
     {
@@ -35,6 +35,7 @@ type ModuleInfo =
         astIsProgram: bool
         nameCheck: Environment
         singletons : Singletons
+        abstractTypes : AbstractTypes
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
     }
@@ -42,7 +43,8 @@ type ModuleInfo =
     static member Make imports 
                        isProgram 
                        symbolTable 
-                       singletons 
+                       singletons
+                       abstractTypes
                        typecheckContext 
                        blechModule =
         { 
@@ -50,6 +52,7 @@ type ModuleInfo =
             astIsProgram = isProgram
             nameCheck = symbolTable
             singletons = singletons
+            abstractTypes = abstractTypes
             typeCheck = typecheckContext
             typedModule = blechModule
         }
@@ -150,6 +153,10 @@ type Imports =
     member this.GetSingletons : SingletonInference.Singletons list = 
         this.GetImports
         |> List.map (fun import -> import.singletons)
+
+    member this.GetAbstractTypes : SingletonInference.AbstractTypes list = 
+        this.GetImports
+        |> List.map (fun import -> import.abstractTypes)
 
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports

@@ -72,6 +72,7 @@ let runSingletonInference implOrIface moduleName fileName =
             logger 
             fileName 
             imports.GetSingletons 
+            imports.GetAbstractTypes
             ast
             symTable
     | Error logger ->

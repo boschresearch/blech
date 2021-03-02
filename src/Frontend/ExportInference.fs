@@ -71,12 +71,8 @@ module ExportInference =
             { this with visibility = this.visibility.Weaken }
     
     
-    type AbstractType =
-        | Array
-        | Struct
-        | Simple
    
-    type AbstractTypes = Map<Name, AbstractType>
+    type OpaqueTypes = Map<Name, SingletonInference.AbstractType>
     
     type RequiredImports = Map<Identifier, Identifier option>
 
@@ -98,29 +94,32 @@ module ExportInference =
             logger : Diagnostics.Logger
             environment : SymbolTable.Environment
             singletons : SingletonInference.Singletons
+            abstractTypes : SingletonInference.AbstractTypes
 
             // results 
-            abstractTypes : AbstractTypes    
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
             singletonSignatures : SingletonSignatures
+            opaqueTypes : OpaqueTypes    
            
         }
 
-        static member Initialise (logger: Diagnostics.Logger) 
-                                 (env: SymbolTable.Environment) 
-                                 (singletons: SingletonInference.Singletons) =
+        static member Initialise (logger : Diagnostics.Logger) 
+                                 (env : SymbolTable.Environment) 
+                                 (singletons : SingletonInference.Singletons) 
+                                 (abstractTypes : SingletonInference.AbstractTypes) =
             {   
                 // inputs
                 environment = env
                 logger = logger
                 singletons = singletons
+                abstractTypes = abstractTypes
         
                 // results
-                abstractTypes = Map.empty
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
+                opaqueTypes = Map.empty
                 
             }
 
@@ -131,12 +130,13 @@ module ExportInference =
                 environment = env
                 logger = logger
                 singletons = Map.empty
-        
+                abstractTypes = Map.empty
+
                 // results
-                abstractTypes = Map.empty 
                 exportScope = Env.getModuleScope env
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
+                opaqueTypes = Map.empty 
             }
 
         member this.AddRequiredImports (id: Identifier) =
@@ -150,13 +150,13 @@ module ExportInference =
             else
                 this
 
-        member this.IsAbstractType name = 
+        member this.IsOpaqueType name = 
             let declName = Env.getDeclName this.environment name
-            this.abstractTypes.ContainsKey declName
+            this.opaqueTypes.ContainsKey declName
 
-        member this.TryGetAbstractType name =
+        member this.TryGetOpaqueType name =
             let declName = Env.getDeclName this.environment name
-            this.abstractTypes.TryFind declName
+            this.opaqueTypes.TryFind declName
 
         member this.HasOpaqueSingletonSignature name =
             let declName = Env.getDeclName this.environment name
@@ -209,19 +209,10 @@ module ExportInference =
             assert Env.isDeclName this.environment declName
             { this with exportScope = Env.exportName this.environment declName.id this.exportScope }
 
-        member this.GetExports = 
-            this.exportScope
+        member this.IsRequiredImport name = 
+            Map.containsKey name.id this.requiredImports
 
-        member this.GetAbstractTypes = 
-            this.abstractTypes
 
-        member this.GetSingletonSignatures = 
-            this.singletonSignatures
-
-        member this.GetRequiredImports = 
-            this.requiredImports
-
-            
     type ExportError = 
         | NameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
         | ImplicitNameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
@@ -295,15 +286,15 @@ module ExportInference =
         |> addSingletonSignature <| name
 
 
-    let private exportTypeDecl abstractType (ctx: ExportContext) (name: Name) =
+    let private exportTypeDecl (ctx: ExportContext) (name: Name) =
         if Env.isExposedToplevelMember ctx.environment name.id then 
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
                          |> Env.exportScope ctx.environment name.id
             { ctx with exportScope = expScp }
         else
             // printfn "Add abstract type: %s" name.id
-            { ctx with abstractTypes = ctx.abstractTypes.Add(name, abstractType) } // will only be exported if actually used
-
+            let abstractType = Map.find name ctx.abstractTypes
+            { ctx with opaqueTypes = ctx.opaqueTypes.Add(name, abstractType) } // will only be exported if actually used
         
     //let private exportAllTypesAndValues (ctx: ExportContext) =
     //    let modScp = Env.getModuleScope ctx.environment
@@ -332,7 +323,7 @@ module ExportInference =
 
 
     let private exportNameIfAbstractType (ctx: ExportContext) (name: Name) =
-        match ctx.TryGetAbstractType name with
+        match ctx.TryGetOpaqueType name with
         | Some _ ->
             let expScp = Env.exportName ctx.environment name.id ctx.exportScope
             { ctx with exportScope = expScp }
@@ -709,13 +700,13 @@ module ExportInference =
         Option.fold (inferDataType rawExp) ctx etd.rawtype    
         |> List.fold (inferTagDecl rawExp) <| etd.tags  // raw values must not contain abstract types
         |> List.fold (inferExtensionMember exp)  <| etd.members
-        |> exportTypeDecl Simple <| etd.name  // TODO: This is preliminary as long as enums are not implemented in the typechecker, fjg. 24.02.20
+        |> exportTypeDecl <| etd.name  // TODO: This is preliminary as long as enums are not implemented in the typechecker, fjg. 24.02.20
 
 
     and private inferStructType exp ctx (std: AST.StructTypeDecl) =
         List.fold (inferFieldDecl exp) ctx std.fields  // infer fields first, before typename becomes visible  
         |> List.fold (inferExtensionMember exp) <| std.members
-        |> exportTypeDecl Struct <| std.name
+        |> exportTypeDecl <| std.name
 
 
     and private inferOpaqueType exp ctx (ntd: AST.OpaqueTypeDecl) =
@@ -727,22 +718,10 @@ module ExportInference =
 
 
     and private inferTypeAlias exp (ctx: ExportContext) (tad: AST.TypeAliasDecl) =
-        let abstractType = 
-            match tad.aliasfor with
-            | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _ | FloatType _ -> 
-                Simple
-            | ArrayType _ ->
-                Array
-            | TypeName snp ->
-                match ctx.TryGetAbstractType (List.last snp.names) with
-                | Some absTyp -> absTyp
-                | None -> Struct
-            | _ -> 
-                Struct // slice, signal treated as struct here
-
+        
         inferDataType exp ctx tad.aliasfor
         |> List.fold (inferExtensionMember exp) <| tad.members  // TODO: change this to something like inferMethod
-        |> exportTypeDecl abstractType <| tad.name
+        |> exportTypeDecl <| tad.name
 
 
     and private inferExtensionMember exp ctx (em: AST.Member) = 
@@ -827,14 +806,15 @@ module ExportInference =
     // end =========================================
     
     
-    let inferExports logger (env: SymbolTable.Environment) 
-                            (singletons: SingletonInference.Singletons)
-                            (cu: AST.CompilationUnit) =
+    let inferExports logger (env : SymbolTable.Environment) 
+                            (singletons : SingletonInference.Singletons)
+                            (abstractTypes : SingletonInference.AbstractTypes)
+                            (cu : AST.CompilationUnit) =
         let exports =
-            ExportContext.Initialise logger env singletons 
+            ExportContext.Initialise logger env singletons abstractTypes
             |> inferCompilationUnit <| cu
         // just for debugging
-        //printfn "Abstract Types: \n %A" exports.abstractTypes
+        printfn "Abstract Types: \n %A" exports.opaqueTypes
         //printfn "SingletonSignatures: \n %A" exports.singletonSignatures
         //printfn "Required imports: \n %A" exports.requiredImports
         if Diagnostics.Logger.hasErrors exports.logger then

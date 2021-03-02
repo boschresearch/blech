@@ -55,15 +55,16 @@ let private parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIf
                 imports.GetExportScopes
                 ast
 
-        let! singletons = 
+        let! singletons, abstractTypes = 
             Main.runSingletonInference 
                 logger 
                 fileName 
                 imports.GetSingletons 
+                imports.GetAbstractTypes
                 ast
                 symTable
         
-        return ast, symTable, singletons
+        return ast, symTable, singletons, abstractTypes
     }
 
 
@@ -77,12 +78,13 @@ let inferExports implOrIface moduleName fileName =
     let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
 
     match parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIface moduleName fileName with
-    | Ok (ast, symTable, singletons) -> 
+    | Ok (ast, symTable, singletons, abstractTypes) -> 
         Main.runExportInference 
             logger 
             symTable 
             fileName 
             singletons // subsumes imported singletons
+            abstractTypes
             ast
     
     | Error logger ->
