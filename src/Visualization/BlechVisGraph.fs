@@ -86,6 +86,7 @@ module Blech.Visualization.BlechVisGraph
 
     /// Determines whether something is "Initial" or "Final".
     and InitOrFinalOrNeither = {Init : IsInit; Final : IsFinal} with 
+        member x.IsInitBool = match x.Init with IsInit -> true | IsNotInit -> false
         member x.IsFinalBool = match x.Final with IsFinal -> true | IsNotFinal -> false
 
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
@@ -195,7 +196,7 @@ module Blech.Visualization.BlechVisGraph
             | [] -> false
 
     /// Checks if a node is stateful (not a simple state).
-    let private isActivityCallOrOtherComplex = 
+    let isActivityCallOrOtherComplex = 
         fun (n:BlechNode) -> 
             match n.Payload.IsComplex with
                | IsSimple | IsConnector _ -> false

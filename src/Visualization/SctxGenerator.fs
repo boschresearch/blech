@@ -12,11 +12,20 @@ module Blech.Visualization.SctxGenerator
     /// This causes a compiler error in SCCharts.
     let rec orderEdgeList (edges : BlechEdge list) : BlechEdge list = 
         // 1. Extract all abort edges from list. 2. Put extracted elements at the beginning of the list.
+        // In second step, but coniditonals in front.
         let partition = List.partition (fun e -> match e.Payload.Property with | IsAbort -> true | _ -> false) edges
         let sndPartition = List.partition (fun e -> match e.Payload.Property with | IsConditional | IsConditionalTerminal-> true | _ -> false) (snd partition)
         
+        // Somewhere, the empty else conditionals get put before labelled conditionals in the opt. TODO find and eliminate so this will be unnecessary.
+        let thrPartition = List.partition( fun e -> match e.Payload.Label with | "" -> false | _ ->  true) (fst sndPartition)
+        // Somewhere in the optimization conditionals get inverted and  TODO find where and fix so this invertion coming next will be unnecessary.
+        // Invert conditionals.
+        let invertedConditionalsWithLabels = List.rev (fst thrPartition)
+        //Combine.
+        let conditionals = List.append invertedConditionalsWithLabels (snd thrPartition)
+
         // Aborts are the first element of the pair. Contitionals the first of the second pair.
-        List.append (fst partition) (List.append (fst sndPartition) (snd sndPartition))
+        List.append (fst partition) (List.append conditionals (snd sndPartition))
 
     /// Constant for whitespaces.
     let private blank : string = " "

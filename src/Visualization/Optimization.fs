@@ -539,8 +539,10 @@ module Blech.Visualization.Optimization
         // Clear cases where the edge is not deleted.
         elif(sourceOutgoings.Length > 1 && targetIncomings.Length > 1 ||
              matchNodes source target ||
-             edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal ||
+             edge.Payload.Property <> IsImmediate && edge.Payload.Property <> IsTerminal && edge.Payload.Property <> IsConditional && edge.Payload.Property <> IsConditionalTerminal ||
              edge.Payload.Property = IsTerminal && not (edge.Payload.Label.Equals "") ||
+             edge.Payload.Property = IsConditional && not (edge.Payload.Label.Equals "") ||
+             edge.Payload.Property = IsConditionalTerminal && not (edge.Payload.Label.Equals "") ||
              edge.Payload.Property = IsImmediate && not (edge.Payload.Label.Equals "")) then
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
         else 
@@ -549,9 +551,11 @@ module Blech.Visualization.Optimization
             // If target is deleted, change the source of outgoing nodes of the target to the source. If deleted source is final state, change source to final state.
             // If a final or initial state is removed, that status needs to be reassigned.
             // Target can not be deleted if it has multiple incomings, source can not be deleted if it has multiple outgoings.
+            // Target can not be deleted, if current edge is a conditional (else case edge) and target is a simple state with an outgoing aawait transition or a complex state.
             if isSimpleOrConnector source && (Seq.toList source.Outgoing).Length = 1 then
                 handleSourceDeletion finalNodeInfo source target graph
-            else if isSimpleOrConnector target && (Seq.toList target.Incoming).Length = 1 then
+            else if isSimpleOrConnector target && (Seq.toList target.Incoming).Length = 1 && 
+                     (edge.Payload.Property <> IsConditional || not (isActivityCallOrOtherComplex target || checkEdgesForAwait (Seq.toList target.Outgoing)))then
                 handleTargetDeletion finalNodeInfo source target graph
             else if (Seq.toList target.Outgoing).Length > 0 then 
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph

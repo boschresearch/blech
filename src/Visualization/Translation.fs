@@ -85,7 +85,7 @@ module Blech.Visualization.Translation
         // Extract.
         let graph = frst5 graphBuilder
         let prevNodeBefore = (scnd5 graphBuilder).Value
-        let prevNode = if useConnectorState && prevNodeBefore.Payload.IsComplex = IsSimple then
+        let prevNode = if useConnectorState && prevNodeBefore.Payload.IsComplex = IsSimple && not (prevNodeBefore.Payload.IsInitOrFinal.IsInitBool) then
                             graph.ReplacePayloadInByAndReturn prevNodeBefore (prevNodeBefore.Payload.SetComplex IsConnector)
                        else 
                             prevNodeBefore
@@ -135,7 +135,7 @@ module Blech.Visualization.Translation
                                                 WasVisualized = NotVisualized;
                                                 WasHierarchyOptimized = NotHierarchyOptimized}      
                    
-                   graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode elseNode |> ignore
+                   graph.AddEdge {Label = "" ; Property = IsConditional; WasOptimized = NotOptimized} prevNode elseNode |> ignore
                    graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} elseNode caseClosingNode |> ignore
 
                    // Potential carry over labels from if- and else branch are merched.
