@@ -106,7 +106,7 @@ type TypeCheckContext =
         userTypes: Dictionary<QName, (Range.range * Types)> 
         // member pragmas are collected in order to do annotation checking
         memberPragmas: ResizeArray<Attribute.MemberPragma>
-        singletons: SingletonInference.Singletons
+        singletons: OpaqueInference.Singletons
     }
     static member Empty modName =
         { cliContext = Arguments.BlechCOptions.Default

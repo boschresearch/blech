@@ -77,9 +77,9 @@ module Main =
         ImportChecking.checkImports packageContext logger importChain moduleName ast 
 
 
-    let runSingletonInference logger fileName importedSingletons importedAbstractTypes ast symboltableEnv = 
-        Logging.log2 "Main" (sprintf "infer singleton in '%s'" fileName)
-        SingletonInference.inferSingletons logger symboltableEnv importedSingletons importedAbstractTypes ast 
+    let runOpaqueInference logger fileName importedSingletons importedAbstractTypes ast symboltableEnv = 
+        Logging.log2 "Main" (sprintf "infer singletons and abstract types in '%s'" fileName)
+        OpaqueInference.inferOpaques logger symboltableEnv importedSingletons importedAbstractTypes ast 
                     
 
     let runExportInference logger symboltableEnv fileName singletons ast = 
@@ -261,7 +261,7 @@ module Main =
                         ast
 
                 let! singletons, abstractTypes = 
-                    runSingletonInference 
+                    runOpaqueInference 
                         logger 
                         fileName 
                         imports.GetSingletons 
@@ -354,7 +354,7 @@ module Main =
                         ast
 
                 let! singletons, abstractTypes = 
-                    runSingletonInference 
+                    runOpaqueInference 
                         logger 
                         fileName 
                         imports.GetSingletons

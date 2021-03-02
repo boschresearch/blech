@@ -56,7 +56,7 @@ let private parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIf
                 ast
 
         let! singletons, abstractTypes = 
-            Main.runSingletonInference 
+            Main.runOpaqueInference 
                 logger 
                 fileName 
                 imports.GetSingletons 

@@ -26,8 +26,8 @@ open Blech.Common
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 type private Environment = SymbolTable.Environment
-type private Singletons = SingletonInference.Singletons
-type private AbstractTypes = SingletonInference.AbstractTypes
+type private Singletons = OpaqueInference.Singletons
+type private AbstractTypes = OpaqueInference.AbstractTypes
 
 type ModuleInfo = 
     {
@@ -150,11 +150,11 @@ type Imports =
     member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetExportScope) ]
         
-    member this.GetSingletons : SingletonInference.Singletons list = 
+    member this.GetSingletons : OpaqueInference.Singletons list = 
         this.GetImports
         |> List.map (fun import -> import.singletons)
 
-    member this.GetAbstractTypes : SingletonInference.AbstractTypes list = 
+    member this.GetAbstractTypes : OpaqueInference.AbstractTypes list = 
         this.GetImports
         |> List.map (fun import -> import.abstractTypes)
 

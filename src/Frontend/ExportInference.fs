@@ -72,7 +72,7 @@ module ExportInference =
     
     
    
-    type OpaqueTypes = Map<Name, SingletonInference.AbstractType>
+    type OpaqueTypes = Map<Name, OpaqueInference.AbstractType>
     
     type RequiredImports = Map<Identifier, Identifier option>
 
@@ -93,8 +93,8 @@ module ExportInference =
             // inputs
             logger : Diagnostics.Logger
             environment : SymbolTable.Environment
-            singletons : SingletonInference.Singletons
-            abstractTypes : SingletonInference.AbstractTypes
+            singletons : OpaqueInference.Singletons
+            abstractTypes : OpaqueInference.AbstractTypes
 
             // results 
             exportScope : SymbolTable.Scope
@@ -106,8 +106,8 @@ module ExportInference =
 
         static member Initialise (logger : Diagnostics.Logger) 
                                  (env : SymbolTable.Environment) 
-                                 (singletons : SingletonInference.Singletons) 
-                                 (abstractTypes : SingletonInference.AbstractTypes) =
+                                 (singletons : OpaqueInference.Singletons) 
+                                 (abstractTypes : OpaqueInference.AbstractTypes) =
             {   
                 // inputs
                 environment = env
@@ -121,22 +121,6 @@ module ExportInference =
                 singletonSignatures = Map.empty
                 opaqueTypes = Map.empty
                 
-            }
-
-        static member MakeForSignature (logger: Diagnostics.Logger) 
-                                       (env: SymbolTable.Environment) = 
-            {   
-                // inputs
-                environment = env
-                logger = logger
-                singletons = Map.empty
-                abstractTypes = Map.empty
-
-                // results
-                exportScope = Env.getModuleScope env
-                requiredImports = Map.empty
-                singletonSignatures = Map.empty
-                opaqueTypes = Map.empty 
             }
 
         member this.AddRequiredImports (id: Identifier) =
@@ -797,26 +781,23 @@ module ExportInference =
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
             List.fold inferTopLevelMember ctx cu.members
-        elif cu.IsSignature then
-            // Todo: Refactor this in import checking
-            ExportContext.MakeForSignature ctx.logger ctx.environment // no inference just needs the export scope
-        else
+        else // do nothing for programs and signatures
             ctx
-
+            
     // end =========================================
     
     
     let inferExports logger (env : SymbolTable.Environment) 
-                            (singletons : SingletonInference.Singletons)
-                            (abstractTypes : SingletonInference.AbstractTypes)
+                            (singletons : OpaqueInference.Singletons)
+                            (abstractTypes : OpaqueInference.AbstractTypes)
                             (cu : AST.CompilationUnit) =
         let exports =
             ExportContext.Initialise logger env singletons abstractTypes
             |> inferCompilationUnit <| cu
         // just for debugging
-        printfn "Abstract Types: \n %A" exports.opaqueTypes
-        //printfn "SingletonSignatures: \n %A" exports.singletonSignatures
-        //printfn "Required imports: \n %A" exports.requiredImports
+        // printfn "Opaque Types: \n %A" exports.opaqueTypes
+        // printfn "SingletonSignatures: \n %A" exports.singletonSignatures
+        // printfn "Required imports: \n %A" exports.requiredImports
         if Diagnostics.Logger.hasErrors exports.logger then
             Error exports.logger
         else

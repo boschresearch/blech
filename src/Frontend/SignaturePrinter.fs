@@ -644,9 +644,9 @@ module SignaturePrinter =
                 bpOptAnnotations annotations
             let abstractKind = 
                 match abstractType with
-                | SingletonInference.Simple -> Attribute.SimpleType.ToDoc
-                | SingletonInference.Array -> Attribute.OpaqueArray.ToDoc
-                | SingletonInference.Struct -> Attribute.OpaqueStruct.ToDoc
+                | OpaqueInference.Simple -> Attribute.SimpleType.ToDoc
+                | OpaqueInference.Array -> Attribute.OpaqueArray.ToDoc
+                | OpaqueInference.Struct -> Attribute.OpaqueStruct.ToDoc
             let optRef =
                 if isRef then Some <| txt "ref" else None
                 
