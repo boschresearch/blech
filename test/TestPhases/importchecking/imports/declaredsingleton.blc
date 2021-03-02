@@ -1,0 +1,6 @@
+module exposes g
+
+singleton function f() end
+
+singleton [f] function g()  // <- this is ok as a declaration
+end
