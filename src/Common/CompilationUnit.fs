@@ -224,8 +224,18 @@ module CompilationUnit =
         let moduleUnit = Implementation requiredModule
         let signatureUnit = Interface requiredModule
         if ctx.loaded.ContainsKey signatureUnit then
-            // printfn "Use compiled module: %A" signatureUnit
-            ctx.loaded.[signatureUnit] // use already compiled signature
+            // printfn "Use compiled signature: %A" signatureUnit
+            // in case the module was compiled successful
+            let res = ctx.loaded.[signatureUnit] // use already compiled signature
+            assert Result.isOk res // a cached signature compilation is always ok
+            res
+        elif ctx.loaded.ContainsKey moduleUnit then 
+            // printfn "Use compiled module: %A" moduleUnit
+            // in case there was no signature generated, due to an error in the module
+            // prevents re-compilation of the module
+            let res = ctx.loaded.[moduleUnit] // use already compiled module
+            assert Result.isError res // the cached module compilation is always an error
+            res
         else
             let blcFile = searchImplementation ctx.sourcePath requiredModule
             
