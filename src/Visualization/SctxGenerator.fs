@@ -36,6 +36,107 @@ module Blech.Visualization.SctxGenerator
     /// Concats string with commata to be used in a fold.
     let commaConcatination = fun acc elm -> acc + "," + elm
 
+    /// List of Sccharts keywords that can not be used as identifiers for variables or acitivites or any other thing that is not a label.
+    let scchartsKeywords =
+        ["Pr";
+         "_";
+         "abort";
+         "auto";
+         "bool";
+         "class";
+         "clock";
+         "combine";
+         "commuting";
+         "conflicting";
+         "connector";
+         "const";
+         "dataflow";
+         "deferred";
+         "delayed";
+         "do";
+         "during";
+         "else";
+         "end";
+         "entry";
+         "exit";
+         "expression";
+         "extends";
+         "extern";
+         "fby";
+         "final";
+         "float";
+         "for";
+         "fork";
+         "global";
+         "go";
+         "goto";
+         "history";
+         "host";
+         "if";
+         "immediate";
+         "import";
+         "initial";
+         "input";
+         "int";
+         "is";
+         "join";
+         "json";
+         "label";
+         "max";
+         "method";
+         "min";
+         "module";
+         "nondeterministic";
+         "none";
+         "null";
+         "once";
+         "output";
+         "override";
+         "par";
+         "pause";
+         "period";
+         "policy";
+         "pre";
+         "print";
+         "private";
+         "protected";
+         "public";
+         "pure";
+         "random";
+         "randomize";
+         "ref";
+         "region";
+         "reset";
+         "return";
+         "run";
+         "scchart";
+         "schedule";
+         "scope";
+         "seq";
+         "sfby";
+         "shallow";
+         "signal";
+         "state";
+         "static";
+         "string";
+         "strong";
+         "struct";
+         "suspend";
+         "then";
+         "to";
+         "undefined";
+         "val";
+         "violation";
+         "void";
+         "weak";
+         "while"
+        ]
+
+    /// Match .sctx keywords and replace them with an added underscore. Variables (in declaration and run statements) and activity names.
+    let matchKeywords = fun (var:string) -> match List.contains var scchartsKeywords with 
+                                                    | true -> "_"+var
+                                                    | false -> var
+
     //______________________________SCTX GENERATION_______________________________________________________ 
     /// Converts a single param to a string.
     let private listParam (param : Param) (isInput : bool) : string =
@@ -46,7 +147,7 @@ module Blech.Visualization.SctxGenerator
 
         // TODO anyone of these? Some sort of parsing. Pure signal problem might be due to name of the input/output.
         //output <- output + blank + inOrOut + blank + param.TypeName + blank + param.Name
-        blank + inOrOut + " host \"" + param.TypeName + "\" " + param.Name + lnbreak            
+        blank + inOrOut + " host \"" + param.TypeName + "\" " + matchKeywords param.Name + lnbreak            
 
     /// Method that converts a list of params to a string (sctx style).
     /// TODO convert to fold.
@@ -133,7 +234,7 @@ module Blech.Visualization.SctxGenerator
                                                 | true -> var.Replace("prev ", "pre(") + ")"
         
         // Apply both functions.
-        let filteredAndCleaned = List.map (workOnConditions >> replacePrev) (List.append input output)
+        let filteredAndCleaned = List.map (workOnConditions >> replacePrev >> matchKeywords) (List.append input output)
         let arguments = match filteredAndCleaned.Length with 
                         | 0 -> ""
                         | 1 -> "(" + List.head filteredAndCleaned + ")"
