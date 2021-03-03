@@ -115,7 +115,6 @@ module Blech.Visualization.Optimization
         let noFinalAct = nodeIsActivityCallAndHasNoFinalNode currentNode finalNodeInfo
         let noFinalCbgn = nodeIsCbgnAndHasNoFinalNode currentNode
         let updatedCurr = if noFinalAct || noFinalCbgn then
-                            if(currentNode.Payload.StateCount = 12 && currentNode.Payload.SecondaryId = 0) then printfn "deassigning final !!!!!"
                             graph.ReplacePayloadInByAndReturn currentNode (currentNode.Payload.SetFinalStatusOff)
                           else
                             currentNode
@@ -473,11 +472,9 @@ module Blech.Visualization.Optimization
                                          // If current is a cobegin without a final node, do not reassign final status.
                                          let notReassignFinalAct = nodeIsActivityCallAndHasNoFinalNode current finalNodeInfo
                                          let notReassignFinalCbgn = nodeIsCbgnAndHasNoFinalNode current
-                                         printfn "current s%i%i - %b - %b - %b" current.Payload.StateCount current.Payload.SecondaryId notReassignFinalCbgn notReassignFinalAct current.Payload.IsInitOrFinal.IsFinalBool
                                          if notReassignFinalAct || notReassignFinalCbgn then
                                             initChecked
                                          else
-                                            if(current.Payload.StateCount = 12) then printfn "assigning final !!!!!"
                                             graph.ReplacePayloadInByAndReturn initChecked (initChecked.Payload.SetFinalStatusOn)
                             | _ -> initChecked
         bothChecked
