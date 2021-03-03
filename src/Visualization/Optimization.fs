@@ -11,6 +11,10 @@ module Blech.Visualization.Optimization
     /// ((Source.StateCount, Source.SecondaryId), (Target.StateCount, Target.SecondaryId))
     let mutable private optimizedEdges: ((int * int) * (int * int)) list = []
 
+    /// Keepsm track of which nodes have been hierarchy optimized.
+    /// (StateCount , SecondaryId).
+    let mutable private optimizedNodes: (int * int) list = []
+
     /// Keeping track of secondary id.
     let mutable private secondaryId = 0
 
@@ -79,6 +83,7 @@ module Blech.Visualization.Optimization
         let actPayload = isComplex.IsActivity   
 
         //Flatten hierarchy inside activity.
+        optimizedNodes <- []
         let flattenedBody = 
             match noBreakHier with
                 | true -> body
@@ -98,18 +103,16 @@ module Blech.Visualization.Optimization
                          IsInitOrFinal = actNodePayload.IsInitOrFinal; 
                          StateCount = actNodePayload.StateCount;
                          SecondaryId = actNodePayload.SecondaryId; 
-                         WasVisualized = NotVisualized; 
-                         WasHierarchyOptimized = HierarchyOptimized}
+                         WasVisualized = NotVisualized}
 
     //______________________________FLATTEN HIERARCHY (NOT COBEGIN OR ACTIITY CALLS)_______________________________________________________
     /// Flattens a given graph if node is complex, else just call flattening method on successors.
     and private flattenHierarchyIfComplex (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (graph : VisGraph) : VisGraph = 
         // Do not call method on same item again when there are self-loops.
-        let filterForUnoptimized = 
-            (fun (e : BlechNode) -> match e.Payload.WasHierarchyOptimized with HierarchyOptimized -> false | NotHierarchyOptimized -> true)
+        let filterForUnoptimized = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) optimizedNodes)
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
         let unoptedSuccesssors = List.filter filterForUnoptimized successorsWithoutCurrent
-
+       
         // It is possible to wrongly assign the final statsus to a node with information based on not yet optimized acitivites (that are called through run statements).
         //Check if said status is rightful.
         let noFinalAct = nodeIsActivityCallAndHasNoFinalNode currentNode finalNodeInfo
@@ -121,15 +124,18 @@ module Blech.Visualization.Optimization
 
         // Is current node complex? 
         let currentGraph = match updatedCurr.Payload.IsComplex with
-                            | IsSimple | IsConnector -> updatedCurr.Payload.SetHierarchyOptimized; graph
+                            | IsSimple | IsConnector -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+                                                        graph
                             | IsActivityCall _ -> match inlineActs with
                                                     |true -> secondaryId <- secondaryId + 1
                                                              flattenHierarchyActivityCall activityNodes finalNodeInfo updatedCurr graph
-                                                    | false -> updatedCurr.Payload.SetHierarchyOptimized; graph
+                                                    | false -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+                                                               graph
                             | IsCobegin cmplx -> flattenHierarchyCobegin activityNodes finalNodeInfo  updatedCurr cmplx graph
                             | IsComplex cmplx -> // Do not flatten if weak abort.
-                                                 match cmplx.IsAbort with
-                                                    | WeakAbort -> updatedCurr.Payload.SetHierarchyOptimized; graph
+                                                match cmplx.IsAbort with
+                                                    | WeakAbort -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+                                                                   graph
                                                     | _ -> flattenHierarchy activityNodes finalNodeInfo updatedCurr cmplx graph
 
         callFlatHierarchyOnNodes activityNodes finalNodeInfo unoptedSuccesssors currentGraph
@@ -428,15 +434,14 @@ module Blech.Visualization.Optimization
                           IsInitOrFinal = currentNode.Payload.IsInitOrFinal; 
                           StateCount = currentNode.Payload.StateCount;
                           SecondaryId = currentNode.Payload.SecondaryId; 
-                          WasVisualized = NotVisualized; 
-                          WasHierarchyOptimized = HierarchyOptimized}
+                          WasVisualized = NotVisualized}
             let updatedCurr = graph.ReplacePayloadInByAndReturn currentNode newPld
 
             // Add weak abort transition.
             addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) graph updatedCurr
             graph
         else
-           currentNode.Payload.SetHierarchyOptimized
+           optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
            graph
 
     //______________________________COLLAPSE IMMEDIATE TRANSITIONS_______________________________________________________ 

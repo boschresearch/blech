@@ -95,29 +95,24 @@ module Blech.Visualization.BlechVisGraph
     /// Indicating, whether outgoing edges of this node have been edge optimized.
     and WasEdgeOptimized = Optimized | NotOptimized
 
-    /// Indicating, whether a node has been hierarchy optimized (checked for hierarchy, and hierarchy flattened if so).
-    and WasHierarchyOptimized = HierarchyOptimized | NotHierarchyOptimized
-
     /// Payload for a node.
     and NodePayload = { Label : string; 
                         IsComplex : ComplexOrSimpleOrCobegin ; 
                         IsInitOrFinal : InitOrFinalOrNeither; 
                         StateCount : StateCount;
                         SecondaryId : StateCount;
-                        mutable WasVisualized : WasVisualized;
-                        mutable WasHierarchyOptimized: WasHierarchyOptimized} with
+                        mutable WasVisualized : WasVisualized} with
         // TODO why are these two handled with mutable variables?
         member x.Visualize = x.WasVisualized <- Visualized
-        member x.SetHierarchyOptimized = x.WasHierarchyOptimized <- HierarchyOptimized
         member x.GetCobeginFromComplex = match x.IsComplex with IsCobegin cgbn -> Some cgbn | _ -> None
         // TODO rename these functions. Setting might be misleading, as a newly changed payload is copied.
-        member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetComplex cmplx = {Label = x.Label; IsComplex = cmplx; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetLabel i = {Label = i; IsComplex = x.IsComplex; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
-        member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized; WasHierarchyOptimized = x.WasHierarchyOptimized}
+        member x.SetSecondaryId i = {Label = x.Label; IsComplex = x.IsComplex.SetSecondaryIdOfCaseClosingNode i; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = i; WasVisualized = NotVisualized}
+        member x.SetComplex cmplx = {Label = x.Label; IsComplex = cmplx; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
+        member x.SetLabel i = {Label = i; IsComplex = x.IsComplex; IsInitOrFinal = x.IsInitOrFinal; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
+        member x.SetFinalStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
+        member x.SetFinalStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = x.IsInitOrFinal.Init; Final = IsNotFinal}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
+        member x.SetInitStatusOn = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
+        member x.SetInitStatusOff = {Label = x.Label; IsComplex = x.IsComplex; IsInitOrFinal = {Init = IsNotInit; Final = x.IsInitOrFinal.Final}; StateCount = x.StateCount; SecondaryId = x.SecondaryId; WasVisualized = NotVisualized}
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
@@ -277,7 +272,6 @@ module Blech.Visualization.BlechVisGraph
             |> Seq.toList 
             |> List.tryFind fnct 
             |> (fun option -> match option.IsSome with true -> option.Value | false -> failwith("No node with the specified properties found in this graph."))
-
 
     /// Finds the node that has Property Init set to true and returns it.
     let findInitNodeInHashSet(nodes : HashSet<BlechNode>) : BlechNode =

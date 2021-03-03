@@ -73,8 +73,7 @@ module Blech.Visualization.Translation
                                     IsInitOrFinal = NeitherInitOrFinal;
                                     StateCount = stateCount;
                                     SecondaryId = defaultSecondaryId;
-                                    WasVisualized = NotVisualized; 
-                                    WasHierarchyOptimized = NotHierarchyOptimized}
+                                    WasVisualized = NotVisualized}
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} updatedPrevNode newNode |> ignore
 
         (graph, Some newNode, stateCount, frth5 graphBuilder, None) 
@@ -100,8 +99,7 @@ module Blech.Visualization.Translation
                                             IsInitOrFinal = NeitherInitOrFinal; 
                                             StateCount = stateCount + 3; 
                                             SecondaryId = defaultSecondaryId;
-                                            WasVisualized = NotVisualized; 
-                                            WasHierarchyOptimized = NotHierarchyOptimized}
+                                            WasVisualized = NotVisualized}
         let ifComplex : ComplexOrSimpleOrCobegin = 
             IsComplex {Body = frst4 ifBody ; IsActivity = IsNotActivity; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}; IsAbort = Neither}
 
@@ -111,8 +109,7 @@ module Blech.Visualization.Translation
                                     IsInitOrFinal = NeitherInitOrFinal; 
                                     StateCount = stateCount + 1; 
                                     SecondaryId = defaultSecondaryId;
-                                    WasVisualized = NotVisualized;
-                                    WasHierarchyOptimized = NotHierarchyOptimized}
+                                    WasVisualized = NotVisualized}
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
                        Property = IsConditional; 
                        WasOptimized = NotOptimized} 
@@ -132,8 +129,7 @@ module Blech.Visualization.Translation
                                                 IsInitOrFinal = NeitherInitOrFinal; 
                                                 StateCount = stateCount + 2; 
                                                 SecondaryId = defaultSecondaryId;
-                                                WasVisualized = NotVisualized;
-                                                WasHierarchyOptimized = NotHierarchyOptimized}      
+                                                WasVisualized = NotVisualized}      
                    
                    graph.AddEdge {Label = "" ; Property = IsConditional; WasOptimized = NotOptimized} prevNode elseNode |> ignore
                    graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} elseNode caseClosingNode |> ignore
@@ -171,8 +167,7 @@ module Blech.Visualization.Translation
                                                                  IsInitOrFinal = NeitherInitOrFinal; 
                                                                  StateCount = stateCount + 2;
                                                                  SecondaryId = defaultSecondaryId;
-                                                                 WasVisualized = NotVisualized; 
-                                                                 WasHierarchyOptimized = NotHierarchyOptimized}
+                                                                 WasVisualized = NotVisualized}
                             Some caseClosingNode
         let caseClosingIdPair = match caseClosingNodeMaybe with
                                     | Some node -> {Opt = Some (findIds node)}
@@ -186,8 +181,7 @@ module Blech.Visualization.Translation
                                 IsInitOrFinal = NeitherInitOrFinal; 
                                 StateCount = stateCount + 1;
                                 SecondaryId = defaultSecondaryId; 
-                                WasVisualized = NotVisualized; 
-                                WasHierarchyOptimized = NotHierarchyOptimized}
+                                WasVisualized = NotVisualized}
 
         // Connect complex to case closing if available.
         if not isEndless then 
@@ -227,8 +221,7 @@ module Blech.Visualization.Translation
                                             IsInitOrFinal = NeitherInitOrFinal; 
                                             StateCount = stateCount + 2;
                                             SecondaryId = defaultSecondaryId; 
-                                            WasVisualized = NotVisualized; 
-                                            WasHierarchyOptimized = NotHierarchyOptimized}
+                                            WasVisualized = NotVisualized}
         let complexNode = graph.AddNode{Label = ""; 
                                         IsComplex = IsComplex {Body = frst4 bodyOfLoop; 
                                                                IsActivity = IsNotActivity; 
@@ -237,8 +230,7 @@ module Blech.Visualization.Translation
                                         IsInitOrFinal = NeitherInitOrFinal; 
                                         StateCount = stateCount + 1;
                                         SecondaryId = defaultSecondaryId;
-                                        WasVisualized = NotVisualized;
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
+                                        WasVisualized = NotVisualized}
         
         // Determine the target node of the preemption.
         let abortTarget = match preemtpion with
@@ -301,16 +293,14 @@ module Blech.Visualization.Translation
                                             IsInitOrFinal = NeitherInitOrFinal; 
                                             StateCount = stateCount + 2;
                                             SecondaryId = defaultSecondaryId; 
-                                            WasVisualized = NotVisualized; 
-                                            WasHierarchyOptimized = NotHierarchyOptimized}
+                                            WasVisualized = NotVisualized}
         let complexNode = graph.AddNode{Label = ""; 
                                         IsComplex = 
                                             IsCobegin{Content = frst4 branches; CaseClosingNode = {Opt = Some (findIds caseClosingNode)}}; 
                                         IsInitOrFinal = NeitherInitOrFinal;
                                         SecondaryId = defaultSecondaryId;
                                         StateCount = stateCount + 1; 
-                                        WasVisualized = NotVisualized; 
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
+                                        WasVisualized = NotVisualized}
 
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
@@ -335,15 +325,13 @@ module Blech.Visualization.Translation
                                         IsInitOrFinal = NeitherInitOrFinal; 
                                         StateCount = stateCount + 1;
                                         SecondaryId = defaultSecondaryId; 
-                                        WasVisualized = NotVisualized; 
-                                        WasHierarchyOptimized = NotHierarchyOptimized}
+                                        WasVisualized = NotVisualized}
         let caseClosingNode = graph.AddNode{Label = ""; 
                                             IsComplex = IsSimple; 
                                             IsInitOrFinal = NeitherInitOrFinal; 
                                             StateCount = stateCount + 2;
                                             SecondaryId = defaultSecondaryId;
-                                            WasVisualized = NotVisualized; 
-                                            WasHierarchyOptimized = NotHierarchyOptimized}
+                                            WasVisualized = NotVisualized}
 
         graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
         graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
@@ -383,8 +371,7 @@ module Blech.Visualization.Translation
                                 IsInitOrFinal = InitNotFinal; 
                                 StateCount = stateCount + 1;
                                 SecondaryId = defaultSecondaryId; 
-                                WasVisualized = NotVisualized; 
-                                WasHierarchyOptimized = NotHierarchyOptimized}
+                                WasVisualized = NotVisualized}
         let graphBuilder = synthesizeStatements stmts (graph, Some init, stateCount + 3, neededVars, carryOverLabel)
 
         // Only add final node if previous statements resulted in a caseClosing node.
@@ -397,8 +384,7 @@ module Blech.Visualization.Translation
                                                 IsInitOrFinal = FinalNotInit; 
                                                 StateCount = stateCount + 2;
                                                 SecondaryId = defaultSecondaryId;
-                                                WasVisualized = NotVisualized; 
-                                                WasHierarchyOptimized = NotHierarchyOptimized}
+                                                WasVisualized = NotVisualized}
                                         updatedGraph.AddEdge {
                                             Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd5 graphBuilder).Value final |> ignore
                                         updatedGraph
@@ -448,8 +434,7 @@ module Blech.Visualization.Translation
             IsInitOrFinal = NeitherInitOrFinal; 
             StateCount = stateCount;
             SecondaryId = defaultSecondaryId; 
-            WasVisualized = NotVisualized;
-            WasHierarchyOptimized = NotHierarchyOptimized},
+            WasVisualized = NotVisualized},
             scnd4 bodyStatecountAndVars)
 
     /// Synthesis entry point. Pours the Blech code into a graph data modell (given by GenericGraph.fs).
