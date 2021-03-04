@@ -406,7 +406,7 @@ module Blech.Visualization.Optimization
             if (finalNodePresent) then 
                 let innerStateIds = innerFinalStateCountAndSecondaryIfPresent.Value
                 let innerFinalNode = findNodeByStateCount (fst innerStateIds) (snd innerStateIds) updatedGraph
-                addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) updatedGraph innerFinalNode
+                addEdgeToNode caseClosingNode IsImmediate "" updatedGraph innerFinalNode
 
                 // Add edge from last to case closing, depending on strength of await-region. Edge is a conditionsless edge. ( Is termination edge if source is complex.)
                 if (snd (snd orderedPairOfRegions)) = Weak then
