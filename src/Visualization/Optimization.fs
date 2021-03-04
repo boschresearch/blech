@@ -112,31 +112,28 @@ module Blech.Visualization.Optimization
         let filterForUnoptimized = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) optimizedNodes)
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
         let unoptedSuccesssors = List.filter filterForUnoptimized successorsWithoutCurrent
-       
-        // It is possible to wrongly assign the final statsus to a node with information based on not yet optimized acitivites (that are called through run statements).
-        //Check if said status is rightful.
-        let noFinalAct = nodeIsActivityCallAndHasNoFinalNode currentNode finalNodeInfo
-        let noFinalCbgn = nodeIsCbgnAndHasNoFinalNode currentNode
-        let updatedCurr = if noFinalAct || noFinalCbgn then
-                            graph.ReplacePayloadInByAndReturn currentNode (currentNode.Payload.SetFinalStatusOff)
-                          else
-                            currentNode
 
         // Is current node complex? 
-        let currentGraph = match updatedCurr.Payload.IsComplex with
-                            | IsSimple | IsConnector -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+        let currentGraph = match currentNode.Payload.IsComplex with
+                            | IsSimple | IsConnector -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                         graph
                             | IsActivityCall _ -> match inlineActs with
                                                     |true -> secondaryId <- secondaryId + 1
-                                                             flattenHierarchyActivityCall activityNodes finalNodeInfo updatedCurr graph
-                                                    | false -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+                                                             flattenHierarchyActivityCall activityNodes finalNodeInfo currentNode graph
+                                                    | false -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                                graph
-                            | IsCobegin cmplx -> flattenHierarchyCobegin activityNodes finalNodeInfo  updatedCurr cmplx graph
+                            | IsCobegin cmplx -> flattenHierarchyCobegin activityNodes finalNodeInfo  currentNode cmplx graph
                             | IsComplex cmplx -> // Do not flatten if weak abort.
                                                 match cmplx.IsAbort with
-                                                    | WeakAbort -> optimizedNodes <- (updatedCurr.Payload.StateCount, updatedCurr.Payload.SecondaryId) :: optimizedNodes
+                                                    | WeakAbort -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                                    graph
-                                                    | _ -> flattenHierarchy activityNodes finalNodeInfo updatedCurr cmplx graph
+                                                    | _ -> flattenHierarchy activityNodes finalNodeInfo currentNode cmplx graph
+
+        // It is possible to wrongly assign the final statsus to a node with information based on not yet optimized acitivites (that are called through run statements).
+        //Check if said status is rightful. Check if inner behaviour has been checked.
+        let noFinalAct = nodeIsActivityCallAndHasNoFinalNode currentNode finalNodeInfo
+        let noFinalCbgn = nodeIsCbgnAndHasNoFinalNode currentNode
+        if noFinalAct || noFinalCbgn then graph.ReplacePayloadInBy currentNode (currentNode.Payload.SetFinalStatusOff)
 
         callFlatHierarchyOnNodes activityNodes finalNodeInfo unoptedSuccesssors currentGraph
 
