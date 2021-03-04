@@ -566,9 +566,10 @@ module Blech.Visualization.Optimization
             if isSimpleOrConnector source && (Seq.toList source.Outgoing).Length = 1 then
                 handleSourceDeletion finalNodeInfo source target graph
             else if isSimpleOrConnector target && (Seq.toList target.Incoming).Length = 1 && 
-                     (edge.Payload.Property <> IsConditional || not (isActivityCallOrOtherComplex target || checkEdgesForAwait (Seq.toList target.Outgoing)))then
+                     not ((edge.Payload.Property = IsConditional || edge.Payload.Property = IsConditionalTerminal) 
+                            && (isActivityCallOrOtherComplex target || checkEdgesForAwait (Seq.toList target.Outgoing))) then
                 handleTargetDeletion finalNodeInfo source target graph
-            else if (Seq.toList target.Outgoing).Length > 0 then 
+            else if (Seq.toList target.Outgoing).Length > 0 then
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
             else
                 graph
