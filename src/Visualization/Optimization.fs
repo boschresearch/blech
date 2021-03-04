@@ -466,7 +466,9 @@ module Blech.Visualization.Optimization
     /// Depending on the final and init status of the other node (sourceOrTarget), which is to be deleted, the status of the given node changes.
     and updateStatusOfNodeDependingOfSuccessorOrPredecessor (finalNodeInfo : (string * bool) list) (current : BlechNode) (counterpart : BlechNode) (graph : VisGraph) : BlechNode = 
         let initChecked = match counterpart.Payload.IsInitOrFinal.Init with
-                                        | IsInit -> graph.ReplacePayloadInByAndReturn current (current.Payload.SetInitStatusOn)
+                                        | IsInit -> match current.Payload.IsComplex with
+                                                        | IsConnector -> graph.ReplacePayloadInByAndReturn current ((current.Payload.SetInitStatusOn).SetComplex IsSimple)
+                                                        | _ -> graph.ReplacePayloadInByAndReturn current (current.Payload.SetInitStatusOn)
                                         | _ -> current
 
         let bothChecked = match counterpart.Payload.IsInitOrFinal.Final with

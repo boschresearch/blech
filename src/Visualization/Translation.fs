@@ -110,6 +110,7 @@ module Blech.Visualization.Translation
                                     StateCount = stateCount + 1; 
                                     SecondaryId = defaultSecondaryId;
                                     WasVisualized = NotVisualized}
+
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
                        Property = IsConditional; 
                        WasOptimized = NotOptimized} 
