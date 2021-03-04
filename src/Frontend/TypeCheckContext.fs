@@ -240,31 +240,34 @@ module TypeCheckContext =
     let addDeclToLut (lut: TypeCheckContext) name decl =
         // for a procedure implementation a name is always added twice: first for the prototype and then for the implementation
         // last one wins, so we can access the extra information
+
         if lut.nameToDecl.ContainsKey name then
             match lut.nameToDecl.[name] with
             | Declarable.ProcedurePrototype _ ->
-                //update
+                // update a prototype with its implementation
                 lut.nameToDecl.[name] <- decl
-            | Declarable.ProcedureImpl _ -> 
-                () // nothing to do
-            | _ -> failwith "what the heck? why is a non-procedure declaration added twice?"
+            //| Declarable.ProcedureImpl _ -> 
+            //    () // nothing to do
+            | item when item = decl  -> 
+                // ignores duplicates
+                ()
+            | _ ->
+                failwith "what the heck? why has the same name two different declarations?"
         else
             //adding for the first time
             lut.nameToDecl.Add(name, decl)
             
 
     let addTypeToLut (lut: TypeCheckContext) name range typ =
-        //if lut.userTypes.ContainsKey(name) then
-        //    failwith <| sprintf "Fatal error: tried to add the type name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
-        //else
-        //    lut.userTypes.Add(name, typ)
+        // ignores duplicates
         ignore <| lut.userTypes.TryAdd(name, (range, typ))
 
 
     let addPragmaToLut (lut: TypeCheckContext) pragma =
-        // TODO: Pragmas might be added more than once on multiple import, correct this. fjg. 20.10.20
-        lut.memberPragmas.Add pragma
-        
+        // ignores duplicates
+        if not <| lut.memberPragmas.Contains pragma then
+            do lut.memberPragmas.Add pragma
+
 
     // Testers ====================================================================
     let hasInclude (lut: TypeCheckContext) =

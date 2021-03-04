@@ -1,0 +1,7 @@
+import s "service"
+
+module exposes make
+
+function make (x: int32) returns s.T 
+    return { b = false }
+end

@@ -77,8 +77,8 @@ module OpaqueInference =
                 
                 calledSingletons = List.Empty
                 usesExternVar = false
-                singletons = Map.collectWithOverride importedSingletons // might contain duplicates
-                abstractTypes = Map.collectWithOverride importedAbstractTypes // might contain duplicates
+                singletons = Map.collectWithOverride importedSingletons
+                abstractTypes = Map.collectWithOverride importedAbstractTypes
             }
 
         // unused

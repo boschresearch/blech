@@ -1,0 +1,8 @@
+module exposes T, init
+
+struct T 
+    var b: bool
+end
+
+function init (x: int32)
+end
