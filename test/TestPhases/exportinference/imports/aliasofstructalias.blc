@@ -4,7 +4,7 @@ struct T
     var b: bool 
 end
 
-typealias AT = T // this is allowed
+typealias AT = T
 
 typealias AAT = AT
 

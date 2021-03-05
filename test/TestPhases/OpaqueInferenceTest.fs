@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module SingletonInferenceTest
+module OpaqueInferenceTest
 
 open NUnit.Framework
 
@@ -57,21 +57,22 @@ let private parseNameCheckAndHandleImports logger pkgCtx implOrIface moduleName 
         return ast, imports, symTable
     }
 
-let runSingletonInference implOrIface moduleName fileName =
+let runOpaqueInference implOrIface moduleName fileName =
     let logger = Diagnostics.Logger.create ()
     let cliContext = 
         { 
-            TestFiles.makeCliContext TestFiles.SingletonInference.Directory fileName with 
+            TestFiles.makeCliContext TestFiles.OpaqueInference.Directory fileName with 
                 isFrontendTest = true // stop before typecheck for imports
         }
     let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
     
     match parseNameCheckAndHandleImports logger pkgCtx implOrIface moduleName fileName with
     | Ok (ast, imports, symTable) -> 
-        Main.runSingletonInference
+        Main.runOpaqueInference
             logger 
             fileName 
             imports.GetSingletons 
+            imports.GetAbstractTypes
             ast
             symTable
     | Error logger ->
@@ -88,13 +89,13 @@ type Test() =
 
     /// load test cases for nameCheckValidFiles test
     static member validFiles =
-        TestFiles.validFiles TestFiles.SingletonInference
+        TestFiles.validFiles TestFiles.OpaqueInference
         
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member __.SingletonInferenceValidFiles (implOrIface, moduleName, filePath) =
-        match runSingletonInference implOrIface moduleName filePath with
+    member __.OpaqueInferenceValidFiles (implOrIface, moduleName, filePath) =
+        match runOpaqueInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Did not expect to find errors!\n" 
             Diagnostics.Emitter.printDiagnostics logger
@@ -104,13 +105,13 @@ type Test() =
             
     /// load test cases for nameCheckInvalidInputs test
     static member invalidFiles = 
-        TestFiles.invalidFiles TestFiles.SingletonInference
+        TestFiles.invalidFiles TestFiles.OpaqueInference
         
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member __.SingletonInferencencInvalidFiles (implOrIface, moduleName, filePath) =
-        match runSingletonInference implOrIface moduleName filePath with
+    member __.OpaqueInferencencInvalidFiles (implOrIface, moduleName, filePath) =
+        match runOpaqueInference implOrIface moduleName filePath with
         | Error logger ->
             printfn "Discovered Errors:\n" 
             Diagnostics.Emitter.printDiagnostics logger

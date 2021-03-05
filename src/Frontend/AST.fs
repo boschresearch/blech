@@ -462,6 +462,7 @@ and ModulePath =
 and Import = 
     {
         range: range
+        isInternal : bool
         localName: Name
         modulePath: ModulePath
         exposing: Exposing option
@@ -542,6 +543,7 @@ and ModuleSpec =
     {
         range: range
         isSignature: bool
+        isInternal: bool
         exposing: Exposing option
     }
     member modspec.Range = modspec.range
@@ -549,6 +551,7 @@ and ModuleSpec =
     static member Nothing = 
         { range = range.Zero
           isSignature = false
+          isInternal = false
           exposing = Option.None }
 
 /// Blech implementation or interface file
@@ -1134,7 +1137,12 @@ let returnRange range (optExpr: Expr option) =
     | Some expr -> unionRanges range expr.Range
 
 
-let moduleHeadRange range (optExposing: Exposing option) =
+let moduleHeadRange optInternalRange keywordRange (optExposing: Exposing option) =
+    let range = 
+        match optInternalRange with 
+        | Some rng -> unionRanges rng keywordRange 
+        | None -> keywordRange
+
     match optExposing with
     | None -> range
     | Some exp -> unionRanges range exp.Range

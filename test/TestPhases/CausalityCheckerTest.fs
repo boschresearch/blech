@@ -54,11 +54,12 @@ let parseHandleImportsNameCheckAndTypeCheck logger cliContext pkgCtx implOrIface
                 imports.GetExportScopes
                 ast
 
-        let! singletons = 
-            Main.runSingletonInference 
+        let! singletons, abstractTypes = 
+            Main.runOpaqueInference 
                 logger 
                 fileName 
                 imports.GetSingletons 
+                imports.GetAbstractTypes
                 ast
                 symTable
         // no export inference needed

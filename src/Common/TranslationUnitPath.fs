@@ -160,7 +160,6 @@ module PathRegex =
 
 
 /// Types =====================================================================
-type PackageName = string
 
 type TranslationUnitPath = 
     {   // TODO: add protocol "box:" to this type, in case we need more than one protocol. fjg. 15.10.20
@@ -173,8 +172,10 @@ type TranslationUnitPath =
     
     override this.ToString () =
         let prefix = 
-            match this.package with | None -> "" | Some _ -> box
-        prefix + "/" + (this.AsList |> String.concat (string slash))
+            match this.package with 
+            | None -> string slash 
+            | Some _ -> box
+        prefix + (this.AsList |> String.concat (string slash))
 
     member this.ToDoc = 
         txt <| string this
@@ -184,12 +185,10 @@ type TranslationUnitPath =
         match this.package with
         | None -> path
         | Some pkg -> pkg::path
-        
-    member this.ToPackageName : PackageName =
-        match this.package with
-        | None -> ""
-        | Some pkg -> pkg
 
+    member this.IsPackage =
+        Option.isSome this.package
+        
 
 /// Functions =================================================================
 

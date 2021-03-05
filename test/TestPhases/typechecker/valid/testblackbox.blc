@@ -1,0 +1,7 @@
+import internal b "../imports/blackbox"
+
+@[EntryPoint]
+activity Main ()
+    var x: b.T 
+    await b.f(x)
+end

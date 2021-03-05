@@ -219,24 +219,35 @@ module CompilationUnit =
     /// load the unit, compile it, cache it 
     /// generate the signature, compile it, cache it
     /// and return the compilation result for imported usage
-    let require (ctx: Context<'info>) logger importChain (requiredModule: TranslationUnitPath) (importRange: Range.range)
-            : Result<Module<'info>, Diagnostics.Logger> =
+    let require (ctx: Context<'info>) logger 
+                                      importChain 
+                                      (requiredModule : TranslationUnitPath) 
+                                      (importRange : Range.range)
+                                      (importInternal : bool) 
+                                      : Result<Module<'info>, Diagnostics.Logger> =
         let moduleUnit = Implementation requiredModule
         let signatureUnit = Interface requiredModule
         if ctx.loaded.ContainsKey signatureUnit then
-            // printfn "Use compiled module: %A" signatureUnit
-            ctx.loaded.[signatureUnit] // use already compiled signature
+            // in case the module was compiled successful
+            let res = ctx.loaded.[signatureUnit] // use already compiled signature
+            assert Result.isOk res // a cached signature compilation is always ok
+            res
+        elif ctx.loaded.ContainsKey moduleUnit then 
+            // in case there was no signature generated, due to an error in the module
+            // prevents re-compilation of the module
+            let res = ctx.loaded.[moduleUnit] // use already compiled module
+            assert Result.isError res // the cached module compilation is always an error
+            res
         else
             let blcFile = searchImplementation ctx.sourcePath requiredModule
-            
             match blcFile with
             | Ok blc ->
                 Logging.log2 "CompilationUnit" <| sprintf "Compile import: %s" (string moduleUnit)
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
                 do ctx.loaded.Add (moduleUnit, compiledBlcRes)
 
-                match compiledBlcRes with 
-                | Ok moduleInfo -> 
+                match compiledBlcRes with  
+                | Ok moduleInfo ->
                     let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
                     match blhFile with
                     | Ok blh -> 
@@ -244,7 +255,10 @@ module CompilationUnit =
                         Logging.log2 "CompilationUnit" <| sprintf "Compile import: %s" (string signatureUnit)
                         let compiledBlhRes = ctx.loader ctx logger importChain Blh requiredModule blh
                         do ctx.loaded.Add (signatureUnit, compiledBlhRes)
-                        compiledBlhRes           
+                        if importInternal then  
+                            compiledBlcRes // white box import
+                        else
+                            compiledBlhRes // normal import          
                     | Error _ ->
                         // no generated signature implies .blc must be a program
                         // TODO: This is a dangerous conclusion if .blh is missing due to other reasons

@@ -4,7 +4,7 @@ struct S
     var b: bool
 end
 
-typealias T = S   // this should create an export inference error: S is less accessible than T
+typealias T = S 
 
 function init() returns T
     return { b = true }

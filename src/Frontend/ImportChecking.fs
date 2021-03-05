@@ -26,8 +26,8 @@ open Blech.Common
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
 type private Environment = SymbolTable.Environment
-type private Singletons = SingletonInference.Singletons
-type private ExportContext = ExportInference.ExportContext
+type private Singletons = OpaqueInference.Singletons
+type private AbstractTypes = OpaqueInference.AbstractTypes
 
 type ModuleInfo = 
     {
@@ -35,6 +35,7 @@ type ModuleInfo =
         astIsProgram: bool
         nameCheck: Environment
         singletons : Singletons
+        abstractTypes : AbstractTypes
         typeCheck: TypeCheckContext
         typedModule: BlechTypes.BlechModule
     }
@@ -42,7 +43,8 @@ type ModuleInfo =
     static member Make imports 
                        isProgram 
                        symbolTable 
-                       singletons 
+                       singletons
+                       abstractTypes
                        typecheckContext 
                        blechModule =
         { 
@@ -50,6 +52,7 @@ type ModuleInfo =
             astIsProgram = isProgram
             nameCheck = symbolTable
             singletons = singletons
+            abstractTypes = abstractTypes
             typeCheck = typecheckContext
             typedModule = blechModule
         }
@@ -69,6 +72,7 @@ type ImportError =
     | CyclicImport of range: Range.range * path: TranslationUnitPath
     | MultipleImport of range: Range.range * path: TranslationUnitPath
     | ProgramImport of range: Range.range * path: TranslationUnitPath
+    | IllegalWhiteboxImport of range: Range.range * libraryPath: TranslationUnitPath
     | CannotCompileImport of range: Range.range * path: TranslationUnitPath
     | Dummy of range: Range.range * msg: string   // just for development purposes
 
@@ -85,6 +89,9 @@ type ImportError =
             | ProgramImport (rng, path) ->
                 { range = rng 
                   message = sprintf "the import '%s' is a program and cannot be imported" <| string path }
+            | IllegalWhiteboxImport (rng, path) ->
+                { range = rng 
+                  message = sprintf "whitebox import for any library module, like \"%s\", is not allowed"  <| string path }
             | CannotCompileImport (rng, path) ->
                 { range = rng 
                   message = sprintf "cannot compile import '%s'" <| string path }
@@ -95,13 +102,15 @@ type ImportError =
         member err.ContextInformation  = 
             match err with
             | CyclicImport (range = rng) ->
-                [ { range = rng; message = "cyclic import"; isPrimary = true }]
+                [ { range = rng; message = "cyclic import"; isPrimary = true } ]
             | MultipleImport (range = rng) ->
-                [ { range = rng; message = "multiple import"; isPrimary = true }]
+                [ { range = rng; message = "multiple import"; isPrimary = true } ]
             | ProgramImport (range = rng) ->
-                [ { range = rng; message = "program import"; isPrimary = true }]
+                [ { range = rng; message = "program import"; isPrimary = true } ]
+            | IllegalWhiteboxImport (range = rng) ->
+                [ { range = rng; message = "library import"; isPrimary = true } ]
             | CannotCompileImport (range = rng) ->
-                [ { range = rng; message = "not compileable"; isPrimary = true }]
+                [ { range = rng; message = "not compileable"; isPrimary = true } ]
             | Dummy (range = rng) ->
                 [ { range = rng; message = "thats wrong"; isPrimary = true } ]
 
@@ -147,9 +156,13 @@ type Imports =
     member this.GetExportScopes : Map<TranslationUnitPath, SymbolTable.Scope> = 
         Map.ofList [ for pair in this.compiledImports do yield (pair.Key, pair.Value.GetExportScope) ]
         
-    member this.GetSingletons : SingletonInference.Singletons list = 
+    member this.GetSingletons : OpaqueInference.Singletons list = 
         this.GetImports
         |> List.map (fun import -> import.singletons)
+
+    member this.GetAbstractTypes : OpaqueInference.AbstractTypes list = 
+        this.GetImports
+        |> List.map (fun import -> import.abstractTypes)
 
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports
@@ -198,18 +211,30 @@ let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledMod
         Error logger
     else
         Ok <| imports.AddCompiledImport modul.path compiledModule.info
+
+
+// check if the import is a white-box import from another box
+let private checkWhiteboxImport logger (import: AST.Import) (imports: Imports) =
+    let modpath = import.modulePath
+    if import.isInternal && modpath.path.IsPackage then
+        IllegalWhiteboxImport (modpath.range, modpath.path)
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger
+    else
+        Ok imports
+        
     
 
 // tries to compile an imported module
 // if successful, adds it to the collection of compiled imported modules.
 // else logs an error for the importing module.
-let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) (imports: Imports)  = 
+let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) importInternal (imports: Imports)  = 
     let modName = modul.path
     let srcRng = modul.Range
     
     let freshLogger = Diagnostics.Logger.create ()
     let importChain = imports.importChain.Extend modName
-    let compRes = CompilationUnit.require pkgCtx freshLogger importChain modName srcRng
+    let compRes = CompilationUnit.require pkgCtx freshLogger importChain modName srcRng importInternal
     
     match compRes with
     | Ok compiledModule ->
@@ -233,7 +258,8 @@ let private checkImport (pkgCtx : CompilationUnit.Context<ModuleInfo>)
     
     checkCyclicImport import.modulePath logger imports
     |> Result.bind (checkMultipleImport pkgCtx import.modulePath logger)
-    |> Result.bind (compileImportedModule pkgCtx logger import.modulePath)
+    |> Result.bind (checkWhiteboxImport logger import)
+    |> Result.bind (compileImportedModule pkgCtx logger import.modulePath import.isInternal)
     |> returnImports 
     
 

@@ -26,7 +26,7 @@ open Blech.Common.TranslationUnitPath
 type Phase =
     | Parser 
     | Namecheck
-    | SingletonInference
+    | OpaqueInference
     | ExportInference
     | Typechecker
     | Causality
@@ -35,7 +35,7 @@ type Phase =
         match p with
         | Parser -> "parser"
         | Namecheck -> "namecheck"
-        | SingletonInference -> "singletoninference"
+        | OpaqueInference -> "opaqueinference"
         | ExportInference -> "exportinference"
         | Typechecker -> "typechecker"
         | Causality -> "causality"

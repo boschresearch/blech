@@ -63,7 +63,7 @@ module Diagnostics =
         | Parsing
         | Importing
         | Naming
-        | Singletons
+        | Opaques
         | Exports
         | Typing
         | Causality
@@ -75,7 +75,7 @@ module Diagnostics =
             | Parsing -> "parsing"
             | Importing -> "importing"
             | Naming -> "name resolution"
-            | Singletons -> "singleton inference"
+            | Opaques -> "opaque inference"
             | Exports -> "export inference"
             | Typing -> "typing"
             | Causality -> "causality"

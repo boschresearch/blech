@@ -150,8 +150,7 @@ rule Token = parse
     | "import"              { IMPORT (getRange lexbuf) }
     | "exposes"             { EXPOSES (getRange lexbuf) }
     | "signature"           { SIGNATURE (getRange lexbuf) }
-    | "inside"              { INSIDE (getRange lexbuf) }
-    | "outside"             { OUTSIDE (getRange lexbuf) }
+    | "internal"            { INTERNAL (getRange lexbuf) }
     
     (* --- extensions --- *)
     

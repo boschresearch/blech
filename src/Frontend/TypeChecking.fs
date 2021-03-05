@@ -506,7 +506,7 @@ let private fParamDecl lut pos name mutableFlag dtyRes =
 
 /// Type check a function prototype
 let private fFunPrototype lut kind pos name inputs outputs retType annotation =
-    let singletons = SingletonInference.collectSingletons lut.ncEnv lut.singletons name
+    let singletons = OpaqueInference.collectSingletons lut.ncEnv lut.singletons name
     let createFunPrototype ((((qname, ins), outs), ret), annotation) = 
         let funPrototype =
             {
