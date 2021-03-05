@@ -264,14 +264,17 @@ module Blech.Visualization.Optimization
     /// Join Transitions are changed to immediate transitions.
     and private updateEdgesFlattenHierarchy (edgeList : BlechEdge list) (newTargetOrSource : BlechNode) (sourceOrTarget : SourceOrTarget) (graph : VisGraph): VisGraph = 
         match edgeList with 
-            | head :: tail  ->  // Determine payload. Terminal transitions change to immdediate transitions
-                                let payload = match head.Payload.Property with
-                                                | IsAwait | IsConditional | IsImmediate | IsAbort -> head.Payload
-                                                | IsTerminal -> head.Payload.CopyWithPropertyImmediate
-                                                | IsConditionalTerminal -> head.Payload.CopyWithPropertyConditional
-                                let updatedTargetOrSource = 
+            | head :: tail  ->  let updatedTargetOrSource = 
                                     match sourceOrTarget with
-                                        | Source -> // 1. If the final node of an complex body becomes a node that is the source of conditionals, it is a connector really.
+                                        | Source -> // Determine payload. Terminal transitions change to immdediate transitions because the hierarchy is flattened.
+                                                    let payload = 
+                                                        match head.Payload.Property with
+                                                            | IsAwait | IsAbortingAwait | IsConditional | IsImmediate | IsAbort -> head.Payload
+                                                            | IsTerminal -> head.Payload.CopyWithProperty IsImmediate
+                                                            | IsConditionalTerminal -> head.Payload.CopyWithProperty IsConditional
+                                                            | IsTerminalAwait -> head.Payload.CopyWithProperty IsAwait
+                                        
+                                                    // 1. If the final node of an complex body becomes a node that is the source of conditionals, it is a connector really.
                                                     // Except if it is the source of a delayed transition.
                                                     let updatedSource = 
                                                         if newTargetOrSource.Payload.IsComplex = IsSimple && payload.Property = IsConditional && useConnectorState &&
@@ -284,7 +287,7 @@ module Blech.Visualization.Optimization
                                                     let target = findNodeByStateCount head.Target.Payload.StateCount head.Target.Payload.SecondaryId graph
                                                     graph.AddEdge payload updatedSource target
                                                     updatedSource
-                                        | Target -> graph.AddEdge payload head.Source newTargetOrSource
+                                        | Target -> graph.AddEdge head.Payload head.Source newTargetOrSource
                                                     newTargetOrSource
                                 updateEdgesFlattenHierarchy tail updatedTargetOrSource sourceOrTarget graph
             | [] -> graph
@@ -398,7 +401,7 @@ module Blech.Visualization.Optimization
             let addEdgeToEveryFirstAwait = 
                                         fun (o:Option<BlechNode>) -> 
                                             match o with 
-                                                | Some a -> addEdgeToNode caseClosingNode IsAwait (fst (snd orderedPairOfRegions)) updatedGraph a  
+                                                | Some a -> addEdgeToNode caseClosingNode IsAbortingAwait (fst (snd orderedPairOfRegions)) updatedGraph a  
                                                 | None -> () // Do nothing.   
             List.map addEdgeToEveryFirstAwait (scnd3 findFirstAwaitConstruct) |> ignore               
             //All nodes after first await. Add edge manually for very last node, if present.
@@ -537,7 +540,7 @@ module Blech.Visualization.Optimization
                 handleSourceDeletion finalNodeInfo source target graph
             else if isSimpleOrConnector target && onlyImmediatesTerminalOrConditionalTargetFocus then
                 handleTargetDeletion finalNodeInfo source target graph
-            else    
+            else
                 callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList target.Outgoing) graph
         elif(specialCase2) then
             graph.RemoveEdge edge
@@ -582,7 +585,7 @@ module Blech.Visualization.Optimization
         let labelChangedTarget = match source.Payload.Label with 
                                     | "" -> statusChangedTarget
                                     | _ -> graph.ReplacePayloadInByAndReturn statusChangedTarget (addPrefixToNodeLabel source.Payload.Label statusChangedTarget) 
-        let updatedTarget = updateEdgesCollapseImmediate (Seq.toList source.Incoming) labelChangedTarget Target graph
+        let updatedTarget = updateEdgesCollapseImmediate finalNodeInfo (Seq.toList source.Incoming) labelChangedTarget Target graph
         graph.RemoveNode source
         callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList updatedTarget.Outgoing) graph
 
@@ -592,7 +595,7 @@ module Blech.Visualization.Optimization
         let labelChangedSource = match target.Payload.Label with 
                                     | "" -> statusChangedSource
                                     | _ -> graph.ReplacePayloadInByAndReturn statusChangedSource (addPostdixToNodeLabel target.Payload.Label statusChangedSource)
-        let updatedSource = updateEdgesCollapseImmediate (Seq.toList target.Outgoing) labelChangedSource Source graph
+        let updatedSource = updateEdgesCollapseImmediate finalNodeInfo (Seq.toList target.Outgoing) labelChangedSource Source graph
         graph.RemoveNode target
         callSubsequentAndFilterAlreadyVisitedTargets finalNodeInfo (Seq.toList updatedSource.Outgoing) graph
 
@@ -600,7 +603,9 @@ module Blech.Visualization.Optimization
     /// New edges are based on the data given by the edges, the information whether source or target is to be changed and the given node to be the new source/target.
     /// If the edge is immediate and the new source is a complex node (everytime it is not simple), change the edge to a termination edge.
     /// If source is a connector and we connect an await edge to it, make it a simple state instead.
-    and private updateEdgesCollapseImmediate (edgeList : BlechEdge list) (newTargetOrSource : BlechNode) (sourceOrTarget : SourceOrTarget) (graph : VisGraph) : BlechNode = 
+    /// If we are connecting an await node to a complex state with a final node, change its property to a terminating await statement.
+    /// NOTE that await conditions
+    and private updateEdgesCollapseImmediate (finalNodeInfo : (string * bool) list) (edgeList : BlechEdge list) (newTargetOrSource : BlechNode) (sourceOrTarget : SourceOrTarget) (graph : VisGraph) : BlechNode = 
         match edgeList with 
             | head :: tail  ->  let updatedSourceOrTarget = 
                                     match sourceOrTarget with
@@ -614,15 +619,17 @@ module Blech.Visualization.Optimization
                                                 let target = findNodeByStateCount head.Target.Payload.StateCount head.Target.Payload.SecondaryId graph
                                                 if not (isSimpleOrConnector newSource) && (head.Payload.Property = IsImmediate || head.Payload.Property = IsConditional) then
                                                     if (head.Payload.Property = IsImmediate) then 
-                                                        graph.AddEdge head.Payload.CopyAsNotOptimized.CopyWithPropertyTerminal newSource target 
+                                                        graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsTerminal) newSource target 
                                                     else 
-                                                        graph.AddEdge head.Payload.CopyAsNotOptimized.CopyWithPropertyConditionalTerminal newSource target
+                                                        graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsConditionalTerminal) newSource target
+                                                elif nodeIsCmplxAndHasFinalNode finalNodeInfo newSource && head.Payload.Property = IsAwait then 
+                                                    graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsTerminalAwait) newSource target
                                                 else
                                                     graph.AddEdge head.Payload.CopyAsNotOptimized newSource target
                                                 newSource
                                         | Target -> graph.AddEdge head.Payload.CopyAsNotOptimized head.Source newTargetOrSource
                                                     newTargetOrSource
-                                updateEdgesCollapseImmediate tail updatedSourceOrTarget sourceOrTarget graph
+                                updateEdgesCollapseImmediate finalNodeInfo tail updatedSourceOrTarget sourceOrTarget graph
             | [] -> newTargetOrSource
 
     /// Calls the immediate collapse on every graph of a cobegin body.

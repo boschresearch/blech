@@ -116,16 +116,13 @@ module Blech.Visualization.BlechVisGraph
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
-    and EdgeProperty = IsAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
+    and EdgeProperty = IsAwait | IsTerminalAwait | IsAbortingAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
 
     /// Payload for an edge.
     and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with
         member x.CopyAsOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = Optimized}
         member x.CopyAsNotOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = NotOptimized}
-        member x.CopyWithPropertyImmediate = {Label = x.Label ; Property = IsImmediate; WasOptimized = x.WasOptimized}
-        member x.CopyWithPropertyTerminal =  {Label = x.Label ; Property = IsTerminal; WasOptimized = x.WasOptimized}
-        member x.CopyWithPropertyConditional = {Label = x.Label ; Property = IsConditional; WasOptimized = x.WasOptimized}
-        member x.CopyWithPropertyConditionalTerminal = {Label = x.Label ; Property = IsConditionalTerminal; WasOptimized = x.WasOptimized}
+        member x.CopyWithProperty prop = {Label = x.Label ; Property = prop; WasOptimized = x.WasOptimized}
 
     /// Node of a graph extracted from Blech code.
     and BlechNode = Node<NodePayload, EdgePayload>
@@ -347,17 +344,35 @@ module Blech.Visualization.BlechVisGraph
     /// Finds for a node that is calling an activity, whether said activity contains no final node.
     /// This is given by the list of pairs, pairing the acitvity names with the presence indicator.
     /// If node is activity call, and called activity has NO final node, return true, else false.
-    let nodeIsActivityCallAndHasNoFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
+    let rec nodeIsActivityCallAndHasNoFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
         match current.Payload.IsComplex with
             | IsActivityCall call -> let pair = List.find (fun e -> call.origName = fst e) pairs
                                      not (snd pair)
             | _ -> false
 
-    /// Checks if a node is a cobegin and if such has a final node in a region.
-    let nodeIsCbgnAndHasNoFinalNode (current: BlechNode) : bool =
+    /// Checks if a node is a cobegin and if such does not has a final node in a region.
+    and nodeIsCbgnAndHasNoFinalNode (current: BlechNode) : bool =
         match current.Payload.IsComplex with
             | IsCobegin cbgn -> not (isThereFinalNodeInCobegin cbgn.Content)
             | _ -> false
+
+    /// Finds for a node that is calling an activity, whether said activity contains a final node.
+    /// This is given by the list of pairs, pairing the acitvity names with the presence indicator.
+    /// If node is activity call, and called activity has final node, return true, else false.
+    and nodeIsActivityCallAndHasFinalNode (current: BlechNode) (pairs : (string*bool) list) : bool =
+        not (nodeIsActivityCallAndHasNoFinalNode current pairs)
+
+    /// Checks if a node is a cobegin and if such has a final node in a region.
+    and nodeIsCbgnAndHasFinalNode (current: BlechNode) : bool =
+        not (nodeIsCbgnAndHasNoFinalNode current)
+
+    /// Checks if a node is complex and has a final node.
+    let nodeIsCmplxAndHasFinalNode (finalNodeInfo : (string * bool) list) (node : BlechNode) : bool =
+        match node.Payload.IsComplex with
+            | IsSimple | IsConnector -> false
+            | IsComplex cmplx -> isThereFinalNodeInHashSet cmplx.Body.Nodes
+            | IsCobegin _-> nodeIsCbgnAndHasFinalNode node
+            | IsActivityCall _ -> nodeIsActivityCallAndHasFinalNode node finalNodeInfo
 
     //____________________________________Remove element in list.
     /// Removes element from a list. If element is not in list, original list will be returned.
