@@ -614,9 +614,18 @@ module ProgramGraph =
         Thread.allForks node1.Payload.Thread
         |> List.tryFind (fun f -> List.contains f (Thread.allForks node2.Payload.Thread))
     
+    let memoizedCycles = Dictionary<QName, ResizeArray<Dictionary<Node,Node>*Graph>>()
+
     /// Given two nodes check if they are both in the surface or depth 
     /// wrt. to their common root thread or not
-    let areBothInSurfOrDepth pg (node1: Node) (node2: Node) =
+    let areBothInSurfOrDepth name graph (node1: Node) (node2: Node) =
+        let allCycles () = 
+            match memoizedCycles.TryGetValue name with
+            | true, cycles -> cycles
+            | false, _ ->
+                let cycles = GenericGraph.johnson75 graph
+                memoizedCycles.Add(name, cycles)
+                cycles
         if areConcurrent node1 node2 then
             // find least common fork (may not exist if root is the lca)
             let lcf = 
@@ -628,7 +637,7 @@ module ProgramGraph =
                     GenericGraph.allSimplePaths cfSucc lcf node
                     |> List.filter (Seq.isEmpty >> not) // why is it at all possible to get empty paths here?
                 let allLoopsWithinLcfThread = 
-                    GenericGraph.johnson75 pg
+                    allCycles()
                     |> Seq.choose (fun (mapping, g) -> if mapping.ContainsKey node then Some (g.Nodes |> Seq.toList) else None)
                     |> Seq.toList
                     |> List.filter (List.forall(fun n -> Thread.strictlyContains lcf.Payload.Thread n.Payload.Thread)) // loops that do not leave the enclosing cobegin
@@ -659,7 +668,7 @@ module ProgramGraph =
             let node1OnlyInDepth = alwaysPauseTowardsNode1
             let node2OnlyInSurface = not hasPauseTowardsNode2
             let node2OnlyInDepth = alwaysPauseTowardsNode2
-
+            
             ((node1OnlyInSurface && node2OnlyInDepth) || (node1OnlyInDepth && node2OnlyInSurface))
             |> not
         // if not concurrent there is no sense to talk about surface and depth
