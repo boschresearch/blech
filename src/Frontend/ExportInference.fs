@@ -86,7 +86,9 @@ module ExportInference =
     
     type SingletonSignatures = Map<Name, SingletonSignature>
 
-    
+    // --- Imports of Internal Modules 
+
+    type ImportedInternalModules = Set<TranslationUnitPath.TranslationUnitPath>
 
     type ExportContext = 
         private {
@@ -97,6 +99,7 @@ module ExportInference =
             abstractTypes : OpaqueInference.AbstractTypes
 
             // results 
+            isApiModule : bool
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
             singletonSignatures : SingletonSignatures
@@ -116,6 +119,7 @@ module ExportInference =
                 abstractTypes = abstractTypes
         
                 // results
+                isApiModule = false
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
@@ -764,8 +768,9 @@ module ExportInference =
     //    // TODO: implement this here
     //    ctx 
 
-    //let private inferImport (ctx: ExportContext) (import: AST.Import) = 
-    //    Option.fold inferImportExposing ctx import.exposing
+    let private inferImport (ctx: ExportContext) (import: AST.Import) = 
+        ctx
+        // Option.fold inferImportExposing ctx import.exposing
 
 
     // ModuleSpec 
@@ -773,14 +778,19 @@ module ExportInference =
     //    ctx 
         
 
-    //let private inferModuleSpecLast ctx (modSpec: AST.ModuleSpec) = 
-    //    Option.fold inferExposing ctx modSpec.exposing
+    let private inferModuleSpec ctx (modSpec: AST.ModuleSpec) = 
+        if modSpec.isInternal then
+            ctx
+        else 
+            { ctx with isApiModule = true }
+        // Option.fold inferExposing ctx modSpec.exposing
 
 
     // Compilation Unit
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
         if cu.IsModule  then 
-            List.fold inferTopLevelMember ctx cu.members
+            Option.fold inferModuleSpec ctx cu.spec
+            |> List.fold inferTopLevelMember <| cu.members
         else // do nothing for programs and signatures
             ctx
             
@@ -790,6 +800,7 @@ module ExportInference =
     let inferExports logger (env : SymbolTable.Environment) 
                             (singletons : OpaqueInference.Singletons)
                             (abstractTypes : OpaqueInference.AbstractTypes)
+                            (importedInternalModules : ImportedInternalModules)
                             (cu : AST.CompilationUnit) =
         let exports =
             ExportContext.Initialise logger env singletons abstractTypes

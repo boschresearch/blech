@@ -33,6 +33,7 @@ type ModuleInfo =
     {
         dependsOn: TranslationUnitPath list
         astIsProgram: bool
+        astIsInternal: bool
         nameCheck: Environment
         singletons : Singletons
         abstractTypes : AbstractTypes
@@ -42,6 +43,7 @@ type ModuleInfo =
 
     static member Make imports 
                        isProgram 
+                       isInternal
                        symbolTable 
                        singletons
                        abstractTypes
@@ -50,6 +52,7 @@ type ModuleInfo =
         { 
             dependsOn = imports
             astIsProgram = isProgram
+            astIsInternal = isInternal
             nameCheck = symbolTable
             singletons = singletons
             abstractTypes = abstractTypes
@@ -164,6 +167,10 @@ type Imports =
         this.GetImports
         |> List.map (fun import -> import.abstractTypes)
 
+    member this.GetImportedInternalModules : ExportInference.ImportedInternalModules = 
+        Set <| seq { for pair in this.compiledImports 
+                        do if pair.Value.astIsInternal then yield pair.Key }
+        
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports
         |> List.map (fun i -> i.typeCheck)

@@ -82,9 +82,9 @@ module Main =
         OpaqueInference.inferOpaques logger symboltableEnv importedSingletons importedAbstractTypes ast 
                     
 
-    let runExportInference logger symboltableEnv fileName singletons ast = 
+    let runExportInference logger symboltableEnv fileName singletons abstractTypes importedInternalModules ast = 
         Logging.log2 "Main" (sprintf "infer signature for module '%s'" fileName)
-        ExportInference.inferExports logger symboltableEnv singletons ast 
+        ExportInference.inferExports logger symboltableEnv singletons abstractTypes importedInternalModules ast 
     
     
     let runTypeChecking cliArgs logger inputFile otherLuts ast env singletons =
@@ -276,6 +276,7 @@ module Main =
                         fileName 
                         singletons
                         abstractTypes
+                        imports.GetImportedInternalModules
                         ast
 
                 let! lut, blechModule = 
@@ -298,7 +299,14 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons abstractTypes lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules 
+                                                      ast.IsProgram 
+                                                      ast.IsInternal 
+                                                      symTable 
+                                                      singletons 
+                                                      abstractTypes 
+                                                      lut 
+                                                      blechModule
             }
 
                 
@@ -377,7 +385,14 @@ module Main =
                             singletons
 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules ast.IsProgram symTable singletons abstractTypes lut blechModule
+                return ImportChecking.ModuleInfo.Make importedModules 
+                                                      ast.IsProgram 
+                                                      ast.IsInternal 
+                                                      symTable 
+                                                      singletons 
+                                                      abstractTypes 
+                                                      lut 
+                                                      blechModule
             }
 
 

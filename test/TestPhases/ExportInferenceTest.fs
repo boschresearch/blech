@@ -64,7 +64,7 @@ let private parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIf
                 ast
                 symTable
         
-        return ast, symTable, singletons, abstractTypes
+        return ast, imports, symTable, singletons, abstractTypes
     }
 
 
@@ -78,13 +78,14 @@ let inferExports implOrIface moduleName fileName =
     let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
 
     match parseHandleImportsNameCheckAndInferSingletons pkgCtx logger implOrIface moduleName fileName with
-    | Ok (ast, symTable, singletons, abstractTypes) -> 
+    | Ok (ast, imports, symTable, singletons, abstractTypes) -> 
         Main.runExportInference 
             logger 
             symTable 
             fileName 
             singletons // subsumes imported singletons
             abstractTypes
+            imports.GetImportedInternalModules
             ast
     
     | Error logger ->

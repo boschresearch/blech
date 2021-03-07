@@ -572,6 +572,12 @@ and CompilationUnit =
             false
     member this.IsProgram = 
         Option.isNone this.spec
+    member this.IsInternal = 
+        match this.spec with
+        | Some modSpec ->
+            modSpec.isInternal
+        | None ->
+            false      
     member this.IsSignature =
         match this.spec with
         | Some modSpec ->
