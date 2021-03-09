@@ -226,6 +226,8 @@ module ExportInference =
     type ExportError = 
         | NameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
         | ImplicitNameLessAccessible of usage: Name * decl: Name * topLevelDecl : Name
+        | InternalModuleRequired of usage: Name * decl: Name * spec : ModuleSpec
+        | ImportInternalRequired of usage: Name * decl: Name * spec : ModuleSpec
         | Dummy of range: Range.range * msg: string   // just for development purposes
     
         interface Diagnostics.IDiagnosable with
@@ -237,6 +239,12 @@ module ExportInference =
                 | ImplicitNameLessAccessible (usage = name; topLevelDecl = tldecl) ->
                     { range = name.range 
                       message = sprintf "implicit name '%s' is less accessible than declaration '%s'" <| string name <| string tldecl }
+                | InternalModuleRequired (decl = decl; spec = spec) ->
+                    { range = spec.range
+                      message = sprintf "module interface requires access to imported internal module '%s'" <| string decl  }
+                | ImportInternalRequired (decl = decl; spec = spec) ->
+                    { range = spec.range
+                      message = sprintf "module interface requires whitebox access to module '%s'" <| string decl  }
                 | Dummy (rng, msg) ->
                     { range = rng
                       message = sprintf "Dummy error: %s" msg }
@@ -248,6 +256,14 @@ module ExportInference =
                     [ { range = usage.Range; message = "hidden"; isPrimary = true }
                       { range = decl.Range; message = "hidden declaration"; isPrimary = false}
                       { range = topLevelDecl.Range; message = "exposed declaration"; isPrimary = false} ]
+                | InternalModuleRequired (usage, decl, spec) ->
+                    [ { range = spec.Range; message = "must be internal"; isPrimary = true }
+                      { range = decl.Range; message = "required import"; isPrimary = false}
+                      { range = usage.Range; message = "exported usage"; isPrimary = false} ]
+                | ImportInternalRequired (usage, decl, spec) ->
+                    [ { range = spec.Range; message = "must be internal"; isPrimary = true }
+                      { range = decl.Range; message = "required import"; isPrimary = false}
+                      { range = usage.Range; message = "exported usage"; isPrimary = false} ]
                 | Dummy (range = rng) ->
                     [ { range = rng; message = "thats wrong"; isPrimary = true } ]
     
@@ -324,10 +340,10 @@ module ExportInference =
             let declName = Env.getDeclName ctx.environment name
             match Map.tryFind declName ctx.internals with
             | Some (InternalModule modPath) ->
-                Dummy (modPath.Range, "Internal module in api")
+                InternalModuleRequired (name, declName, Option.get ctx.moduleSpec)
                 |> logExportError ctx 
             | Some (ImportInternal modPath) ->
-                Dummy (modPath.Range, "import internal in api")
+                ImportInternalRequired (name, declName, Option.get ctx.moduleSpec)
                 |> logExportError ctx 
             | None ->
                 ctx
