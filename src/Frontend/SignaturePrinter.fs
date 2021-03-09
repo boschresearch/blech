@@ -868,7 +868,11 @@ module SignaturePrinter =
             |> dpRemoveEmpty
             |> dpToplevelClose
 
-        let spec = txt "signature"
+        let spec = 
+            if ast.IsInternal then
+                txt "internal signature"
+            else
+                txt "signature"
 
         let members = 
             List.map psMember ast.members

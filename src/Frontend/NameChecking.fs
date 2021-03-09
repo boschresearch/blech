@@ -629,9 +629,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         // this should create an intermediate scope after the imports, lets call it module scope
         List.fold checkImport ctx cu.imports
         |> addModuleScope  // all compilation units get a module scope
-        |> Option.fold checkModuleSpecBefore <| cu.spec
+        |> Option.fold checkModuleSpecBefore <| cu.moduleSpec
         |> List.fold checkMember <| cu.members
-        |> Option.fold checkModuleSpecAfter <| cu.spec     // check exposes <identifiers> last 
+        |> Option.fold checkModuleSpecAfter <| cu.moduleSpec     // check exposes <identifiers> last 
     
     
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking

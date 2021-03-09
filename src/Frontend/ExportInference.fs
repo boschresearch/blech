@@ -86,46 +86,68 @@ module ExportInference =
     
     type SingletonSignatures = Map<Name, SingletonSignature>
 
-    // --- Imports of Internal Modules 
+    // --- Imports 
 
     type ImportedInternalModules = Set<TranslationUnitPath.TranslationUnitPath>
 
+    /// Classification of imported modules
+    type private Internal =
+        | InternalModule of AST.ModulePath
+        | ImportInternal of AST.ModulePath
+
+
+    type private Internals = Map<Name, Internal>
+    
     type ExportContext = 
         private {
             // inputs
             logger : Diagnostics.Logger
+            moduleSpec : AST.ModuleSpec option
             environment : SymbolTable.Environment
             singletons : OpaqueInference.Singletons
             abstractTypes : OpaqueInference.AbstractTypes
+            importedInternalModules : ImportedInternalModules
 
-            // results 
-            isApiModule : bool
+            // accumulated state
+            internals : Internals
+            
+            // results
             exportScope : SymbolTable.Scope
             requiredImports: RequiredImports // import mod "url" exposes member: "mod" -> None; "member" -> Some mod
             singletonSignatures : SingletonSignatures
             opaqueTypes : OpaqueTypes    
-           
         }
 
         static member Initialise (logger : Diagnostics.Logger) 
+                                 (moduleSpec : AST.ModuleSpec option)
                                  (env : SymbolTable.Environment) 
                                  (singletons : OpaqueInference.Singletons) 
-                                 (abstractTypes : OpaqueInference.AbstractTypes) =
+                                 (abstractTypes : OpaqueInference.AbstractTypes) 
+                                 (importedInternalModules : ImportedInternalModules)=
             {   
                 // inputs
                 environment = env
+                moduleSpec = moduleSpec
                 logger = logger
                 singletons = singletons
                 abstractTypes = abstractTypes
+                importedInternalModules = importedInternalModules
         
+                // accumulated state
+                internals = Map.empty
+                
                 // results
-                isApiModule = false
                 exportScope = SymbolTable.Scope.createExportScope ()
                 requiredImports = Map.empty
                 singletonSignatures = Map.empty
                 opaqueTypes = Map.empty
                 
             }
+
+        member this.IsInternalModule =
+            match this.moduleSpec with
+            | None -> false
+            | Some spec -> spec.isInternal
 
         member this.AddRequiredImports (id: Identifier) =
             if Env.isImportedName this.environment id then
@@ -297,15 +319,33 @@ module ExportInference =
     //    | None ->
     //        ctx
 
+    let private checkInternalModule (ctx : ExportContext) name = 
+        if ctx.IsRequiredImport name &&  not ctx.IsInternalModule then
+            let declName = Env.getDeclName ctx.environment name
+            match Map.tryFind declName ctx.internals with
+            | Some (InternalModule modPath) ->
+                Dummy (modPath.Range, "Internal module in api")
+                |> logExportError ctx 
+            | Some (ImportInternal modPath) ->
+                Dummy (modPath.Range, "import internal in api")
+                |> logExportError ctx 
+            | None ->
+                ctx
+        else
+            ctx
+    
+
     let private requireImportIfImported (ctx: ExportContext) (name: Name) =
         // printfn "require import for: %s" name.id
         ctx.AddRequiredImports name.id
+        |> checkInternalModule <| name 
 
 
     let private requireImportIfCalledSingleton (ctx: ExportContext) (name: Name) (maybeSingleton: Name) =
         // printfn "require import for: %s" name.id
         if ctx.IsSingleton maybeSingleton then 
             ctx.AddRequiredImports name.id
+            |> checkInternalModule <| name 
         else
             ctx
 
@@ -769,7 +809,12 @@ module ExportInference =
     //    ctx 
 
     let private inferImport (ctx: ExportContext) (import: AST.Import) = 
-        ctx
+        if ctx.importedInternalModules.Contains import.modulePath.path then
+            { ctx with internals = Map.add import.localName (InternalModule import.modulePath) ctx.internals }
+        elif import.isInternal then
+            { ctx with internals = Map.add import.localName (ImportInternal import.modulePath) ctx.internals }
+        else
+            ctx
         // Option.fold inferImportExposing ctx import.exposing
 
 
@@ -778,22 +823,18 @@ module ExportInference =
     //    ctx 
         
 
-    let private inferModuleSpec ctx (modSpec: AST.ModuleSpec) = 
-        if modSpec.isInternal then
-            ctx
-        else 
-            { ctx with isApiModule = true }
+    // let private inferModuleSpec ctx (modSpec: AST.ModuleSpec) = 
         // Option.fold inferExposing ctx modSpec.exposing
 
 
-    // Compilation Unit
+    // Compilation Unit is always a module
     let private inferCompilationUnit (ctx: ExportContext) (cu: AST.CompilationUnit) =
-        if cu.IsModule  then 
-            Option.fold inferModuleSpec ctx cu.spec
+        if cu.IsModule then 
+            List.fold inferImport ctx cu.imports  // collect imported internal modules and white-box imports
             |> List.fold inferTopLevelMember <| cu.members
         else // do nothing for programs and signatures
             ctx
-            
+
     // end =========================================
     
     
@@ -802,8 +843,9 @@ module ExportInference =
                             (abstractTypes : OpaqueInference.AbstractTypes)
                             (importedInternalModules : ImportedInternalModules)
                             (cu : AST.CompilationUnit) =
+
         let exports =
-            ExportContext.Initialise logger env singletons abstractTypes
+            ExportContext.Initialise logger cu.moduleSpec env singletons abstractTypes importedInternalModules
             |> inferCompilationUnit <| cu
         // just for debugging
         // printfn "Opaque Types: \n %A" exports.opaqueTypes

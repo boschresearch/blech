@@ -560,26 +560,26 @@ and CompilationUnit =
         range: range
         moduleName: TranslationUnitPath
         imports: Import list
-        spec: ModuleSpec option
+        moduleSpec: ModuleSpec option
         members: Member list 
     }
     member this.Range = this.range
     member this.IsModule = 
-        match this.spec with
+        match this.moduleSpec with
         | Some modSpec ->
             not modSpec.isSignature
         | None ->
             false
     member this.IsProgram = 
-        Option.isNone this.spec
+        Option.isNone this.moduleSpec
     member this.IsInternal = 
-        match this.spec with
+        match this.moduleSpec with
         | Some modSpec ->
             modSpec.isInternal
         | None ->
             false      
     member this.IsSignature =
-        match this.spec with
+        match this.moduleSpec with
         | Some modSpec ->
             modSpec.isSignature
         | None ->
@@ -1143,15 +1143,15 @@ let returnRange range (optExpr: Expr option) =
     | Some expr -> unionRanges range expr.Range
 
 
-let moduleHeadRange optInternalRange keywordRange (optExposing: Exposing option) =
-    let range = 
-        match optInternalRange with 
-        | Some rng -> unionRanges rng keywordRange 
-        | None -> keywordRange
+//let moduleHeadRange optInternalRange keywordRange (optExposing: Exposing option) =
+//    let range = 
+//        match optInternalRange with 
+//        | Some rng -> unionRanges rng keywordRange 
+//        | None -> keywordRange
 
-    match optExposing with
-    | None -> range
-    | Some exp -> unionRanges range exp.Range
+//    match optExposing with
+//    | None -> range
+//    | Some exp -> unionRanges range exp.Range
 
 
 let importAsRange leftRng rightRng (optExp: Exposing option) =
@@ -1288,7 +1288,7 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
     match treeNode with
     | Package p -> 
         let result = List.map (fun m -> recurse (ASTNode.Member' m)) p.members
-        fPackage (p.range, p.spec, result)
+        fPackage (p.range, p.moduleSpec, result)
     | Import' i ->
         fImport i
     | Member' m -> 

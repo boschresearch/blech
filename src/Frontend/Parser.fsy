@@ -1337,7 +1337,7 @@ OptInternal
     | INTERNAL                                  { Some $1 }
 
 ModuleHead 
-    : OptInternal MODULE Exposing               { { ModuleSpec.range = moduleHeadRange $1 $2 $3
+    : OptInternal MODULE Exposing               { { ModuleSpec.range = optUnionRanges $1 $2 
                                                     isSignature = false
                                                     isInternal = Option.isSome $1
                                                     exposing = $3 } }
@@ -1389,7 +1389,7 @@ Module
     : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = $1
-                                                    spec = Option.Some $2
+                                                    moduleSpec = Option.Some $2
                                                     members = $3 |> filterOutNothingMembers } }
 
 /* ----------------------------------------------------------------------------
@@ -1401,7 +1401,7 @@ Program
     : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = $1 
-                                                    spec = Option.None
+                                                    moduleSpec = Option.None
                                                     members = $2::$3 |> filterOutNothingMembers } }
  
 
@@ -1454,7 +1454,7 @@ Signature
                                                 { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = $1
-                                                    spec = Some $2
+                                                    moduleSpec = Some $2
                                                     members = $3 |> filterOutNothingMembers } }
 
 
@@ -1470,7 +1470,7 @@ Compilation
                                                   { CompilationUnit.range = $2
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = []
-                                                    spec = Option.None
+                                                    moduleSpec = Option.None
                                                     members = [] } }
 
 

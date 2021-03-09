@@ -21,7 +21,7 @@ module Blech.Frontend.ImportChecking
 open System.Collections.Generic
 
 open Blech.Common
-//open Blech.Frontend
+open Blech.Frontend
 
 
 type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
@@ -32,8 +32,7 @@ type private AbstractTypes = OpaqueInference.AbstractTypes
 type ModuleInfo = 
     {
         dependsOn: TranslationUnitPath list
-        astIsProgram: bool
-        astIsInternal: bool
+        moduleSpec : AST.ModuleSpec option
         nameCheck: Environment
         singletons : Singletons
         abstractTypes : AbstractTypes
@@ -41,18 +40,17 @@ type ModuleInfo =
         typedModule: BlechTypes.BlechModule
     }
 
-    static member Make imports 
-                       isProgram 
-                       isInternal
+    static member Make imports
+                       moduleSpec
                        symbolTable 
                        singletons
                        abstractTypes
                        typecheckContext 
                        blechModule =
+
         { 
             dependsOn = imports
-            astIsProgram = isProgram
-            astIsInternal = isInternal
+            moduleSpec = moduleSpec
             nameCheck = symbolTable
             singletons = singletons
             abstractTypes = abstractTypes
@@ -69,13 +67,22 @@ type ModuleInfo =
     member this.GetExportScope : SymbolTable.Scope = 
         SymbolTable.Environment.getModuleScope this.nameCheck
 
-    member this.IsProgram = this.astIsProgram
+    member this.IsProgram = 
+        Option.isNone this.moduleSpec
+
+    member this.IsInternal = 
+        match this.moduleSpec with
+        | Some spec ->
+            spec.isInternal
+        | None ->
+            false
     
 type ImportError = 
     | CyclicImport of range: Range.range * path: TranslationUnitPath
     | MultipleImport of range: Range.range * path: TranslationUnitPath
     | ProgramImport of range: Range.range * path: TranslationUnitPath
     | IllegalWhiteboxImport of range: Range.range * libraryPath: TranslationUnitPath
+    | IllegalImportOfInternal of range: Range.range * libraryPath: TranslationUnitPath
     | CannotCompileImport of range: Range.range * path: TranslationUnitPath
     | Dummy of range: Range.range * msg: string   // just for development purposes
 
@@ -95,6 +102,9 @@ type ImportError =
             | IllegalWhiteboxImport (rng, path) ->
                 { range = rng 
                   message = sprintf "whitebox import for any library module, like \"%s\", is not allowed"  <| string path }
+            | IllegalImportOfInternal (rng, path) ->
+                { range = rng 
+                  message = sprintf "import for any internal library module, like \"%s\", is not allowed"  <| string path }
             | CannotCompileImport (rng, path) ->
                 { range = rng 
                   message = sprintf "cannot compile import '%s'" <| string path }
@@ -112,6 +122,8 @@ type ImportError =
                 [ { range = rng; message = "program import"; isPrimary = true } ]
             | IllegalWhiteboxImport (range = rng) ->
                 [ { range = rng; message = "library import"; isPrimary = true } ]
+            | IllegalImportOfInternal (range = rng) ->
+                [ { range = rng; message = "library internal"; isPrimary = true } ]
             | CannotCompileImport (range = rng) ->
                 [ { range = rng; message = "not compileable"; isPrimary = true } ]
             | Dummy (range = rng) ->
@@ -167,9 +179,9 @@ type Imports =
         this.GetImports
         |> List.map (fun import -> import.abstractTypes)
 
-    member this.GetImportedInternalModules : ExportInference.ImportedInternalModules = 
+    member this.GetImportedInternalModules : ExportInference.ImportedInternalModules =
         Set <| seq { for pair in this.compiledImports 
-                        do if pair.Value.astIsInternal then yield pair.Key }
+                        do if pair.Value.IsInternal then yield pair.Key }
         
     member this.GetTypeCheckContexts : TypeCheckContext list =
         this.GetImports
@@ -220,24 +232,37 @@ let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledMod
         Ok <| imports.AddCompiledImport modul.path compiledModule.info
 
 
-// check if the import is a white-box import from another box
+// checks if the whitebox import of a module is not from another box
 let private checkWhiteboxImport logger (import: AST.Import) (imports: Imports) =
     let modpath = import.modulePath
     if import.isInternal && modpath.path.IsPackage then
+        // TODO: Currently this cannot be tested, because we cannot import from another package, fjg. 09.03.21
         IllegalWhiteboxImport (modpath.range, modpath.path)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
     else
         Ok imports
+
         
-    
+// checks if the already compiled import of an internal module is not from another box
+let checkImportofInternalModule logger (modPath : AST.ModulePath) (imports : Imports) =
+    assert imports.compiledImports.ContainsKey modPath.path // this will only be called after a successful compilation
+    let compiledModule = imports.compiledImports.Item modPath.path
+    if compiledModule.IsInternal && modPath.path.IsPackage then
+        // TODO: Currently this cannot be tested, because we cannot import from another package, fjg. 09.03.21
+        IllegalImportOfInternal (modPath.range, modPath.path)
+        |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
+        Error logger    
+    else
+        Ok imports
+
 
 // tries to compile an imported module
 // if successful, adds it to the collection of compiled imported modules.
 // else logs an error for the importing module.
-let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) importInternal (imports: Imports)  = 
-    let modName = modul.path
-    let srcRng = modul.Range
+let private compileImportedModule pkgCtx logger (modPath: AST.ModulePath) importInternal (imports: Imports)  = 
+    let modName = modPath.path
+    let srcRng = modPath.Range
     
     let freshLogger = Diagnostics.Logger.create ()
     let importChain = imports.importChain.Extend modName
@@ -245,13 +270,12 @@ let private compileImportedModule pkgCtx logger (modul: AST.ModulePath) importIn
     
     match compRes with
     | Ok compiledModule ->
-        checkImportIsNotAProgram logger modul compiledModule imports // log error to the importing module's logger
-
+        checkImportIsNotAProgram logger modPath compiledModule imports // log error to the importing module's logger
+        |> Result.bind (checkImportofInternalModule logger modPath)
     | Error _ ->
         CannotCompileImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger
-
 
 
 // Check one import

@@ -1,0 +1,9 @@
+
+import i "../imports/internal" // this import is hidden in the signature
+
+module exposes aReturnsS
+
+activity aReturnsS ()
+    var x: i.S = i.f()
+    await true 
+end

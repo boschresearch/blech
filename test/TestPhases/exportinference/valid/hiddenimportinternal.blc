@@ -1,0 +1,9 @@
+
+import internal ni "../imports/notinternal" // this import is hidden in the signature
+
+module exposes aReturnsS
+
+activity aReturnsS ()
+    var x: ni.S = ni.hidden()  // only accessible with withbox import
+    await true 
+end

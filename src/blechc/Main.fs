@@ -299,9 +299,8 @@ module Main =
 
                 // return interface information and dependencies for module 
                 let importedModules = imports.GetImportedModuleNames
-                return ImportChecking.ModuleInfo.Make importedModules 
-                                                      ast.IsProgram 
-                                                      ast.IsInternal 
+                return ImportChecking.ModuleInfo.Make importedModules
+                                                      ast.moduleSpec
                                                       symTable 
                                                       singletons 
                                                       abstractTypes 
@@ -386,8 +385,7 @@ module Main =
 
                 let importedModules = imports.GetImportedModuleNames
                 return ImportChecking.ModuleInfo.Make importedModules 
-                                                      ast.IsProgram 
-                                                      ast.IsInternal 
+                                                      ast.moduleSpec
                                                       symTable 
                                                       singletons 
                                                       abstractTypes 

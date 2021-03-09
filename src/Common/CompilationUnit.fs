@@ -158,9 +158,6 @@ module CompilationUnit =
             this.loaded.ContainsKey <| Implementation moduleName
             || this.loaded.ContainsKey <| Interface moduleName
 
-        member this.GetLoaded =
-            Seq.toList (this.loaded.Values)
-
 
     /// loads a program or a module for compilation
     /// Given a context with package information, a diagnostic logger for errors, an import chain and a filename

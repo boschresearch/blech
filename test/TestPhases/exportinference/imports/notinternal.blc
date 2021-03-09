@@ -1,0 +1,19 @@
+
+module exposes S, f, a 
+
+struct S  
+    var b: bool
+end
+
+function f() returns S 
+    return { b = true }
+end
+
+function hidden() returns S 
+    return { b = false }
+end
+
+activity a ()
+    var s = f()
+    await true
+end
