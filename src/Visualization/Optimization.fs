@@ -525,8 +525,10 @@ module Blech.Visualization.Optimization
                                     | _ -> false)) &&
                             sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
                             ((multSpecifiedAndSingleOtherEdge IsTerminal IsAbort edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAbort edge targetIncomings) ||
+                             (multSpecifiedAndSingleOtherEdge IsTerminal IsAbortingAwait edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAbortingAwait edge targetIncomings) ||
                              (multSpecifiedAndSingleOtherEdge IsTerminal IsAwait edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAwait edge targetIncomings)) &&
                             edge.Payload.Property = IsTerminal
+
         // Special case: between two nodes are a immediate and a abort transition.
         // Both are deleted, if target or source is simple and has only two outgoing/incoming transitions respecitvely.
         // Simplicity is checked after this condition is met.
