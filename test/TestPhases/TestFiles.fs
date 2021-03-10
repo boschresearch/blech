@@ -52,13 +52,13 @@ type Validity =
 
 let private modulesAndFiles (phase: Phase) (validity: Validity) =
     let fileDirectory = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory, validity.Directory)
-    let fakeSourcePath = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory)
+    let fakeProjectDir = Path.Combine(__SOURCE_DIRECTORY__, phase.Directory)
     let testCaseNameFrom moduleName =
         sprintf "%s/%s: %s" phase.Directory validity.Directory (moduleName.ToString())
     let mkTestCaseData file = 
         let modName = 
             // printfn "file name: '%s'" file
-            match tryMakeTranslationUnitPath file fakeSourcePath None with
+            match tryMakeTranslationUnitPath file fakeProjectDir None with
             | Ok fp -> fp
             | Error wrongIds -> failwith (sprintf "illegal filename '%A'" wrongIds)
         // printfn "module name: '%s'" <| modName.ToString()
@@ -82,9 +82,10 @@ let validFiles phase =
 
 let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
     let projectDir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, phasedir)
+    let blechPath = System.IO.Path.Combine(projectDir, "boxes")
     { Arguments.BlechCOptions.Default with inputFile = inputfile
-                                           sourcePath = projectDir 
-                                           projectDir = projectDir }
+                                           projectDir = projectDir
+                                           blechPath = blechPath}
 
 
 let printImportDiagnostics (translatedUnit, importLogger) = 

@@ -126,20 +126,21 @@ module CompilationUnit =
 
     type Context<'info> =
         {
-            sourcePath: string
+            projectDir: string
             blechPath: string
-            package: string option // the name of the package we currently compile, TODO: should be set from the commandline -pkg "mylib", fjg. 22.9.20   
             outDir: string
+            box: string option // the name of the package we currently compile for 
             loader: Context<'info> -> Diagnostics.Logger -> ImportChain -> ImplOrIface -> TranslationUnitPath -> string -> Result<Module<'info>, Diagnostics.Logger>  
                     // package context -> module logger -> import chain -> LoadWhat -> module name -> file name -> compiled module or errors in logged errors
             loaded: Dictionary<TranslatedUnit, Result<Module<'info>, Diagnostics.Logger>>              
                     // module name |-> compiled module or errors in logger
         }
         static member Make (arguments: Arguments.BlechCOptions) loader =
-            { sourcePath = arguments.sourcePath
+            // TODO: add all BlechCOptions to context, instead deconstructing them, delete additional blechCOptions in various phases. fjg. 10.03.21
+            { projectDir = arguments.projectDir
               blechPath = arguments.blechPath
-              package = None
               outDir = arguments.outDir
+              box = arguments.box
               loader = loader
               loaded = Dictionary<TranslatedUnit, Result<Module<'info>, Diagnostics.Logger>>() }
 
@@ -175,13 +176,13 @@ module CompilationUnit =
             <| FileNotFound fileName 
             Error logger
         else
-            // file belongs to the source directory?
-            match tryFindSourceDir fileName ctx.sourcePath with
+            // file belongs to the project directory?
+            match tryFindFileInProjectDir fileName ctx.projectDir with
             | None ->
                 Diagnostics.Logger.logFatalError 
                 <| logger
                 <| Diagnostics.Phase.Compiling
-                <| FileNotInSourcePath (fileName, searchPath2Dirs ctx.sourcePath)
+                <| FileNotInSourcePath (fileName, searchPath2Dirs ctx.projectDir)
                 Error logger
             | Some srcDir ->
                 // file is either .blc or .blh?
@@ -194,7 +195,7 @@ module CompilationUnit =
                     Error logger
                 | Some loadWhat ->
                     // file and source directory have valid names?
-                    match tryMakeTranslationUnitPath fileName srcDir ctx.package with
+                    match tryMakeTranslationUnitPath fileName srcDir ctx.box with
                     | Error wrongIds ->
                         Diagnostics.Logger.logFatalError 
                         <| logger
@@ -224,28 +225,47 @@ module CompilationUnit =
                                       : Result<Module<'info>, Diagnostics.Logger> =
         let moduleUnit = Implementation requiredModule
         let signatureUnit = Interface requiredModule
+        printfn "require module: %A" requiredModule
+        
         if ctx.loaded.ContainsKey signatureUnit then
             // in case the module was compiled successful
             let res = ctx.loaded.[signatureUnit] // use already compiled signature
             assert Result.isOk res // a cached signature compilation is always ok
             res
+        
         elif ctx.loaded.ContainsKey moduleUnit then 
             // in case there was no signature generated, due to an error in the module
             // prevents re-compilation of the module
             let res = ctx.loaded.[moduleUnit] // use already compiled module
             assert Result.isError res // the cached module compilation is always an error
             res
-        else
-            let blcFile = searchImplementation ctx.sourcePath requiredModule
+
+        elif requiredModule.IsOtherBox ctx.box then 
+            // import the signature from other box
+            let blhFile = searchInterface ctx.blechPath requiredModule
+            match blhFile with
+            | Ok blh ->
+                let compiledBlhRes = ctx.loader ctx logger importChain Blh requiredModule blh
+                do ctx.loaded.Add (signatureUnit, compiledBlhRes)
+                compiledBlhRes          
+            | Error triedBlhs ->
+                do Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling
+                   <| ModuleNotFound (requiredModule, importRange, triedBlhs) 
+                do ctx.loaded.Add(moduleUnit, Error logger) // errors must be cached, too
+                Error logger // logger of importing module 
+        
+        else 
+            // import from current project, compile the implementation and the generated interface
+            printfn "Required module: %s" <| string requiredModule
+            let blcFile = searchImplementation ctx.projectDir requiredModule
             match blcFile with
             | Ok blc ->
-                Logging.log2 "CompilationUnit" <| sprintf "Compile import: %s" (string moduleUnit)
                 let compiledBlcRes = ctx.loader ctx logger importChain Blc requiredModule blc
                 do ctx.loaded.Add (moduleUnit, compiledBlcRes)
 
                 match compiledBlcRes with  
                 | Ok moduleInfo ->
-                    let blhFile = searchInterface ctx.sourcePath requiredModule // TODO: Simplify this, if possible
+                    let blhFile = searchInterface ctx.outDir requiredModule // TODO: Simplify this, if possible
                     match blhFile with
                     | Ok blh -> 
                         // signature found
@@ -266,7 +286,7 @@ module CompilationUnit =
             
             | Error triedBlcs ->
                 do Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling
-                    <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
+                   <| ModuleNotFound (requiredModule, importRange, triedBlcs) 
                 do ctx.loaded.Add(moduleUnit, Error logger) // errors must be cached, too
                 Error logger // logger of importing module 
 

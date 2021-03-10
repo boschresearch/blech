@@ -107,7 +107,7 @@ module Main =
 
     let private writeSignature (cliArgs : Arguments.BlechCOptions ) 
                                 moduleName exports ast =  
-        let signatureFile = Path.Combine(cliArgs.projectDir, TranslatePath.moduleToInterfaceFile moduleName)
+        let signatureFile = Path.Combine(cliArgs.outDir, TranslatePath.moduleToInterfaceFile moduleName)
         let blechSignature = SignaturePrinter.printSignature exports ast
         do writeFile signatureFile blechSignature
 
@@ -155,7 +155,7 @@ module Main =
     /// run the compilation phases starting with the type checker
     let private runFromTypeChecking cliArgs
                             logger 
-                            moduleName
+                            ( moduleName : TranslationUnitPath.TranslationUnitPath )
                             fileName
                             ast
                             symTable

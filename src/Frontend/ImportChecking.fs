@@ -233,9 +233,9 @@ let private checkImportIsNotAProgram logger (modul: AST.ModulePath) (compiledMod
 
 
 // checks if the whitebox import of a module is not from another box
-let private checkWhiteboxImport logger (import: AST.Import) (imports: Imports) =
+let private checkWhiteboxImport logger box (import: AST.Import) (imports: Imports) =
     let modpath = import.modulePath
-    if import.isInternal && modpath.path.IsPackage then
+    if import.isInternal && (modpath.path.IsOtherBox box) then
         // TODO: Currently this cannot be tested, because we cannot import from another package, fjg. 09.03.21
         IllegalWhiteboxImport (modpath.range, modpath.path)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
@@ -245,12 +245,12 @@ let private checkWhiteboxImport logger (import: AST.Import) (imports: Imports) =
 
         
 // checks if the already compiled import of an internal module is not from another box
-let checkImportofInternalModule logger (modPath : AST.ModulePath) (imports : Imports) =
-    assert imports.compiledImports.ContainsKey modPath.path // this will only be called after a successful compilation
-    let compiledModule = imports.compiledImports.Item modPath.path
-    if compiledModule.IsInternal && modPath.path.IsPackage then
+let checkImportofInternalModule logger box (importPath : AST.ModulePath) (imports : Imports) =
+    assert imports.compiledImports.ContainsKey importPath.path // this will only be called after a successful compilation
+    let compiledModule = imports.compiledImports.Item importPath.path
+    if compiledModule.IsInternal && importPath.path.IsOtherBox box then
         // TODO: Currently this cannot be tested, because we cannot import from another package, fjg. 09.03.21
-        IllegalImportOfInternal (modPath.range, modPath.path)
+        IllegalImportOfInternal (importPath.range, importPath.path)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
         Error logger    
     else
@@ -260,9 +260,9 @@ let checkImportofInternalModule logger (modPath : AST.ModulePath) (imports : Imp
 // tries to compile an imported module
 // if successful, adds it to the collection of compiled imported modules.
 // else logs an error for the importing module.
-let private compileImportedModule pkgCtx logger (modPath: AST.ModulePath) importInternal (imports: Imports)  = 
-    let modName = modPath.path
-    let srcRng = modPath.Range
+let private compileImportedModule pkgCtx logger (importPath: AST.ModulePath) importInternal (imports: Imports)  = 
+    let modName = importPath.path
+    let srcRng = importPath.Range
     
     let freshLogger = Diagnostics.Logger.create ()
     let importChain = imports.importChain.Extend modName
@@ -270,8 +270,8 @@ let private compileImportedModule pkgCtx logger (modPath: AST.ModulePath) import
     
     match compRes with
     | Ok compiledModule ->
-        checkImportIsNotAProgram logger modPath compiledModule imports // log error to the importing module's logger
-        |> Result.bind (checkImportofInternalModule logger modPath)
+        checkImportIsNotAProgram logger importPath compiledModule imports // log error to the importing module's logger
+        |> Result.bind (checkImportofInternalModule logger pkgCtx.box importPath)
     | Error _ ->
         CannotCompileImport (srcRng, modName)
         |> Diagnostics.Logger.logError logger Diagnostics.Phase.Importing
@@ -289,7 +289,7 @@ let private checkImport (pkgCtx : CompilationUnit.Context<ModuleInfo>)
     
     checkCyclicImport import.modulePath logger imports
     |> Result.bind (checkMultipleImport pkgCtx import.modulePath logger)
-    |> Result.bind (checkWhiteboxImport logger import)
+    |> Result.bind (checkWhiteboxImport logger pkgCtx.box import)
     |> Result.bind (compileImportedModule pkgCtx logger import.modulePath import.isInternal)
     |> returnImports 
     

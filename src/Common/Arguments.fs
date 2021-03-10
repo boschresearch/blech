@@ -41,7 +41,7 @@ module Arguments =
     //    | Csv
     
     let defaultBlechPath = "."
-    let defaultSourcePath = "." 
+    let defaultProjectDir = "." 
     let defaultOutDir = Path.Combine (".", "blech") // put all generated files into blech folder bei default
     let defaultAppName = "blech"
     
@@ -53,10 +53,11 @@ module Arguments =
         | [<Unique; AltCommandLine("-v")>] Verbosity of level : Verbosity 
         
         | [<Unique; EqualsAssignment>] App of name : string option
-        | [<Unique; AltCommandLine("-sp")>] Source_Path of path : string 
+        | [<Unique; AltCommandLine("-pd")>] Project_Dir of directory : string 
         | [<Unique; AltCommandLine("-od")>] Out_Dir of directory : string
         | [<Unique; AltCommandLine("-bp")>] Blech_Path of path : string
         
+        | [<Unique; EqualsAssignment>] Box of name : string
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
@@ -74,19 +75,24 @@ module Arguments =
                     "always re-compile from source files."
                 | Dry_Run _ -> 
                     "do not generate any C code files."
-                | App _ -> 
-                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
-                | Source_Path _ ->
-                    "search for blech modules in <path> templates, "
-                    + "defaults to " + "\"" + defaultSourcePath + "\"" + "."
-                | Out_Dir _ -> 
-                    "write all build results to <directory>, which must already exist."
-                | Blech_Path _ ->
-                    "search for blech modules in <path> templates, "
-                    + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
                 | Verbosity _ -> 
                     "set verbosity <level>, "
                     + "allowed values are q[uiet], m[inimal], n[ormal], d[etailed], diag[nostic]."
+                
+                | App _ -> 
+                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
+                | Project_Dir _ ->
+                    "search for blech modules in <directory>, "
+                    + "defaults to " + "\"" + defaultProjectDir + "\"" + "."
+                | Out_Dir _ -> 
+                    "write all build results to <directory>, which must already exist."
+                | Blech_Path _ ->
+                    "search for blech library modules in <path>, "
+                    + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
+                
+                | Box _ ->
+                    "compile for for box <name>"
+                
                 | Word_Size _ -> 
                     "maximum word size, "
                     + "allowed values are 8, 16, 32, 64."
@@ -119,9 +125,9 @@ module Arguments =
     type BlechCOptions =  // TODO: Move this to separate file in utils
         {
             inputFile: string
+            box: string option
             appName: string option
-            sourcePath: string
-            projectDir : string  // for future use and dotnet test
+            projectDir : string
             outDir: string
             blechPath: string
             showVersion: bool
@@ -136,9 +142,9 @@ module Arguments =
 
         static member Default = {
                 inputFile = ""
+                box = None
                 appName = None
-                sourcePath = defaultSourcePath
-                projectDir = ""  // currently only used for "dotnet test"
+                projectDir = defaultProjectDir 
                 outDir = defaultOutDir
                 blechPath = defaultBlechPath
                 showVersion = false
@@ -168,12 +174,14 @@ module Arguments =
             { opts with isRebuild = true }
         | Dry_Run ->
             { opts with isDryRun = true }
-        | Source_Path sp ->
-            { opts with sourcePath = sp }
+        | Project_Dir pd ->
+            { opts with projectDir = pd }
         | Out_Dir od ->
             { opts with outDir = od }
         | Blech_Path bp ->
             { opts with blechPath = bp}
+        | Box bn ->
+            { opts with box = Some bn}
         | Verbosity v ->
             { opts with verbosity = v }
         | Word_Size ws ->

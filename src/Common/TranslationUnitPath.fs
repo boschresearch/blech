@@ -186,8 +186,11 @@ type TranslationUnitPath =
         | None -> path
         | Some pkg -> pkg::path
 
-    member this.IsPackage =
-        Option.isSome this.package
+    member this.IsOtherBox box =
+        this.package <> box
+
+    //member this.AddBox box = 
+    //    {this with package = box}
         
 
 /// Functions =================================================================
@@ -287,7 +290,8 @@ let private search searchPath (name: TranslationUnitPath) extension =
 /// Returns the resulting name of the first implementation file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open    
 let searchImplementation searchPath name = 
-    search searchPath name implementationFileExtension
+    let boxLocalName = { name with package = None }
+    search searchPath boxLocalName implementationFileExtension
 
 /// Returns the resulting name of the first interface file in the searchPath that it can open in read mode (after closing it)
 /// in case of error it returns a list of file names it tried to open   
@@ -316,13 +320,13 @@ let private isFileInSourceDir file srcDir =
 /// such as searchPath = ".;../otherSources", return
 /// Some path - if file is in this path
 /// None - if the file cannot be found in any directory
-let tryFindSourceDir file searchPath =
-    searchPath2Dirs searchPath
+let tryFindFileInProjectDir file projectDir = 
+    searchPath2Dirs projectDir // TODO: Eliminate the possibility to search along a search path, fjg. 10.03.21
     |> List.tryFind (isFileInSourceDir file)
 
 
 /// Makes a TranslationUnitPath from strings
-/// representing the filename, source path and the current package name
+/// representing the filename and the source dir
 /// The result is an Error if the path elements or filename are invalid identifiers
 /// such as "blech" or contain non-alphanumerical characters.
 let tryMakeTranslationUnitPath file srcDir optPackage : Result<TranslationUnitPath, string list> =
@@ -344,7 +348,7 @@ let tryMakeTranslationUnitPath file srcDir optPackage : Result<TranslationUnitPa
              dirs = dirs
              file = file }
     else
-        printfn "wrong: %A" wrongIds
+        // printfn "wrong: %A" wrongIds
         Error wrongIds
 
 
