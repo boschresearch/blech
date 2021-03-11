@@ -1,4 +1,4 @@
-import I1 "../imports/opaque_imp"
+import I1 "../imports/opaqueimp"
 
 
 @[EntryPoint]

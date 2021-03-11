@@ -1,0 +1,7 @@
+
+import api "box:testlib/api"
+
+@[EntryPoint]
+activity Main()
+    run api.A()
+end

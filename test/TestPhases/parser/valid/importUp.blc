@@ -1,4 +1,4 @@
-import mymod "../a_director/my_mod"
+import mymod "../adirector/mymod"
 
 module
 

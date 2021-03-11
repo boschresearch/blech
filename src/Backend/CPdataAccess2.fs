@@ -88,7 +88,7 @@ let assembleName pref infixLst identifier =
 let private auxiliaryName name = assembleName AUX [] name.basicId
 let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
-let private globalName name = assembleName BLC (name.moduleName.AsList @ name.prefix) name.basicId
+let private globalName name = assembleName BLC (name.moduleName.AsListAddEmptyPackage @ name.prefix) name.basicId
 let private programName name = assembleName BLECH name.moduleName.AsList name.basicId
 let private ctxName (name: QName) = assembleName (fromContext BLC) name.prefix name.basicId // in order to avoid clashes between a Blech variable "pc_1" and 
                                                                                             // a context element pc_1, we need the blc_ prefix
