@@ -82,7 +82,7 @@ let validFiles phase =
 
 let makeCliContext phasedir inputfile : Arguments.BlechCOptions =
     let projectDir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, phasedir)
-    let blechPath = System.IO.Path.Combine(projectDir, "boxes")
+    let blechPath = System.IO.Path.Combine(__SOURCE_DIRECTORY__, "boxes")
     { Arguments.BlechCOptions.Default with inputFile = inputfile
                                            projectDir = projectDir
                                            blechPath = blechPath}

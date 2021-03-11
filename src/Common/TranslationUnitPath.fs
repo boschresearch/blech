@@ -63,13 +63,13 @@ module PathRegex =
     
     // `identifier` taken from https://www.quanttec.com/fparsec/tutorial.html#parsing-string-data
     let private identifier =
-        let isIdentifierFirstChar c = isLetter c || c = '_'
-        let isIdentifierChar c = isLetter c || isDigit c || c = '_'
+        let isIdentifierFirstChar c = isLetter c
+        let isIdentifierChar c = isLetter c || isDigit c 
     
         many1Satisfy2L // _L version of the parser additionally expects an error "label"
             isIdentifierFirstChar 
             isIdentifierChar 
-            "expected an identifier starting with a letter or underscore"
+            "expected an identifier starting with a letter"
         .>> spaces // skips trailing whitespace
     
     let private slash = pstring "/" // prstring is a predefined parser, that parses a given string
@@ -186,12 +186,14 @@ type TranslationUnitPath =
         | None -> path
         | Some pkg -> pkg::path
 
+    member this.AsListAddEmptyPackage = 
+        match this.package with
+        | None -> "" :: this.AsList
+        | Some pkg -> this.AsList
+
     member this.IsOtherBox box =
         this.package <> box
 
-    //member this.AddBox box = 
-    //    {this with package = box}
-        
 
 /// Functions =================================================================
 

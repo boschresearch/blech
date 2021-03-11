@@ -1,0 +1,7 @@
+
+import internal api "box:testlib/api" // whitebox import not allowed
+
+@[EntryPoint]
+activity Main()
+    var s = ap.hidden()
+end

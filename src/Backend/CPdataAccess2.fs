@@ -83,12 +83,15 @@ let private assembleName pref infixLst identifier =
         |> (fun s -> s.Replace(".", "_")) // TODO: hack to avoid directory names "." to become dots in C names, fg 01.10.20
     pref + infix + "_" + identifier
     |> txt
+    
 
 let private auxiliaryName name = assembleName AUX [] name.basicId
 let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
-let private globalName name = assembleName BLC (name.moduleName.AsList @ name.prefix) name.basicId
-let private programName name = assembleName BLECH name.moduleName.AsList name.basicId
+let private globalName name = // do printfn "global name: %A" name;
+                              assembleName BLC (name.moduleName.AsListAddEmptyPackage @ name.prefix) name.basicId
+let private programName name = // do printfn "program name: %A" name
+                               assembleName BLECH name.moduleName.AsList name.basicId
 let private ctxName (name: QName) = assembleName (fromContext BLC) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
 let private externalPrev (name: QName) = assembleName (fromContext PREV) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
 let private internalPrev name = assembleName PREV [] name.basicId

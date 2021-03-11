@@ -225,7 +225,7 @@ module CompilationUnit =
                                       : Result<Module<'info>, Diagnostics.Logger> =
         let moduleUnit = Implementation requiredModule
         let signatureUnit = Interface requiredModule
-        printfn "require module: %A" requiredModule
+        // printfn "require module: %A" requiredModule
         
         if ctx.loaded.ContainsKey signatureUnit then
             // in case the module was compiled successful
@@ -256,7 +256,6 @@ module CompilationUnit =
         
         else 
             // import from current project, compile the implementation and the generated interface
-            printfn "Required module: %s" <| string requiredModule
             let blcFile = searchImplementation ctx.projectDir requiredModule
             match blcFile with
             | Ok blc ->

@@ -1,5 +1,5 @@
 
-import mymod "0_17Y"
+import mymod "17Y"
 
 module
 
