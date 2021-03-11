@@ -30,6 +30,22 @@ open Blech.Frontend
 open CPdataAccess2
 
 
+// return true if <varname> is a local variable inside activity <actname>
+// and is bound to an external input or output
+let isExternalGlobal (lut: TypeCheckContext) actname varname =
+    match lut.nameToDecl.TryGetValue actname with
+    | true, declarable ->
+        match declarable with
+        | ParamDecl _
+        | Declarable.VarDecl _
+        | Declarable.ExternalVarDecl _
+        | ProcedurePrototype _ -> false // actname is a prototype and cannot contain external variable <varname>
+        | ProcedureImpl impl ->
+            impl.globalInputs @ impl.globalOutputsInScope
+            |> List.exists (fun x -> x.name.basicId = varname.basicId)
+    | false, _ -> failwithf "%A is unknown to the lookup table" actname
+
+
 //=============================================================================
 // Overview comments from the code generator
 //=============================================================================
@@ -172,16 +188,22 @@ let internal cpMainParametersAsStatics tcc (iface: Compilation) =
     |> List.map (fun p -> txt "static" <+> cpArrayDeclDoc (render p.name) p.datatype <^> semi)
     |> dpBlock
 
-let internal cpContextTypeDeclaration (comp: Compilation) =
+let internal cpContextTypeDeclaration lut (comp: Compilation) =
     match comp.actctx with 
     | None -> empty // this is a function, nothing to print
     | Some _ -> // ok, print activity context struct
         let typename = cpStaticName comp.name
         let locals = 
+            let renderNameForCtx name =
+                if isExternalGlobal lut comp.name name then
+                    // if an external is the activity context, it is there because we use the previous value
+                    assembleName BLC (name.prefix @ [PREV]) name.basicId
+                else
+                    assembleName BLC name.prefix name.basicId
             // in order to avoid clashes between a Blech variable "pc_1" and 
             // a context element pc_1, we need the blc_ prefix
             comp.GetActCtx.locals
-            |> List.map (fun local -> cpArrayDeclDoc (txt (BLC + "_" + local.name.ToUnderscoreString())) local.datatype <^> semi)
+            |> List.map (fun local -> cpArrayDeclDoc (renderNameForCtx local.name) local.datatype <^> semi)
             |> dpBlock
         let pcs = 
             comp.GetActCtx.pcs.AsList

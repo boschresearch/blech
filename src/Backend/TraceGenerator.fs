@@ -23,6 +23,7 @@ module Blech.Backend.TraceGenerator
 open Blech.Common.PPrint
 open Blech.Common.Range
 
+open Blech.Frontend
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.Constants
 open Blech.Frontend.BlechTypes
@@ -128,7 +129,10 @@ let private getFormatStrForArithmetic (dty: Types) =
     | ValueTypes (BitsType Bits8) -> "%hu" // should be hhu since C99
     | _ -> failwithf "No format string for composite data type %A." dty
 
-let rec private printTml level lut isLast tml (pos: range) = 
+let rec private printTml isExternalGlobal level lut isLast (tml: TypedMemLoc) (pos: range) = 
+    let timepoint =
+        if isExternalGlobal tml.QNamePrefix then Previous
+        else Current
     let dty = getDatatypeFromTML lut tml
     let ident =
         let innerIdent =
@@ -165,7 +169,7 @@ let rec private printTml level lut isLast tml (pos: range) =
             + if isLast then "" 
               else ","
         let args = 
-            ((cpTml Current lut tml).Render |> render None)
+            ((cpTml timepoint lut tml).Render |> render None)
         cCodePrintf format [args]
         |> txt
     | ValueTypes (ValueTypes.StructType (_, fields)) ->
@@ -176,8 +180,8 @@ let rec private printTml level lut isLast tml (pos: range) =
             |> function
                 | [] -> []
                 | f :: fs ->
-                    printTml (level + 1) lut true (tml.AddFieldAccess f.name.basicId) pos
-                    :: List.map (fun (x: VarDecl) -> printTml (level + 1) lut false (tml.AddFieldAccess x.name.basicId) pos) fs
+                    printTml isExternalGlobal (level + 1) lut true (tml.AddFieldAccess f.name.basicId) pos
+                    :: List.map (fun (x: VarDecl) -> printTml isExternalGlobal (level + 1) lut false (tml.AddFieldAccess x.name.basicId) pos) fs
             |> List.rev
         let openStruct =
             let format = 
@@ -218,14 +222,14 @@ let rec private printTml level lut isLast tml (pos: range) =
             |> txt
         let intsize = (int)size // an array with max_int many entries is at least 2GB large, so before we run into casting problems here the trace printing would already be intractable
         let arrayContents =
-            [for i in 0 .. intsize - 2 -> printTml (level + 1) lut false (tml.AddArrayAccess (mkIdxOf i)) pos]
-            @ [for i in intsize - 1 .. intsize - 1 -> printTml (level + 1) lut true (tml.AddArrayAccess (mkIdxOf i)) pos]
+            [for i in 0 .. intsize - 2 -> printTml isExternalGlobal (level + 1) lut false (tml.AddArrayAccess (mkIdxOf i)) pos]
+            @ [for i in intsize - 1 .. intsize - 1 -> printTml isExternalGlobal (level + 1) lut true (tml.AddArrayAccess (mkIdxOf i)) pos]
         openArray :: arrayContents @ [closeArray]
         |> dpBlock
     | _ -> failwith "Only value types implemented."
 
-let private printLocal lut isLast (local: ParamDecl) =
-    printTml 0 lut isLast (TypedMemLoc.Loc local.name) local.pos
+let private printLocal isExternalGlobal lut isLast (local: ParamDecl) =
+    printTml isExternalGlobal 0 lut isLast (TypedMemLoc.Loc local.name) local.pos
 
 let private genStatePrinter lut compilation amIentryPoint =
     match compilation.actctx with
@@ -281,7 +285,7 @@ let private genStatePrinter lut compilation amIentryPoint =
                         |> function
                         | [] -> []
                         | l :: ls ->
-                            printLocal lut true l :: List.map (printLocal lut false) ls
+                            printLocal (isExternalGlobal lut name) lut true l :: List.map (printLocal (isExternalGlobal lut name) lut false) ls
                         |> List.rev
                         |> dpBlock
                     [ txt cCodeAddComma

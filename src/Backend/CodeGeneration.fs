@@ -339,7 +339,8 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
 
     // Activity Contexts
     let activityContexts =
-        List.map cpContextTypeDeclaration compilations
+        compilations
+        |> List.map (cpContextTypeDeclaration ctx.tcc) 
         |> dpBlock
 
     let directCCalls =

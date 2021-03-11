@@ -85,11 +85,10 @@ let rec private cpAction ctx curComp action =
         if List.contains v.name (!curComp).varsToPrev then
             // Dually to local variables--prev on external variables are 
             // generated as static C variables and thus added to the local interface here
-            let prevName = {v.name with prefix = "blech_prev" :: v.name.prefix} // TODO hack, fix the string magic!
-            let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
+            let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := newIface
             // add new declaration to type check table
-            TypeCheckContext.addDeclToLut ctx.tcc prevName (Declarable.ExternalVarDecl {v with name = prevName})
+            TypeCheckContext.addDeclToLut ctx.tcc v.name (Declarable.ExternalVarDecl v)
             // make sure the prev variable is initialised in the first reaction
             // this is crucial if the prev value is used in the same block where the variable is declared
             cpAssignDefaultPrevInActivity ctx.tcc v.name
@@ -894,7 +893,7 @@ let private pcInit ctx prefix (comp: Compilation) =
 /// Generate statements which initialises program counters 
 /// used in the init function
 let internal mainPCinit ctx (entryCompilation: Compilation) =
-    pcInit ctx "blc_blech_ctx." entryCompilation
+    pcInit ctx (CTX + ".") entryCompilation
 
 
 /// Given a translation context, a list of produced compilations so far,
@@ -984,7 +983,7 @@ let internal translate ctx (subProgDecl: ProcedureImpl) =
             :: rest 
             |> dpBlock
 
-    let initBody = pcInit ctx "blc_blech_ctx->" !curComp
+    let initBody = pcInit ctx (fromContext "") !curComp
 
     let initActivityCode =
         txt "void"

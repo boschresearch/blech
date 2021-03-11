@@ -67,14 +67,15 @@ let internal cpIndent = indent cpTabsize
 
 let BLC = "blc" // do not add trailing "_" this is done by assembleName
 let BLECH = BLC + "_blech"
-let AUX = BLECH + "_aux"
-let PREV = BLECH + "_prev"
-let CTX = BLECH + "_ctx"
+let GEN = "00" // set apart generated names. No Blech identifier (basicId in QName) can start with a digit. No prefix in QName can be 00 (even for numbered scopes!)
+let AUX = BLC + "_" + GEN + "_aux"
+let PREV = GEN + "_prev" // BLC added below when necessary
+let CTX = BLC + "_" + GEN + "_ctx"
 
-let private fromContext prefix =
+let fromContext prefix =
     CTX + "->" + prefix
 
-let private assembleName pref infixLst identifier =
+let assembleName pref infixLst identifier =
     let infix = 
         let longId = String.concat "_" infixLst
         match longId with
@@ -89,9 +90,11 @@ let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
 let private globalName name = assembleName BLC (name.moduleName.AsList @ name.prefix) name.basicId
 let private programName name = assembleName BLECH name.moduleName.AsList name.basicId
-let private ctxName (name: QName) = assembleName (fromContext BLC) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
-let private externalPrev (name: QName) = assembleName (fromContext PREV) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
-let private internalPrev name = assembleName PREV [] name.basicId
+let private ctxName (name: QName) = assembleName (fromContext BLC) name.prefix name.basicId // in order to avoid clashes between a Blech variable "pc_1" and 
+                                                                                            // a context element pc_1, we need the blc_ prefix
+                                                                                            // the name.prefix prevents collision with the same local name in a different local scope
+let private externalPrev (name: QName) = assembleName (fromContext BLC) (name.prefix @ [PREV]) name.basicId // blc_00_ctx->blc_<activity>_<scope>_blc_00_prev_<name>
+let private internalPrev name = assembleName (BLC + "_" + PREV) [] name.basicId
 
 let cpPcName name = (fromContext "") + name.basicId |> txt
 

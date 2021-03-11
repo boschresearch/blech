@@ -1,9 +1,7 @@
 module exposes S, B
-
 struct S
     var s: float32
 end
-
 
 activity A () returns int32
     @[COutput(binding="c_name_extVarI8", header="externalVariables.ext.h")]
