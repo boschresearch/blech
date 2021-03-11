@@ -1,4 +1,4 @@
-import Ex "externalConst_imp" exposes S
+import Ex "externalConst1imp" exposes S
 
 
 

@@ -4,7 +4,7 @@
 #include "returnsArrayFromExternFunction.h"
 
 void rrr_impl (const blc_bool,
-                     blc_returnsArrayFromExternFunction_Foo *,
-                     blc_returnsArrayFromExternFunction_Foo *);
+                     blc__returnsArrayFromExternFunction_Foo *,
+                     blc__returnsArrayFromExternFunction_Foo *);
 
 #endif

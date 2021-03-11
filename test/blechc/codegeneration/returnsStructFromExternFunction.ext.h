@@ -4,6 +4,6 @@
 #include "returnsStructFromExternFunction.h"
 
 void rrr_impl (const blc_bool,
-                     blc_returnsStructFromExternFunction_S *);
+                     blc__returnsStructFromExternFunction_S *);
 
 #endif
