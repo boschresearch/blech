@@ -91,7 +91,7 @@ module Arguments =
                     + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
                 
                 | Box _ ->
-                    "compile for for box <name>"
+                    "compile for for box <name>."
                 
                 | Word_Size _ -> 
                     "maximum word size, "
@@ -198,6 +198,11 @@ module Arguments =
         else
             failwith <| "invalid word size " + string ws + ". Allowed values are 8, 16, 32, 64."
 
+    let private parseBoxName bn = 
+        if TranslationUnitPath.PathRegex.isValidFileOrDirectoryName bn then
+            bn
+        else
+            failwith <| sprintf "invalid library name \"%s\". Use a regular Blech name." bn
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")
@@ -210,6 +215,8 @@ module Arguments =
     
             if config.Contains <@ Word_Size @> then 
                 ignore <| config.PostProcessResult(<@ Word_Size @>, parseWordSize)
+            if config.Contains <@ Box @> then
+                ignore <| config.PostProcessResult(<@ Box @>, parseBoxName)
     
             let opts =
                 config.GetAllResults()
