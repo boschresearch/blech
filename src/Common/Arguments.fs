@@ -91,7 +91,7 @@ module Arguments =
                     + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
                 
                 | Box _ ->
-                    "compile for for box <name>."
+                    "compile for box <name>, allowed names are valid Blech identifiers."
                 
                 | Word_Size _ -> 
                     "maximum word size, "
@@ -202,7 +202,7 @@ module Arguments =
         if TranslationUnitPath.PathRegex.isValidFileOrDirectoryName bn then
             bn
         else
-            failwith <| sprintf "invalid library name \"%s\". Use a regular Blech name." bn
+            failwith <| sprintf "invalid library name \"%s\". Allowed names are valid Blech identfiers." bn
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")
