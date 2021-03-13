@@ -202,7 +202,7 @@ module Arguments =
         if TranslationUnitPath.PathRegex.isValidFileOrDirectoryName bn then
             bn
         else
-            failwith <| sprintf "invalid library name \"%s\". Allowed names are valid Blech identfiers." bn
+            failwith <| sprintf "invalid library name \"%s\". Allowed names are valid Blech identifiers." bn
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")

@@ -25,9 +25,11 @@ open System.IO
 
 open Blech.Common.TranslationUnitPath
 
+let private separate sep (moduleName: TranslationUnitPath) =
+    String.concat sep moduleName.AsList
 
 let private separateAndExtend sep (moduleName: TranslationUnitPath) extension =
-    sprintf "%s%s" (String.concat sep moduleName.AsList) extension
+    sprintf "%s%s" (separate sep moduleName) extension
       
 /// creates a suituable header file name from a module name, has to be combined with the output directory
 let moduleToHFile moduleName =
@@ -55,3 +57,22 @@ let moduleToInterfaceFile (moduleName: TranslationUnitPath) =
 /// creates a suitable C implementation file name from an app name, has to be combined with the output directory
 let appNameToCFile appName = 
     sprintf "%s%s" appName cFileExtension
+
+// Name mangling for TranslationUnitPath in a generated C name
+// prevents naming conflicts
+let private BOX = "02" 
+let private MOD = "01" 
+// "00" is for auxiliary names inside a module
+
+/// creates a the module name part for a C name
+/// example: "box:lib/dir/dir/mod" is encode as ["02lib"; "01dir01dir01mod01"]
+/// "/dir/dir/mod" is encode as ["01dir01dir01mod01"]
+// The encoding is necessary to uniquely identify box names and module names in C code
+// This enables name shortening via a macro mechanism
+// example #define _02lib _<unique box number for box:lib>
+// #define _01dir01dir01mod01 _<unique module number for /dir/dir/mod>
+let moduleToCNameParts (moduleName: TranslationUnitPath) = 
+    let modul = MOD + (String.concat MOD moduleName.GetModuleSegments) + MOD
+    match moduleName.package with
+    | None -> [ modul ]
+    | Some box -> (BOX + box) :: [ modul ]

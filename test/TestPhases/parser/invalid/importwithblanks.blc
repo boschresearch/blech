@@ -1,0 +1,7 @@
+import mymod "a director/my mod"
+
+module
+
+activity main()
+end
+

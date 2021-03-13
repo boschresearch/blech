@@ -63,13 +63,13 @@ module PathRegex =
     
     // `identifier` taken from https://www.quanttec.com/fparsec/tutorial.html#parsing-string-data
     let private identifier =
-        let isIdentifierFirstChar c = isLetter c
-        let isIdentifierChar c = isLetter c || isDigit c 
+        let isIdentifierFirstChar c = isLetter c || c = '_'
+        let isIdentifierChar c = isLetter c || isDigit c || c = '_'
     
         many1Satisfy2L // _L version of the parser additionally expects an error "label"
             isIdentifierFirstChar 
             isIdentifierChar 
-            "expected an identifier starting with a letter"
+            "expected an identifier starting with a letter or underscore"
         .>> spaces // skips trailing whitespace
     
     let private slash = pstring "/" // prstring is a predefined parser, that parses a given string
@@ -147,15 +147,15 @@ module PathRegex =
 
     open System.Text.RegularExpressions
     [<Literal>]
-    let ReservedPkg = "blech"  // reserved name for unnamed packages
+    let ReservedId = "blech"  // reserved Blech identifier, not a keyword
     [<Literal>]
-    let Id = "^[_a-zA-Z0-9]+$"  // can be used as part of a C identifier for code generation
+    let Id = "^_*[a-zA-Z]+[_a-zA-Z0-9]*$"  // a valid Blech identifier, cannot not start with a digit or a digit after '_'
 
     /// Checks if a directory or file name - without extension - can be used as a Blech identifier
     // also used by the language server
     let isValidFileOrDirectoryName name =
         let isId = (Regex Id).IsMatch
-        not (ReservedPkg.Equals name) && isId name
+        not (ReservedId.Equals name) && isId name
 // end of PathRegex module
 
 
@@ -186,10 +186,8 @@ type TranslationUnitPath =
         | None -> path
         | Some pkg -> pkg::path
 
-    member this.AsListAddEmptyPackage = 
-        match this.package with
-        | None -> "" :: this.AsList
-        | Some pkg -> this.AsList
+    member this.GetModuleSegments =
+        this.dirs @ [this.file]
 
     member this.IsOtherBox box =
         this.package <> box
