@@ -67,7 +67,10 @@ module Blech.Visualization.BlechVisGraph
     and ComplexNode = {Body : VisGraph; IsActivity : IsActivity; CaseClosingNode : IdPairOpt; IsAbort : IsAbort} with
         member x.isWeakAbort = match x.IsAbort with WeakAbort -> true | _ -> false
         member x.SetSecondaryIdOfCaseClosingNode i = 
-            {Body = x.Body; IsActivity = x.IsActivity; CaseClosingNode = x.CaseClosingNode.UpdateSecondary i;IsAbort = x.IsAbort}
+            {Body = x.Body; IsActivity = x.IsActivity; CaseClosingNode = x.CaseClosingNode.UpdateSecondary i; IsAbort = x.IsAbort}
+        member private x.SetBody bdy = 
+            {Body = bdy; IsActivity = x.IsActivity; CaseClosingNode = x.CaseClosingNode; IsAbort = x.IsAbort}
+        member x.SetSecIdCaseClosingAndBody i body = (x.SetSecondaryIdOfCaseClosingNode i ).SetBody body
     
     /// Type to match whether a node is simple or complex or a cobegin node. Cobegin nodes are very different from others due to their concurrenc nature.
     /// IsActivityCall consists of the input and output variable names.

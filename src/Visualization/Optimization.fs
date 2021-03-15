@@ -11,9 +11,13 @@ module Blech.Visualization.Optimization
     /// ((Source.StateCount, Source.SecondaryId), (Target.StateCount, Target.SecondaryId))
     let mutable private optimizedEdges: ((int * int) * (int * int)) list = []
 
-    /// Keepsm track of which nodes have been hierarchy optimized.
+    /// Keeps track of which nodes have been hierarchy optimized.
     /// (StateCount , SecondaryId).
     let mutable private optimizedNodes: (int * int) list = []
+
+    /// Keeps track of which nodes have been secondary id assigned.
+    /// (StateCount , SecondaryId).
+    let mutable private secondaryIdAssignedList : (int * int) list = []
 
     /// Keeping track of secondary id.
     let mutable private secondaryId = 0
@@ -62,7 +66,7 @@ module Blech.Visualization.Optimization
         noCollTransient <- cliContext.vis_disableCollapseTrans
         let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode activityNodes
         match inlineActivities with
-            | true -> [optimizeSingleActivity activityNodes actNameAndFinalNodesPairs (List.find (fun (n:BlechNode) -> n.Payload.Label = entryPointName) activityNodes)]  
+            | true ->  [optimizeSingleActivity activityNodes actNameAndFinalNodesPairs (List.find (fun (n:BlechNode) -> n.Payload.Label = entryPointName) activityNodes)]
             | false -> let firstIt = List.map (optimizeSingleActivity activityNodes actNameAndFinalNodesPairs) activityNodes
                        // Doing it twice. Activities are optimized sequentially. Some information is different, after a activity was updated.
                        // TODO make this functionally? So that the part where the updated information is needed is done only?
@@ -87,9 +91,9 @@ module Blech.Visualization.Optimization
         let flattenedBody = 
             match noBreakHier with
                 | true -> body
-                | false -> flattenHierarchyIfComplex activityNodes finalNodeInfo (findInitNodeInHashSet body.Nodes) body
+                | false -> flattenHierarchyIfComplex false activityNodes finalNodeInfo (findInitNodeInHashSet body.Nodes) body
 
-        // Collapse transient states. 
+        // Collapse transient states.
         optimizedEdges <- []
         let collapsedTransientStatesBody = 
             match noCollTransient with
@@ -107,7 +111,8 @@ module Blech.Visualization.Optimization
 
     //______________________________FLATTEN HIERARCHY (NOT COBEGIN OR ACTIITY CALLS)_______________________________________________________
     /// Flattens a given graph if node is complex, else just call flattening method on successors.
-    and private flattenHierarchyIfComplex (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (graph : VisGraph) : VisGraph = 
+    /// assignSecondaryId determines if the current secondary id is applied through all complexity layers.
+    and private flattenHierarchyIfComplex (assignSecondaryId : bool) (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (graph : VisGraph) : VisGraph = 
         // Do not call method on same item again when there are self-loops.
         let filterForUnoptimized = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) optimizedNodes)
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
@@ -118,16 +123,15 @@ module Blech.Visualization.Optimization
                             | IsSimple | IsConnector -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                         graph
                             | IsActivityCall _ -> match inlineActs with
-                                                    |true -> secondaryId <- secondaryId + 1
-                                                             flattenHierarchyActivityCall activityNodes finalNodeInfo currentNode graph
+                                                    | true -> flattenHierarchyActivityCall activityNodes finalNodeInfo currentNode graph
                                                     | false -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                                graph
-                            | IsCobegin cmplx -> flattenHierarchyCobegin activityNodes finalNodeInfo  currentNode cmplx graph
+                            | IsCobegin cbgn -> flattenHierarchyCobegin activityNodes finalNodeInfo currentNode cbgn graph
                             | IsComplex cmplx -> // Do not flatten if weak abort.
-                                                match cmplx.IsAbort with
+                                                 match cmplx.IsAbort with
                                                     | WeakAbort -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
                                                                    graph
-                                                    | _ -> flattenHierarchy activityNodes finalNodeInfo currentNode cmplx graph
+                                                    | _ -> flattenHierarchy assignSecondaryId activityNodes finalNodeInfo currentNode cmplx graph
 
         // It is possible to wrongly assign the final statsus to a node with information based on not yet optimized acitivites (that are called through run statements).
         //Check if said status is rightful. Check if inner behaviour has been checked.
@@ -135,15 +139,16 @@ module Blech.Visualization.Optimization
         let noFinalCbgn = nodeIsCbgnAndHasNoFinalNode currentNode
         if noFinalAct || noFinalCbgn then graph.ReplacePayloadInBy currentNode (currentNode.Payload.SetFinalStatusOff)
 
-        callFlatHierarchyOnNodes activityNodes finalNodeInfo unoptedSuccesssors currentGraph
+        callFlatHierarchyOnNodes assignSecondaryId activityNodes finalNodeInfo unoptedSuccesssors currentGraph
 
     /// Flattens the hierarchy on a list of nodes subsequentially.
-    and private callFlatHierarchyOnNodes (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (nodes : BlechNode list) (graph : VisGraph) : VisGraph = 
-        List.fold (fun state e-> flattenHierarchyIfComplex activityNodes finalNodeInfo e state) graph nodes
+    and private callFlatHierarchyOnNodes (assignSecondaryId : bool) (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (nodes : BlechNode list) (graph : VisGraph) : VisGraph = 
+        List.fold (fun state e-> flattenHierarchyIfComplex assignSecondaryId activityNodes finalNodeInfo e state) graph nodes
 
     /// Replaces the payloads of the nodes in the given graph with the payloads resulting from the given function.
-    and private replacePayloadsInGraph (convertToPayload : BlechNode -> NodePayload) (graph : VisGraph) =
-        List.map (fun node -> graph.ReplacePayloadInBy node (convertToPayload node)) (Seq.toList graph.Nodes) |> ignore
+    and private replacePayloadsInGraph (convertToPayload : BlechNode -> NodePayload) (graph : VisGraph) : VisGraph =
+        List.map (fun node -> graph.ReplacePayloadInByAndReturn node (convertToPayload node)) (Seq.toList graph.Nodes) |> ignore
+        graph
 
     /// Gives a new payload of the given node's payload with the prefix added to the node's label, if given bool is true.
     and addPrefixToNodeLabel (prefix : string) (node : BlechNode) = 
@@ -157,31 +162,62 @@ module Blech.Visualization.Optimization
            | "" -> node.Payload.SetLabel postfix
            | _ -> node.Payload.SetLabel (node.Payload.Label + "-" + postfix)
 
-    /// Sets the secondary id as as secondary id of the nodes in the given graph.
-    and private setSecondaryIdOnSubGraph (graph: VisGraph) = 
-        let setSecondaryId = fun (n:BlechNode) -> n.Payload.SetSecondaryId secondaryId
-        replacePayloadsInGraph setSecondaryId graph
+    /// Sets the secondary id as as secondary id of the nodes in the given graph, if they have not been assigned a secondary id before.
+    /// Also minds the saved ids of the case closing nodes.
+    and private setSecondaryIdOnSubGraph (graph: VisGraph) : VisGraph = 
+        let notAssignedYet = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) secondaryIdAssignedList)
+        let setSecondaryIdIfOk = 
+            fun (n:BlechNode) -> 
+                // Assign new values recursively.
+                if notAssignedYet n then
+                    secondaryIdAssignedList <- (n.Payload.StateCount, secondaryId) :: secondaryIdAssignedList
+                    // Also sets the case closing node, if present.
+                    let updatedPl = n.Payload.SetSecondaryId secondaryId
+
+                    // Recursive call.
+                    match updatedPl.IsComplex with
+                        // Cobegin was done in method Clone Rec. 
+                        // IsActivityCall should only appear if inlining is not wanted, in this case, no recursive call needed as the nodes inside an activity are distinct.
+                        // Complex payload needs to be cloned !!! Else this payload will point to wrong body.
+                        | IsSimple | IsConnector | IsActivityCall _ | IsCobegin _-> updatedPl
+                        | IsComplex cmplx -> IsComplex (cmplx.SetSecIdCaseClosingAndBody secondaryId (setSecondaryIdOnSubGraph (cloneRec false cmplx.Body)))
+                                              |> updatedPl.SetComplex
+                else
+                    n.Payload
+
+        replacePayloadsInGraph setSecondaryIdIfOk graph |> ignore
+        graph
 
     /// Clones a graph recursively. That means that special payloads, such as cobegins, are cloned explicitly. 
-    ///Else it can cause, that two cloned cobegin nodes point to the same subgraph. Changing this in said subgraph will cause trouble.
-    and private cloneRec (graph: VisGraph) : VisGraph =
+    /// Else it can cause, that two cloned cobegin nodes point to the same subgraph. Changing this in said subgraph will cause trouble.
+    /// AssignSecondaryId tells us, that this is a body of an activity that is called.
+    and private cloneRec (assignSecondaryId : bool) (graph: VisGraph) : VisGraph =
         let simplyCloned = clone graph
+
+        if assignSecondaryId then secondaryId <- secondaryId + 1
 
         // Clones cobegin payload.
         let cloneCobeginPayload = fun (cbgn : CobeginPayload) -> let updatedList = List.map (fun (e: VisGraph * Strength)-> let cloned = clone (fst e)
-                                                                                                                            secondaryId <- secondaryId + 1
-                                                                                                                            setSecondaryIdOnSubGraph cloned
-                                                                                                                            (cloned, snd e))
+                                                                                                                            let clonedUpdated = 
+                                                                                                                                if assignSecondaryId then
+                                                                                                                                    setSecondaryIdOnSubGraph cloned
+                                                                                                                                else
+                                                                                                                                    cloned
+                                                                                                                            (clonedUpdated, snd e))
                                                                                             cbgn.Content
                                                                  IsCobegin {Content = updatedList; CaseClosingNode = cbgn.CaseClosingNode}
 
         // Check a node and replace its payload if necessary.
         let checkAndReplace = fun (n:BlechNode) -> 
                                 match n.Payload.IsComplex with
-                                    | IsCobegin cmplx -> simplyCloned.ReplacePayloadInBy n (n.Payload.SetComplex (cloneCobeginPayload cmplx)) 
+                                    | IsCobegin cbgn -> simplyCloned.ReplacePayloadInBy n (n.Payload.SetComplex ((cloneCobeginPayload cbgn).SetSecondaryIdOfCaseClosingNode secondaryId)) 
                                     | _ -> ()
         List.map checkAndReplace (Seq.toList simplyCloned.Nodes) |> ignore
-        simplyCloned
+        
+        if assignSecondaryId then 
+            setSecondaryIdOnSubGraph simplyCloned
+        else 
+            simplyCloned
 
     /// Elevates the inner body of a complex node to the level given in graph. Collapses hierarchies recursively regarding all hierarchies that are not caused by activites.
         // 1. Change the status of the inner init/final state, so that they are regular states.
@@ -189,18 +225,20 @@ module Blech.Visualization.Optimization
         // 4. Modify in- and outcoming edges from node and change their source/target to the final/init node of the inner graph, respecitvely.
         // 5. Respect the differences in handling edges (aborts, for example). Some completely new edges might have to be added.
         // 6. Remove node from graph.
-    and private flattenHierarchy (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (complex : ComplexNode) (graph : VisGraph) : VisGraph = 
-        let complexCloned = cloneRec complex.Body
-        //let complexCloned = clone complex.Body
+    and private flattenHierarchy (assignSecondaryId : bool) (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (complex : ComplexNode) (graph : VisGraph) : VisGraph = 
+        let complexCloned = cloneRec assignSecondaryId complex.Body
 
-        // Adjust inner. Replace the payload (adjust id).
-        setSecondaryIdOnSubGraph complexCloned
         // Recursive hierarchy flattening call on inner graph.
-        let innerGraph = flattenHierarchyIfComplex activityNodes finalNodeInfo (findInitNodeInHashSet complexCloned.Nodes) complexCloned
+        // Give correct secondary id to mark as optimized, as secondary id will be increased AFTER these opt steps.
+        let innerGraph = flattenHierarchyIfComplex assignSecondaryId activityNodes finalNodeInfo (findInitNodeInHashSet complexCloned.Nodes) complexCloned
 
         // Init.
         let init = findInitNodeInHashSet innerGraph.Nodes
-        let replacedInit = innerGraph.ReplacePayloadInByAndReturn init (init.Payload.SetInitStatusOff)
+        // Replace init only if current is not init! 
+        let replacedInit = 
+            match currentNode.Payload.IsInitOrFinal.IsInitBool with 
+                | true -> init
+                | false -> innerGraph.ReplacePayloadInByAndReturn init (init.Payload.SetInitStatusOff)
         let innerInitStateCount = replacedInit.Payload.StateCount
         let innerInitSecondaryId = replacedInit.Payload.SecondaryId
         let innerNodesIds = List.map findIds (Seq.toList innerGraph.Nodes)
@@ -210,7 +248,11 @@ module Blech.Visualization.Optimization
             match finalNodePresent with 
                 | true ->
                     let final = findFinalNodeInHashSet innerGraph.Nodes
-                    let replacedFinal = innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
+                    // Replace final only if current is not final! 
+                    let replacedFinal = 
+                        match currentNode.Payload.IsInitOrFinal.IsFinalBool with 
+                            | true -> final
+                            | false -> innerGraph.ReplacePayloadInByAndReturn final (final.Payload.SetFinalStatusOff)
                     let innerFinalStateCount = replacedFinal.Payload.StateCount
                     let innerFinalSecondary = replacedFinal.Payload.SecondaryId
                     let joinedGraph = addGraphToGraph graph innerGraph
@@ -301,7 +343,7 @@ module Blech.Visualization.Optimization
                         | IsComplex a -> a
                         | _ -> failwith "unexpected error, was not an activity node."// Should not happen here.
 
-        flattenHierarchy activityNodes finalNodeInfo currentNode cmplx graph
+        flattenHierarchy true activityNodes finalNodeInfo currentNode cmplx graph
 
     //______________________________FLATTEN HIERARCHY (COBEGIN)_______________________________________________________
     /// Adds an  edge to the given graph with the given label, source and target and given property.
@@ -352,7 +394,7 @@ module Blech.Visualization.Optimization
     /// Collapses hierarchies recursively regarding all hierarchies that are not caused by activites for every branch.
     and private flattenHierarchyCobegin (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (complex : CobeginPayload) (graph : VisGraph) : VisGraph =
         // Call flattening recursively on branches.
-        List.map (fun (b : VisGraph * Strength) -> (flattenHierarchyIfComplex activityNodes finalNodeInfo (findInitNodeInHashSet (fst b).Nodes) (fst b))) complex.Content |> ignore
+        List.map (fun (b : VisGraph * Strength) -> (flattenHierarchyIfComplex false activityNodes finalNodeInfo (findInitNodeInHashSet (fst b).Nodes) (fst b))) complex.Content |> ignore
         
         // 1. Two regions, at least one weak. Other must contain a single await statement ONLY
         let generalCondition = complex.Content.Length = 2 && checkRegionWeakAndContainAwait complex.Content.[0] complex.Content.[1] && (not noCobeginPattern)
