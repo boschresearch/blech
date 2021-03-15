@@ -1,4 +1,4 @@
-module BoCSEexample
+module
 
 function calc1() returns int8
     return 77

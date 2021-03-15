@@ -1,8 +1,8 @@
-module TypesClasses1
+module
 
 unit mm
 
-type MyT = float32[mm]
+typealias MyT = float32[mm]
 
 
 ref struct MyT //error

@@ -1,0 +1,10 @@
+
+import i "../imports/internal"
+import ni "../imports/notinternal"
+
+internal module exposes aReturnsS
+
+activity aReturnsS (x: ni.S) returns i.S
+    await true 
+    return i.f()
+end

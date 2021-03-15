@@ -1,0 +1,33 @@
+module
+
+struct MyS
+  var f1: int8
+  var f2: bool
+end
+
+struct MyT
+  var g1: float64
+  var g2: MyS
+  var g3: int32
+end
+
+function f (i: MyS)(out: MyT) returns MyT
+  out.g2 = i
+  let res: MyT = { g1 = out.g1 + 1.0,
+                   g2 = { f1 = out.g2.f1 + 1,
+                          f2 = not out.g2.f2 },
+                   g3 = out.g3 - 18
+                 }
+  return res
+end
+
+activity main ()()
+  var s: MyS = {f2 = true}
+  var t: MyT = {}
+  await true
+  var x = f(s)(t)
+  let b = x.g2.f2
+  x.g2.f2 = not b
+  s.f1 = t.g2.f1 + x.g2.f1 - 9
+  var y = f({f2 = true})(t)
+end

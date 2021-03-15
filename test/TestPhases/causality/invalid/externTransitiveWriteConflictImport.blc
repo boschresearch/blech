@@ -1,0 +1,15 @@
+import SE "../imports/sideffect"
+
+activity A ()()
+    run SE.SideEffect()
+end
+
+@[EntryPoint]
+activity E ()()
+    cobegin
+        run A()
+    with
+        run A()
+    end
+    await true
+end

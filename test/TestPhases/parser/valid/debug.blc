@@ -1,4 +1,4 @@
-module debug
+module
 
 function f()
     if switch == Enumeration.L then

@@ -1,4 +1,4 @@
-module ReturnInVoid
+module
 
 function calc()
     return 9

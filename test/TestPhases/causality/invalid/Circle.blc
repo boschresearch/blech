@@ -1,4 +1,4 @@
-module Circle
+module
 
 activity main () ()
     var a: int32

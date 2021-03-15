@@ -1,4 +1,4 @@
-module methods
+module
 
 /* ATTENTION: Currently we do not allow subprogram types */
 

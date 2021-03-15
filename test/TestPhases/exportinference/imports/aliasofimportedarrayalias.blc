@@ -1,0 +1,9 @@
+import aoaa "aliasofarrayalias"
+
+module exposes init
+
+typealias T = aoaa.AT // this should become an opaque array type
+
+function init() returns T 
+    return aoaa.init()
+end

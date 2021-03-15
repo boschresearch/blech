@@ -18,6 +18,7 @@ module Blech.Frontend.AST
 
 open Blech.Common
 open Blech.Common.Range
+open Blech.Common.TranslationUnitPath
 
 open Constants
 open CommonTypes
@@ -196,6 +197,12 @@ and DataType =
             -> r   
         | TypeName path 
             -> path.Range
+
+    member this.IsSimple =
+        match this with
+        | BoolType _ | BitvecType _ | NaturalType _ | IntegerType _
+        | FloatType _ -> true
+        | ArrayType _ | SliceType _ | Signal _ | TypeName _ -> false
         
 /// Declarations //////////////////////////////////////////////////////////
 
@@ -308,12 +315,12 @@ and StructTypeDecl =
         member this.Range = this.range
         member this.name = this.name
 
-and NewTypeDecl = 
+and OpaqueTypeDecl = 
     { 
         range: range
         isReference: bool
         name: Name
-        representation: DataType option
+        //representation: DataType option
         members: Member list
         annotations: Annotation list
     }
@@ -321,7 +328,7 @@ and NewTypeDecl =
         member this.Range = this.range
         member this.name = this.name
     
-and TypeDecl = 
+and TypeAliasDecl = 
     { 
         range: range
         isReference: bool
@@ -389,6 +396,7 @@ and SubProgram =
     {
         range: range
         isSingleton: bool
+        singletons: StaticNamedPath list
         isFunction: bool
         name: Name
         inputs: ParamDecl list
@@ -408,6 +416,7 @@ and Prototype =
         isSingleton: bool
         singletons: StaticNamedPath list
         isFunction: bool
+        isOpaque: bool // to distinguish from prototypes of local procedures with empty parameter lists
         name: Name
         inputs: ParamDecl list
         outputs: ParamDecl list
@@ -418,35 +427,56 @@ and Prototype =
         member this.Range = this.range
         member this.name = this.name
 
-    
+and OpaqueSingleton = 
+    { 
+        range : range
+        singletons : StaticNamedPath list
+        name : Name
+        annotations : Annotation list
+    }
+    interface IDeclarable with
+        member this.Range = this.range
+        member this.name = this.name
 
-and FromPath = 
+and ModulePath = 
     {
         range: range
-        path: string
+        path: TranslationUnitPath
     }
-    member ip.Range = ip.range
+
+    static member Empty = { range = Range.range0; path = TranslationUnitPath.Empty }
+    
+    member mp.Range = mp.range
+
+    //member mp.FromPath : TranslationUnitPath = 
+    //    let moduleName = List.ofArray <| mp.path.Split [| '/' |]
+    //    try 
+    //        { TranslationUnitPath.package = List.head moduleName
+    //          dirs = moduleName.[1 .. moduleName.Length-2]
+    //          file = List.last moduleName}
+    //    with
+    //    | _ -> failwith "this should never happen"
+    //    // TODO: This is a temporary hack for branch feature/modules, improve this fjg 16.09.20
 
 
 and Import = 
     {
         range: range
-        name: StaticNamedPath
-        from: FromPath option
-        localName: Name option
+        isInternal : bool
+        localName: Name
+        modulePath: ModulePath
         exposing: Exposing option
     }
+    
     member import.Range = import.range
 
 
-and Exposing =
-    | Few of Name list * range:range
-    | All of range:range
-    member exp.Range = 
-        match exp with
-        | Few (range=r)
-        | All (range=r)
-            -> r    
+and Exposing = 
+    { names: Name list
+      range: range }
+    
+    member this.Range = 
+        this.range
 
 
 /// package members (this also subsumes struct members)
@@ -456,32 +486,33 @@ and Exposing =
 and Member = 
     | Nothing                   // just for the moment to enable parsing, tolerating pattern matching warnings
     | Pragma of Annotation
-    | Import of Import
     | EnumType of EnumTypeDecl
     | StructType of StructTypeDecl
-    | NewType of NewTypeDecl
-    | Type of TypeDecl
+    | OpaqueType of OpaqueTypeDecl
+    | TypeAlias of TypeAliasDecl
     | Unit of UnitDecl
     | Clock of ClockDecl
     | Var of VarDecl
     | Subprogram of SubProgram
     | Prototype of Prototype
+    | OpaqueSingleton of OpaqueSingleton
     
     member m.Range =
         match m with
         | Nothing -> Range.rangeStartup
         | Pragma anno -> anno.Range
-        | Import i -> i.range
         | EnumType m -> m.range
         | StructType m -> m.range
-        | NewType m -> m.range
-        | Type m -> m.range
+        | OpaqueType m -> m.range
+        | TypeAlias m -> m.range
         | Unit m -> m.range
         | Clock m -> m.range
         | Var m -> m.range
         | Subprogram m -> m.range
         | Prototype m -> m.range
+        | OpaqueSingleton m -> m.range
     
+
     member m.isInterface =
         match m with
         | Subprogram sp ->
@@ -502,7 +533,6 @@ and Member =
     //    match m with
     //    | EnumType _ 
     //    | StructType _
-    //    | NewType _
     //    | TypeAlias _ ->
     //        true
     //    | _ ->
@@ -512,30 +542,48 @@ and Member =
 and ModuleSpec = 
     {
         range: range
-        path: Name list
+        isSignature: bool
+        isInternal: bool
         exposing: Exposing option
     }
     member modspec.Range = modspec.range
 
     static member Nothing = 
         { range = range.Zero
-          path = []
+          isSignature = false
+          isInternal = false
           exposing = Option.None }
 
-/// package = Blech implementation or interface file
-
-and Package = 
+/// Blech implementation or interface file
+and CompilationUnit = 
     {
         range: range
-        moduleName: SearchPath.ModuleName
-        loadWhat: Package.LoadWhat
-        imports: Member list
-        spec: ModuleSpec option
+        moduleName: TranslationUnitPath
+        imports: Import list
+        moduleSpec: ModuleSpec option
         members: Member list 
     }
-    member pkg.Range = pkg.range
-    member pkg.IsLibrary = Option.isSome pkg.spec
-    member pkg.IsProgram = Option.isNone pkg.spec
+    member this.Range = this.range
+    member this.IsModule = 
+        match this.moduleSpec with
+        | Some modSpec ->
+            not modSpec.isSignature
+        | None ->
+            false
+    member this.IsProgram = 
+        Option.isNone this.moduleSpec
+    member this.IsInternal = 
+        match this.moduleSpec with
+        | Some modSpec ->
+            modSpec.isInternal
+        | None ->
+            false      
+    member this.IsSignature =
+        match this.moduleSpec with
+        | Some modSpec ->
+            modSpec.isSignature
+        | None ->
+            false
         
 
 // Unit expressions //////////////////////////////////////////////////////
@@ -644,7 +692,6 @@ and Expr =
     | Const of Literal
     | AggregateConst of FieldExpr * range:range // array or struct const
     | SliceConst of index:Expr option * length:Expr option * buffer:DynamicAccessPath * range:range 
-    | ImplicitMember of StaticNamedPath 
     // -- variables --
     | Var of DynamicAccessPath
     // -- function call --
@@ -695,8 +742,6 @@ and Expr =
         match e with
         | Const literal 
             -> literal.Range
-        | ImplicitMember staticNamedPath 
-            -> staticNamedPath.Range
         | Var location 
             -> location.Range
         | And (l, r)
@@ -900,6 +945,7 @@ let filterOutNothingStmts stmts =
 let filterOutNothingMembers members = 
     List.filter (isNot Member.Nothing) members
 
+
 /// Given a list of Names, create a proper static named path value
 let mkStaticNamedPath (names, dots) : StaticNamedPath = 
     {
@@ -933,18 +979,51 @@ let mkFromPointedNameAndOptArrayAccess temporalQualifier (staticPath: StaticName
     let nameList = List.map (fun x -> Access.Name x) staticPath.path
     nameList @ nameOrExList |> mkDynamicAccessPath temporalQualifier
 
-let mkPreemption range preemption conditionLst body =
-    match preemption with
-    | Abort ->
-        Stmt.Preempt(range, Abort, conditionLst, Before, body)
-    | Suspend -> // remove this case?
-        Stmt.Preempt(range, Suspend, conditionLst, Before, body)
-    | Reset -> // rewrite into abort in a loop
-        let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range}
+//let mkPreemption range preemption conditionLst body =
+//    match preemption with
+//    | Abort ->
+//        Stmt.Preempt(range, Abort, conditionLst, Before, body)
+//    | Suspend -> // remove this case?
+//        Stmt.Preempt(range, Suspend, conditionLst, Before, body)
+//    | Reset -> // rewrite into abort in a loop
+//        let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range; index = -1}
+//        let varDecl =
+//            LocalVar { 
+//                VarDecl.range = range
+//                name = name
+//                permission = ReadWrite(Mutable.Var, range = range)
+//                isReference = false
+//                isExtern = false
+//                datatype = Some (BoolType range)
+//                initialiser = None
+//                annotations = []
+//            }
+//        let dynPath = 
+//            { path = [Name(name)]
+//              timepoint = Current
+//              subexpr = ref []
+//              qname = ref None }
+//        let lhs = Loc dynPath
+//        let assignNotYetFinished = Stmt.Assign(range, lhs, Const (Bool(false, range)))
+//        let assignFinished = Stmt.Assign(range, lhs, Const (Bool(true, range)))
+//        let untilCond = Var dynPath
+//        let loop =
+//            Stmt.RepeatUntil (range, 
+//                              [Stmt.Preempt(range, 
+//                                            Abort, 
+//                                            conditionLst, 
+//                                            Before, 
+//                                            assignNotYetFinished :: body @ [assignFinished] )], 
+//                              [Cond untilCond])
+//        SubScope(range, [varDecl; loop]) // sub-scoping to match exptected return type Stmt
+
+
+let rewriteResetToAbortInLoop (abortFinished : Name) range conditionLst body =
+        //let name = {id = mkPrefixIndexedNameFrom "abortFinished"; range = range; index = -1}
         let varDecl =
             LocalVar { 
                 VarDecl.range = range
-                name = name
+                name = abortFinished
                 permission = ReadWrite(Mutable.Var, range = range)
                 isReference = false
                 isExtern = false
@@ -953,7 +1032,7 @@ let mkPreemption range preemption conditionLst body =
                 annotations = []
             }
         let dynPath = 
-            { path = [Name(name)]
+            { path = [ Name (abortFinished) ]
               timepoint = Current
               subexpr = ref []
               qname = ref None }
@@ -1003,6 +1082,7 @@ let unionRangesPlusOpt leftRng rightRng optRng =
     | Some rng -> unionRanges leftRng rng
 
 
+
 let numberTypeRange range (optUnitExpr: UnitExpr option) =
     match optUnitExpr with
     | None -> range
@@ -1021,8 +1101,8 @@ let typeDeclRange (annos: Annotation list) modifiers startRange endRange =
 
     unionRanges fstRng endRange 
 
-let typeNameRange (annos: Annotation list) modifiers startRange (dt: DataType) =
-    typeDeclRange annos modifiers startRange (dt.Range)
+//let opaqueTypeRange (annos: Annotation list) modifiers startRange (dt: DataType) =
+//    typeAliasDeclRange annos modifiers startRange (dt.Range)
     
 
 let tagDeclRange (name: Name) (optRawExpr: Expr option) optDefaultRange =
@@ -1063,10 +1143,15 @@ let returnRange range (optExpr: Expr option) =
     | Some expr -> unionRanges range expr.Range
 
 
-let moduleHeadRange range (path: StaticNamedPath) (optExposing: Exposing option) =
-    match optExposing with
-    | None -> unionRanges range path.Range
-    | Some exp -> unionRanges range exp.Range
+//let moduleHeadRange optInternalRange keywordRange (optExposing: Exposing option) =
+//    let range = 
+//        match optInternalRange with 
+//        | Some rng -> unionRanges rng keywordRange 
+//        | None -> keywordRange
+
+//    match optExposing with
+//    | None -> range
+//    | Some exp -> unionRanges range exp.Range
 
 
 let importAsRange leftRng rightRng (optExp: Exposing option) =
@@ -1075,29 +1160,28 @@ let importAsRange leftRng rightRng (optExp: Exposing option) =
     | Some exp -> unionRanges leftRng exp.Range
 
 
-let importRange rng (optExp: Exposing option) =
-    match optExp with
-    | None -> rng
-    | Some exp -> unionRanges rng exp.Range
+let importRange importRng pathRng (optExposing : Exposing option) =
+    match optExposing with
+    | None -> unionRanges importRng pathRng
+    | Some exp -> unionRanges importRng exp.Range 
 
 
-let packageRange (imports: Member list) defaultRange (members: Member list) =
-
+let compilationUnitRange (imports: Import list) defaultRange (members: Member list) =
     let membersRange (members: Member list) =
-        assert not (List.isEmpty members)
-        let fst = List.head members
-        let lst = List.last members
-        unionRanges (fst.Range) (lst.Range) 
+        unionRanges (List.head members).Range (List.last members).Range 
 
+    let importsRange (imports: Import list) = 
+        unionRanges (List.head imports).Range (List.last imports).Range 
+        
     match imports, members with
     | [], [] ->
         defaultRange
     | [],  _ ->
-        unionRanges defaultRange  (membersRange members)
+        unionRanges defaultRange  (membersRange  members)
     | _,  [] -> 
-        unionRanges (membersRange imports) defaultRange
+        unionRanges (importsRange imports) defaultRange
     | _, _ ->
-        unionRanges (membersRange imports) (membersRange members)
+        unionRanges (importsRange imports) (membersRange members)
     
 
 let externalFunctionRange (annos: Annotation list) externRange inputsRange  optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option) =
@@ -1135,7 +1219,15 @@ let prototypeRange (annos: Annotation list) singleton startRange inputsRange opt
     | hd::_, _ ->
         unionRanges hd.Range endRange
 
- 
+
+let opaqueSingletonRange (annos: Annotation list) singleton nameRange =
+    match annos with
+    | [] -> 
+        unionRanges singleton nameRange
+    | hd::_ ->
+        unionRanges hd.Range nameRange
+
+
 let vardeclRange (annos: Annotation list) keywordRange endRange =
     match annos with
     | [] ->
@@ -1159,11 +1251,12 @@ let DummyRange = range.Zero
 //////////////////////////////////////////////////////////////////////////
 
 type ASTNode = 
-    | Package of Package
-    //| Import of Import
+    | Package of CompilationUnit
+    | Import' of Import
     | Member' of Member
     | Subprogram of SubProgram
     | Prototype of Prototype
+    | OpaqueSingleton of OpaqueSingleton
     | Stmt of Stmt
     | VarDecl' of VarDecl
     | ParamDecl of ParamDecl
@@ -1173,8 +1266,8 @@ type ASTNode =
     | EnumTypeDecl' of EnumTypeDecl
     | TagDecl of TagDecl
     | StructTypeDecl' of StructTypeDecl
-    | NewTypeDecl' of NewTypeDecl
-    | TypeDecl' of TypeDecl
+    | OpaqueTypeDecl' of OpaqueTypeDecl
+    | TypeAliasDecl' of TypeAliasDecl
     | Receiver of Receiver
     | Lexpr' of LhsInAssignment
     | Expr' of Expr
@@ -1186,31 +1279,34 @@ type ASTNode =
 
 // end of AST data structures
 
+// TODO: postOrderWalk is only used in pretty printer, which is itself incomplete.
+// TODO remove postOrderWalk and substitute code pretty printer with something better/more suitable, fjg 19.01.21
+
 /// Postorder (i.e. bottom-up) AST walker.
-let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
+let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+    let recurse = postOrderWalk fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fLocalVar fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation
     match treeNode with
     | Package p -> 
         let result = List.map (fun m -> recurse (ASTNode.Member' m)) p.members
-        fPackage (p.range, p.spec, result)
-    //| Import i ->
-    //    fImport i
+        fPackage (p.range, p.moduleSpec, result)
+    | Import' i ->
+        fImport i
     | Member' m -> 
         match m with
         | Member.Nothing ->
             fNothing
         | Member.Pragma anno ->
             fPragma anno
-        | Member.Import i->
-            fImport i
+        //| Member.Import i->
+        //    fImport i
         | Member.EnumType e ->
             fPackageMember (recurse (ASTNode.EnumTypeDecl' e))
         | Member.StructType s ->
             fPackageMember (recurse (ASTNode.StructTypeDecl' s))
-        | Member.NewType t ->
-            fPackageMember (recurse (ASTNode.NewTypeDecl' t))
-        | Member.Type t ->
-            fPackageMember (recurse (ASTNode.TypeDecl' t))
+        | Member.OpaqueType t ->
+            fPackageMember (recurse (ASTNode.OpaqueTypeDecl' t))
+        | Member.TypeAlias t ->
+            fPackageMember (recurse (ASTNode.TypeAliasDecl' t))
         | Member.Unit u ->
             fPackageMember (recurse (ASTNode.UnitDecl u))
         | Member.Clock c ->
@@ -1221,6 +1317,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
             fPackageMember (recurse (ASTNode.Subprogram f))
         | Member.Prototype f ->
             fPackageMember (recurse (ASTNode.Prototype f))
+        | Member.OpaqueSingleton s ->
+            fPackageMember (recurse (ASTNode.OpaqueSingleton s))
     | Subprogram f -> 
         let resIn = List.map (fun i -> recurse (ASTNode.ParamDecl i)) f.inputs
         let resOut = List.map (fun o -> recurse (ASTNode.ParamDecl o)) f.outputs
@@ -1234,6 +1332,8 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
         let resRet = Option.map (fun r -> recurse (ASTNode.ReturnDecl r)) f.result
         let resAtt =  List.map (fun a -> recurse (ASTNode.Annotation' a)) f.annotations
         fFunctionPrototype (f.range, f.name, resIn, resOut, resRet, resAtt)
+    | OpaqueSingleton s ->
+        fNothing // TODO: just for the time being
     | Stmt s -> 
         match s with
         | LocalVar vdecl ->
@@ -1352,16 +1452,16 @@ let rec postOrderWalk           fNothing fPragma fPackage fImport fPackageMember
         let resMembers = List.map (ASTNode.Member' >> recurse) s.members
         let resAtt = List.map (ASTNode.Annotation' >> recurse) s.annotations
         fStructTypeDecl (s.range, s.isReference, s.name, resFields, resMembers, resAtt)
-    | NewTypeDecl' t -> 
-        let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.representation
+    | OpaqueTypeDecl' t -> 
+        // let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.representation
         let resMembers = List.map (ASTNode.Member' >> recurse) t.members
         let resAtt = List.map (fun a -> recurse (ASTNode.Annotation' a)) t.annotations
-        fNewTypeDecl (t.range, t.isReference, t.name, resDat, resMembers, resAtt)
-    | TypeDecl' t -> 
+        fOpaqueTypeDecl (t.range, t.isReference, t.name, resMembers, resAtt)
+    | TypeAliasDecl' t -> 
         let resDat = recurse (ASTNode.DataType' t.aliasfor)
         //let resDat = Option.map (fun r -> recurse (ASTNode.DataType' r)) t.aliasfor
         let resAtt = List.map (fun a -> recurse (ASTNode.Annotation' a)) t.annotations
-        fTypeDecl (t.range, t.name, resDat, resAtt) 
+        fTypeAliasDecl (t.range, t.name, resDat, resAtt) 
     | Receiver r -> 
         fReceiver r
     | Lexpr' l ->

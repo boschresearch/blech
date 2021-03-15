@@ -1,4 +1,4 @@
-@[CFunction(source="appWithExternFun.ext.c")]
+@[CFunction(binding="increase_global_state()", header="appWithExternFun.ext.h")]
 extern function myExternFun()() returns int32
 
 @[EntryPoint]

@@ -1,0 +1,13 @@
+import E "../imports/enum" exposes Color
+module
+
+enum RGB
+    Red
+    Green
+    Blue
+end
+
+function f ()
+    var tl: Color = Color.Green 
+    var rgb: RGB = Green // implicit member local
+end

@@ -1,0 +1,8 @@
+// just to trigger recursive compilation of implementations and generated signatures
+
+import ids "../imports/importdeclaredsingleton"  
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

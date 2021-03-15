@@ -1,4 +1,4 @@
-module recursion
+module
 
 // recursion leads to a name checking error
 function f()

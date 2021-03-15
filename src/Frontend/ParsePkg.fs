@@ -19,6 +19,7 @@ module Blech.Frontend.ParsePkg
 open System
     
 open Blech.Common
+open TranslationUnitPath
 
 open SyntaxUtils
 open SyntaxUtils.ParserUtils
@@ -36,10 +37,9 @@ let tokenTagToString token =
     | TOKEN_IMPORT -> "import"
     | TOKEN_EXPOSES -> "exposes"
     | TOKEN_SIGNATURE -> "signature"
+    | TOKEN_INTERNAL -> "internal"
     (* ---- name spaces ---- *)
     | TOKEN_EXTENSION -> "extension"
-    (* --- paths -----*)
-    | TOKEN_FROMPATH -> "from <path>"
     (* --- doc comments --- *)
     | TOKEN_LINEDOC -> "/// <line doc comment>"
     | TOKEN_BLOCKDOC -> "/** <block doc comment> */"
@@ -60,8 +60,8 @@ let tokenTagToString token =
     | TOKEN_FLOAT32 -> "float32"
     | TOKEN_FLOAT64 -> "float64"
     (* --- user-defined types --- *)
+    | TOKEN_TYPEALIAS -> "typealias"
     | TOKEN_TYPE -> "type"
-    | TOKEN_NEWTYPE -> "newtype"
     | TOKEN_ENUM -> "enum"
     | TOKEN_STRUCT -> "struct"
     | TOKEN_SIGNAL -> "signal"
@@ -226,61 +226,28 @@ let private myErrorHandler (lexbuf: FSharp.Text.Lexing.LexBuffer<char>)
     ParserContext.storeParserErrorInfo errInfo
 
     
-let private myBlechParser lexer lexbuf : AST.Package =
+let private myBlechParser lexer lexbuf : AST.CompilationUnit =
     let myTables = { BlechParser.tables() with parseError = myErrorHandler lexbuf }
     Operators.unbox <| myTables.Interpret(lexer, lexbuf, 0)
     // Todo: Catch exception from parser, in case error token cannot be accepted (which should not happen)
 
 
-/// Parses a Blech module from a file given by its last argument.
-/// The result is an untyped blech package, which could then be handed over to the
-/// static analysis part.
-let parseModule diagnosticLogger (loadWhat: Package.LoadWhat) (moduleName: SearchPath.ModuleName) (fileName: string) =
+/// Parses a Blech module from a file given by a string
+/// The result is an untyped blech package
+let parseModuleFromStr diagnosticLogger (implOrIface: CompilationUnit.ImplOrIface) (moduleName: TranslationUnitPath) fileName (contents: string) =
     Logging.log8 "ParsePkg.parseModule" 
-    <| sprintf "%s: %s | file: %s | fileIndex: %d" (loadWhat.ToString()) 
-                                                   (CommonTypes.idsToString moduleName) 
+    <| sprintf "%s: %s | file: %s | fileIndex: %d" (implOrIface.ToString()) 
+                                                   (moduleName.ToString()) 
                                                    fileName 
                                                    (Range.fileIndexOfFile fileName)
 
     // Initialise global ParserContext
-    ParserContext.initialise diagnosticLogger moduleName loadWhat
+    ParserContext.initialise diagnosticLogger moduleName implOrIface
         
     // create a file index for current module's file in the global file index table
     ignore <| Range.fileIndexOfFile fileName
 
-    // open stream from file
-    let stream = new IO.StreamReader( IO.Path.GetFullPath(fileName) )
-    
-    // initialise lexing buffer
-    let lexbuf = FSharp.Text.Lexing.LexBuffer<char>.FromTextReader stream
-    lexbuf.EndPos <- { pos_bol = 0
-                       pos_fname = fileName 
-                       pos_cnum = 0
-                       pos_lnum = 1 }
-    
-    // parse the file
-    let utyPkg = myBlechParser myBlechLexer lexbuf
-
-    // close the stream
-    stream.Close()
-    
-    // handle errors
-    let logger,_ = ParserContext.getDiagnosticsLogger()
-    if Diagnostics.Logger.hasErrors logger then
-        Error logger
-    else
-        Ok utyPkg
-
-/// Parses a Blech module from a string given by its last argument.
-/// The result is an either untyped blech package, 
-/// or a Diagnostic
-let parseModuleFromStrNoConsole diagnosticLogger fileName moduleName fileContents =
-    // Initialise global ParserContext
-
-    ParserContext.initialise diagnosticLogger moduleName Blech.Common.Package.Implementation 
-    // TODO: change this, determine loadWhat from file extension for language server
-        
-    let stream = new IO.StringReader(fileContents)
+    let stream = new IO.StringReader(contents)
     
     // intialise lexing buffer
     let lexbuf = FSharp.Text.Lexing.LexBuffer<char>.FromTextReader stream
@@ -294,11 +261,17 @@ let parseModuleFromStrNoConsole diagnosticLogger fileName moduleName fileContent
 
     // close the stream
     stream.Close()
-    
+
     // handle errors
-    let logger,_ = ParserContext.getDiagnosticsLogger ()
+    let logger,_ = ParserContext.getDiagnosticsLogger()
     if Diagnostics.Logger.hasErrors logger then
         Error logger
     else
         Ok utyPkg
-    
+
+
+/// Shorthand wrapper for parsing from files
+/// useful in unit tests, for example
+let parseModuleFromFile logger implOrIface moduleName filePath =
+    System.IO.File.ReadAllText (System.IO.Path.GetFullPath(filePath))
+    |> parseModuleFromStr logger implOrIface moduleName filePath

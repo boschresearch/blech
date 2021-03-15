@@ -1,4 +1,4 @@
-module XlocalShadow
+module
 
 
 ref struct x

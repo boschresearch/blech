@@ -1,4 +1,4 @@
-module PrevConst
+module
 
 const p: int64 = 7
 activity main ()()

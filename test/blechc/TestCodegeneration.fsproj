@@ -14,6 +14,10 @@
   <ItemGroup>
     <PackageReference Include="FSharp.Data" Version="3.3.3" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="4.7.2" />
+  </ItemGroup>
   
   <!-- 
     Copyright (c) 2019 - for information on the respective copyright owner

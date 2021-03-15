@@ -39,25 +39,29 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     open AST
 
     module Env = SymbolTable.Environment
-    
-
-    // type ErrorMessage = Cmd.ErrorMessage
-
     module Logger = Diagnostics.Logger
+
+    type private TranslationUnitPath = TranslationUnitPath.TranslationUnitPath
+    type private Environment = SymbolTable.Environment
 
 
     type NameCheckContext = 
         {
-            env: SymbolTable.Environment
+            env: Environment
             logger: Diagnostics.Logger
+            importedLookupTables: Map<TranslationUnitPath, SymbolTable.LookupTable>
+            importedExportScopes: Map<TranslationUnitPath, SymbolTable.Scope>
         }
 
 
-    let initialise logger moduleName : NameCheckContext =
+    let initialise logger moduleName importedLookupTables importedExportScopes : NameCheckContext =
         { 
             env = Env.init moduleName
             logger = logger  // this will be create at blechc started and handed over
+            importedLookupTables = importedLookupTables
+            importedExportScopes = importedExportScopes
         }
+
 
     let private identifyNameInCurrentScope (ctx: NameCheckContext) (name: Name) =
         match Env.findNameInCurrentScope ctx.env name with
@@ -67,6 +71,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+
     let private identifyStatic (ctx: NameCheckContext) (spath: AST.StaticNamedPath) =
         match Env.findCompletePath ctx.env spath with
         | Ok env ->            
@@ -74,6 +79,7 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
+
 
     let private identifyDynamic (ctx: NameCheckContext) (dpath: AST.DynamicAccessPath) =
         // let candidatePath = dpath.leadingNames
@@ -84,33 +90,58 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+    
+    /// adds an imported module to the name check context
+    let private addImportedModule (ctx: NameCheckContext) (import: AST.Import) = 
+        let localName = import.localName
+        let lookupTable = ctx.importedLookupTables.[import.modulePath.path]
+        let exportScope = ctx.importedExportScopes.[import.modulePath.path]
+        { ctx with env = Env.addImportedModule ctx.env localName lookupTable exportScope }
 
-    let private identifyImplicitMember (ctx: NameCheckContext) (implicitMember: AST.StaticNamedPath) =
-        match Env.findImplicitPath ctx.env implicitMember with
+
+    let private addModuleNameDecl (ctx: NameCheckContext) (import: AST.Import) = 
+        let name = import.localName
+        match Env.insertModuleName ctx.env name with // check for shadowing
         | Ok env ->
             { ctx with env = env }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
-            ctx     
-
-    let private addModule (ctx: NameCheckContext) (moduleName: SearchPath.ModuleName) = 
-        let env = List.fold (fun env id -> Env.enterModuleScope env id) ctx.env moduleName
-        {ctx with env = env}
-        
-
+            ctx
+    
+    let private addExposedImportedMember (import: AST.Import) (ctx: NameCheckContext) (exposedImportedMember: Name) =
+        let modName = import.localName
+        let modPath = import.modulePath
+        match Env.exposeImportedMember ctx.env modName modPath exposedImportedMember with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx
+     
     let private addDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) (label: IdLabel) =
         let name = decl.name
-        match Env.insertName ctx.env name label with
+        match Env.insertName ctx.env name label  with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            do Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx     
+        
+
+    let private addConstOrParamDecl (ctx: NameCheckContext) (decl: AST.IDeclarable) =
+        let name = decl.name
+        match Env.insertConstOrParamName ctx.env name with
         | Ok env -> 
             { ctx with env = env }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             ctx
 
+    let private addUnitDecl = addConstOrParamDecl
 
     let private addTypeDecl (ctx: NameCheckContext) (sd: AST.IDeclarable) = 
         let name = sd.name
-        match Env.insertScopeName ctx.env name with
+        match Env.insertTypeName ctx.env name with
         | Ok env ->
             { ctx with env = Env.enterOpenScope env name } // here is the difference to addDecl!
         | Error err ->
@@ -119,13 +150,21 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
  
     let private addSubprogramDecl (ctx: NameCheckContext) name = 
-        match Env.insertScopeName ctx.env name with  // wird im inner scope eingetragen
+        match Env.insertSubProgramName ctx.env name with  // wird im inner scope eingetragen
         | Ok env ->
             { ctx with env = Env.enterClosedScope env name }
         | Error err ->
             Logger.logError ctx.logger Diagnostics.Phase.Naming err
             { ctx with env = Env.enterAnonymousScope ctx.env }  // remains as anonymous inner scope
 
+    let private addOpaqueSingletonDecl (ctx: NameCheckContext) name = 
+        match Env.insertOpaqueSingletonName ctx.env name with  // wird im inner scope eingetragen
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err
+            ctx 
+            
 
     let private addSubScope (ctx: NameCheckContext) =
         { ctx with env = Env.enterAnonymousScope ctx.env }
@@ -137,6 +176,26 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
 
     let private exitSubScope (ctx: NameCheckContext) =
         { ctx with env = Env.exitInnerScope ctx.env }
+
+
+    let private addExposedNameBefore (ctx: NameCheckContext) name =
+        match Env.addExposedNameBefore ctx.env name with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err       
+            ctx
+
+    let private addExposedNameAfter (ctx: NameCheckContext) name = 
+        match Env.addExposedNameAfter ctx.env name with
+        | Ok env ->
+            { ctx with env = env }
+        | Error err ->
+            Logger.logError ctx.logger Diagnostics.Phase.Naming err       
+            ctx
+
+    let private addModuleScope (ctx: NameCheckContext) =
+        { ctx with env = Env.enterModuleScope ctx.env }
 
 
     // begin ==========================================================
@@ -207,8 +266,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 | ArrayFields fields -> List.fold checkArrayField ctx fields
             | Expr.SliceConst _ ->
                 ctx
-            | Expr.ImplicitMember name ->
-                identifyImplicitMember ctx name
             | Expr.Var pname ->
                 checkDynamicAccessPath ctx pname
             | Expr.Not (e, _) 
@@ -267,7 +324,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
         | FloatType (unit = uexp) ->
             Option.fold checkUnitExpr ctx uexp
         | ArrayType (size = expr; elem = dty) ->
+            // resumeExposure ctx
             checkExpr ctx expr
+            // |> disableExposure
             |> checkDataType <| dty
         | SliceType (elem = dty) ->
             checkDataType ctx dty
@@ -298,7 +357,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
     let checkStaticVarDecl ctx (vd: AST.VarDecl) = 
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
-        |> addDecl <| vd <| IdLabel.Static// added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        |> addConstOrParamDecl <| vd // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        // |> exportCodeDecl <| vd.name
+
 
     let checkLocation ctx (lhs: AST.Receiver) =
         match lhs with
@@ -309,14 +370,6 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             |> addDecl <| vd <| IdLabel.Dynamic 
         | _ ->
             ctx
-
-    //let checkFreshLocation ctx (lhs: AST.LhsInAssignment) =
-    //    match lhs with
-    //    | AST.FreshLoc vd ->
-    //        Option.fold checkDataType ctx vd.datatype
-    //        |> addDecl <| vd <| IdLabel.Dynamic 
-    //    | _ ->
-    //        ctx
 
 
     let checkCondition ctx (cond: AST.Condition) =
@@ -440,27 +493,37 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
     let checkSubprogram ctx (sp: AST.SubProgram) =
         addSubprogramDecl ctx sp.name
+        |> List.fold identifyStatic <| sp.singletons
         |> List.fold checkParamDecl <| sp.inputs
         |> List.fold checkParamDecl <| sp.outputs
         |> Option.fold checkReturnDecl <| sp.result
         |> List.fold checkStatement <| sp.body
         |> exitSubScope
+        // |> exportCodeDecl <| sp.name
 
-    let checkFunctionPrototype ctx (fp: Prototype) =
+
+    let checkFunctionPrototype ctx (fp: AST.Prototype) =
         addSubprogramDecl ctx fp.name
+        |> List.fold identifyStatic <| fp.singletons
         |> List.fold checkParamDecl <| fp.inputs
         |> List.fold checkParamDecl <| fp.outputs
         |> Option.fold checkReturnDecl <| fp.result
         |> exitSubScope
+        
+
+    let checkOpaqueSingleton ctx (os: AST.OpaqueSingleton) =
+        List.fold identifyStatic ctx os.singletons
+        |> addOpaqueSingletonDecl <| os.name
+        
 
     let checkUnitDecl ctx (ud: AST.UnitDecl) =
-        addDecl ctx ud IdLabel.Static
+        addUnitDecl ctx ud
  
  
     let checkTagDecl ctx (td: AST.TagDecl) =
         Option.fold checkExpr ctx td.rawvalue
         |> addDecl <| td <| IdLabel.Static
-
+        
 
     // all field names are syntactically var decls
     let checkFieldDecl ctx (field: AST.Member) =
@@ -473,41 +536,49 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
             ctx
 
 
+    let checkImportExposes import ctx (exposing: AST.Exposing) =
+        List.fold (addExposedImportedMember import) ctx exposing.names
+        
+
+    let checkImport ctx (import: AST.Import) = 
+        addModuleNameDecl ctx import
+        |> addImportedModule <| import
+        |> Option.fold (checkImportExposes import) <| import.exposing
+
+
     let rec checkEnumType ctx (etd: AST.EnumTypeDecl) =
-            addTypeDecl ctx etd                     // open, named, non-recursive                          
+            addTypeDecl ctx etd                           // open, named, non-recursive
             |> Option.fold checkDataType <| etd.rawtype   // check rawtype first 
             |> enableRecursion                            
             |> List.fold checkTagDecl <| etd.tags
             |> List.fold checkMember <| etd.members
-            |> exitSubScope                               
-
+            |> exitSubScope
+            
 
         and checkStructType ctx (std: AST.StructTypeDecl) =
-            addTypeDecl ctx std                  // add non-recursive sub scope
+            addTypeDecl ctx std                        // add non-recursive sub scope
             |> addSubScope                             // separate anonymous scope for fields, prevents open access
-            |> List.fold checkFieldDecl <| std.fields  // check fields without, before typename becomes visible  
+            |> List.fold checkFieldDecl <| std.fields  // check fields first, before typename becomes visible  
             |> exitSubScope      
             |> enableRecursion                         
             |> List.fold checkMember <| std.members
             |> exitSubScope
+            
 
-
-        and checkNewType ctx (ntd: AST.NewTypeDecl) =
+        and checkOpaqueType ctx (ntd: AST.OpaqueTypeDecl) =
             addTypeDecl ctx ntd                 // open, named, non-recursive scope 
-            // |> checkDataType <| ntd.representation    // check representation first, before typename becomes visible
-            |> Option.fold checkDataType <| ntd.representation
             |> enableRecursion                         
             |> List.fold checkMember <| ntd.members
             |> exitSubScope
+            
 
-
-        and checkTypeAlias ctx (tad: AST.TypeDecl) =
-            addTypeDecl ctx tad                 // open, named, non-recursive scope  
-            |> checkDataType <| tad.aliasfor          // check alias first, before new typename becomes visible
+        and checkTypeAlias ctx (tad: AST.TypeAliasDecl) =
+            addTypeDecl ctx tad                 // open, named, non-recursive scope
+            |> checkDataType <| tad.aliasfor          // check alias first, before typename becomes visible
             |> enableRecursion
             |> List.fold checkMember <| tad.members
             |> exitSubScope
-
+            
 
         and checkMember ctx (m: AST.Member) =
             match m with
@@ -515,9 +586,9 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkEnumType ctx et
             | Member.StructType st ->
                 checkStructType ctx st
-            | Member.NewType nt ->
-                checkNewType ctx nt
-            | Member.Type ta -> 
+            | Member.OpaqueType nt ->
+                checkOpaqueType ctx nt
+            | Member.TypeAlias ta -> 
                 checkTypeAlias ctx ta
             | Member.Var vdecl ->
                 checkStaticVarDecl ctx vdecl
@@ -525,6 +596,8 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 checkSubprogram ctx sp
             | Member.Prototype fp ->
                 checkFunctionPrototype ctx fp
+            | Member.OpaqueSingleton os ->
+                checkOpaqueSingleton ctx os
             | Member.Unit u ->
                 checkUnitDecl ctx u
             | Member.Clock _ ->
@@ -533,45 +606,41 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
                 ctx 
             | Member.Nothing -> 
                 ctx
-            | Member.Import _ ->
-                ctx // Handled separately, maybe we should fail here
+
+    
+    let checkExposingBefore ctx (exposing: AST.Exposing) =
+        List.fold addExposedNameBefore ctx exposing.names
+        
+
+    let checkModuleSpecBefore ctx (modSpec: AST.ModuleSpec) =
+        Option.fold checkExposingBefore ctx modSpec.exposing
 
 
-    let checkImport (packageContext: Package.Context<'info>) (import: AST.Member) = 
-        let pkgCtx = { packageContext with logger = Diagnostics.Logger.create() }
-        match import with
-        | Member.Import i ->
-            Package.require pkgCtx i.name.identifiers
-        | _ ->
-            failwith "This should never happen"
+    let checkExposingAfter (ctx: NameCheckContext) (exposing: AST.Exposing) = 
+        List.fold addExposedNameAfter ctx exposing.names 
+        
+
+    let checkModuleSpecAfter (ctx: NameCheckContext) (modSpec: AST.ModuleSpec) : NameCheckContext = 
+        Option.fold checkExposingAfter ctx modSpec.exposing
 
 
-    let checkPackage packageContext (ctx: NameCheckContext) (p: AST.Package) : NameCheckContext =
-        // addModule ctx p.moduleName  // TODO: use this just for imports
-        // TODO: checkModuleName for shadowing of imports
-        let imports = List.filter (fun (m: Member) -> not m.IsAPragma) p.imports
-        let importedModules = List.map (checkImport packageContext) imports
-        //printfn "%A" imports
-        List.fold checkMember ctx p.members
-        // |> exitSubScope  // remove just for debugging
-
-
+    let checkCompilationUnit (ctx: NameCheckContext) (cu: AST.CompilationUnit) : NameCheckContext =
+        // printfn "Namecheck Compilation Unit: %s" <| string cu.moduleName
+        // this should create an intermediate scope after the imports, lets call it module scope
+        List.fold checkImport ctx cu.imports
+        |> addModuleScope  // all compilation units get a module scope
+        |> Option.fold checkModuleSpecBefore <| cu.moduleSpec
+        |> List.fold checkMember <| cu.members
+        |> Option.fold checkModuleSpecAfter <| cu.moduleSpec     // check exposes <identifiers> last 
+    
+    
     // TODO: Maybe we should define different entry points, for (incremental) parsing and checking
-    let checkDeclaredness packageContext (ctx: NameCheckContext) (ast: AST.Package) = 
-        let ncc = checkPackage packageContext ctx ast
+    let checkDeclaredness (ctx: NameCheckContext) (ast: AST.CompilationUnit) = 
+        let ncc = checkCompilationUnit ctx ast
         if Diagnostics.Logger.hasErrors ncc.logger then
             Error ncc.logger
         else
-            Ok (ast, ncc.env.lookupTable)
+            Ok ncc.env
     
 
-    /// This function ist just for testing compiler phases. It ignores imports
-    /// It does not need a package context
-    let checkSingleFileDeclaredness (ctx: NameCheckContext) (ast: AST.Package) =
-        let ncc = List.fold checkMember ctx ast.members
-        if Diagnostics.Logger.hasErrors ncc.logger then
-            Error ncc.logger
-        else
-            Ok (ast, ncc.env.lookupTable)
-    
     // end ============================================================

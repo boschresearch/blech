@@ -1,4 +1,4 @@
-module assignArrayToStruct
+module
 
 struct MyS
   var f1: int8

@@ -1,8 +1,8 @@
-module ObjectMemberAccess
+module
 
 unit mm
 
-type MyT = float32[mm]
+typealias MyT = float32[mm]
 
 
 ref struct CLS

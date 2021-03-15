@@ -1,0 +1,11 @@
+module exposes S
+
+struct S
+    var b: bool
+extension
+    function f()
+    end
+    activity a()
+        await true
+    end
+end

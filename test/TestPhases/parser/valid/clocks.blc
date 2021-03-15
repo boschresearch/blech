@@ -1,4 +1,4 @@
-module clocks
+module
 
 @[periodic(counter = 10, resolution = 1000)]
 clock ms10 = count 10

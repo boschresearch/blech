@@ -1,0 +1,6 @@
+import E "../imports/enum"
+module
+
+function f ()
+    var color : E.Color = Green // no implicit member access in other module without qualification
+end

@@ -1,0 +1,7 @@
+module exposes g
+
+singleton function f() end
+
+function g()
+    f()
+end

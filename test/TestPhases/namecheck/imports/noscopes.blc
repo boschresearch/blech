@@ -1,0 +1,3 @@
+module exposes c
+
+const c = 42 : int32

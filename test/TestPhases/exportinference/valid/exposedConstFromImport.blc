@@ -1,0 +1,5 @@
+import a "../imports/concrete" exposes s
+
+module exposes c
+
+const c: a.S = s

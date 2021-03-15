@@ -1,4 +1,4 @@
-module increment2
+module
 
 activity empty ()()
     var x: float64 = 15.0

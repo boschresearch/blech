@@ -1,4 +1,4 @@
-module operandSpaces
+module
 
 const x: int64 = 15
 

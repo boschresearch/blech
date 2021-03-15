@@ -45,6 +45,14 @@ module Attribute =
     [<Literal>]
     let ccompile = "CCompile"
 
+    // opaque types qualification
+    [<Literal>] 
+    let opaqueStruct = "StructType"
+    [<Literal>] 
+    let opaqueArray = "ArrayType"
+    [<Literal>] 
+    let simpleType = "SimpleType"
+
     module Key =
 
         // C bindings
@@ -77,6 +85,10 @@ module Attribute =
 
         | LineDoc of linedoc: string
         | BlockDoc of blockdoc: string
+
+        | OpaqueArray
+        | OpaqueStruct
+        | SimpleType
     
         member attr.ToDoc =
             let dpStructured key attrs =
@@ -127,7 +139,15 @@ module Attribute =
                 txt "///" <+> txt doc
             | BlockDoc doc ->
                 txt "/**" <^> txt doc <^> txt "*/"
-                
+
+            | OpaqueStruct ->
+                txt opaqueStruct |> dpAnno
+            | OpaqueArray ->
+                txt opaqueArray |> dpAnno
+            | SimpleType ->
+                txt simpleType |> dpAnno
+
+
         override attr.ToString() =
             render None <| attr.ToDoc
 
@@ -176,13 +196,6 @@ module Attribute =
         | CInput (header = Some header)
         | CFunctionPrototype (header = Some header) ->
             Some header
-        | _ ->
-            None
-
-    let private tryGetCSource (attr: Attribute) =
-        match attr with
-        | CFunctionWrapper (source = source) ->
-            Some source
         | _ ->
             None
 

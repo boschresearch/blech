@@ -1,4 +1,4 @@
-module intOutRanges
+module
 
 function inOutRanges()
     var a: int8 = -129

@@ -6,7 +6,8 @@ function f() returns bool
 end
 
 activity B()
-    await f()
+    let b = f()
+    await b
 end
 
 @[EntryPoint]
@@ -14,6 +15,7 @@ activity A()
     cobegin
         run B()
     with
-        await f()
+        let b = f()
+        await b
     end
 end

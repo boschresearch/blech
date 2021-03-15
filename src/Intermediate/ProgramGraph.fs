@@ -112,7 +112,7 @@ module IntermediateContext =
         | Some t -> [ t ]
         | None ->
             match TypeCheckContext.getDatatypeFromTML context.lut tml with
-            | ValueTypes (ValueTypes.StructType (_, _, fields))
+            | ValueTypes (ValueTypes.StructType (_, fields))
             | ReferenceTypes (ReferenceTypes.StructType (_, _, fields)) ->
                 [
                     for field in fields do
@@ -144,8 +144,8 @@ module IntermediateContext =
         // and determine the list of singletons downstream
         let names =
             match context.lut.nameToDecl.[whoToCall] with
-            | SubProgramDecl s -> s.singletons
-            | FunctionPrototype f -> if f.isSingleton then [f.name] else []
+            | ProcedureImpl s -> s.Singletons
+            | ProcedurePrototype p -> p.singletons
             | Declarable.VarDecl _ 
             | Declarable.ExternalVarDecl _ 
             | Declarable.ParamDecl _ -> failwith "Expected whoToCall to be a a function or activity or prototype declaration."
@@ -389,23 +389,9 @@ module ProgramGraph =
         outputs |> List.iter (addNameWritten context callNode)
         retvar |> Option.iter (addNameWritten context callNode)
 
-        // add locally declared external (output) variables
-        let addGlobalOutputs extVarDecls =
-            let createNewLhs (extVarDecl: ExternalVarDecl) =
-                { lhs = LhsCur (Loc extVarDecl.name)
-                  typ = extVarDecl.datatype
-                  range = pos } // use calling activity's source pos instead of declaration's
-            extVarDecls
-            |> List.map createNewLhs
-            |> List.iter (fun lhs -> addNameWritten context pg.Entry lhs; addNameWritten context callNode lhs)
-        match context.lut.nameToDecl.[name] with
-        | SubProgramDecl spd ->
-            addGlobalOutputs spd.globalOutputsAccumulated
-            addSingletonCalls context line pg.Entry name
-            addSingletonCalls context line callNode name
-        | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
-        
-        
+        addSingletonCalls context line pg.Entry name
+        addSingletonCalls context line callNode name
+                
         let pgActCall = { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph] }
 
         match optReceiver with
@@ -417,142 +403,33 @@ module ProgramGraph =
             pgActCall
     
 
-    /// This function is here temporarily. It solves the following problem:
-    /// Since the abort conditions are pushed into the body of the abort statement
-    /// conditions may become concurrent in the context of a cobegin in the body.
-    /// This is a problem if the condition is modified in the body. The scheduler
-    /// will generate wrong code following the write first-then read strategy.
-    /// To avoid that we prev all variables which are part of the abort condition
-    /// and which are modified inside the abort body.
-    /// In the future we want to generate code for preemptions differently
-    /// such that prev'ing conditions won't be necessary.
-    /// This future implementation would introduce another control point which is
-    /// traversed in every reaction before executing any blocks that correspond to
-    /// the abort body.
-    /// The future solution would allow to use references in cond which cannot be prev'ed.
-    /// As of right now references are not implemented and thus the 
-    /// current implementation always works.
-    let private tempPrevHelper context cond subPg =
-        let writtenLabels =
-            let rec intersect l1 l2 =
-                List.allPairs l1 l2
-                |> List.tryFind (fun (a,b) -> a = b)
-            let innerNodes = subPg.Graph.Nodes |> Seq.toList
-            context.tempNameWrittenByNodes
-            |> Seq.choose (fun kvp -> 
-                let allWritingNodes = kvp.Value |> Seq.toList |> List.unzip |> snd
-                match intersect innerNodes allWritingNodes with
-                | Some _ -> Some kvp.Key
-                | None -> None
-                )
-
-        // for every current memory location in cond that is written within the body to be aborted, use prev
-        let rec rewriteCond expr =
-            let newRhs =
-                match expr.rhs with
-                // locations
-                | RhsCur tml ->
-                    if Seq.exists (function | Cur x -> x = tml | _ -> false ) writtenLabels then
-                        Prev tml
-                    else
-                        expr.rhs
-                | Prev _ -> expr.rhs
-                // call
-                | FunCall (fn,ins,outs) ->
-                    assert (outs = [])
-                    let rewrittenIns = ins |> List.map rewriteCond
-                    FunCall (fn,rewrittenIns,outs)
-                // constants and literals
-                | BoolConst _
-                | IntConst _
-                | BitsConst _
-                | NatConst _
-                | FloatConst _
-                | ResetConst -> expr.rhs
-                | StructConst fieldExprs ->
-                    fieldExprs 
-                    |> List.map (fun (id, v) -> (id, rewriteCond v))
-                    |> StructConst
-                | ArrayConst cellExpr ->
-                    cellExpr
-                    |> List.map (fun (idx, v) -> (idx, rewriteCond v))
-                    |> ArrayConst
-                // type conversion 
-                | Convert (v, t, b) -> Convert (rewriteCond v, t, b)
-                // logical
-                | Neg v -> Neg <| rewriteCond v
-                | Conj (v1, v2) -> Conj (rewriteCond v1, rewriteCond v2)
-                | Disj (v1, v2) -> Disj (rewriteCond v1, rewriteCond v2)
-                // bitwise
-                | Bnot v -> Bnot <| rewriteCond v
-                | Band (v1, v2) -> Band (rewriteCond v1, rewriteCond v2)
-                | Bor (v1, v2) -> Bor (rewriteCond v1, rewriteCond v2)
-                | Bxor (v1, v2) -> Bxor (rewriteCond v1, rewriteCond v2)
-                | Shl (v1, v2) -> Shl (rewriteCond v1, rewriteCond v2)
-                | Shr (v1, v2) -> Shr (rewriteCond v1, rewriteCond v2)
-                | Sshr (v1, v2) -> Sshr (rewriteCond v1, rewriteCond v2)
-                | Rotl (v1, v2) -> Rotl (rewriteCond v1, rewriteCond v2)
-                | Rotr (v1, v2) -> Rotr (rewriteCond v1, rewriteCond v2)
-                // relational
-                | Les (v1, v2) -> Les (rewriteCond v1, rewriteCond v2)
-                | Leq (v1, v2) -> Leq (rewriteCond v1, rewriteCond v2)
-                | Equ (v1, v2) -> Equ (rewriteCond v1, rewriteCond v2)
-                // arithmetic
-                | Add (v1, v2) -> Add (rewriteCond v1, rewriteCond v2)
-                | Sub (v1, v2) -> Sub (rewriteCond v1, rewriteCond v2)
-                | Mul (v1, v2) -> Mul (rewriteCond v1, rewriteCond v2)
-                | Div (v1, v2) -> Div (rewriteCond v1, rewriteCond v2)
-                | Mod (v1, v2) -> Mod (rewriteCond v1, rewriteCond v2)
-            {expr with rhs = newRhs}
-        rewriteCond cond
-    // end of tempPrevHelper
+    /// Generate program graph for strong delayed abort
+    let private createAbortBefore context pos thread bodyGenerator abortCond =
+        let pgAwait = createAwait context pos thread "ticker" {rhs = BoolConst true; typ = ValueTypes BoolType; range = pos}
         
-    
-    /// Program graph for non-immediate strong abort
-    /// For this we add a new location, an AbortEnd location,
-    /// and transitions from every StartFromAwaitLocation in subPg
-    /// guarded by cond
-    /// These transitions have a higher priority than the original ones
-    /// which start the reaction.
-    let private createAbortBefore context line thread cond subPg =
-        // collect the abort lists for all abort surface nodes
-        let innerAwaitNodes = 
-            subPg.Graph.Nodes
-            |> Seq.choose (fun n -> match n.Payload.Typ with | StartFromAwaitLocation -> Some n | _ -> None)
-            |> Seq.toList
-
         let graph = Graph.Empty ()
-        let endAbortNode = graph.AddNode {Typ = AbortEnd (HashSet(innerAwaitNodes)); Line = None; Thread = thread}
-        let entry = graph.AddNode {Typ = Location; Line = Some line; Thread = thread}
+        let abortDecisionPoint = graph.AddNode {Typ = GuardLocation; Line = None; Thread = thread}
+        let entry = graph.AddNode {Typ = AbortBegin (pgAwait.Entry, abortDecisionPoint); Line = Some pos; Thread = thread}
+        let subPg = bodyGenerator entry // Generate subgraphs where the thread IDs are derived from thread of entry
+        let abortEnd = graph.AddNode {Typ = AbortEnd subPg.Exit; Line = None; Thread = thread}
         let exit = graph.AddNode {Typ = Location; Line = None; Thread = thread}
         let pg =
             { Entry = entry
               Exit = exit
               Graph = graph }
-        do connect pg pg.Entry subPg.Entry 
-        do connect pg subPg.Exit endAbortNode
-        do connect pg endAbortNode pg.Exit
 
-        // temporary solution with prioritised transitions and
-        // prev'ed abort condition
-        let rewrittenCond = tempPrevHelper context cond subPg
-        let thisPrio =
-            innerAwaitNodes
-            |> List.map (fun n -> // for every node determine the outgoing edge with the highest priority
-                n.Outgoing 
-                |> Seq.map (fun edge -> 
-                    match edge.Payload with
-                    | ControlFlow opt -> opt |> Option.map fst |> Option.defaultValue 0 
-                    | _ -> 0) 
-                |> Seq.max)
-            |> List.max // find the highest priority among all await nodes
-            |> (+) 1 // add one for new abort transitions
-        // add abortion conditions to delaying nodes
-        for n in innerAwaitNodes do 
-            do guardedConnectWithPrio thisPrio rewrittenCond pg n endAbortNode
-            do addNameRead context n rewrittenCond
-
-        { pg with Graph = Graph.JoinAll [pg.Graph; subPg.Graph] }
+        do connect pg abortEnd exit
+        
+        do replaceExitBy pgAwait abortDecisionPoint
+        do guardedConnect abortCond pg abortDecisionPoint abortEnd
+        let negCond = { abortCond with rhs = unsafeNeg abortCond }
+        do guardedConnect negCond pg abortDecisionPoint pgAwait.Entry 
+        do addNameRead context abortDecisionPoint abortCond        
+        
+        do connect pg pg.Entry subPg.Entry  // connect abort head to start of body
+        do connect pg subPg.Exit abortEnd // connect body's end to the abort end node
+                
+        { pg with Graph = Graph.JoinAll [pg.Graph; pgAwait.Graph; subPg.Graph] }
 
     
 
@@ -681,8 +558,10 @@ module ProgramGraph =
                     failwith "Abort after does not exist. It was replaced by explicit cobegin weak."
                 | Moment.Before ->
                     // this is the only alive code path for the Abort case
-                    createPGofBody context pos thread body
-                    |> createAbortBefore context pos thread cond
+                    let genNewThread = Thread.newChildThread thread
+                    // using genNewThread, translateSubProg knows how to create a PG for a code block
+                    let translateSubProg = (fun stmts forkNode -> createPGofBody context pos (genNewThread forkNode) stmts)
+                    createAbortBefore context pos thread (translateSubProg body) cond 
                 | Moment.OnNext -> failwith "Cannot handle OnNext"
             | Reset ->
                 failwith "Reset should be transformed away before."
@@ -710,9 +589,9 @@ module ProgramGraph =
     let private createPGofActivity (context: IntermediateContext) thread subProg =
         let context = context.ReInitNodeDicts()
         let pg = createPGofBody context Range.range0 thread subProg.body
-        do context.pgs.Add(subProg.name, pg)
-        do context.subprogReadNodes.Add(subProg.name, context.tempNameReadByNodes)
-        do context.subprogWrittenNodes.Add(subProg.name, context.tempNameWrittenByNodes)
+        do context.pgs.Add(subProg.Name, pg)
+        do context.subprogReadNodes.Add(subProg.Name, context.tempNameReadByNodes)
+        do context.subprogWrittenNodes.Add(subProg.Name, context.tempNameWrittenByNodes)
         
     /// Given a package, translates all its activities to program graphs
     /// and populates an intermediateContext
@@ -722,7 +601,7 @@ module ProgramGraph =
             let thread = Thread.newThread()
             // filter away functions, since their prog graph is useless, 
             // and causes spurious causality errors
-            if not subProg.isFunction then
+            if not subProg.IsFunction then
                 do createPGofActivity context thread subProg
         context
 
@@ -735,9 +614,18 @@ module ProgramGraph =
         Thread.allForks node1.Payload.Thread
         |> List.tryFind (fun f -> List.contains f (Thread.allForks node2.Payload.Thread))
     
+    let memoizedCycles = Dictionary<QName, ResizeArray<Dictionary<Node,Node>*Graph>>()
+
     /// Given two nodes check if they are both in the surface or depth 
     /// wrt. to their common root thread or not
-    let areBothInSurfOrDepth pg (node1: Node) (node2: Node) =
+    let areBothInSurfOrDepth name graph (node1: Node) (node2: Node) =
+        let allCycles () = 
+            match memoizedCycles.TryGetValue name with
+            | true, cycles -> cycles
+            | false, _ ->
+                let cycles = GenericGraph.johnson75 graph
+                memoizedCycles.Add(name, cycles)
+                cycles
         if areConcurrent node1 node2 then
             // find least common fork (may not exist if root is the lca)
             let lcf = 
@@ -749,7 +637,7 @@ module ProgramGraph =
                     GenericGraph.allSimplePaths cfSucc lcf node
                     |> List.filter (Seq.isEmpty >> not) // why is it at all possible to get empty paths here?
                 let allLoopsWithinLcfThread = 
-                    GenericGraph.johnson75 pg
+                    allCycles()
                     |> Seq.choose (fun (mapping, g) -> if mapping.ContainsKey node then Some (g.Nodes |> Seq.toList) else None)
                     |> Seq.toList
                     |> List.filter (List.forall(fun n -> Thread.strictlyContains lcf.Payload.Thread n.Payload.Thread)) // loops that do not leave the enclosing cobegin
@@ -780,7 +668,7 @@ module ProgramGraph =
             let node1OnlyInDepth = alwaysPauseTowardsNode1
             let node2OnlyInSurface = not hasPauseTowardsNode2
             let node2OnlyInDepth = alwaysPauseTowardsNode2
-
+            
             ((node1OnlyInSurface && node2OnlyInDepth) || (node1OnlyInDepth && node2OnlyInSurface))
             |> not
         // if not concurrent there is no sense to talk about surface and depth

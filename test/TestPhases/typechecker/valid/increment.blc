@@ -1,4 +1,4 @@
-module increment
+module
 
 
 activity empty ()()

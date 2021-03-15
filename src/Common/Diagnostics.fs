@@ -61,7 +61,10 @@ module Diagnostics =
         | Default
         | Compiling
         | Parsing
+        | Importing
         | Naming
+        | Opaques
+        | Exports
         | Typing
         | Causality
         | CodeGeneration
@@ -70,7 +73,10 @@ module Diagnostics =
             | Default
             | Compiling -> "compiling"
             | Parsing -> "parsing"
+            | Importing -> "importing"
             | Naming -> "name resolution"
+            | Opaques -> "opaque inference"
+            | Exports -> "export inference"
             | Typing -> "typing"
             | Causality -> "causality"
             | CodeGeneration -> "code generation"
@@ -317,15 +323,17 @@ module Diagnostics =
         let getDiagnostics (dl: Logger) =
             dl.diagnostics
 
-    let wrapErrsInLogger phase errs =
-        let errLogger = Logger.create()
-        let logError e = Logger.logError errLogger phase e
 
-        errs
-        |> List.iter logError
-        errLogger
+    // Helpers for type checking, TODO: clean this up. fjg 17.02.21
 
-    let printErrors phase errs =
-        wrapErrsInLogger phase errs
+    let wrapErrsInLogger logger phase errs =
+        // let errLogger = Logger.create()
+        let logError e = Logger.logError logger phase e
+        do List.iter logError errs
+        logger
+
+
+    let printErrors logger phase errs =
+        wrapErrsInLogger logger phase errs
         |> Emitter.printDiagnostics
             

@@ -1,0 +1,23 @@
+
+module
+
+struct S
+    var x: bool
+end
+
+enum TrafficLights
+    Red
+    Yellow
+    Green
+end
+
+enum RGB
+    Red
+    Green
+    Blue
+end
+
+function f ()
+    var tl = Green // Green is not unique
+    var rgb: RGB = Green // typing does not help, no overloading resolution in Blech
+end

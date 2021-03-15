@@ -1,0 +1,8 @@
+@[CFunction (source = "foo.c")]
+extern singleton function f () returns bool
+
+@[EntryPoint]
+activity Main ()
+    _ = f()
+    await true
+end

@@ -39,7 +39,7 @@ type TyCheckError =
     | ImpossibleCase of obj
     | UnsupportedFeature of range * string
     | UnsupportedTuple of range
-    | IllegalAccessOfTypeInfo of string
+    | ProcedureNameUsedLikeAVariable of string
     | ExpectedSubProgDecl of range * string
     | AmendBroken of Types * TypedRhs
     //| MissingQName of range * Identifier
@@ -52,7 +52,12 @@ type TyCheckError =
     | VarDeclMissingTypeOrValue of range * Identifier
     | VarDeclRequiresExplicitType of range * Identifier
     | NoDefaultValueForSecondClassType of range * Identifier * ReferenceTypes
+    | NoDefaultValueForOpaque of range * Identifier
     | MismatchDeclInit of range * Identifier * Types * TypedRhs
+    | OpaqueMustHaveInitialiser of range * Identifier
+    | OpaqueInitialiserMustBeConcrete of range * Identifier
+    | OpaqueNeedsAnnotation of range
+    | OpaqueConflictingAnnotations of range
     // expressions
     | InvalidFloat of range * string
     | NextOnRhs of range * string
@@ -74,7 +79,6 @@ type TyCheckError =
     | IndexMustBeInteger of range * TypedRhs * TypedMemLoc
     | StaticArrayOutOfBounds of range * TypedRhs * TypedMemLoc * Size
     | AssignmentToImmutable of range * Identifier
-    | AssignmentToLetFields of range * Identifier
     | ImmutableOutArg of range * TypedLhs
     | ConditionHasSideEffect of TypedRhs
     | InitialisationHasSideEffect of TypedRhs
@@ -88,9 +92,12 @@ type TyCheckError =
     | MustBeConst of TypedRhs
     | ConstArrayRequiresConstIndex of range
     | ParameterMustHaveStaticInit of Name * TypedRhs
+    | StructMustHaveStaticInit of range * QName * TypedRhs
     // calls
-    | FunCallToAct of range * FunctionPrototype
-    | RunAFun of range * FunctionPrototype
+    | FunCallToAct of range * ProcedurePrototype
+    | FunNotExist of range * ProcedurePrototype
+    | RunAFun of range * ProcedurePrototype
+    | ActNotExist of range * ProcedurePrototype
     
     // simple types
     | ExpectedBoolExpr of range * TypedRhs
@@ -195,14 +202,17 @@ type TyCheckError =
     | MissingNamedArgument of range * string
     | MissingEntryPoint of range
     | MultipleEntryPoints of first: range * second: range
-    | IllegalEntryPoint of range * AST.Package
+    | IllegalEntryPoint of range * AST.CompilationUnit
     | BindingIndexOutOfBounds of range * string list
     // pragmas
     | UnknownPragma of range
     
     // --- result receivers ---
-    | ReceiverForVoidReturn of range * FunctionPrototype
-    | MissingReceiver of range * FunctionPrototype
+    | ReceiverForVoidReturn of range * ProcedurePrototype
+    | MissingReceiver of range * ProcedurePrototype
+
+    // deprecated, legacy
+    | DeprecatedCFunctionWrapper of range
 
     // --- Dummy error, just for development purposes ---
     | Dummy of range * string
@@ -214,7 +224,6 @@ type TyCheckError =
             | ImpossibleCase o -> Range.range0, sprintf "Seems like some of the DUs in the type checker are not up-to-date. Ran into an seemingly impossible case: %A." o
             | UnsupportedFeature (p, s) -> p, sprintf "Sorry, currently the type checker does not support %s." s
             | UnsupportedTuple p -> p, sprintf "Multiple-return types, assignments or tuples are not supported."
-            | IllegalAccessOfTypeInfo s -> Range.range0, sprintf "Internal error: tried to lookup data type for identifier %s which does not represent data." s
             | ExpectedSubProgDecl (p, n) -> p, sprintf "Internal error: expected a subprogram for lookup table entry %s." n
             | AmendBroken (t, r) -> r.Range, sprintf "Could not amend. Type %s Expression %s." (t.ToString()) (r.ToString())
             //| MissingQName (p, id) -> p, sprintf "Internal error: Expected a qualified identifier for %s but found none, buggy name resolution?" id
@@ -222,14 +231,17 @@ type TyCheckError =
             | IllegalVoid (p, n) -> p, sprintf "Internal error: tried to determine a default value for %s which has type void." (string n)
             | ValueCannotBeVoid n -> Range.range0, sprintf "Internal error: attempted to create a void value for identifier %s." n
             | EmptyGuardList -> Range.range0, sprintf "Making an empty guard expression should be impossible!"
-            
             // declarations
             | NotInLUTPrevError s -> Range.range0, sprintf "Identifier %s is not in the lookup table, probably due to a previous error." s 
             | VarDeclMissingTypeOrValue (p, n) -> p, sprintf "The declaration of variable %s needs either a type annotation or an initialisation." (string n)
             | VarDeclRequiresExplicitType (p, n) -> p, sprintf "Could not infer type of %s. Please provide explicit type information." (string n)
             | NoDefaultValueForSecondClassType (p, n, typ) -> p, sprintf "Internal error: tried to determine a default value for %s which has type %s." (string n) (typ.ToString())
+            | NoDefaultValueForOpaque (pos, name) -> pos, sprintf "Internal error: tried to determine a default value for %s which is opaque." name
             | MismatchDeclInit (p, n, typ, init) -> p, sprintf "%s has type %s but is initialised with %s which is of type %s." (string n) (typ.ToString()) (init.ToString()) (init.typ.ToString())
-            
+            | OpaqueMustHaveInitialiser (p,n) -> p, sprintf "%s has an opaque type and must be initialised." n
+            | OpaqueInitialiserMustBeConcrete (p, n) -> p, sprintf "%s is opaque and can only be initialised using a value of the same type (or using a procedure that returns such value)." n
+            | OpaqueNeedsAnnotation p -> p, sprintf "The signature must specify the opaque type either as a complex or a simple type."
+            | OpaqueConflictingAnnotations p -> p, sprintf "An opaque type cannot be both complex and simple at the same time." 
             // expressions
             | InvalidFloat (p, s) -> p, sprintf "%s cannot be parsed as a floating point number." s
             | NextOnRhs (p, s) -> p, sprintf "The access of the next value of %s is forbidden on the right hand side." s
@@ -251,7 +263,6 @@ type TyCheckError =
             | IndexMustBeInteger (r, idx, dPath) -> r, sprintf "The array access [%s] in %s must evaluate to an integer." (idx.ToString()) (dPath.ToBasicString())
             | StaticArrayOutOfBounds (r, idx, dPath, maxIdx) -> r, sprintf "The array access [%s] in %s is out of bounds [0..%s]." (idx.ToString()) (dPath.ToBasicString()) (string maxIdx)
             | AssignmentToImmutable (p, l) -> p, sprintf "%s is immutable and cannot be assigned any value" (l.ToString())
-            | AssignmentToLetFields (p, l) -> p, sprintf "%s contains substructures with immutable fields. It therefore cannot be overwritten as a whole." (l.ToString())
             | ImmutableOutArg(p, l) -> p, sprintf "Read-only location %s cannot be passed as an output argument." (l.ToString())
             | ConditionHasSideEffect cond -> cond.Range, sprintf "The condition %s has a side-effect. This is not allowed." (cond.ToString())
             | InitialisationHasSideEffect expr -> expr.Range, sprintf "The initialisation expression %s has a side-effect. This is not allowed." (expr.ToString())
@@ -265,10 +276,14 @@ type TyCheckError =
             | MustBeConst expr -> expr.Range, sprintf "The expression %s must be a compile-time constant." (expr.ToString())
             | ConstArrayRequiresConstIndex r -> r, sprintf "Constant arrays must be accessed using constant indices. Hint: use param arrays if you need dynamic access at runtime."
             | ParameterMustHaveStaticInit (name, checkedInitExpr) -> name.range, sprintf "The static parameter %s was initialised by %s which assumes a value at runtime. Instead it must be initialised using only constants or other static parameters." name.idToString (checkedInitExpr.ToString())
-            
+            | StructMustHaveStaticInit(pos, name, initValue) -> pos, sprintf "The struct field %s must be declared with a static initialiser." (name.basicId)
+            | ProcedureNameUsedLikeAVariable s -> Range.range0, sprintf "The lookup of the data type for %s indicates that this is a name of a procedure. Maybe the () are missing?" s
+
             // calls
             | FunCallToAct (p, decl) -> p, sprintf "This is a function call to an activity. Did you mean 'run %s ...'?" (decl.name.basicId)
+            | FunNotExist (p, decl) -> p, sprintf "Function %s is not visible in this scope. Ensure that the module %s exposes it." (decl.name.ToString()) (decl.name.moduleName.ToString())
             | RunAFun (p, _) -> p, sprintf "You can only run an activity, not a function."
+            | ActNotExist (p, decl) -> p, sprintf "Activity %s is not visible in this scope. Ensure that the module %s exposes it." (decl.name.ToString()) (decl.name.moduleName.ToString())
             
             // simple types
             | ExpectedBoolExpr (p, r) -> p, sprintf "Expression '%s' must be boolean." (r.ToString())
@@ -409,7 +424,7 @@ type TyCheckError =
             | MissingNamedArgument (p, key) -> p, sprintf "Missing [... %s = \"<file>\" ...] annotation argument." key
             | MissingEntryPoint p -> p, "Blech program file must contain an activity with '@[EntryPoint]' annotation."
             | MultipleEntryPoints (second = p) -> p, "'@[EntryPoint]' activity already defined."
-            | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (String.concat "." pack.moduleName)
+            | IllegalEntryPoint (p, pack) -> p, sprintf "Illegal '@[EntryPoint]' annotation in Blech libary '%s'." (pack.moduleName.ToString())
             | BindingIndexOutOfBounds (p, indices) -> p, sprintf "Parameter index: %s, out-of bounds." <| String.concat ", " indices
             
             // pragmas
@@ -420,13 +435,12 @@ type TyCheckError =
             | ReceiverForVoidReturn (p, activity) -> p, "No receiver for void return allowed."
             | MissingReceiver (p, activity) -> p, sprintf "The returned value of '%s' must be ignored explicitly." (activity.name.ToString())
 
+            | DeprecatedCFunctionWrapper pos -> pos, sprintf "The %s annotation using the 'source' key is deprecated. Implement a wrapper and use a 'binding' instead." Attribute.cfunction
+
             // --- Dummy error, just for development purposes ---
             | Dummy (p, msg) -> p, msg
  
-            |> (fun (srcPos, msg) -> 
-                { range = srcPos
-                  message = msg }
-                )
+            ||> Diagnostics.Information.Create 
 
         member err.ContextInformation = 
             match err with
@@ -699,7 +713,7 @@ module TyChecked =
     /// Zips a pair of Oks into an Ok of pairs
     /// In case at least one of the argument contains the Error case,
     /// simply concatenates the errors.
-    let internal combine tyc1 tyc2 =
+    let combine tyc1 tyc2 =
         match tyc1, tyc2 with
         | Error e1, Error e2 -> Error (e1 @ e2)
         | Error e1, _ -> Error e1
@@ -708,7 +722,7 @@ module TyChecked =
 
     /// Similar to combine, except that it works on a list
     /// and returns an Ok of a list in the good case.
-    let internal contract tycList =
+    let contract tycList =
         let rec recContract tycs res =
             match tycs with
             | [] -> res
@@ -722,6 +736,6 @@ module TyChecked =
 
     /// Similar to contract, except that it works on an optional
     /// and returns an Ok of an optional in the good case
-    let internal ofOption = function
+    let ofOption = function
         | None -> Ok None
         | Some res -> res |> Result.map Some

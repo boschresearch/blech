@@ -1,0 +1,30 @@
+
+
+module exposes
+    S,
+    C,
+    multS, 
+    addS, 
+    accMultS
+
+struct S
+    var a: int32
+    var b: float32
+end
+
+const C: S = {a = 1, b = 1.0}
+
+function multS (a: S, b: S)() returns S
+    return {a = a.a * b.a, b = a.b * b.b}
+end
+
+function addS (a: S, b: S)() returns S
+    return {a = a.a + b.a, b = a.b + b.b}
+end
+
+activity accMultS (a: S, b: S) (acc: S)
+    repeat
+        acc = addS(acc, multS(a, b))
+        await true
+    end
+end

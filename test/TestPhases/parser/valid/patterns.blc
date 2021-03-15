@@ -1,4 +1,4 @@
-module patterns
+module
 
 unit mm
 
@@ -25,14 +25,14 @@ function optionBinding(x: [5]int32[mm])
     end
 
     var x: OtherColor
-    if x == .Red then
+    if x == Red then
         doSomethingWith(x)
     end
 
     var colors: [4]ColorValue
 
     for let c of colors do
-        if c.name == .red then
+        if c.name == red then
             doSomethingWith(c.value)
         end
     end

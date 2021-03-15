@@ -1,0 +1,14 @@
+module exposes C, initO
+
+struct O 
+    var x: bool
+end
+
+struct C 
+    let foo: O
+    let bar: float32
+end
+
+function initO () returns O
+    return {x = false}
+end

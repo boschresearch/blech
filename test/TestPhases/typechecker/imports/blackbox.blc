@@ -1,0 +1,10 @@
+
+module
+
+struct T 
+    var b: bool 
+end
+
+function f(x: T) returns bool 
+    return x.b
+end

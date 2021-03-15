@@ -1,0 +1,6 @@
+import n "../imports/names" exposes f 
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

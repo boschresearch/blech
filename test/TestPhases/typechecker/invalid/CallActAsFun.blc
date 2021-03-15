@@ -1,4 +1,4 @@
-module CallActAsFun
+module
 
 activity calc() returns float64
     await true

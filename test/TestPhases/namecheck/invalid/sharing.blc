@@ -1,4 +1,4 @@
-module sharing
+module
 
 activity act (a: int32)
              (b shares b: int32 ) // b should not be visible

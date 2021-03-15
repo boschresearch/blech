@@ -67,30 +67,34 @@ let internal cpIndent = indent cpTabsize
 
 let BLC = "blc" // do not add trailing "_" this is done by assembleName
 let BLECH = BLC + "_blech"
-let AUX = BLECH + "_aux"
-let PREV = BLECH + "_prev"
-let CTX = BLECH + "_ctx"
+let GEN = "00" // set apart generated names. No Blech identifier (basicId in QName) can start with a digit. No prefix in QName can be 00 (even for numbered scopes!)
+let AUX = BLC + "_" + GEN + "_aux"
+let PREV = GEN + "_prev" // BLC added below when necessary
+let CTX = BLC + "_" + GEN + "_ctx"
 
-let private fromContext prefix =
+let fromContext prefix =
     CTX + "->" + prefix
 
-let private assembleName pref infixLst identifier =
+let assembleName pref infixLst identifier =
     let infix = 
         let longId = String.concat "_" infixLst
         match longId with
         | "" -> ""
         | _ -> "_" + longId
+        |> (fun s -> s.Replace(".", "_")) // TODO: hack to avoid directory names "." to become dots in C names, fg 01.10.20
     pref + infix + "_" + identifier
     |> txt
 
 let private auxiliaryName name = assembleName AUX [] name.basicId
 let private moduleLocalName name = assembleName BLC name.prefix name.basicId
 let private autoName name = assembleName BLC [] name.basicId
-let private globalName name = assembleName BLC (name.moduleName @ name.prefix) name.basicId
-let private programName name = assembleName BLECH name.moduleName name.basicId
-let private ctxName (name: QName) = assembleName (fromContext BLC) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
-let private externalPrev (name: QName) = assembleName (fromContext PREV) [] (name.ToUnderscoreString()) // prevent collision when the same local name is declared in different local scopes
-let private internalPrev name = assembleName PREV [] name.basicId
+let private globalName name = assembleName BLC (TranslatePath.moduleToCNameParts name.moduleName @ name.prefix) name.basicId
+let private programName name = assembleName BLECH (TranslatePath.moduleToCNameParts name.moduleName) name.basicId
+let private ctxName (name: QName) = assembleName (fromContext BLC) name.prefix name.basicId // in order to avoid clashes between a Blech variable "pc_1" and 
+                                                                                            // a context element pc_1, we need the blc_ prefix
+                                                                                            // the name.prefix prevents collision with the same local name in a different local scope
+let private externalPrev (name: QName) = assembleName (fromContext BLC) (name.prefix @ [PREV]) name.basicId // blc_00_ctx->blc_<activity>_<scope>_blc_00_prev_<name>
+let private internalPrev name = assembleName (BLC + "_" + PREV) [] name.basicId
 
 let cpPcName name = (fromContext "") + name.basicId |> txt
 
@@ -145,8 +149,8 @@ let private isInFunction tcc name =
     | prefix ->
         let prefixAsName = QName.Create name.moduleName [] prefix.Head IdLabel.Static
         match tcc.nameToDecl.[prefixAsName] with
-        | Declarable.SubProgramDecl spd ->
-            spd.isFunction
+        | Declarable.ProcedureImpl spd ->
+            spd.IsFunction
         | _ -> failwithf "Cannot find code capsule for variable %s" (name.ToString())
 
 let private isInActivity tcc name =
@@ -155,8 +159,8 @@ let private isInActivity tcc name =
     | prefix ->
         let prefixAsName = QName.Create name.moduleName [] prefix.Head IdLabel.Static
         match tcc.nameToDecl.[prefixAsName] with
-        | Declarable.SubProgramDecl spd ->
-            not spd.isFunction
+        | Declarable.ProcedureImpl spd ->
+            not spd.IsFunction
         | _ -> failwithf "Cannot find code capsule for variable %s" (name.ToString())
 
 /// Whenever a name has to be printed as C code this function does it
@@ -232,9 +236,14 @@ let renderCName tp tcc name =
 
 /// Shorthand for cpName None Empty name
 /// |> Render
-let cpStaticName = 
-    cpName None TypeCheckContext.Empty
-    >> (fun x -> x.Render)
+let cpStaticName q = 
+    cpName None (TypeCheckContext.Empty q.moduleName) q
+    |> (fun x -> x.Render)
+
+/// Given QName of calle and arguments as Doc list
+/// return Doc of "callee(arg1,arg2,...)"
+let assembleSubprogCall whoToCall args =
+    cpStaticName whoToCall <^> dpCommaSeparatedInParens args
 
 /// Translates a primitive Blech type or a type name to a C type and returns a Doc representation thereof
 let rec internal cpType typ =
@@ -263,9 +272,12 @@ let rec internal cpType typ =
         match size with
         | FloatType.Float32 -> txt "blc_float32"
         | FloatType.Float64 -> txt "blc_float64"
-    | ValueTypes (ValueTypes.StructType (_, typeName, _))
-    | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_)) ->
-        txt "struct" <+> (cpStaticName typeName)
+    | ValueTypes (ValueTypes.StructType (typeName, _))
+    | ReferenceTypes (ReferenceTypes.StructType (_, typeName,_))
+    | ValueTypes (OpaqueSimple typeName)
+    | ValueTypes (OpaqueArray typeName)
+    | ValueTypes (OpaqueStruct typeName) -> 
+        cpStaticName typeName
     | ValueTypes (ArrayType _) ->
         failwith "Do not call cpType on arrays. Use cpArrayDecl or cpArrayDeclDoc instead."
     | Any
@@ -273,11 +285,13 @@ let rec internal cpType typ =
     | AnyInt | AnyBits | AnyFloat -> failwith "Cannot print <Any> type."
     | ReferenceTypes _ -> failwith "Reference types not implemented yet. Cannot print them."
 
-let rec internal sizeofMacro = function
-| ValueTypes (ArrayType(size, elemTyp)) ->
-    size |> string |> txt <+> txt "*" <+> sizeofMacro (ValueTypes elemTyp)
-| x ->
-    txt "sizeof" <^> parens (cpType x)
+let rec internal sizeofMacro =
+    function
+    | ValueTypes (ArrayType(size, elemTyp)) ->
+        size |> string |> txt <+> txt "*" <+> sizeofMacro (ValueTypes elemTyp)
+        // opaque arrays have a name and are therefore treated like any other named type
+    | x ->
+        txt "sizeof" <^> parens (cpType x)
 
 
 let private cpMemSetDoc typ lhsDoc =
@@ -299,6 +313,8 @@ and CExpr =
         | Blob p -> p.Render
         | Value d -> d
         | ComplexExpr (f, c) -> f c
+    static member RenderAll (xs: CExpr list) =
+        xs |> List.map (fun x -> x.Render)
 
 and CPath =
     | Name of CName
@@ -354,7 +370,8 @@ let getValueFromName timepoint tcc name : CBlob =
         | _ -> None, false
     let cName = cpName (Some timepoint) tcc name
     match typeAndIsOutput with
-    | Some(ValueTypes (ValueTypes.StructType _)),_ ->
+    | Some(ValueTypes (ValueTypes.StructType _)),_
+    | Some(ValueTypes (ValueTypes.OpaqueStruct _)),_ ->
         ValueOf (Loc (Name cName))
     | Some typ, true when typ.IsPrimitive && timepoint.Equals Current ->
         // primitive typed, output parameter
@@ -519,7 +536,6 @@ and cpExpr tcc expr : PrereqExpression =
     | FunCall (whoToCall, inputs, outputs) ->
         let reIns = inputs |> List.map (cpInputArg tcc)
         let reOuts = outputs |> List.map (cpOutputArg tcc)
-        let name = (cpStaticName whoToCall)
         let retType =
             match tcc.nameToDecl.[whoToCall].TryGetReturnType with
             | Some t -> t
@@ -528,8 +544,8 @@ and cpExpr tcc expr : PrereqExpression =
         if retType.IsPrimitive then
             // in case we call a function that returns a primitive value
             // rely on C return values
-            let render (rs: CExpr list) =
-                name <^> (rs |> List.map (fun x -> x.Render) |> dpCommaSeparatedInParens)
+            let render rs =
+                assembleSubprogCall whoToCall (CExpr.RenderAll rs)
             mkPrereqExpr
             <| (reIns @ reOuts |> List.collect getPrereq)
             <| ComplexExpr (render, (reIns @ reOuts |> List.map getCExpr))
@@ -556,8 +572,8 @@ and cpExpr tcc expr : PrereqExpression =
             let tmpRExpr = {rhs = RhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = v.pos}
             let reReceiverAsRhs = cpExpr tcc tmpRExpr
             let funCall =
-                name 
-                <^> (reIns @ reOuts @ [reReceiverAsOutArg] |> List.map (getCExpr >> (fun x -> x.Render)) |> dpCommaSeparatedInParens) 
+                let rs = reIns @ reOuts @ [reReceiverAsOutArg] |> List.map getCExpr
+                assembleSubprogCall whoToCall (CExpr.RenderAll rs)
                 <^> semi
             mkPrereqExpr
             <| ((reIns @ reOuts @ [reReceiverAsOutArg] |> List.collect getPrereq) @ [tmpDecl; funCall])
@@ -652,7 +668,10 @@ and cpExpr tcc expr : PrereqExpression =
         | AnyComposite 
         | AnyInt 
         | AnyBits
-        | AnyFloat -> failwith "Error in type checker. Trying to compare void or not fully typed expressions."
+        | AnyFloat
+        | ValueTypes (OpaqueSimple _)
+        | ValueTypes (OpaqueArray _)
+        | ValueTypes (OpaqueStruct _) -> failwith "Error in type checker. Trying to compare void, opaque or not fully typed expressions."
         | ReferenceTypes _ -> failwith "Comparing reference types not implemented."
     // arithmetic
     | Add (s1, s2) -> binExpr tcc s1 s2 "+"
@@ -665,7 +684,8 @@ and cpInputArg tcc expr : PrereqExpression =
     // if expr is a structured literal, make a new name for it
     let singleArgLocation: PrereqExpression = makeTmpForComplexConst tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.StructType _) ->
+    | ValueTypes (ValueTypes.StructType _)
+    | ValueTypes (OpaqueStruct _) ->
         // if struct, then prepend &
         let cExpr = 
             match getCExpr singleArgLocation with
@@ -680,7 +700,9 @@ and cpOutputArg tcc expr : PrereqExpression =
     // unless array, prepend &
     let pe = cpLexpr tcc expr
     match expr.typ with
-    | ValueTypes (ValueTypes.ArrayType _) -> pe
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) -> 
+        pe
     | _ ->
         let cExpr = 
             match getCExpr pe with
@@ -703,6 +725,7 @@ and cpArrayDeclDoc name typ =
         | ValueTypes (ArrayType(size, elemTyp)) ->
             let nameAndType, length = cpRecArrayDeclDoc n (ValueTypes elemTyp)
             nameAndType, brackets (size |> string |> txt) <^> length
+            // opaque arrays have a name and are therefore treated like any other named type
         | _ ->
             cpType t <+> n, empty
     cpRecArrayDeclDoc name typ ||> (<^>)
@@ -719,15 +742,17 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
         let lhsTyp = expr.typ
         let tmpDecl = cpArrayDeclDoc (auxiliaryName lhsName) lhsTyp <^> semi
         let init =
-            match expr.typ with
-            | ValueTypes (ValueTypes.StructType _) ->
+            match expr.typ with // regarding opaque expr see comment below
+            | ValueTypes (ValueTypes.StructType _)
+            | ValueTypes (OpaqueStruct _) ->
                 cpMemSetDoc expr.typ (txt "&" <^> auxiliaryName lhsName)
-            | ValueTypes (ValueTypes.ArrayType _) ->
+            | ValueTypes (ValueTypes.ArrayType _)
+            | ValueTypes (OpaqueArray _) ->
                 cpMemSetDoc expr.typ (auxiliaryName lhsName)
             | _ ->
                 empty //failwith "Cannot not do anything about rhs which are simple value constants" // This has been checked somewhere else
         let lhs = {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = expr.typ; range = range0}
-        let assignments = 
+        let assignments = // why not use cpAssign here?
             normaliseAssign tcc (range0, lhs, expr)
             |> List.map (function 
                 | Stmt.Assign(_, lhs, rhs) -> 
@@ -742,7 +767,9 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
 
     match expr.typ with
     | ValueTypes (ValueTypes.StructType _)
-    | ValueTypes (ValueTypes.ArrayType _) ->
+    | ValueTypes (ValueTypes.ArrayType _)
+    | ValueTypes (OpaqueStruct _)
+    | ValueTypes (OpaqueArray _) -> // do opaque compile time constants actually exist?
         match expr.rhs with
         | StructConst _ 
         | ArrayConst _ ->
@@ -761,6 +788,9 @@ and makeTmpForComplexConst tcc (expr: TypedRhs) : PrereqExpression =
         cpExpr tcc expr
     
 
+let renderSubContext pcId whoToCall =
+    let renderedWhoToCall = cpStaticName whoToCall
+    txt ("&" + CTX + "->") <^> txt pcId <^> txt "_" <^> renderedWhoToCall
 
 //=============================================================================
 // Printing statements
@@ -825,12 +855,17 @@ let rec cpAssign tcc left right =
         | _ -> // x = y needs no rewriting, assign directly
             let a, b = directAssignment rightRE
             mkRenderedStmt a b 
+    | ValueTypes (OpaqueArray _) ->
+        let a, b = directArrayAssignment rightRE
+        mkRenderedStmt a b 
+    | ValueTypes (OpaqueStruct _) // for opaque structs use direct assignment
     | ValueTypes Void 
     | ValueTypes BoolType 
     | ValueTypes (IntType _)
     | ValueTypes (NatType _)
     | ValueTypes (BitsType _) 
-    | ValueTypes (FloatType _) ->
+    | ValueTypes (FloatType _) 
+    | ValueTypes (OpaqueSimple _) ->
         // assign primitives
         let a, b = directAssignment rightRE
         mkRenderedStmt a b
@@ -851,6 +886,17 @@ let cpFunctionCall tcc whoToCall inputs outputs =
     <| (pe.cExpr.Render <^> semi)
 
 
+let cpInitActivityCall pcName whoToCall =
+    let renderedWhoToCall = cpStaticName whoToCall
+    let renderedCalleeName = renderedWhoToCall <^> txt "_init"
+    let subctx = renderSubContext pcName whoToCall
+    let actCall = 
+        [subctx]
+        |> dpCommaSeparatedInParens
+        |> (<^>) renderedCalleeName
+    actCall <^> semi
+
+
 /// Create a Doc for an activity call
 /// tcc - type check context
 /// pcName - string, the calling thread's program counter name (used as field name in activity context)
@@ -860,10 +906,9 @@ let cpFunctionCall tcc whoToCall inputs outputs =
 /// receiverVar - optional TypedLhs (r = run A...)
 /// termRetcodeVarName - QName of the variable that stores the termination information
 let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVarName =
-    let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = inputs |> List.map (cpInputArg tcc)
     let renderedOutputs = outputs |> List.map (cpOutputArg tcc)
-    let subctx = txt "&blc_blech_ctx->" <^> txt pcName <^> txt "_" <^> renderedCalleeName
+    let subctx = renderSubContext pcName whoToCall
     let renderedRetvarOpt =
         receiverVar
         |> Option.map (cpOutputArg tcc)
@@ -875,8 +920,7 @@ let cpActivityCall tcc pcName whoToCall inputs outputs receiverVar termRetcodeVa
             renderedRetvarOpt |> Option.toList |> List.map (getCExpr >> (fun x -> x.Render))
         ]
         |> List.concat
-        |> dpCommaSeparatedInParens
-        |> (<^>) renderedCalleeName
+        |> assembleSubprogCall whoToCall
     let prereqStmts =
         [
             renderedInputs |> List.collect getPrereq
@@ -894,7 +938,8 @@ let private assignPrevInActivity tcc qname =
     let prevname = (cpName (Some Previous) tcc qname).Render
     let initvalue = (getValueFromName Current tcc qname).Render
     match dty with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         txt "memcpy"
         <+> dpCommaSeparatedInParens
             [ prevname
@@ -914,6 +959,7 @@ let cpAssignPrevInActivity tcc qname =
         match dty with
         | ValueTypes (ArrayType _) ->
             cpArrayDeclDoc prevname dty <^> semi
+            // opaque arrays have a name and are therefore treated like any other named type using cpType
         | _ ->
             cpType dty
     declaration <+> assignPrevInActivity tcc qname

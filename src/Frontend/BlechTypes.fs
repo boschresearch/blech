@@ -28,6 +28,7 @@ open System.Collections.Generic
 
 open Blech.Common.PPrint
 open Blech.Common.Range
+open Blech.Common.TranslationUnitPath
 
 open Constants
 open CommonTypes
@@ -55,6 +56,21 @@ type Mutability =
 
     member this.ToDoc = txt <| this.ToString()
 
+type ProcedureKind =
+    | Activity
+    | LocalFunction
+    | ExternFunction
+    | OpaqueProcedure
+
+    override this.ToString() =
+        match this with
+        | Activity -> "activity"
+        | LocalFunction -> "function"
+        | ExternFunction -> "extern function"
+        | OpaqueProcedure -> ""
+
+    member this.ToDoc = txt <| this.ToString()
+
 /// Data types
 /// Only value-typed data may be returned from functions or activities
 type ValueTypes =
@@ -67,8 +83,11 @@ type ValueTypes =
     | FloatType of FloatType
     //structured
     | ArrayType of size: Size * datatype: ValueTypes // we use uint64 for size to represent any positive integer                                                      
-    | StructType of range:range * name:QName * VarDecl list  // value typed structs may only contain value typed fields
+    | StructType of name:QName * VarDecl list  // value typed structs may only contain value typed fields
                                                              // these may be mutable or not
+    | OpaqueSimple of QName
+    | OpaqueArray of QName
+    | OpaqueStruct of QName
     
     member this.ToDoc = txt <| this.ToString()
     
@@ -81,18 +100,21 @@ type ValueTypes =
         | BitsType b -> b.ToString()    
         | FloatType f -> f.ToString()
         | ArrayType (s, e) -> sprintf "[%s]%s" (s.ToString()) (e.ToString())
-        | StructType (_, q, _) -> q.ToString()
+        | StructType (q, _) -> q.ToString()
+        | OpaqueArray n
+        | OpaqueStruct n
+        | OpaqueSimple n -> sprintf "type %s" (n.ToString())
     
     member this.IsPrimitive =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ -> true
-        | ArrayType _ | StructType _ -> false
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | OpaqueSimple _ -> true
+        | ArrayType _ | StructType _ | OpaqueArray _ | OpaqueStruct _ -> false
 
-    member this.TryRange =
+    member this.IsOpaque =
         match this with
-        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _ | ArrayType _ -> None
-        | StructType (r,_,_) -> Some r
-
+        | OpaqueArray _ | OpaqueStruct _ | OpaqueSimple _ -> true
+        | Void | BoolType | IntType _ | NatType _ | BitsType _ | FloatType _
+        | ArrayType _ | StructType _ -> false
     
 /// Reference Types are not used anywhere as of the first release 2019/2020
 /// Only introduced as a reminder that not all types are value types and
@@ -136,7 +158,7 @@ and Types =
 
     override this.ToString() = render None <| this.ToDoc
     
-    member this.IsValueType() = 
+    member this.IsValueType = 
         match this with
         | ValueTypes _ -> true
         | _ -> false
@@ -162,46 +184,11 @@ and Types =
         | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> true
         | ValueTypes _ | ReferenceTypes _ -> false
 
-    /// true iff data blob may be assigned (or reset) as a whole
-    /// relevant for value typed structs and arrays
-    /// which contain structs with `let` fields
-    member this.IsAssignable =
-        let isFieldMutable (field: VarDecl) =
-            // if a field has been declared immutable
-            // it is also not assignable as a whole
-            field.mutability.Equals Mutability.Variable
-            && field.datatype.IsAssignable
-
-        match this with
-        // only "any" literal on the lhs is wildcard
-        | Any -> true
-        | AnyInt
-        | AnyBits
-        | AnyFloat
-        | AnyComposite
+    member this.IsOpaque =
+        match this with 
+        | ValueTypes v -> v.IsOpaque
+        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat
         | ReferenceTypes _ -> false
-        // the relevant case
-        | ValueTypes vt ->
-            match vt with
-            // primitives are assignable (if they are mutable)
-            | Void
-            | BoolType
-            | IntType _
-            | NatType _
-            | BitsType _
-            | FloatType _ -> true
-            // check structs and arrays recursively
-            | ValueTypes.StructType (_,_,fields) ->
-                List.forall isFieldMutable fields
-            | ValueTypes.ArrayType (_,dty) ->
-                (ValueTypes dty).IsAssignable
-                
-    
-    member this.TryRange =
-        match this with
-        | ValueTypes v -> v.TryRange
-        | ReferenceTypes r -> r.TryRange
-        | Any | AnyComposite | AnyInt | AnyBits | AnyFloat -> None
 
 
 //=============================================================================
@@ -252,8 +239,8 @@ and VarDecl =
         this.annotation.ToDoc @ [vdDoc]
         |> dpToplevelClose
 
-    override this.ToString () = render None <| this.ToDoc 
-
+    override this.ToString () = render None <| this.ToDoc
+    
 /// variables and constants bound to an external C declaration
 and ExternalVarDecl =
     {
@@ -328,33 +315,91 @@ and ParamDecl =  // TODO: add annotations, fjg 21.03.19
 // Code capsules 
 //=============================================================================
 
-/// Declaration of an activity or a function (discerned by isFunction field).
-and SubProgramDecl = 
+/// We use "procedure" to refer to a function or activity
+/// The data structure is split in a prototype (as represented in signatures) and
+/// implementation (when there is a body as in blc files)
+
+and ProcedurePrototype =
     {
-        isFunction: bool // true if a function is declared, false for activities
         pos: range
+        kind: ProcedureKind // [extern] function or activity
+        singletons: QName list // Singletons called from this procedure. Includes its own name iff declared as singleton.
         name: QName
         inputs: ParamDecl list
         outputs: ParamDecl list
-        globalInputs: ExternalVarDecl list
-        globalOutputsInScope: ExternalVarDecl list // for code generation
-        globalOutputsAccumulated: ExternalVarDecl list // for causality checking
-        singletons: QName list // Singletons called from this subprogram. Includes its own name iff declared as singleton.
-        body: Stmt list // TODO: maybe turn into stmt?
         returns: ValueTypes
-        annotation: Attribute.SubProgram
+        annotation: Attribute.FunctionPrototype
         allReferences: HashSet<range>
     }
+
+    member this.IsFunction =
+        match this.kind with
+        | Activity | OpaqueProcedure -> false
+        | LocalFunction | ExternFunction -> true
+
+    member this.IsActivity =
+        match this.kind with
+        | Activity -> true
+        | OpaqueProcedure | LocalFunction | ExternFunction -> false
+
+    //member this.IsExtern =
+    //    match this.kind with
+    //    | Activity | LocalFunction -> false
+    //    | ExternFunction -> true
+
+    member this.IsSingleton = not this.singletons.IsEmpty
 
     member this.ToDoc =
         let ins = this.inputs |> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
         let outs = this.outputs|> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-        let spdoc = 
-            if this.isFunction then txt "function" else txt "activity"
+        let protoDoc = 
+            this.kind.ToDoc
             <+> txt (this.name.ToString())
             <^> ( ins
                   <..> outs
                   <.> match this.returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.returns.ToDoc
+                  |> align
+                  |> group )
+        let protoDoc = if this.IsSingleton then txt "singleton" <+> protoDoc else protoDoc
+        this.annotation.ToDoc @ [protoDoc]
+        |> dpToplevelClose
+
+    override this.ToString() = 
+        render None <| this.ToDoc
+    
+    member this.IsDirectCCall = 
+        this.annotation.isDirectCCall
+
+and ProcedureImpl =
+    {
+        pos: range // contains the range of the protoype and the code block
+        prototype: ProcedurePrototype
+        globalInputs: ExternalVarDecl list
+        globalOutputsInScope: ExternalVarDecl list // for code generation
+        body: Stmt list // TODO: maybe turn into stmt?
+        annotation: Attribute.SubProgram
+        allReferences: HashSet<range>
+    }
+
+    member this.Singletons = this.prototype.singletons
+    member this.Name = this.prototype.name
+    member this.Inputs = this.prototype.inputs
+    member this.Outputs = this.prototype.outputs
+    member this.Returns = this.prototype.returns
+    
+    member this.IsFunction = this.prototype.IsFunction
+    member this.IsActivity = this.prototype.IsActivity
+    member this.IsSingleton = this.prototype.IsSingleton
+
+    member this.ToDoc =
+        let ins = this.Inputs |> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
+        let outs = this.Outputs|> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
+        let spdoc = 
+            this.prototype.kind.ToDoc
+            <+> txt (this.Name.ToString())
+            <^> ( ins
+                  <..> outs
+                  <.> match this.Returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.Returns.ToDoc
                   |> align
                   |> group )
             <.> (this.body |> List.map(fun s -> s.ToDoc) |> vsep |> indent dpTabsize)
@@ -362,7 +407,7 @@ and SubProgramDecl =
         let spdoc =
             if this.IsSingleton then 
                 let singletonsBlock = 
-                    List.map (fun n -> txt (n.ToString())) this.singletons
+                    List.map (fun n -> txt (n.ToString())) this.Singletons
                     |> dpCommaSeparatedInBrackets
                 txt "singleton"
                 <+> singletonsBlock
@@ -378,56 +423,32 @@ and SubProgramDecl =
     member this.IsEntryPoint =
         Option.isSome this.annotation.entryPoint
 
-    member this.IsSingleton =
-        not this.singletons.IsEmpty
-
-/// Declaration of an externally declared C function
-and FunctionPrototype =
-    {
-        isFunction: bool // TODO: apart from weird technicalities, why do we need this field? It must always be true, there are no external activities.
-        isSingleton: bool
-        pos: range
-        name: QName
-        inputs: ParamDecl list
-        outputs: ParamDecl list
-        returns: ValueTypes
-        annotation: Attribute.FunctionPrototype
-        allReferences: HashSet<range>
-    }
-
-    member this.ToDoc =
-        let ins = this.inputs |> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-        let outs = this.outputs|> List.map (fun i -> i.ToDoc) |> dpCommaSeparatedInParens
-        let fpdoc = 
-            txt "extern function"
-            <+> txt (this.name.ToString())
-            <^> ( ins
-                  <..> outs
-                  <.> match this.returns with | ValueTypes.Void -> empty | _ -> txt "returns" <+> this.returns.ToDoc
-                  |> align
-                  |> group )
-        let fpdoc = if this.isSingleton then txt "singleton" <+> fpdoc else fpdoc
-        this.annotation.ToDoc @ [fpdoc]
-        |> dpToplevelClose
-
-    override this.ToString() = 
-        render None <| this.ToDoc
-    
-    member this.isDirectCCall = 
-        this.annotation.isDirectCCall
 
 /// A Blech module corresponds to a file    
 and BlechModule =
     {
-        name: LongIdentifier
+        name: TranslationUnitPath
         types: Types list
-        funPrototypes: FunctionPrototype list
-        funacts: SubProgramDecl list
+        funPrototypes: ProcedurePrototype list
+        funacts: ProcedureImpl list
         variables: VarDecl list
         externalVariables: ExternalVarDecl list
         memberPragmas: Attribute.MemberPragma list
-        entryPoint: SubProgramDecl option
+        entryPoint: ProcedureImpl option
     }
+
+    // creates an empty type checking result for test purposes
+    static member MakeEmpty moduleName =
+        { 
+            name = moduleName
+            types = List.empty 
+            funPrototypes = List.empty 
+            funacts = List.empty 
+            variables = List.empty 
+            externalVariables = List.empty 
+            memberPragmas = List.empty 
+            entryPoint = None 
+        }
 
     override this.ToString() = 
         render (Some 72) <| this.ToDoc
@@ -443,6 +464,8 @@ and BlechModule =
         |> punctuate line 
         |> vsep
 
+    member this.IsAProgram = 
+        Option.isSome this.entryPoint
 
 //=============================================================================
 // Expressions 

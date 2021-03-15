@@ -18,9 +18,64 @@ module NameCheckerTest
 
 open NUnit.Framework
 
+open System.IO
+open Blech.Compiler
 open Blech.Common
-open Blech.Frontend
 
+
+let private parseFileAndHandleImports logger pkgCtx implOrIface moduleName fileName =
+    let importChain = CompilationUnit.ImportChain.Empty
+    let fileContents = File.ReadAllText <| Path.GetFullPath fileName
+    
+    let resultWorkflow = ResultBuilder()
+    resultWorkflow {
+        let! ast =
+            Main.runParser 
+                logger 
+                implOrIface
+                moduleName 
+                fileContents 
+                fileName
+
+        let! imports =
+            Main.runImportCompilation 
+                pkgCtx 
+                logger 
+                importChain
+                moduleName 
+                fileName
+                ast
+        return ast, imports
+    }
+           
+
+let private runNameChecking implOrIface moduleName fileName = 
+    let logger = Diagnostics.Logger.create ()
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Namecheck.Directory fileName with 
+                isFrontendTest = true // stop before typecheck for imports
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+    match parseFileAndHandleImports logger pkgCtx implOrIface moduleName fileName with
+    | Ok (ast, imports) -> 
+        Main.runNameResolution 
+            logger 
+            moduleName 
+            fileName 
+            imports.GetLookupTables 
+            imports.GetExportScopes
+            ast
+    | Error logger ->
+        printfn "Did not expect to find errors during parsing or in imported files!\n" 
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+        
+        Assert.False true
+        Error logger
+      
+    
 [<TestFixture>]
 type Test() =
 
@@ -31,21 +86,13 @@ type Test() =
     /// run nameCheckValidFiles
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.nameCheckValidFiles (loadWhat, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-        match astAndEnv with
+    member __.NameCheckValidFiles (implOrIface, moduleName, filePath) =
+        match runNameChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.False true
-        | Ok (ast, env) ->
-            printfn "%s" env.Show
+        | Ok env ->
+            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.True true
             
     /// load test cases for nameCheckInvalidInputs test
@@ -55,21 +102,13 @@ type Test() =
     /// run nameCheckInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.nameCheckInvalidInputs (loadWhat, moduleName, filePath) =
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
-        Assert.True (Result.isOk ast)
-
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-        match astAndEnv with
+    member __.NameCheckInvalidFiles (implOrIface, moduleName, filePath) =
+        match runNameChecking implOrIface moduleName filePath with
         | Error logger ->
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        | Ok (ast, env) ->
-            printfn "%s" env.Show
+        | Ok env ->
+            // printfn "%s" (SymbolTable.Environment.getLookupTable env).Show
             Assert.False true
 
         

@@ -18,7 +18,86 @@ module CausalityCheckerTest
 
 open NUnit.Framework
 
+open System.IO
 open Blech.Common
+open Blech.Compiler
+
+let parseHandleImportsNameCheckAndTypeCheck logger cliContext pkgCtx implOrIface moduleName fileName = 
+    let importChain = CompilationUnit.ImportChain.Empty
+    let fileContents = File.ReadAllText <| Path.GetFullPath fileName
+
+    let resultWorkflow = ResultBuilder()
+    resultWorkflow {
+        let! ast =
+            Main.runParser 
+                logger 
+                implOrIface
+                moduleName 
+                fileContents 
+                fileName
+
+        let! imports =
+            Main.runImportCompilation 
+                pkgCtx 
+                logger 
+                importChain
+                moduleName 
+                fileName
+                ast
+
+        let! symTable =
+            Main.runNameResolution 
+                logger 
+                moduleName 
+                fileName 
+                imports.GetLookupTables
+                imports.GetExportScopes
+                ast
+
+        let! singletons, abstractTypes = 
+            Main.runOpaqueInference 
+                logger 
+                fileName 
+                imports.GetSingletons 
+                imports.GetAbstractTypes
+                ast
+                symTable
+        // no export inference needed
+
+        let! lut, blechModule = 
+            Main.runTypeChecking 
+                cliContext
+                logger
+                fileName
+                imports.GetTypeCheckContexts
+                ast
+                symTable
+                singletons
+
+        return lut, blechModule
+    }
+
+
+let runCausalityAnalysis implOrIface moduleName fileName =
+    let logger = Diagnostics.Logger.create ()
+    let cliContext = 
+        { 
+            TestFiles.makeCliContext TestFiles.Causality.Directory fileName with 
+                isDryRun = true // no code generation necessary        
+        }
+    let pkgCtx = CompilationUnit.Context.Make cliContext <| Main.loader cliContext
+    
+    match parseHandleImportsNameCheckAndTypeCheck logger cliContext pkgCtx implOrIface moduleName fileName with
+    | Ok (lut, blechModule) ->
+        Main.runCausalityCheck logger fileName lut blechModule
+    | Error logger ->
+        printfn "Did not expect to find errors during parsing, name checking, typeChecking or in imported files!\n" 
+        do Diagnostics.Emitter.printDiagnostics logger
+        do List.iter TestFiles.printImportDiagnostics pkgCtx.GetErrorImports
+        
+        Assert.False true
+        Error logger
+
 
 [<TestFixture>]
 type Test() =
@@ -27,85 +106,35 @@ type Test() =
     static member validFiles = 
         TestFiles.validFiles TestFiles.Causality
 
-        
-    /// run causalityCheckValidFiles
+    /// run causality analysis on valid files
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.causalityCheckValidFiles (loadWhat, moduleName, filePath) =
-        let cliContext = Arguments.BlechCOptions.Default
-
-        let logger = Diagnostics.Logger.create ()
-        
-        let ast = 
-            Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
-        Assert.True (Result.isOk ast)
-
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
-        Assert.True (Result.isOk lutAndTyPkg)
-        
-        let progGraphs = 
-            Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality
-            <| lutAndTyPkg
-        
-        //let causalityContext = Blech.Intermediate.ProgramGraph.createPGofPackage lut blechPack
-        //match Blech.Intermediate.Causality.checkPackCausality causalityContext with
-        match progGraphs with
+    member __.CausalityCheckValidFiles (implOrIface, moduleName, filePath) =
+        match runCausalityAnalysis implOrIface moduleName filePath with
         | Ok pgs ->
             pgs.Values
             |> Seq.map Blech.Intermediate.BlockGraph.buildFromPG
             |> Seq.iter (fun ctx -> printf "%s\n" (ctx.blockGraph.ToString()))
             Assert.True true
         | Error logger ->
+            printfn "Did not expect to find errors!\n" 
+
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True false
-
 
     /// load test cases for causalityCheckInvalidInputs test
     static member invalidFiles = 
         TestFiles.invalidFiles TestFiles.Causality
 
-        
-    /// run causalityCheckInvalidInputs
+    /// run causality analysis on invalid files
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.causalityCheckInvalidInputs (loadWhat, moduleName, filePath) =
-        let cliContext = Arguments.BlechCOptions.Default
-        
-        let logger = Diagnostics.Logger.create ()
-        let ast = 
-            Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
-        Assert.True (Result.isOk ast)
-        
-        let astAndEnv = 
-            let ctx = Blech.Frontend.NameChecking.initialise logger moduleName
-            Result.bind (Blech.Frontend.NameChecking.checkSingleFileDeclaredness ctx) ast
-        Assert.True (Result.isOk astAndEnv)
-        
-        let lutAndTyPkg = 
-            Result.bind (Blech.Frontend.TypeChecking.typeCheck cliContext) astAndEnv 
-        Assert.True (Result.isOk lutAndTyPkg)
-        
-        let progGraphs = 
-            Result.bind 
-            <| Blech.Intermediate.Causality.checkPackCausality
-            <| lutAndTyPkg
-        
-        match progGraphs with
+    member __.CausalityCheckInvalidFiles (implOrIface, moduleName, filePath) =
+        match runCausalityAnalysis implOrIface moduleName filePath with
         | Ok pgs ->
             pgs.Values |> Seq.iter (fun pg -> printf "%s\n" (pg.ToString()))
             Assert.True false
         | Error logger ->
+            printfn "Discovered Errors:\n" 
             Diagnostics.Emitter.printDiagnostics logger
             Assert.True true
-        
-        
-
-    
-

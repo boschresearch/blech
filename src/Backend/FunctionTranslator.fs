@@ -123,8 +123,8 @@ and private translateFunctionStatement ctx curComp stmt =
                     let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
                     let typ =
                         match ctx.tcc.nameToDecl.[(!curComp).name] with
-                        | FunctionPrototype p -> p.returns
-                        | SubProgramDecl d -> d.returns
+                        | ProcedurePrototype p -> p.returns
+                        | ProcedureImpl d -> d.Returns
                         | _ -> failwith "expected subprogram, got something else"
                     { lhs = LhsCur (TypedMemLoc.Loc name)
                       typ = ValueTypes typ
@@ -144,34 +144,33 @@ and private translateFunctionStatement ctx curComp stmt =
 // Statements of functions cannot be interleaved with other concurrent statements.
 // Hence we can generate a program coutner free code, disregarding the individual blocks.
 /// Returns the translated function body
-let private translateFunction ctx curComp (funDecl: SubProgramDecl) =
-    assert funDecl.isFunction
+let private translateFunction ctx curComp (funDecl: ProcedureImpl) =
+    assert funDecl.IsFunction
     funDecl.body
     |> translateFunctionStatements ctx curComp
 
-let internal translate ctx (subProgDecl: SubProgramDecl) =
-    let name = subProgDecl.name
+let internal translate ctx (subProgDecl: ProcedureImpl) =
+    let name = subProgDecl.Name
     
     let retvar, retType =
-        if subProgDecl.returns.IsPrimitive then
-            None, cpType (ValueTypes subProgDecl.returns)
+        if subProgDecl.Returns.IsPrimitive then
+            None, cpType (ValueTypes subProgDecl.Returns)
         else
-            let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
+            let qname = QName.Create subProgDecl.Name.moduleName (subProgDecl.Name.prefix @ [subProgDecl.Name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.Returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v, cpType (ValueTypes Void)
     
-    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
+    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.Inputs; outputs = subProgDecl.Outputs; retvar = retvar}
     
     let code = translateFunction ctx curComp subProgDecl
     
     let completeFunctionCode =
-        txt "static" // TODO must be non-static if function is exposed, fjg 17.01.19
-        <+> retType
+        retType
         <+> cpStaticName (!curComp).name
         <+> cpFunctionIface ctx.tcc (!curComp)
         <+> txt "{"

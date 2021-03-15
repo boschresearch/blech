@@ -1,4 +1,4 @@
-module NoMagicCasting2
+module
 
 function noMagicCasting()
     var a: int32 = -128

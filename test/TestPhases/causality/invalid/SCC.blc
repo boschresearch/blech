@@ -1,4 +1,4 @@
-module SCC
+module
 
 activity A ()()
     var a: int32

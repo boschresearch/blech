@@ -1,4 +1,4 @@
-module returnFromLoopMay
+module
 
 activity doingStuff () returns int64
     var x: int32

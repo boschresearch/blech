@@ -1,0 +1,7 @@
+import mymod "mod.infix" // not dots in Blech file names!
+
+module
+
+activity main()
+end
+

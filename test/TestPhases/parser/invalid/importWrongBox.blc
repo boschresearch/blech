@@ -1,0 +1,8 @@
+
+import mymod "bl:package/a/b/file"
+
+module
+
+activity main()
+end
+

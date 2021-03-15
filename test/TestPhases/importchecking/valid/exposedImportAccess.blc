@@ -1,0 +1,5 @@
+import c "../imports/constant" exposes FortyTwo
+
+module exposes incr42
+
+const incr42 = FortyTwo + 1

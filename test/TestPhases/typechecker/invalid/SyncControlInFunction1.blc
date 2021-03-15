@@ -1,4 +1,4 @@
-module SyncControlInFunction1
+module
 
 function calc() returns float64
     await true

@@ -1,0 +1,44 @@
+module exposes set
+
+struct Pair
+    var fst: int32
+    var snd: int32
+extension  // This is a preliminary experiment
+    typealias T = int32
+    function setFirst(p: Pair, x: int32) 
+        p.fst = x
+    end
+end
+
+// struct Both
+//     var one: bool = true
+//     var fst: int32
+//     var snd: int32
+// extension
+//     function init (fst: int32, snd: int32) returns Both 
+//         return {}
+//     end
+//     function fst (b: Both) (bla: int32) returns int32 
+//         return b.fst    
+//     end
+//     function snd (b: Both) returns int32 
+//         return b.snd
+//     end
+// end
+
+
+function set (fst: int32, snd: int32) returns Pair
+    var teste: int32
+    do
+        var test: bool 
+    end
+    return {fst = fst, snd = snd}
+end
+
+// function fst (pp: Pair) returns int32
+//     return pp.fst
+// end
+
+// function snd (pp: Pair) returns int32
+//     return pp.snd
+// end

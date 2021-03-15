@@ -1,0 +1,18 @@
+import sp "../imports/subprograms"
+
+module exposes f
+
+function s ()
+end
+
+singleton [sp.notASingletonFunction] function t () // this should be wrong
+    s()
+end
+
+function f()
+    t()
+end
+
+singleton [sp.NotASingletonActivity] activity a () // this should be wrong
+    run sp.NotASingletonActivity()
+end

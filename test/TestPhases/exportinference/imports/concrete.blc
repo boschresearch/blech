@@ -1,0 +1,13 @@
+module exposes S, 
+               create,
+               s
+
+struct S 
+    var x: int32
+end
+
+function create () returns S 
+    return { x = 42 }
+end
+
+const s: S = { x = 4711 }

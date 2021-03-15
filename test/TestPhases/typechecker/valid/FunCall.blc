@@ -1,4 +1,4 @@
-module FunCall
+module
 
 function calc() returns float64
     return 123.321

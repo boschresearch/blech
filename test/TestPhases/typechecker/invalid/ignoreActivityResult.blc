@@ -1,4 +1,4 @@
-module ignoreActivityResult
+module
 
 activity calc() returns int64
     await true

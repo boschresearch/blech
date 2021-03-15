@@ -1,4 +1,4 @@
-module boollean
+module
 
 activity empty ()()
     var x: bool = false

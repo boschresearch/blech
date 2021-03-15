@@ -1,0 +1,6 @@
+import uc "../imports/uncompilable"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

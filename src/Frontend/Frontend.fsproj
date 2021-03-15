@@ -19,14 +19,16 @@
     <Compile Include="AST.fs" />
     <Compile Include="PrettyPrint.fs" />
     <Compile Include="Attribute.fs" />
-    <Compile Include="BlechTypes.fs" />
     <Compile Include="SyntaxUtils.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="BlechLexer.fs" />
     <Compile Include="ParsePkg.fs" />
     <Compile Include="SymbolTable.fs" />
     <Compile Include="NameChecking.fs" />
+    <Compile Include="OpaqueInference.fs" />
+    <Compile Include="ExportInference.fs" />
     <Compile Include="SignaturePrinter.fs" />
+    <Compile Include="BlechTypes.fs" />
     <Compile Include="TyChkErrors.fs" />
     <Compile Include="TypeCheckContext.fs" />
     <Compile Include="Evaluation.fs" />
@@ -34,6 +36,7 @@
     <Compile Include="TyChkExpressions.fs" />
     <Compile Include="Annotation.fs" />
     <Compile Include="TypeChecking.fs" />
+    <Compile Include="ImportChecking.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,7 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.0" />
+    <PackageReference Update="FSharp.Core" Version="4.7.2" />
   </ItemGroup>
 
   <!-- 

@@ -1,0 +1,24 @@
+@[CFunction(binding="",header="")]
+extern singleton function g()
+    
+
+function f() returns bool
+    g()
+    return true
+end
+
+function h() returns nat8
+    g()
+    return 0
+end
+
+@[EntryPoint]
+activity A()
+    var a: [3]bool
+    cobegin
+        await f()
+        
+    with
+        await a[h()]
+    end
+end

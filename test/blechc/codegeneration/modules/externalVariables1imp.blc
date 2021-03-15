@@ -1,0 +1,33 @@
+module exposes S, B
+struct S
+    var s: float32
+end
+
+activity A () returns int32
+    @[COutput(binding="c_name_extVarI8", header="externalVariables.ext.h")]
+    extern var extVarI8: int32
+    
+    await true
+    
+    extVarI8 = 7
+    let foo1 = prev extVarI8
+
+    await true
+
+    return extVarI8
+end
+
+activity B (myS: S)
+    @[COutput(binding="c_name_extVarArr", header="externalVariables.ext.h")]
+    extern var extVarArr: [8]int32
+    var res: int32
+
+    if myS.s < 0.0 then run _ =  A()
+    else 
+        run res = A()
+        extVarArr[0] = 77
+        let foo2 = prev extVarArr
+        let foo3 = prev extVarArr[0]
+    end
+    extVarArr[1] = res
+end

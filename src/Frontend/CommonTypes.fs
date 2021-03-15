@@ -20,8 +20,12 @@
 /// with the untyped AST.)
 module Blech.Frontend.CommonTypes
 
+
 open Blech.Common
+open Blech.Common.TranslationUnitPath
+
 open Constants
+
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -44,7 +48,7 @@ type IdLabel =
 /// qualified names
 type QName = 
     {
-        moduleName: SearchPath.ModuleName
+        moduleName: TranslationUnitPath
         prefix: LongIdentifier // TODO: what exactly is the meaning of prefix? 
                                // Is the following invariant true:
                                // prefix is empty <=> QName is on top level <=> IsStatic, or equivalently
@@ -65,7 +69,7 @@ type QName =
         }
 
     static member CreateAuxiliary path id =
-        QName.Create [] path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
+        QName.Create TranslationUnitPath.Empty path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
 
     /// Creates a QName for program names: tick, init, printState
     static member CreateProgramName moduleName id =
@@ -97,33 +101,31 @@ type QName =
 type Name = 
     {
         id : Identifier
-        range: Range.range
+        range : Range.range
+        index : int
     }
-
-    static member FromFileOrDirectoryId (identifier: string) =
-        { id = identifier
-          range = Range.rangeStartup }
-        
+    
     member name.Range = name.range
     
     member name.idToString = name.id
     
     override name.ToString() = name.id
 
-    // Todo: Is it really necessary to use the id - a range should uniquely identify the occurence of a name: fjg 25.07.2018
+    // CustomEquality is defined via the name's index
     override name.Equals obj =
         match obj with
-        | :? Name as otherName 
-            -> name.range.Code = otherName.range.Code
+        | :? Name as otherName ->
+            name.index = otherName.index
         | _ -> false
-    override name.GetHashCode() = name.range.GetHashCode()
 
-    // Names are ordered according to the start of of their source code position 
+    override name.GetHashCode() = name.index // maybe better: hash name.index
+
+    // CustomComparison is defined via the names's index 
     interface System.IComparable with
         member name.CompareTo obj =
             match obj with
             | :? Name as otherName ->
-                Range.posOrder.Compare (name.range.Start, otherName.range.Start)
+                compare name.index otherName.index
             | _ -> 
                 invalidArg "obj" "cannot compare values of different types"
 

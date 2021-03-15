@@ -1,0 +1,6 @@
+module exposes f
+
+typealias T = int32
+typealias T2 = T
+
+function f(x: T, y: T2) end

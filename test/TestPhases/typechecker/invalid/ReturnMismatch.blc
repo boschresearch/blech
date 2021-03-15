@@ -1,4 +1,4 @@
-module ReturnMismatch
+module
 
 function calc() returns int64
     return true

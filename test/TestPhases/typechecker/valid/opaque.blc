@@ -1,0 +1,8 @@
+import I1 "../imports/opaqueimp"
+
+
+@[EntryPoint]
+activity Main () ()
+    //var v: I1.C = {foo = I1.initO()}
+    await false
+end

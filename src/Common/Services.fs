@@ -40,6 +40,15 @@ module Int32 =
 module Int64 = 
     let order = LanguagePrimitives.FastGenericComparer<int64>
 
+module List =
+    let rec unzip4 x =
+        match x with
+        | [] ->
+            [], [], [], []
+        | (h1, h2, h3, h4) :: t ->
+            let res1, res2, res3, res4 = unzip4 t
+            h1::res1, h2::res2, h3::res3, h4::res4
+
 
 module Pair = 
     open System.Collections.Generic
@@ -49,6 +58,22 @@ module Pair =
                   let res1 = compare1.Compare (a1, aa1)
                   if res1 <> 0 then res1 else compare2.Compare (a2, aa2) }
 
+
+module Map = 
+    let collectWithOverride (maps: Map<'a, 'b> list) : Map<'a, 'b> =
+        let mapfolder acc key value = Map.add key value acc
+        let listfolder acc map = Map.fold mapfolder acc map
+        List.fold listfolder Map.empty maps
+
+
+    let collect (maps: Map<'a, 'b> list) : Map<'a, 'b> =
+        let mapfolder acc key value =
+            if Map.containsKey key acc then 
+                failwith <| sprintf "Key: %A already bound" key
+            else 
+                Map.add key value acc
+        let listfolder acc map = Map.fold mapfolder acc map
+        List.fold listfolder Map.empty maps
 
 // --------------------------------------------------------------------------
 //  String
@@ -78,16 +103,37 @@ module String =
 [<RequireQualifiedAccess>]
 module Result =
 
-    let isError (result: Result<'a, 'x>) : bool =
+    let isError (result: Result<'ok, 'err>) : bool =
         match result with
         | Ok _ -> false
         | Error _ -> true
     
-    let isOk (result: Result<'a, 'x>) : bool =
+    let isOk (result: Result<'ok, 'err>) : bool =
         match result with
         | Ok _ -> true
         | Error _ -> false
 
+    let getOk (result: Result<'ok, 'err>) : 'ok = 
+        match result with 
+        | Error err -> failwithf "Could not get Ok item from Result as it contains an error: %A" err 
+        | Ok ok -> ok
+        
+    let getError (result: Result<'ok, 'err>) : 'err = 
+        match result with 
+        | Error err -> err 
+        | Ok ok -> failwithf "Could not get Error from Result: %A" ok
+
+
+type ResultBuilder() =
+    member __.Return(x) = Ok x
+
+    member __.ReturnFrom(m: Result<_, _>) = m
+
+    member __.Bind(m, f) = Result.bind f m
+    
+    member __.Zero() = None
+
+    member __.Combine(m, f) = Result.bind f m
 
 //-------------------------------------------------------------------------
 // Bits, from fsharp compiler

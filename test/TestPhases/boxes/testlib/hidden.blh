@@ -1,0 +1,7 @@
+internal signature
+
+struct S
+    var b: bool
+end
+
+function init () returns S

@@ -1,0 +1,13 @@
+import i "imported" exposes S, init
+
+// function init()
+//     // this shadows exposed import init
+// end
+
+@[EntryPoint]
+activity Main()
+    var s : i.S = init()
+    s.i = 42
+    var t : i.T
+    await true
+end

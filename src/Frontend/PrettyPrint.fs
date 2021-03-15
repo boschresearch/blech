@@ -24,8 +24,9 @@ module PrettyPrint =
     /// pretty printing modules (below).
     
     module DocPrint =
+        open System.Text.RegularExpressions
         open Blech.Common.PPrint
-
+        
         let dpTabsize = 4
 
         let dpIndent = 
@@ -75,8 +76,12 @@ module PrettyPrint =
             |> align
             |> group 
 
+        let dpSeparated docs = 
+            docs
+            |> vsep
+            |> align
+            |> group 
 
-           
         let private _dpCommaSeparatedInBrackets withBrackets docs =
             docs
             |> punctuate comma
@@ -109,15 +114,32 @@ module PrettyPrint =
             | None ->
                 doc
 
-        /// Convert any object with a ToString representation to a Doc
-        let dpName name = txt <| name.ToString()
+        let dpOptSpacePostfix doc (optDoc: Doc option) =
+            match optDoc with
+            | Some pstfx ->
+                doc <+> pstfx
+            | None ->
+                doc
+
+
+        /// Convert a blech name to a Doc
+        let dpName name = 
+            txt <| name.ToString()
+
+        /// Convert a blech auxiliary name
+        /// see mkAuxIdentifierFromWildCard in file SyntaxUtils
+        let dpModuleName modname = 
+            let identifier = "_*[a-zA-Z]+[_a-zA-Z0-9]*"
+            let wildcard = "_+"
+            let m = Regex.Match(modname.ToString(), sprintf "%s|%s" identifier wildcard)
+            txt m.Value
 
         let dpToplevel elements =
             elements
             |> punctuate line
             |> vsep
 
-        let dpRemoveEmptyLines elements =
+        let dpRemoveEmpty elements =
             elements
             |> Seq.filter (function
                 | Empty -> false // remove empty documents from sequence
@@ -126,7 +148,7 @@ module PrettyPrint =
         /// statement blocks (body of a control-flow structure)
         /// removes empty lines
         let dpBlock : Doc seq -> Doc =
-            dpRemoveEmptyLines >> vsep
+            dpRemoveEmpty >> vsep
 
         // Printing of argument lists in particular
         let dpArguments = dpCommaSeparatedInParens
@@ -271,7 +293,7 @@ module PrettyPrint =
                 let docs = 
                     match optSpec with
                     | Some spec ->
-                        (txt "module" <+> ppStaticNamedPath spec.path) :: members
+                        txt "module" :: members
                     | None ->
                         members 
                 docs
@@ -662,8 +684,6 @@ module PrettyPrint =
                     |> (</>) <| ppLexpr buf
                     |> align
                     |> group                     
-                | ImplicitMember name ->
-                    chr '.' <^> ppStaticNamedPath name.path
                 // --- variable
                 | Var access ->
                     ppDynamicAccessPath access.timepoint access.path  
@@ -845,13 +865,11 @@ module PrettyPrint =
                 <.> indent dpTabsize (membersDoc |> vsep)
                 <.> txt "end"
 
-            let fNewTypeDecl (_, isRef, name, represents, members, annons) =
+            let fOpaqueTypeDecl (_, isRef, name, members, annons) =
                 vsep annons
                 <.> if isRef then txt "ref" else empty
                 <+> txt "type" 
                 <+> dpName name
-                <+> (dpAliasedType represents
-                     |> gnest dpTabsize)
                 <.> match members with | [] -> empty | _ -> txt "extension"
                 <.> indent dpTabsize (members |> vsep)
                 <.> txt "end"
@@ -896,8 +914,8 @@ module PrettyPrint =
 
             // call the catamorphism using the functions defined above
             // signature is
-            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
-            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fNewTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
+            // postOrderWalk            fNothing fPragma fPackage fImport fPackageMember fSubprogram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation treeNode : 'r=
+            let doc = AST.postOrderWalk fNothing fPragma fPackage fImport fMember        fSubProgram fFunctionPrototype fStmt fNameBinding fAssign fAssert fAssume fAwait fITE fMatch fCobegin fWhile fRepeat fNumericFor fIteratorFor fPreempt fSubScope fActCall fFunCall fEmit fReturn fVarDecl fParamDecl fReturnDecl fUnitDecl fClockDecl fEnumTypeDecl fTagDecl fStructTypeDecl fOpaqueTypeDecl fTypeAliasDecl fReceiver fLexpr fExpr fCondition fDataType fUnitExpr fClockDef fAnnotation node
             render (Some 72) doc
 
         // end of template

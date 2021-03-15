@@ -1,0 +1,7 @@
+
+import h "box:testlib/hidden"  // import of internal module not allowed
+
+@[EntryPoint]
+activity Main()
+    var s: h.S = h.init()
+end

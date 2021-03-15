@@ -1,0 +1,5 @@
+
+@[EntryPoint]
+activity AnAct ()
+    await true
+end

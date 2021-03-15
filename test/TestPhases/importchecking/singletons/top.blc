@@ -1,0 +1,16 @@
+import _ "middle" exposes u, f
+// import m "middle" 
+import b "bottom" 
+
+module exposes h
+
+singleton [f]
+function h ()
+    b.f()
+    b.noSingleton()
+    // m.f()
+    // m.u()
+    f()
+    // u()
+end
+

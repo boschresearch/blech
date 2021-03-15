@@ -233,6 +233,12 @@ test/blechc/codegeneration/blech
 # generated code
 **/blech
 blech.c
+*.c
+*.h
+*.blh
+# *.blh
+!*.ext.c
+!*.ext.h
 
 /src/blechc/Properties/launchSettings.json
 

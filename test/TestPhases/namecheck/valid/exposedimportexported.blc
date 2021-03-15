@@ -1,0 +1,6 @@
+import n "../imports/names" exposes T
+
+@[EntryPoint]
+activity Main ()
+    run let t: T = n.A()
+end

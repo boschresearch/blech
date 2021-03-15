@@ -1,0 +1,7 @@
+import I "importRecB"
+
+module
+
+activity Main () ()
+    await true
+end

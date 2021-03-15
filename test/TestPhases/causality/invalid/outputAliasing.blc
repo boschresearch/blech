@@ -1,4 +1,4 @@
-module outputAliasing
+module
 
 activity A()(x: bool, y: bool)
     cobegin

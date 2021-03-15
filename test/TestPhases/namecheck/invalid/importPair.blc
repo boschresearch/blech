@@ -1,0 +1,9 @@
+import p "../imports/pair"
+
+@[EntryPoint]
+activity Main ()
+    var ab: p.Pair = p.set(1,2)
+
+    let f: p.Pair.T = 42 // illegal access to typealias in extension for abstract type T
+    await true
+end

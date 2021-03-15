@@ -1,4 +1,4 @@
-module whenafter_mehrFehler
+module
 
 activity controllingInjection   // includes injectingWater
     when tank.getWaterStatus() <> .Frozen else kill

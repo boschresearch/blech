@@ -1,4 +1,4 @@
-module implicitUpcasting
+module
 
 activity implicitUpCasting()
 

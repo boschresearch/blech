@@ -1,0 +1,7 @@
+import C "../imports/constant"
+
+module 
+
+enum E 
+    C default
+end 

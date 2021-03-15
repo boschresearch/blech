@@ -1,6 +1,6 @@
-module staticarrayindex
+module
 
-type MyArray = [4]int32
+typealias MyArray = [4]int32
 
 const fst: nat8 = 0
     

@@ -1,0 +1,18 @@
+import b "bottom"
+
+module exposes f
+
+singleton function u () 
+end
+
+function g ()
+    u()
+end
+
+function f () 
+    g()
+    u()
+    b.f()
+    b.h()
+end
+

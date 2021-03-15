@@ -1,0 +1,29 @@
+module exposes f, f1, f2, noSingleton, h
+
+singleton function s ()
+end
+
+singleton [s] function t ()
+    s()
+end
+
+singleton function u ()
+end
+
+function f ()
+    t()
+end
+
+singleton function f1 ()
+    t()
+end
+
+function h ()
+end
+
+singleton [t] function f2 () 
+    t()
+end
+
+function noSingleton ()
+end

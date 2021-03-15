@@ -1,4 +1,4 @@
-module FunMissingReturn
+module
 
 function calc() returns float64
     

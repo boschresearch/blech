@@ -103,7 +103,9 @@ let internal isLeftSupertypeOfRight typL typR =
     | ValueTypes (NatType _), AnyBits
     | ValueTypes (FloatType _), AnyFloat -> true
     | Any, _ -> true      // wildcard hast type Any which is supertype of any other type
-    | a, b when (a = b) -> true
+    | a, b when (a = b) -> true // meaning opaque types with same name
+                                // structs with same name and recursively the same fields
+                                // arrays of same length and element type (recursively)
     | _, _ -> false // this includes the cases that integers shall not 
                     // implicitly be promoted to floats
 
@@ -127,8 +129,8 @@ let rec getDefaultValueFor pos name dty =
         | IntType size -> Ok {rhs = IntConst <| Constant.Zero size; typ = dty; range = pos}
         | BitsType size -> Ok {rhs = BitsConst <| Constant.Zero size; typ = dty; range = pos}
         | NatType size -> Ok {rhs = NatConst <| Constant.Zero size; typ = dty; range = pos}
-        | FloatType size ->Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
-        | ValueTypes.StructType (_, _, fields) ->
+        | FloatType size -> Ok {rhs = FloatConst <| Constant.Zero size; typ = dty; range = pos}
+        | ValueTypes.StructType (_, fields) ->
             let defaultValues =
                 fields
                 |> List.map (fun f -> f.name.basicId, f.initValue)
@@ -137,6 +139,11 @@ let rec getDefaultValueFor pos name dty =
             getDefaultValueFor pos name (ValueTypes elemDty)
             |> Result.map (fun v -> [ for i in SizeZero .. SizeOne .. size - SizeOne -> (i, v) ])
             |> Result.map (fun lst -> { rhs = ArrayConst lst; typ = dty; range = pos })
+        | OpaqueSimple _
+        | OpaqueArray _
+        | OpaqueStruct _ ->
+            Error [NoDefaultValueForOpaque (pos, name)]
+       
     | ReferenceTypes s ->
         Error [NoDefaultValueForSecondClassType (pos, name, s)]
 
@@ -317,13 +324,12 @@ let tryPromotePrimitiveAny ltyp (rexpr: TypedRhs) =
 //=============================================================================
 
 /// Amends a struct literal depending on the lhs type
-/// inInitMode - true iff lhs and rhs a parts of a declaration (initialisation)
 /// lTyp - type of the lhs
 /// pos - range of the literal we are trying to amend
 /// name - struct's type name, only needed for error messages
 /// fields - list of VarDecls inside a struct
 /// kvps - list of key-value pairs in the rhs struct literal
-let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps =
+let rec private amendStruct lTyp pos name (fields: VarDecl list) kvps =
     let merge checkedUserInput = 
         getInitValueWithoutZeros pos name.basicId lTyp
         |> Result.map (fun r -> unsafeMergeCompositeLiteral r.rhs (StructConst checkedUserInput))
@@ -340,13 +346,10 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
         |> function
             | None -> // no
                 Error [FieldNotAMember2(pos, name, fst kvp)]
-            | Some idx -> // yes, do the checks, take the RhsExpr
-                if fields.[idx].mutability.Equals Mutability.Variable || inInitMode then // check mutability of the field
-                    // recursively check and amend the rhs expr
-                    amendRhsExpr inInitMode fields.[idx].datatype (snd kvp)
-                    |> Result.map (fun amendedRhs -> (fst kvp, amendedRhs))
-                else // writing to let field
-                    Error [AssignmentToImmutable(pos, fields.[idx].name.basicId)]
+            | Some idx -> // take the RhsExpr
+                // recursively check and amend the rhs expr
+                amendRhsExpr fields.[idx].datatype (snd kvp)
+                |> Result.map (fun amendedRhs -> (fst kvp, amendedRhs))
     
     kvps                   // type checked key value pairs as given by the programmer
     |> List.map processKvp // check that each kvp belongs to this struct
@@ -364,7 +367,7 @@ let rec private amendStruct inInitMode lTyp pos name (fields: VarDecl list) kvps
 /// size - array's length
 /// datatype - array's elements' type
 /// kvps - list of index-value pairs in the rhs array literal
-and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * TypedRhs) list) =
+and private amendArray lTyp pos (size: Size) datatype (kvps: (Size * TypedRhs) list) =
     let merge checkedUserInput = 
         getInitValueWithoutZeros Range.range0 "" lTyp // TODO: this is a hacky use of API, fg 16.04.19
         |> Result.map (fun r -> unsafeMergeCompositeLiteral r.rhs (ArrayConst checkedUserInput))
@@ -381,7 +384,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
             let indices, values = kvps |> List.unzip
                      
             values 
-            |> List.map (amendRhsExpr inInitMode (ValueTypes datatype))
+            |> List.map (amendRhsExpr (ValueTypes datatype))
             |> contract
             |> Result.map (
                 List.zip indices
@@ -394,7 +397,7 @@ and private amendArray inInitMode lTyp pos (size: Size) datatype (kvps: (Size * 
         | :? System.OverflowException ->  
             failwith "Array literal with more elements than an int can represent" // this will certainly never happen
 
-and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
+and internal amendCompoundLiteral lTyp (rExpr: TypedRhs) =
     match lTyp, rExpr.rhs with
     // resetting
     | ValueTypes (ValueTypes.StructType _), ResetConst
@@ -403,11 +406,11 @@ and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
         // note that we do overwrite let fields but we do so with the default value which essentially has no effect
         getInitValueWithoutZeros rExpr.Range "" lTyp
     // structs
-    | ValueTypes (ValueTypes.StructType (_, name, fields)), StructConst assignments ->
-        amendStruct inInitMode lTyp rExpr.Range name fields assignments 
+    | ValueTypes (ValueTypes.StructType (name, fields)), StructConst assignments ->
+        amendStruct lTyp rExpr.Range name fields assignments 
     // arrays
     | ValueTypes (ArrayType (size, datatype)), ArrayConst idxValPairs ->
-        amendArray inInitMode lTyp rExpr.Range size datatype idxValPairs
+        amendArray lTyp rExpr.Range size datatype idxValPairs
     // all sorts of mismatches
     | ValueTypes (ArrayType _), StructConst _ ->
         Error [TypeMismatchArrStruct(lTyp, rExpr)]
@@ -425,11 +428,9 @@ and internal amendCompoundLiteral inInitMode lTyp (rExpr: TypedRhs) =
  
 /// With structured literals we may need to "fill them up" since a user may 
 /// provide only some of the structure or array fields.
-/// inInitMode - true if this function is called from an initialisation
-///              here also immutable fields may be set
 /// lTyp       - type of the left hand side that we write the literal to
 /// rExpr      - the given (partial) literal
-and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
+and internal amendRhsExpr lTyp (rExpr: TypedRhs) =
     // if rhs type is at least as concrete as on the lhs, we are satisfied
     if isLeftSupertypeOfRight lTyp rExpr.typ then
         // if left hand side is _, its type is any and we need to keep the rhs type
@@ -447,7 +448,10 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
     // this is the case with struct literals or reset literals, array literals
     // these have to be filled up and their type needs to be updated
     elif rExpr.typ.IsCompoundLiteral then // we expect to be amending only Any typed expressions (literals, in fact)
-        amendCompoundLiteral inInitMode lTyp rExpr
+        if lTyp.IsOpaque then 
+            Error [OpaqueInitialiserMustBeConcrete(rExpr.Range, lTyp.ToString())]
+        else
+            amendCompoundLiteral lTyp rExpr
     else
         Error [TypeMismatch(lTyp, rExpr)]
 
@@ -455,7 +459,15 @@ and internal amendRhsExpr inInitMode lTyp (rExpr: TypedRhs) =
 /// Poor man's type deduction for variable initialisation.
 /// If either type or initial value is given, infer the other one if possible.
 /// If both are given, check that the types agree.
-let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt = 
+// insideTypeDecl - boolean flag, indicates whether we are checking a variable declaration 
+//                  inside a (struct) type declaration. In such case opaque types do not
+//                  require an initialiser since the instatiation of this struct will
+//                  provide an initial value for an opaque field.
+//                  Since this function must return a pair of type and value, we create a
+//                  dummy value which will not be used in subsequent phases. This is because
+//                  this is a type declaration and the init values set here will only be used
+//                  if the user does not provide an initial value - which however he must do for opaque fields.
+let internal alignOptionalTypeAndValue insideTypeDecl pos name dtyOpt initValOpt = 
     let inferFromRhs (expr: TypedRhs) =
         // we need to infer the data type from the right hand side initialisation expression
         // however if that is a literal we might have not enough information (which int size?)
@@ -465,10 +477,7 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         | AnyInt 
         | AnyBits
         | AnyFloat ->
-            Error [VarDeclRequiresExplicitType (pos, name)]    
-        //| ( ValueTypes (IntType _) 
-        //  | ValueTypes (FloatType _) ) when not (exprContainsName expr.rhs) ->
-        //    Error [VarDeclRequiresExplicitType (pos, name)]
+            Error [VarDeclRequiresExplicitType (pos, name)]
         | _ ->
             Ok (expr.typ, expr)
 
@@ -479,12 +488,23 @@ let internal alignOptionalTypeAndValue pos name dtyOpt initValOpt =
         vRes |> Result.bind inferFromRhs
     | Some dtyRes, None ->
         dtyRes 
-        |> Result.map (getInitValueWithoutZeros pos name)
-        |> Result.bind (combine dtyRes)
+        |> Result.bind (fun (typ: Types) ->
+            if insideTypeDecl && typ.IsOpaque then
+                // in this special case, opaque typed struct fields do not need a initial value
+                // create dummy init
+                Ok {rhs = ResetConst; typ = AnyComposite; range = pos}
+                |> combine dtyRes
+            else
+                if typ.IsOpaque then 
+                    Error [OpaqueMustHaveInitialiser(pos, name)]
+                else
+                    getInitValueWithoutZeros pos name typ
+                    |> combine dtyRes
+                )
     | Some dtyRes, Some vRes ->
         combine dtyRes vRes
         |> Result.bind (fun (dty, v) ->
-            amendRhsExpr true dty v
-            |> Result.map (fun amendedV -> (dty, amendedV))
+                amendRhsExpr dty v
+                |> Result.map (fun amendedV -> (dty, amendedV))
         )
 

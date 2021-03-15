@@ -1,4 +1,4 @@
-module compoundLiterals
+module
 
 struct AB 
     var a: int32

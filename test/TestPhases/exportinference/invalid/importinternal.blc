@@ -1,0 +1,10 @@
+
+import internal i "../imports/internal"
+import internal ni "../imports/notinternal"
+
+module exposes aReturnsS  // must be an internal module, because of whitebox imports
+
+activity aReturnsS (x: ni.S) returns i.S
+    await true 
+    return i.f()
+end

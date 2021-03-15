@@ -1,0 +1,13 @@
+
+@[CFunction (binding ="c_f", header = "c_f.h")]
+extern singleton function f () returns bool
+
+struct S 
+    var b: bool = f() // singleton in static initialiser -> non-determinism
+end 
+
+@[EntryPoint]
+activity Main ()
+    var s: S
+    await s.b
+end

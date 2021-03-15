@@ -1,0 +1,13 @@
+module exposes Enum, Struct, Array, Bool
+
+enum Enum
+    Tag
+end
+
+struct Struct 
+   var b: bool
+end
+
+typealias Array = [1]int32
+
+typealias Bool = bool
