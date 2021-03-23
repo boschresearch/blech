@@ -1,4 +1,4 @@
-import EX "appWithExternFun1imp"
+import EX "appWithExternFun_imp"
 
 
 @[EntryPoint]

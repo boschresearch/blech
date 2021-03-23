@@ -1,4 +1,4 @@
-import I1 "opaque1imp" exposes changeC
+import I1 "opaque_imp" exposes changeC
 
 
 @[EntryPoint]

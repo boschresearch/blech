@@ -40,18 +40,18 @@ del /Q /S tmp\*
 rem finally run the code generation test
 
 echo *** Run tests for Blech-C interface
-dotnet run -- codegeneration/blech_c_interface tmp/blech_c_interface
+dotnet run -- blech_c_interface tmp/blech_c_interface
 
-echo *** Run tests for general code generation
-dotnet run -- codegeneration tmp
+echo *** Run tests for general programs
+dotnet run -- programs tmp/programs
 
 echo *** Run tests for entry point activities with parameters
-dotnet run -- codegeneration/blechAccess tmp/blechAccess
+dotnet run -- blechAccess tmp/blechAccess
 
 echo *** Run tests for module imports
-dotnet run -- codegeneration/modules tmp/modules
+dotnet run -- modules tmp/modules
 
 echo *** Run tests according to Scode analysis
-dotnet run -- codegeneration/88problemsbutastructaintone tmp/88problemsbutastructaintone
+dotnet run -- 88problemsbutastructaintone tmp/88problemsbutastructaintone
 
 pause

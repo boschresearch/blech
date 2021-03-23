@@ -1,4 +1,4 @@
-import I1 "importOne1imp"
+import I1 "importOne_imp"
 
 struct S 
     var c: int32
