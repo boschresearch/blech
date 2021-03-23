@@ -263,7 +263,7 @@ module Blech.Visualization.SctxGenerator
                                                                 | IsNotActivity -> "{"  + lnbreak + bodyToSctx cmplx.Body  + lnbreak + "}" + lnbreak
                                         | IsSimple | IsConnector -> "" // Ok. Do nothing.
                                         | IsCobegin cbgn-> "{" + lnbreak + cobeginBranchesToString cbgn.Content + lnbreak + "}" + lnbreak
-                                        | IsActivityCall actCall -> actCallToString actCall.GetIns actCall.GetOuts node.Payload.Label
+                                        | IsActivityCall actCall -> actCallToString actCall.GetIns actCall.GetOuts actCall.origName
         
         // If the node is a final node, we are finished, as there are no subsequent nodes.
         let edgeStringsAndRecursiveNodes =  match node.Payload.IsInitOrFinal.Final with
