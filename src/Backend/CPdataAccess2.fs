@@ -37,21 +37,6 @@ open Blech.Frontend.TypeCheckContext
 open Normalisation
 
 
-module AppName =
-
-    let predefinedNames =
-        [| "tick"; "init"; "printState" |]
-    let private idxTick = 0
-    let private idxInit = 1
-    let private idxPrint = 2
-
-    let private programName idx moduleName =
-        QName.CreateProgramName moduleName predefinedNames.[idx]
-
-    let tick = programName idxTick
-    let init = programName idxInit
-    let printState = programName idxPrint
-
 type TemporalQualification =
     | Current
     | Previous
@@ -99,6 +84,24 @@ let private internalPrev name = assembleName (BLC + "_" + PREV) [] name.basicId
 let cpPcName name = (fromContext "") + name.basicId |> txt
 
 
+module AppName =
+
+    let predefinedNames =
+        [| "tick"; "init"; "printState" |]
+    let private idxTick = 0
+    let private idxInit = 1
+    let private idxPrint = 2
+
+    let private toDoc idx moduleName =
+        QName.CreateProgramName moduleName predefinedNames.[idx]
+        |> programName
+
+    let tick = toDoc idxTick
+    let init = toDoc idxInit
+    let printState = toDoc idxPrint
+// end of module AppName
+
+
 [<DefaultAugmentation(false)>] // default Is* is on its way https://github.com/fsharp/fslang-suggestions/issues/222
                                // for the moment we do this as in https://stackoverflow.com/a/23665277/2289899
 /// Represents information on how to render a Blech name to a C name
@@ -110,7 +113,9 @@ type CName =
     | PrevExternal of QName
     | Auto of QName
     | CtxLocal of QName
-    | ProgramName of QName // this category currently represents names of tick, init, print functions
+    | ProgramName of QName // unused since init tick and print functions are 
+                           // generated and rendered without using cpName, 
+                           // see submodule AppName above
 
     member this.QName =
         match this with
@@ -188,13 +193,9 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
         //    false
 
     if needsStaticName then
-        if Array.contains name.basicId AppName.predefinedNames then
-            // special case we have a generated "program name" such as init
-            ProgramName name
-        else
-            // otherwise, decide here whether name is exported or not
-            // for now always generate full global name
-            Global name
+        // decide here whether name is exported or not
+        // for now always generate full global name
+        Global name
     elif name.IsAuxiliary then
         // no prev on auxiliary variables
         assert timepointOpt.Equals (Some Current)

@@ -106,7 +106,7 @@ let private cpGlobalCall tcc primitivePassByAddress (iface: Compilation) =
 /// Call parameters for the tick and the printState functions
 /// To be used from the test app only
 
-let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
+let internal cpAppCall tcc renderedCalleeName (entryPointIface: Compilation) =
     let addAmp pe =
             match getCExpr pe with
             | Blob cPath -> cPath.PrependAddrOf |> Blob
@@ -120,7 +120,6 @@ let internal cpAppCall tcc whoToCall (entryPointIface: Compilation) =
         match t with
         | ValueTypes (ValueTypes.ArrayType _) -> getCExpr pe
         | _ -> addAmp pe
-    let renderedCalleeName = (cpStaticName whoToCall)
     let renderedInputs = entryPointIface.inputs |> List.map (paramAsInput >> (fun i -> i.typ, cpInputArg tcc i))
     let renderedOutputs = entryPointIface.outputs |> List.map (paramAsOutput >> (fun o -> o.typ, cpOutputArg tcc o))
     // create dummy receiver for return value if entry point returns something
@@ -182,7 +181,7 @@ let internal mainCallback tcc primitivePassByAddress tick entryName entryIface =
         |> cpIndent
 
     txt "void"
-    <+> cpStaticName tick
+    <+> tick
     <+> cpMainIface tcc primitivePassByAddress entryIface 
     <+> txt "{"
     <.> entryPointCall
@@ -191,7 +190,7 @@ let internal mainCallback tcc primitivePassByAddress tick entryName entryIface =
 /// Generate a C function "void init(void)" which initialises program counters
 let internal mainInit ctx init (entryCompilation: Compilation) =    
     txt "void" 
-    <+> cpStaticName init 
+    <+> init 
     <+> txt "(void)"
     <+> txt "{"
     <.> ActivityTranslator.mainPCinit ctx entryCompilation
@@ -231,7 +230,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
         cpStaticName entryCompilation.name <^> txt TraceGenerator.printLocalsSuffix <^> args <^> semi
         
     txt "void" 
-    <+> cpStaticName printState
+    <+> printState
     <+> cpMainIface ctx.tcc false entryCompilation
     <+> txt "{"
     <.> txt """printf("\t\t\t\"pcs\": {");"""
@@ -244,7 +243,7 @@ let internal printState ctx printState (entryCompilation: Compilation) =
 
 let appMainLoop ctx init tick printState entryCompilation =
     let initCall = 
-        cpStaticName init
+        init
         <^> txt "()"
         <^> semi
 
@@ -306,6 +305,6 @@ let appMainLoop ctx init tick printState entryCompilation =
 
 let programFunctionPrototype tcc primitivePassByAddress name iface returns =
     cpType returns
-    <+> cpStaticName name
+    <+> name
     <+> cpMainIface tcc primitivePassByAddress iface
     <^> semi
