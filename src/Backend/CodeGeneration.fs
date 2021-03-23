@@ -362,10 +362,9 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
             let entryCompilation = 
                 compilations |> List.find (fun c -> c.name = entryPoint)
             let progFunProt =
-                // TODO: The tick function can return a value, not always void, fjg. 18.04.19
                 let emptyIface =
                     Compilation.mkNew entryPoint // the name is irrelevant here, the point is to make a compilation without inputs, outputs or retvalue
-                let voidType = (ValueTypes ValueTypes.Void) 
+                let voidType = (ValueTypes ValueTypes.Void) // remember that return values are passed via extra parameter
                 [ ProgramGenerator.programFunctionPrototype ctx.tcc ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
                   ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.init moduleName) emptyIface voidType
                   ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
