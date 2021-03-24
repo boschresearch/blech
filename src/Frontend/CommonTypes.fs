@@ -131,11 +131,7 @@ type Name =
             | :? Name as otherName ->
                 if name.index = -1 || otherName.index = -1 then
                     // fake names without a valid index, compare id and range
-                    let cmpFileIdx = compare name.range.FileIndex otherName.range.FileIndex
-                    if cmpFileIdx = 0 then
-                        Range.posOrder.Compare (name.range.Start, otherName.range.Start)
-                    else
-                        cmpFileIdx
+                    Range.rangeOrder.Compare (name.range, otherName.range)
                 else
                     compare name.index otherName.index
             | _ -> 
