@@ -119,7 +119,7 @@ module Blech.Visualization.BlechVisGraph
         member x.GetActivityOrigLabel = match x.IsComplex with | IsActivityCall call -> call.origName | _ -> ""
 
     /// Determines what kind of edge the edge ist.
-    and EdgeProperty = IsAwait | IsTerminalAwait | IsAbortingAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
+    and EdgeProperty = IsAwait | IsTerminalAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
 
     /// Payload for an edge.
     and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with

@@ -174,7 +174,7 @@ module Blech.Visualization.SctxGenerator
     let private singleEdge(edge : BlechEdge) (targetIds : string) (prio : int) : string =
         let prioLabel = string prio + ": "
         match edge.Payload.Property with 
-            | IsAwait | IsAbortingAwait ->  "if true go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
+            | IsAwait ->  "if true go to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
             | IsTerminalAwait -> "if true join to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
             | IsAbort -> "if true abort to s" + string targetIds + " label \"" + edge.Payload.Label + "\"" + lnbreak
             // Include prio.
@@ -186,7 +186,7 @@ module Blech.Visualization.SctxGenerator
     /// Folding function that is used to fold a set of edges into their corresponding sctx strings.
     let rec foldEdges (accumulator : EdgeAccumulator) (edge : BlechEdge) : EdgeAccumulator =
         let currPrio = match edge.Payload.Property with 
-                            | IsAwait | IsAbortingAwait | IsTerminalAwait | IsAbort -> thrd3 accumulator
+                            | IsAwait | IsTerminalAwait | IsAbort -> thrd3 accumulator
                             | IsImmediate | IsTerminal | IsConditional | IsConditionalTerminal -> (thrd3 accumulator) + 1
         let singleEdgeString = singleEdge edge ((string edge.Target.Payload.StateCount) + (string edge.Target.Payload.SecondaryId)) currPrio
 

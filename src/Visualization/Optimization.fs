@@ -311,7 +311,7 @@ module Blech.Visualization.Optimization
                                         | Source -> // Determine payload. Terminal transitions change to immdediate transitions because the hierarchy is flattened.
                                                     let payload = 
                                                         match head.Payload.Property with
-                                                            | IsAwait | IsAbortingAwait | IsConditional | IsImmediate | IsAbort -> head.Payload
+                                                            | IsAwait | IsConditional | IsImmediate | IsAbort -> head.Payload
                                                             | IsTerminal -> head.Payload.CopyWithProperty IsImmediate
                                                             | IsConditionalTerminal -> head.Payload.CopyWithProperty IsConditional
                                                             | IsTerminalAwait -> head.Payload.CopyWithProperty IsAwait
@@ -443,7 +443,7 @@ module Blech.Visualization.Optimization
             let addEdgeToEveryFirstAwait = 
                                         fun (o:Option<BlechNode>) -> 
                                             match o with 
-                                                | Some a -> addEdgeToNode caseClosingNode IsAbortingAwait (fst (snd orderedPairOfRegions)) updatedGraph a  
+                                                | Some a -> addEdgeToNode caseClosingNode IsAwait (fst (snd orderedPairOfRegions)) updatedGraph a  
                                                 | None -> () // Do nothing.   
             List.map addEdgeToEveryFirstAwait (scnd3 findFirstAwaitConstruct) |> ignore               
             //All nodes after first await. Add edge manually for very last node, if present.
@@ -567,7 +567,6 @@ module Blech.Visualization.Optimization
                                     | _ -> false)) &&
                             sourceOutgoings.Length >= 2 && targetIncomings.Length >= 2 &&
                             ((multSpecifiedAndSingleOtherEdge IsTerminal IsAbort edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAbort edge targetIncomings) ||
-                             (multSpecifiedAndSingleOtherEdge IsTerminal IsAbortingAwait edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAbortingAwait edge targetIncomings) ||
                              (multSpecifiedAndSingleOtherEdge IsTerminal IsAwait edge sourceOutgoings && multSpecifiedAndSingleOtherEdge IsTerminal IsAwait edge targetIncomings)) &&
                             edge.Payload.Property = IsTerminal
 
