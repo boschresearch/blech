@@ -122,7 +122,7 @@ type Name =
                 name.index = otherName.index
         | _ -> false
 
-    override name.GetHashCode() = name.index // maybe better: hash name.index
+    override name.GetHashCode() = name.range.GetHashCode() //name.index // maybe better: hash name.index
 
     // CustomComparison is defined via the names's index 
     interface System.IComparable with
