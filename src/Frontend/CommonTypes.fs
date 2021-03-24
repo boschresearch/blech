@@ -115,7 +115,11 @@ type Name =
     override name.Equals obj =
         match obj with
         | :? Name as otherName ->
-            name.index = otherName.index
+            if name.index = -1 || otherName.index = -1 then
+                // fake names without a valid index, compare id and range
+                name.range = otherName.range
+            else
+                name.index = otherName.index
         | _ -> false
 
     override name.GetHashCode() = name.index // maybe better: hash name.index
@@ -125,7 +129,15 @@ type Name =
         member name.CompareTo obj =
             match obj with
             | :? Name as otherName ->
-                compare name.index otherName.index
+                if name.index = -1 || otherName.index = -1 then
+                    // fake names without a valid index, compare id and range
+                    let cmpFileIdx = compare name.range.FileIndex otherName.range.FileIndex
+                    if cmpFileIdx = 0 then
+                        Range.posOrder.Compare (name.range.Start, otherName.range.Start)
+                    else
+                        cmpFileIdx
+                else
+                    compare name.index otherName.index
             | _ -> 
                 invalidArg "obj" "cannot compare values of different types"
 

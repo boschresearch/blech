@@ -336,6 +336,13 @@ module ParserUtils =
               range = Range.range0 
               index = -1 }
 
+        /// Helper function for language server, construct a name without specifying an index
+        /// CommonTypes.Name.CompareTo and CommonTypes.Name.Equals
+        let mkFakeName id range =
+            { id = id
+              range = range
+              index = -1 }
+
         let private newWildcardIndex () = 
             parserContext.auxWildcardIndex <- parserContext.auxWildcardIndex + 1
             parserContext.auxWildcardIndex
