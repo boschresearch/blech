@@ -533,7 +533,14 @@ module Blech.Visualization.Optimization
     // TODO this is not functional programming..
     and private checkSingleEdgeForCollapse (finalNodeInfo : (string * bool) list) (graph : VisGraph) (edge : BlechEdge) : VisGraph =
         //Recursive calls.
+        // Doing simplfication on target AND source. This means nodes will be done more often than necessary. But this is needed for the very and very last node. TODO there is probably a better way for this.
         match edge.Source.Payload.IsComplex with 
+            | IsComplex cmplx -> collapseTransient finalNodeInfo cmplx.Body
+            | IsCobegin cbgn -> immediateCollapseCallOnCobegin finalNodeInfo cbgn.Content graph
+            | IsSimple | IsConnector | IsActivityCall _-> graph
+        |> ignore
+
+        match edge.Target.Payload.IsComplex with 
             | IsComplex cmplx -> collapseTransient finalNodeInfo cmplx.Body
             | IsCobegin cbgn -> immediateCollapseCallOnCobegin finalNodeInfo cbgn.Content graph
             | IsSimple | IsConnector | IsActivityCall _-> graph
