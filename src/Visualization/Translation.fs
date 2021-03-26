@@ -274,7 +274,7 @@ module Blech.Visualization.Translation
                                 match carryOverLabelSingleCbgn + carryOverLabelCbgn with 
                                             | "" -> None
                                             | _ -> Some (carryOverLabelSingleCbgn + carryOverLabelCbgn)    
-                              let updatedAcc = ((frst5 result, scnd5 result) :: (fst accumulator), carryOverAccumulator)
+                              let updatedAcc = (List.append (fst accumulator) [(frst5 result, scnd5 result)], carryOverAccumulator)
                               convertListToCobeginPayload tail (thrd5 result) updatedAcc (frth5 result) carryOverLabel
             | [] -> (fst accumulator, stateCount, neededVars, snd accumulator) // Last string option now returns the accumulated label !!
 
