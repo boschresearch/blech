@@ -28,10 +28,16 @@ module SignaturePrinter =
     // Abbreviations
     module Scope = SymbolTable.Scope
 
+    let bpGeneratedComment info =
+        txt "/*"
+        <.> txt "**" <+> info
+        <.> txt "*/"
+
     // ----------------------------------------------
     // Functions for printing blech code form an AST    
     // naming: bp<ASTNode> which means: blech print <ASTNode>   
     // ----------------------------------------------
+    
     
     let bpLineDoc comment = 
         txt "///" <^> txt comment
@@ -863,6 +869,10 @@ module SignaturePrinter =
                 |> dpOptSpacePostfix <| requiredExposedNames   
             else empty
 
+
+        let generatedCode =
+            bpGeneratedComment <| txt "This is generated code - do not touch!"
+
         let imports = 
             List.map psImport ast.imports
             |> dpRemoveEmpty
@@ -879,7 +889,7 @@ module SignaturePrinter =
             |> dpRemoveEmpty
             |> dpToplevel
         
-        [imports; spec ; members]
+        [generatedCode; imports; spec ; members]
         |> dpRemoveEmpty
         |> dpToplevel
         |> render (Some 80)
