@@ -1,0 +1,5 @@
+module exposes S
+
+struct S
+    var s: float32
+end

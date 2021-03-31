@@ -2,36 +2,6 @@ import X "externalVariables_imp"
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @[EntryPoint]
 activity E ()
     @[COutput(binding="c_name_S2", header="externalVariables.ext.h")]

@@ -1,0 +1,6 @@
+import _ "externalBlechStructType_imp" exposes S
+
+module exposes extVarS
+
+@[ CConst (binding = "c_name_extVarS", header = "externalBlechStruct.ext.h") ]
+extern const extVarS: S

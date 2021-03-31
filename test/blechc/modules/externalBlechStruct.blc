@@ -1,0 +1,24 @@
+import ebs "externalBlechStructType_imp" exposes S
+import ebsc "externalBlechStructConst_imp"
+
+
+activity B (myS: S) returns float32
+    var res: float32
+
+    await true
+    if myS.s < 0.0 then
+        res = 0.0
+    else
+        res = myS.s
+    end   
+    
+    return res
+end
+
+@[EntryPoint]
+activity E ()
+    let foo4 = ebsc.extVarS   // activity defined
+    let foo5 = ebsc.extVarS.s // top level
+    
+    run _ =  B(ebsc.extVarS)
+end

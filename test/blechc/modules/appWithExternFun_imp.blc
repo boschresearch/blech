@@ -1,3 +1,4 @@
+
 module exposes myExternFun 
 
 @[CFunction(binding="increase_global_state()", header="appWithExternFun.ext.h")]

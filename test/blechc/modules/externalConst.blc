@@ -1,16 +1,7 @@
 import Ex "externalConst_imp" exposes S
 
-
-
-
-
-
-
-
-
-
 activity A (arg: int32) returns int32
-    @[CConst(binding="3*(c_name_extVarI8 + 1)", header="externalConst.ext.h")]
+    @[CConst(binding="3*(C_NAME_CONST_I32 + 1)", header="externalConst.ext.h")]
     extern const extActVarI8: int32
     
     await true
