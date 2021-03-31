@@ -53,6 +53,9 @@ module Comment =
     let selfInclude = 
         cpGeneratedComment <| txt "exports, user types and C wrappers"
 
+    let necessaryHeaders =
+        cpGeneratedComment <| txt "necessary C headers"
+
     let cConstants = 
         cpGeneratedComment <| txt "direct C constants"
     
@@ -171,13 +174,14 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.VarDecl f -> Some f | _ -> None)
 
-    let externConsts = 
+    let externLocalVars = 
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
-    
+        |> Seq.filter (fun (e: ExternalVarDecl) -> not (e.name.IsTopLevel || e.name.IsImported moduleName))
+
     /// C define macros for external constants / params
     /// e.g. #define blc_MyActivity_myConst &FOO(BAR)
-    let externConstMacros = 
+    let externLocalConstMacros = 
         let renderExternConst (ec: ExternalVarDecl) = 
             let cexpr = 
                 match ec.annotation.cvardecl with
@@ -194,7 +198,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
             cpOptDocComments ec.annotation.doc
             |> dpOptLinePrefix <| macro
 
-        externConsts
+        externLocalVars
         |> Seq.filter (fun extVar -> match extVar.mutability with Mutability.CompileTimeConstant | Mutability.StaticParameter -> true | _ -> false)
         |> Seq.map renderExternConst
         |> dpBlock
@@ -222,7 +226,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
 
     let cHeaders = 
         let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
-        let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
+        let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externLocalVars
         let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
         seq {extConsts; cCalls; cIncludes }
@@ -269,25 +273,32 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
     
     // combine all into one Doc
     [ Comment.generatedCode
-      programHeader
-      (if ctx.cliContext.trace then stdioHeader else empty)
-      Comment.cHeaders
-      cHeaders
-      Comment.blechHeader
-      blechHeader
       
       // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
       Comment.selfInclude
       selfHeader
+      
+      Comment.necessaryHeaders
+      programHeader
+      (if ctx.cliContext.trace then stdioHeader else empty)
+      
+      Comment.cHeaders
+      cHeaders
+      
+      Comment.blechHeader
+      blechHeader
+      
       Comment.importHeaders 
       importIncludes 
 
       Comment.cConstants
-      externConstMacros
-      //Comment.cFunctions // already part of *.h
+      externLocalConstMacros
+      
+      ////Comment.cFunctions // already part of *.h
       //directCCalls
       //Comment.constants
       //userConst
+      
       Comment.parameters
       userParams
       if entryPointOpt.IsSome then
@@ -307,7 +318,11 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
 // end of cpModuleCode
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules (compilations: Compilation list) entryPointOpt =
+let private cpModuleHeader ctx (moduleName: TranslationUnitPath) 
+                               (pragmas: Attribute.MemberPragma list) 
+                               importedModules 
+                               (compilations: Compilation list) 
+                               entryPointOpt =
     // C header
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
@@ -317,18 +332,34 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
     let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
     let cCalls = mkCCalls functionPrototypes
+    
+    let externConsts = 
+        ctx.tcc.nameToDecl.Values
+        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
+        |> Seq.filter (fun (ec: ExternalVarDecl) -> ec.name.IsTopLevel && (not <| ec.name.IsImported moduleName))
 
-    let cCallHeaders = 
-        let hfiles =
-            cCalls
-            |> Seq.choose(fun fp -> fp.annotation.TryGetCHeader) 
-            |> Seq.distinct
-        
-        let includeHfile hfile = 
-            txt "#include" <+> (txt hfile |> dquotes)
-        
-        Seq.map includeHfile hfiles
+    let cHeaders = 
+        let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
+        let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
+        let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
+
+        seq {extConsts; cCalls; cIncludes }
+        |> Seq.concat 
+        |> Seq.distinct
+        |> Seq.map includeQuotedHfile
         |> dpBlock
+
+    //let cCallHeaders = 
+    //    let hfiles =
+    //        cCalls
+    //        |> Seq.choose(fun fp -> fp.annotation.TryGetCHeader) 
+    //        |> Seq.distinct
+        
+    //    let includeHfile hfile = 
+    //        txt "#include" <+> (txt hfile |> dquotes)
+        
+    //    Seq.map includeHfile hfiles
+    //    |> dpBlock
 
     // Type Declarations
     let userTypes = 
@@ -342,6 +373,30 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
         compilations
         |> List.map (cpContextTypeDeclaration ctx.tcc) 
         |> dpBlock
+
+    /// e.g. #define blc_MyActivity_myConst &FOO(BAR)
+    let externConstMacros =     
+        let renderExternConst (ec: ExternalVarDecl) = 
+            let cexpr = 
+                match ec.annotation.cvardecl with
+                | Some (Attribute.CConst (binding = text))
+                | Some (Attribute.CParam (binding = text)) ->
+                    txt text |> parens
+                | _ -> 
+                    failwith "This should never happen"            
+            
+            let macro = 
+                txt "#define" <+> (renderCName Current ctx.tcc ec.name) <+> cexpr
+                |> groupWith (txt " \\")
+            
+            cpOptDocComments ec.annotation.doc
+            |> dpOptLinePrefix <| macro
+        // printfn "Extern Consts: %A" externConsts
+        externConsts
+        |> Seq.filter (fun extVar -> match extVar.mutability with Mutability.CompileTimeConstant | Mutability.StaticParameter -> true | _ -> false)
+        |> Seq.map renderExternConst
+        |> dpBlock
+
 
     let directCCalls =
         cCalls
@@ -378,25 +433,29 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath) importedModules
     // combine all into one Doc
     [ includeGuardBegin
       Comment.generatedCode
+      
+      Comment.cHeaders
+      cHeaders
+      
       Comment.blechHeader
       blechHeader
+      
       Comment.importHeaders
       importIncludes
+      
       Comment.userTypes
       userTypes    // all user types are global
+      
       Comment.activityContexts
       activityContexts
       
-      // Comment.constants
-      // userConst // only exposed constants and params go there, currently none
-      
-      // Comment.parameters
-      // userParams // only exposed params go there, currently non
+      // Comment.cConstants
+      // userConst // only top-level constants and params go there, currently none
       
       // Comment.constants
       
       Comment.cConstants
-      // externConstMacros
+      externConstMacros
       
       Comment.cFunctions
       directCCalls
@@ -438,14 +497,19 @@ let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilati
 
     // combine all into one Doc
     [ Comment.generatedCode
-      Comment.cHeaders
+
+      Comment.necessaryHeaders
       (if ctx.cliContext.trace then stdioHeader else empty)
+      
       Comment.blechHeader
       blechHeader
+      
       Comment.blechCInclude
       includeCProgramFile
+      
       Comment.externalState
       staticVars
+      
       Comment.testFunction
       mainLoop ]
     |> dpRemoveEmpty
@@ -474,7 +538,7 @@ let public emitCode ctx (modul: BlechModule) importedModules compilations =
 let public emitHeader ctx (modul: BlechModule) importedModules compilations =
     emitAnything
         <| modul.entryPoint
-        <| cpModuleHeader ctx modul.name importedModules compilations
+        <| cpModuleHeader ctx modul.name modul.memberPragmas importedModules compilations
 
 
 let public emitApp ctx (modul: BlechModule) compilations entryPointName =

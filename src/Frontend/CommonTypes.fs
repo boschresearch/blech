@@ -84,6 +84,14 @@ type QName =
     member qn.IsDynamic = 
         qn.label = Dynamic
 
+    /// Qname is a top level declaration
+    member this.IsTopLevel = 
+        List.isEmpty this.prefix
+
+    /// Qname is an imported name for the current module
+    member this.IsImported (currentModule: TranslationUnitPath) = 
+        this.moduleName <> currentModule
+
     // TODO: This is currently only used for acitivity states, which does not take imports into account,
     // therefore it does not take qn.moduleName into account. Change this with code generation for imports, fjg 26.01.19
     // unused
