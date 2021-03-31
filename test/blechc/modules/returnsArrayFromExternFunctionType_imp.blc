@@ -1,0 +1,14 @@
+module exposes S, Foo, LEN
+
+struct S
+    var s1: int8
+    var s2: float64
+end
+
+struct Foo
+    var i: int8
+    var j: float64 = 18.7
+    var a: [2]S
+end
+
+const LEN: int8 = 3

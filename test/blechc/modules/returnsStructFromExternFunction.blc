@@ -1,13 +1,4 @@
-struct Foo
-    var x: bool
-end
-
-const LEN: int8 = 3
-struct S
-    var i: int8
-    var j: float64
-    var a: [LEN]Foo
-end
+import _ "returnsStructFromExternFunctionType_imp" exposes S
 
 @[CFunction(binding="rrr_impl($1, $2)", header="returnsStructFromExternFunction.ext.h")]
 extern function rrr(a: bool) returns S
@@ -24,8 +15,7 @@ extern function rrr(a: bool) returns S
 @[EntryPoint]
 activity start ()()
     
-    var myS: S
-    myS = rrr(false)
+    var myS: S = rrr(false)
     await true
     _ = rrr(true)
 end

@@ -1,0 +1,13 @@
+module exposes Foo, LEN, S
+
+struct Foo
+    var x: bool
+end
+
+const LEN: int8 = 3
+
+struct S
+    var i: int8
+    var j: float64
+    var a: [LEN]Foo
+end

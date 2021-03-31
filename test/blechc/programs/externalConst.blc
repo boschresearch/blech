@@ -6,8 +6,10 @@ end
 extern const extConstI8: int32
 @[CConst(binding="c_name_extVarArr", header="externalConst.ext.h")]
 extern const extVarArr: [8]int32
-@[CConst(binding="c_name_S2", header="externalConst.ext.h")]
-extern const extVarS: S
+
+// This cannot be an external without creating a loop in .h-file includes
+// see tests for modules
+const extVarS: S = {}
 
 activity A (arg: int32) returns int32
     @[CConst(binding="3*(c_name_extVarI8 + 1)", header="externalConst.ext.h")]
@@ -37,9 +39,7 @@ end
 
 @[EntryPoint]
 activity E ()
-    @[CConst(binding="c_name_S2", header="externalConst.ext.h")]
-    extern const extActVarS: S
-
+    const extActVarS: S = {} // cannot be external either see above extVarS
     let foo4 = extActVarS // activity defined
     let foo5 = extVarS.s // top level
     
