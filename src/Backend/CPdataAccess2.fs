@@ -174,27 +174,9 @@ let private isInActivity tcc name =
 /// name - QName
 // covers functions, activities, user types, variables
 let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CName =
-    // Either a static QName of Function/Activity, user type or top level constant
-    // or a const/param local inside a function/activity
-    // TODO: do we want to lift these to the top level? Why not use C's statics inside functions??
-    //       or define macros locally for compile time const?? fg 13.03.20
-    let needsStaticName =
-        name.IsStatic ||
-        match tcc.nameToDecl.TryGetValue name with
-        | true, Declarable.VarDecl v -> v.IsConst || v.IsParam
-        | true, Declarable.ExternalVarDecl v -> 
-            //printfn "Found %s in tcc" (name.ToString())
-            v.IsConst || v.IsParam
-        | _, _ -> false
-        // for debugging
-        //| true,_ -> false
-        //| false, _ ->
-        //    printfn "No such name %s in tcc" (name.ToString())
-        //    false
-
-    if needsStaticName then
-        // decide here whether name is exported or not
-        // for now always generate full global name
+    if name.IsStatic then
+        // no need to decide here whether name is exported or not
+        // always generate full global name for whitebox import
         Global name
     elif name.IsAuxiliary then
         // no prev on auxiliary variables
@@ -203,18 +185,19 @@ let cpName (timepointOpt: TemporalQualification option) tcc (name: QName) : CNam
         Auxiliary name
     else
         assert name.IsDynamic
-        assert (name.prefix <> [])
+        assert not name.IsTopLevel
         let isParam =
             match tcc.nameToDecl.TryGetValue name with
             | true, Declarable.ParamDecl _ -> true
             | _ -> false
-        // Prev
+        
         let isExternal =
             match tcc.nameToDecl.[name] with
             | Declarable.ExternalVarDecl _ -> true
             | _ -> false
 
         if timepointOpt.Equals (Some Previous) then
+            // prev
             if isExternal then PrevExternal name
             else PrevInternal name
         elif isParam then

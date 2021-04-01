@@ -349,16 +349,17 @@ module NameChecking = //TODO: @FJG: please clarify the notions "NameCheckContext
  
  
     let checkVarDecl ctx (vd: AST.VarDecl) =
+        let idLabel = if vd.permission.IsStatic then IdLabel.Static else IdLabel.Dynamic
+        
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
-        |> addDecl <| vd <| IdLabel.Dynamic // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
+        |> addDecl <| vd <| idLabel // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
 
 
     let checkStaticVarDecl ctx (vd: AST.VarDecl) = 
         Option.fold checkDataType ctx vd.datatype
         |> Option.fold checkExpr <| vd.initialiser
         |> addConstOrParamDecl <| vd // added to scope last: 'const c: [1*c]int32 = 2*c' should be wrong
-        // |> exportCodeDecl <| vd.name
 
 
     let checkLocation ctx (lhs: AST.Receiver) =

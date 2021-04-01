@@ -38,26 +38,17 @@ let idsToString (ids: LongIdentifier) =
 
 type IdLabel = 
     | Auxiliary
-    | Static
-    | Dynamic // TODO: what the hell is a 'dynamic' QName?
-              // It seems in fact that this simply discerns the scope in which this name was introduced.
-              // The top-level scope being 'static' and any other scope, such as a subprogram, a for-loop header etc... are called dynamic.
-              // Meaning that a subprogram-local const has a QName with 'dynamic' label! What is dynamic about it?
-              // For now we use this in CPdataAccess to render names correctly. (fg, 04.04.19)
+    | Static  // subprogram, module, type, const, param, opaque singleton, unit, enum tag, struct field
+    | Dynamic // var, let, formal parameter, extern var, extern let
 
 /// qualified names
 type QName = 
     {
         moduleName: TranslationUnitPath
-        prefix: LongIdentifier // TODO: what exactly is the meaning of prefix? 
-                               // Is the following invariant true:
-                               // prefix is empty <=> QName is on top level <=> IsStatic, or equivalently
-                               // prefix is non-empty <=> QName is declared inside a subprogram <=> IsDynamic
-                               // ???
-                               // How is that for names in structures? OO style programming?
-                               // fg, 04.04.19
+        prefix: LongIdentifier // prefix is empty <=> QName is on top level 
+                               // prefix is non-empty <=> QName is declared inside a scope (subprogram, struct type, enum type)
         basicId: Identifier
-        label: IdLabel
+        label: IdLabel         
     } 
 
     static member Create moduleName path id label =
