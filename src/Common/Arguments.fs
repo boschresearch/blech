@@ -62,7 +62,7 @@ module Arguments =
         | [<Unique; AltCommandLine("-vis")>] Visualize
         | [<Unique; AltCommandLine("-vis_breakRunStmt")>] Vis_BreakRunStatement
         | [<Unique; AltCommandLine("-vis_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
-        | [<Unique; AltCommandLine("-vis_NoCbgnPattern")>] Vis_NoCbgnPattern
+        | [<Unique; AltCommandLine("-vis_cbgnPattern")>] Vis_CbgnPattern
         | [<Unique; AltCommandLine("-vis_includeOrigcode")>] Vis_includeOrigCode
         | [<Unique; AltCommandLine("-vis_notUseConnector")>] Vis_notUseConnector
         | [<Unique; AltCommandLine("-vis_disableBreakHier")>] Vis_DisableBreakHier
@@ -109,8 +109,8 @@ module Arguments =
                     "indicates, whether a generated abstract visualization of the code should break the hierarchies on run statements."
                 | Vis_CbgnPatternWithHier _ ->
                     "alternative improvement of cobegin pattern. Instead of breaking the hierarchy, a hierarchical node with weak abort transition is added."
-                | Vis_NoCbgnPattern _ ->
-                    "turns off the cobegin pattern detection in the visualization."
+                | Vis_CbgnPattern _ ->
+                    "turns on the cobegin pattern detection in the visualization."
                 | Vis_includeOrigCode _ ->
                     "if this flag is set, the original BlechCode is included as a comment in the resulting .sctx."
                 | Vis_notUseConnector _ ->
@@ -155,7 +155,7 @@ module Arguments =
             visualize: bool
             vis_breakHierOnActCalls: bool
             vis_cbgnPatternWithHier : bool
-            vis_noCbgnPattern : bool
+            vis_cbgnPattern : bool
             vis_includeOrigCode : bool
             vis_notUseConnector : bool
             vis_disableBreakHier : bool 
@@ -177,7 +177,7 @@ module Arguments =
                 visualize = false
                 vis_breakHierOnActCalls = false
                 vis_cbgnPatternWithHier = false
-                vis_noCbgnPattern = false
+                vis_cbgnPattern = false
                 vis_includeOrigCode = false
                 vis_notUseConnector = false
                 vis_disableBreakHier = false
@@ -221,8 +221,8 @@ module Arguments =
             { opts with vis_breakHierOnActCalls = true }
         | Vis_CbgnPatternWithHier _ ->
             { opts with vis_cbgnPatternWithHier = true }
-        | Vis_NoCbgnPattern _ ->
-            { opts with vis_noCbgnPattern = true }
+        | Vis_CbgnPattern _ ->
+            { opts with vis_cbgnPattern = true }
         | Vis_includeOrigCode _ ->
             { opts with vis_includeOrigCode = true }
         | Vis_notUseConnector _ ->

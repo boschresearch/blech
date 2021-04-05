@@ -26,7 +26,7 @@ module Blech.Visualization.Optimization
     let mutable inlineActs = false
 
     /// Keeping track if an alternative cobegin pattern should be visualized.
-    let mutable noCobeginPattern = false
+    let mutable cobeginPattern = false
 
     /// Keeping track if the cobegin pattern should be detected at all.
     let mutable cbgnPatternWithHierarchy = false
@@ -59,7 +59,7 @@ module Blech.Visualization.Optimization
                      (entryPointName : string)
                      (activityNodes: BlechNode list) : BlechNode list =
         inlineActs <- inlineActivities
-        noCobeginPattern <- cliContext.vis_noCbgnPattern
+        cobeginPattern <- cliContext.vis_cbgnPattern
         cbgnPatternWithHierarchy <- cliContext.vis_cbgnPatternWithHier
         useConnectorState <- not (cliContext.vis_notUseConnector)
         noBreakHier <- cliContext.vis_disableBreakHier
@@ -397,7 +397,7 @@ module Blech.Visualization.Optimization
         List.map (fun (b : VisGraph * Strength) -> (flattenHierarchyIfComplex false activityNodes finalNodeInfo (findInitNodeInHashSet (fst b).Nodes) (fst b))) complex.Content |> ignore
         
         // 1. Two regions, at least one weak. Other must contain a single await statement ONLY
-        let generalCondition = complex.Content.Length = 2 && checkRegionWeakAndContainAwait complex.Content.[0] complex.Content.[1] && (not noCobeginPattern)
+        let generalCondition = complex.Content.Length = 2 && checkRegionWeakAndContainAwait complex.Content.[0] complex.Content.[1] && cobeginPattern
         let cond1 = generalCondition && (not cbgnPatternWithHierarchy)
         let cond2 = generalCondition && cbgnPatternWithHierarchy
         if cond1 then
