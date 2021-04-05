@@ -7,7 +7,7 @@
     open Blech.Common
     open Blech.Visualization.BlechVisGraph
     open Blech.Visualization.Translation
-    open Blech.Visualization.Optimization
+    open Blech.Visualization.Simplification
 
     /// Synthesis start. Has side effects: prints file to current folder.
     let startSynthesis (cliContext: Arguments.BlechCOptions) (arg : Result<TypeCheckContext * BlechModule, Diagnostics.Logger>) (fileName : string) = 
@@ -27,18 +27,18 @@
 
         printfn "Synthesized %i activities." (activityNodes.Length)
 
-        // Optimizations take place here.
-        printfn "Optimizing.."
+        // Simplifications take place here.
+        printfn "Simplifying.."
         let inlineActivites = cliContext.vis_breakHierOnActCalls && (if blechModule.entryPoint.IsSome then true else printfn "No entry point given, no inlining of activities possible."; false)
         let entryPointName = if blechModule.entryPoint.IsSome then blechModule.entryPoint.Value.name.ToString() else ""
-        let optimizedNodes : BlechNode list = optimize cliContext
+        let simplifiedNodes : BlechNode list = simplify cliContext
                                                        inlineActivites 
                                                        entryPointName 
                                                        activityNodes
 
         // Generate sctx content.
         printfn "Generating .sctx.."
-        let sctxString = SctxGenerator.generate optimizedNodes
+        let sctxString = SctxGenerator.generate simplifiedNodes
 
         //Read file content for documentation purposes
         let origProDoc = match cliContext.vis_includeOrigCode with

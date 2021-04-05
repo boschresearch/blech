@@ -1,4 +1,4 @@
-module Blech.Visualization.Optimization
+module Blech.Visualization.Simplification
     
     open Blech.Common
     open Blech.Common.GenericGraph
@@ -6,14 +6,14 @@ module Blech.Visualization.Optimization
     open Blech.Visualization.BlechVisGraph
 
     //______________________________Global variables_______________________________________________________
-    /// Keeps track of which edges have been optimized yet.
+    /// Keeps track of which edges have been simplified yet.
     /// First pair are the ids of the source. Second pair are the ids of the target.
     /// ((Source.StateCount, Source.SecondaryId), (Target.StateCount, Target.SecondaryId))
-    let mutable private optimizedEdges: ((int * int) * (int * int)) list = []
+    let mutable private simplifiedEdges: ((int * int) * (int * int)) list = []
 
-    /// Keeps track of which nodes have been hierarchy optimized.
+    /// Keeps track of which nodes have been hierarchy simplified.
     /// (StateCount , SecondaryId).
-    let mutable private optimizedNodes: (int * int) list = []
+    let mutable private simplifiedNodes: (int * int) list = []
 
     /// Keeps track of which nodes have been secondary id assigned.
     /// (StateCount , SecondaryId).
@@ -51,10 +51,10 @@ module Blech.Visualization.Optimization
 
         (actNodePayload.Label, isThereFinalNodeInHashSet isComplex.Body.Nodes)
     
-    /// Optimizes the nodes and their contents according to the optimization steps introduced in the thesis.
-    /// Optimizations steps: flatten hierarchy, collapsing transient states.
+    /// Simplifies the nodes and their contents according to the simplification steps introduced in the thesis.
+    /// Simplifications steps: flatten hierarchy, collapsing transient states.
     /// 4 Bool flags, use conenction states on hierarchy collapse, no cobegin pattern, alternative cobegin pattern, inline activities.
-    let rec optimize (cliContext: Arguments.BlechCOptions)
+    let rec simplify (cliContext: Arguments.BlechCOptions)
                      (inlineActivities: bool)
                      (entryPointName : string)
                      (activityNodes: BlechNode list) : BlechNode list =
@@ -66,18 +66,18 @@ module Blech.Visualization.Optimization
         noCollTransient <- cliContext.vis_disableCollapseTrans
         let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode activityNodes
         match inlineActivities with
-            | true ->  [optimizeSingleActivity activityNodes actNameAndFinalNodesPairs (List.find (fun (n:BlechNode) -> n.Payload.Label = entryPointName) activityNodes)]
-            | false -> let firstIt = List.map (optimizeSingleActivity activityNodes actNameAndFinalNodesPairs) activityNodes
-                       // Doing it twice. Activities are optimized sequentially. Some information is different, after a activity was updated.
+            | true ->  [simplifySingleActivity activityNodes actNameAndFinalNodesPairs (List.find (fun (n:BlechNode) -> n.Payload.Label = entryPointName) activityNodes)]
+            | false -> let firstIt = List.map (simplifySingleActivity activityNodes actNameAndFinalNodesPairs) activityNodes
+                       // Doing it twice. Activities are simplified sequentially. Some information is different, after a activity was updated.
                        // TODO make this functionally? So that the part where the updated information is needed is done only?
                        let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode firstIt
-                       let secondIt = List.map (optimizeSingleActivity firstIt actNameAndFinalNodesPairs) firstIt
+                       let secondIt = List.map (simplifySingleActivity firstIt actNameAndFinalNodesPairs) firstIt
                        // TODO some (updated edges) are not checked again. Hence, the transient simplification is run twice. Fix !
                        let actNameAndFinalNodesPairs = List.map checkForNameAndFinalNode secondIt
-                       List.map (optimizeSingleActivity secondIt actNameAndFinalNodesPairs) secondIt
+                       List.map (simplifySingleActivity secondIt actNameAndFinalNodesPairs) secondIt
 
-    /// Optimizes a single activity node.
-    and private optimizeSingleActivity (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (activityNode: BlechNode) : BlechNode =
+    /// Simplifies a single activity node.
+    and private simplifySingleActivity (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (activityNode: BlechNode) : BlechNode =
         let actNodePayload = activityNode.Payload
         // Extract body.
         let isComplex = match actNodePayload.IsComplex with 
@@ -87,14 +87,14 @@ module Blech.Visualization.Optimization
         let actPayload = isComplex.IsActivity   
 
         //Flatten hierarchy inside activity.
-        optimizedNodes <- []
+        simplifiedNodes <- []
         let flattenedBody = 
             match noBreakHier with
                 | true -> body
                 | false -> flattenHierarchyIfComplex false activityNodes finalNodeInfo (findInitNodeInHashSet body.Nodes) body
 
         // Collapse transient states.
-        optimizedEdges <- []
+        simplifiedEdges <- []
         let collapsedTransientStatesBody = 
             match noCollTransient with
                 | true -> flattenedBody
@@ -114,26 +114,26 @@ module Blech.Visualization.Optimization
     /// assignSecondaryId determines if the current secondary id is applied through all complexity layers.
     and private flattenHierarchyIfComplex (assignSecondaryId : bool) (activityNodes: BlechNode list) (finalNodeInfo: (string * bool) list) (currentNode : BlechNode) (graph : VisGraph) : VisGraph = 
         // Do not call method on same item again when there are self-loops.
-        let filterForUnoptimized = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) optimizedNodes)
+        let filterForUnsimplified = fun (n : BlechNode) -> not (List.contains (n.Payload.StateCount, n.Payload.SecondaryId) simplifiedNodes)
         let successorsWithoutCurrent = (removeItem currentNode (Seq.toList currentNode.Successors))
-        let unoptedSuccesssors = List.filter filterForUnoptimized successorsWithoutCurrent
+        let unoptedSuccesssors = List.filter filterForUnsimplified successorsWithoutCurrent
 
         // Is current node complex? 
         let currentGraph = match currentNode.Payload.IsComplex with
-                            | IsSimple | IsConnector -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
+                            | IsSimple | IsConnector -> simplifiedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: simplifiedNodes
                                                         graph
                             | IsActivityCall _ -> match inlineActs with
                                                     | true -> flattenHierarchyActivityCall activityNodes finalNodeInfo currentNode graph
-                                                    | false -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
+                                                    | false -> simplifiedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: simplifiedNodes
                                                                graph
                             | IsCobegin cbgn -> flattenHierarchyCobegin activityNodes finalNodeInfo currentNode cbgn graph
                             | IsComplex cmplx -> // Do not flatten if weak abort.
                                                  match cmplx.IsAbort with
-                                                    | WeakAbort -> optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
+                                                    | WeakAbort -> simplifiedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: simplifiedNodes
                                                                    graph
                                                     | _ -> flattenHierarchy assignSecondaryId activityNodes finalNodeInfo currentNode cmplx graph
 
-        // It is possible to wrongly assign the final statsus to a node with information based on not yet optimized acitivites (that are called through run statements).
+        // It is possible to wrongly assign the final statsus to a node with information based on not yet simplified acitivites (that are called through run statements).
         //Check if said status is rightful. Check if inner behaviour has been checked.
         let noFinalAct = nodeIsActivityCallAndHasNoFinalNode currentNode finalNodeInfo
         let noFinalCbgn = nodeIsCbgnAndHasNoFinalNode currentNode
@@ -229,7 +229,7 @@ module Blech.Visualization.Optimization
         let complexCloned = cloneRec assignSecondaryId complex.Body
 
         // Recursive hierarchy flattening call on inner graph.
-        // Give correct secondary id to mark as optimized, as secondary id will be increased AFTER these opt steps.
+        // Give correct secondary id to mark as simplified, as secondary id will be increased AFTER these opt steps.
         let innerGraph = flattenHierarchyIfComplex assignSecondaryId activityNodes finalNodeInfo (findInitNodeInHashSet complexCloned.Nodes) complexCloned
 
         // Init.
@@ -274,7 +274,7 @@ module Blech.Visualization.Optimization
         let newInit = snd initGraphPair
 
         // Add abort transitions according to the concept from the inner graph to either the former initial state of the inner graph or the case closing state, depending on the abort.
-        // TODO there has got to be some possible optimization here.
+        // TODO there has got to be some possible optimizations here.
         match complex.IsAbort with
             | AbortWhen label -> let caseClosingNode = findNodeByStateCount (complex.CaseClosingNode.StateCount) (complex.CaseClosingNode.SecondaryId) updatedGraph
                                  let firstAwaitAndSubsequentConstruct = findFirstAwaitNodeOnEveryPath newInit innerNodesIds [findIds newInit]
@@ -348,19 +348,19 @@ module Blech.Visualization.Optimization
     //______________________________FLATTEN HIERARCHY (COBEGIN)_______________________________________________________
     /// Adds an  edge to the given graph with the given label, source and target and given property.
     and private addEdgeToNode (target : BlechNode) (property : EdgeProperty) (label: string) (graph : VisGraph) (source : BlechNode) =     
-        graph.AddEdge {Label = label; Property = property; WasOptimized = NotOptimized} source target
+        graph.AddEdge {Label = label; Property = property; WasSimplified = NotSimplified} source target
      
     /// Adds an immediate or termintation edge to the given graph with the given label, source and target. Distinction depends on complexity of the source.
     and private addImmedOrTerminEdgeToNode (target : BlechNode) (label: string) (graph : VisGraph) (source : BlechNode) =     
         match source.Payload.IsComplex with
             | IsConnector -> ()
-            | IsSimple -> graph.AddEdge {Label = label; Property = IsImmediate; WasOptimized = NotOptimized} source target
-            | _ -> graph.AddEdge {Label = label; Property = IsTerminal; WasOptimized = NotOptimized} source target
+            | IsSimple -> graph.AddEdge {Label = label; Property = IsImmediate; WasSimplified = NotSimplified} source target
+            | _ -> graph.AddEdge {Label = label; Property = IsTerminal; WasSimplified = NotSimplified} source target
     
     /// Checks, whether a graph contains only a single await statement.
     // TODO seriously with this method? Rework this for the love of 42. It works, but come on.
     and private onlyAwaitStmt (graph : VisGraph) : bool = 
-        // This step is executed pre immediate-transition optimization.
+        // This step is executed pre immediate-transition simplification.
         // Hence a single await statement should look like this:
         // initial -await- regular_node -immediate- final
         let init = findInitNodeInHashSet (graph.Nodes)
@@ -483,7 +483,7 @@ module Blech.Visualization.Optimization
             addEdgeToNode caseClosingNode IsImmediate (fst (snd orderedPairOfRegions)) graph updatedCurr
             graph
         else
-           optimizedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: optimizedNodes
+           simplifiedNodes <- (currentNode.Payload.StateCount, currentNode.Payload.SecondaryId) :: simplifiedNodes
            graph
 
     //______________________________COLLAPSE IMMEDIATE TRANSITIONS_______________________________________________________ 
@@ -504,8 +504,8 @@ module Blech.Visualization.Optimization
 
     /// Calls the recursive method on subsequent edges. Avoid edges that are self-loops.
     and private callSubsequentAndFilterAlreadyVisitedTargets (finalNodeInfo : (string * bool) list) (edges : BlechEdge List) (graph : VisGraph) : VisGraph =
-        let filterForUnoptimizedEdges = fun e -> not (List.contains (convertToIdTuple e) optimizedEdges)
-        checkEdgesForCollapse finalNodeInfo (List.filter filterForUnoptimizedEdges edges) graph
+        let filterForUnsimplifiedEdges = fun e -> not (List.contains (convertToIdTuple e) simplifiedEdges)
+        checkEdgesForCollapse finalNodeInfo (List.filter filterForUnsimplifiedEdges edges) graph
 
     /// Updates the status of the current node in context of immediate transition deletion. 
     /// Depending on the final and init status of the other node (sourceOrTarget), which is to be deleted, the status of the given node changes.
@@ -551,8 +551,8 @@ module Blech.Visualization.Optimization
         let target = edge.Target
         let targetIncomings = (Seq.toList target.Incoming)
 
-        // Mark the current edge as optimized.
-        optimizedEdges <- convertToIdTuple edge :: optimizedEdges
+        // Mark the current edge as simplified.
+        simplifiedEdges <- convertToIdTuple edge :: simplifiedEdges
         // Special cases. 
         // Only immediate transitions between the source and edge. Source can not be a weak abort.
         let isSourceWeakAbort = match source.Payload.IsComplex with
@@ -669,15 +669,15 @@ module Blech.Visualization.Optimization
                                                 let target = findNodeByStateCount head.Target.Payload.StateCount head.Target.Payload.SecondaryId graph
                                                 if not (isSimpleOrConnector newSource) && (head.Payload.Property = IsImmediate || head.Payload.Property = IsConditional) then
                                                     if (head.Payload.Property = IsImmediate) then 
-                                                        graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsTerminal) newSource target 
+                                                        graph.AddEdge (head.Payload.CopyAsNotSimplified.CopyWithProperty IsTerminal) newSource target 
                                                     else 
-                                                        graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsConditionalTerminal) newSource target
+                                                        graph.AddEdge (head.Payload.CopyAsNotSimplified.CopyWithProperty IsConditionalTerminal) newSource target
                                                 elif nodeIsCmplxAndHasFinalNode finalNodeInfo newSource && head.Payload.Property = IsAwait then 
-                                                    graph.AddEdge (head.Payload.CopyAsNotOptimized.CopyWithProperty IsTerminalAwait) newSource target
+                                                    graph.AddEdge (head.Payload.CopyAsNotSimplified.CopyWithProperty IsTerminalAwait) newSource target
                                                 else
-                                                    graph.AddEdge head.Payload.CopyAsNotOptimized newSource target
+                                                    graph.AddEdge head.Payload.CopyAsNotSimplified newSource target
                                                 newSource
-                                        | Target -> graph.AddEdge head.Payload.CopyAsNotOptimized head.Source newTargetOrSource
+                                        | Target -> graph.AddEdge head.Payload.CopyAsNotSimplified head.Source newTargetOrSource
                                                     newTargetOrSource
                                 updateEdgesCollapseImmediate finalNodeInfo tail updatedSourceOrTarget sourceOrTarget graph
             | [] -> newTargetOrSource

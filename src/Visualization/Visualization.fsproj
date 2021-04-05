@@ -8,7 +8,7 @@
     <Compile Include="SctxGenerator.fs" />
     <Compile Include="Translation.fs" />
     <Compile Include="SctxToFile.fs" />
-    <Compile Include="Optimization.fs" />
+    <Compile Include="Simplification.fs" />
     <Compile Include="Visualization.fs" />
   </ItemGroup>
   <ItemGroup>

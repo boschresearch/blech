@@ -74,7 +74,7 @@ module Blech.Visualization.Translation
                                     StateCount = stateCount;
                                     SecondaryId = defaultSecondaryId;
                                     WasVisualized = NotVisualized}
-        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasOptimized = NotOptimized} updatedPrevNode newNode |> ignore
+        graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); Property = IsAwait; WasSimplified = NotSimplified} updatedPrevNode newNode |> ignore
 
         (graph, Some newNode, stateCount, frth5 graphBuilder, None) 
 
@@ -113,13 +113,13 @@ module Blech.Visualization.Translation
 
         graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
                        Property = IsConditional; 
-                       WasOptimized = NotOptimized} 
+                       WasSimplified = NotSimplified} 
                        prevNode ifNode |> ignore
-        graph.AddEdge {Label = ""; Property = IsTerminal; WasOptimized = NotOptimized} ifNode caseClosingNode |> ignore
+        graph.AddEdge {Label = ""; Property = IsTerminal; WasSimplified = NotSimplified} ifNode caseClosingNode |> ignore
 
         // Else-path gets a complex state, if the else block contains code.
         match elseBlock.Length with
-            | 0 -> graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode caseClosingNode |> ignore
+            | 0 -> graph.AddEdge {Label = "" ; Property = IsImmediate; WasSimplified = NotSimplified} prevNode caseClosingNode |> ignore
                    (graph, Some caseClosingNode, scnd4 ifBody, thrd4 ifBody, frth4 ifBody)
             | _ -> // Extract label, if present from if block statement list.
                    let elseBody = synthesizeComplexBody elseBlock (scnd4 ifBody + 1) (thrd4 ifBody) (ffth5 graphBuilder)
@@ -132,8 +132,8 @@ module Blech.Visualization.Translation
                                                 SecondaryId = defaultSecondaryId;
                                                 WasVisualized = NotVisualized}      
                    
-                   graph.AddEdge {Label = "" ; Property = IsConditional; WasOptimized = NotOptimized} prevNode elseNode |> ignore
-                   graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} elseNode caseClosingNode |> ignore
+                   graph.AddEdge {Label = "" ; Property = IsConditional; WasSimplified = NotSimplified} prevNode elseNode |> ignore
+                   graph.AddEdge {Label = "" ; Property = IsTerminal; WasSimplified = NotSimplified} elseNode caseClosingNode |> ignore
 
                    // Potential carry over labels from if- and else branch are merched.
                    let carryOverLabelIf = match frth4 ifBody with
@@ -188,12 +188,12 @@ module Blech.Visualization.Translation
         if not isEndless then 
                 graph.AddEdge {Label = renderRhsRhlString (rhs.ToString()); 
                                Property = IsConditionalTerminal; 
-                               WasOptimized = NotOptimized} 
+                               WasSimplified = NotSimplified} 
                                complexNode caseClosingNodeMaybe.Value |> ignore
 
         // Regular transitions that are always present
-        graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
-        graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode complexNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsImmediate; WasSimplified = NotSimplified} prevNode complexNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsTerminal; WasSimplified = NotSimplified} complexNode complexNode |> ignore
 
         (graph, caseClosingNodeMaybe, scnd4 bodyOfLoop, thrd4 bodyOfLoop, frth4 bodyOfLoop)
 
@@ -239,9 +239,9 @@ module Blech.Visualization.Translation
                             | Reset -> complexNode
                             | Suspend -> failwith "Unreachable case."
         
-        graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
-        graph.AddEdge {Label = abortLabel; Property = IsAbort; WasOptimized = NotOptimized} complexNode abortTarget |> ignore
-        graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsImmediate; WasSimplified = NotSimplified} prevNode complexNode |> ignore
+        graph.AddEdge {Label = abortLabel; Property = IsAbort; WasSimplified = NotSimplified} complexNode abortTarget |> ignore
+        graph.AddEdge {Label = "" ; Property = IsTerminal; WasSimplified = NotSimplified} complexNode caseClosingNode |> ignore
 
         (graph, Some caseClosingNode, scnd4 bodyOfLoop, thrd4 bodyOfLoop, frth4 bodyOfLoop)
 
@@ -303,8 +303,8 @@ module Blech.Visualization.Translation
                                         StateCount = stateCount + 1; 
                                         WasVisualized = NotVisualized}
 
-        graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
-        graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsImmediate; WasSimplified = NotSimplified} prevNode complexNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsTerminal; WasSimplified = NotSimplified} complexNode caseClosingNode |> ignore
 
         (graph, Some caseClosingNode, scnd4 branches, thrd4 branches, frth4 branches)
 
@@ -334,8 +334,8 @@ module Blech.Visualization.Translation
                                             SecondaryId = defaultSecondaryId;
                                             WasVisualized = NotVisualized}
 
-        graph.AddEdge {Label = "" ; Property = IsImmediate; WasOptimized = NotOptimized} prevNode complexNode |> ignore
-        graph.AddEdge {Label = "" ; Property = IsTerminal; WasOptimized = NotOptimized} complexNode caseClosingNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsImmediate; WasSimplified = NotSimplified} prevNode complexNode |> ignore
+        graph.AddEdge {Label = "" ; Property = IsTerminal; WasSimplified = NotSimplified} complexNode caseClosingNode |> ignore
         
         (graph, Some caseClosingNode, stateCount + 2, neededVars, ffth5 graphBuilder)
 
@@ -387,7 +387,7 @@ module Blech.Visualization.Translation
                                                 SecondaryId = defaultSecondaryId;
                                                 WasVisualized = NotVisualized}
                                         updatedGraph.AddEdge {
-                                            Label = ""; Property = IsImmediate; WasOptimized = NotOptimized} (scnd5 graphBuilder).Value final |> ignore
+                                            Label = ""; Property = IsImmediate; WasSimplified = NotSimplified} (scnd5 graphBuilder).Value final |> ignore
                                         updatedGraph
                             | false -> frst5 graphBuilder
         

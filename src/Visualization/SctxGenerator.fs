@@ -7,7 +7,7 @@ module Blech.Visualization.SctxGenerator
 
     //______________________________HELP METHODS & DATA_______________________________________________________ 
     /// Orders a list of edges to match the needed order in SCCharts. Strong aborts must always come first.
-    /// Due to optimization steps, where edges from surrounding aborts are added, abort transitions can be present at the end of the list.
+    /// Due to simplification steps, where edges from surrounding aborts are added, abort transitions can be present at the end of the list.
     /// Similar things go for conditional edges, they need to come before immediate transitions.
     /// This causes a compiler error in SCCharts.
     let rec orderEdgeList (edges : BlechEdge list) : BlechEdge list = 
@@ -18,7 +18,7 @@ module Blech.Visualization.SctxGenerator
         
         // Somewhere, the empty else conditionals get put before labelled conditionals in the opt. TODO find and eliminate so this will be unnecessary.
         let thrPartition = List.partition( fun e -> match e.Payload.Label with | "" -> false | _ ->  true) (fst sndPartition)
-        // Somewhere in the optimization conditionals get inverted and  TODO find where and fix so this invertion coming next will be unnecessary.
+        // Somewhere in the simplification conditionals get inverted and  TODO find where and fix so this invertion coming next will be unnecessary.
         // Invert conditionals.
         let invertedConditionalsWithLabels = List.rev (fst thrPartition)
         //Combine.

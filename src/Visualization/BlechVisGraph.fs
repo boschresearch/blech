@@ -95,8 +95,8 @@ module Blech.Visualization.BlechVisGraph
     /// Indicating, if a node has been transformed to sctx (visualized) or not.
     and WasVisualized = Visualized | NotVisualized
 
-    /// Indicating, whether outgoing edges of this node have been edge optimized.
-    and WasEdgeOptimized = Optimized | NotOptimized
+    /// Indicating, whether outgoing edges of this node have been edge simplified.
+    and WasEdgeSimplified = Simplified | NotSimplified
 
     /// Payload for a node.
     and NodePayload = { Label : string; 
@@ -122,10 +122,10 @@ module Blech.Visualization.BlechVisGraph
     and EdgeProperty = IsAwait | IsTerminalAwait | IsConditional | IsImmediate | IsTerminal | IsAbort | IsConditionalTerminal
 
     /// Payload for an edge.
-    and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasOptimized : WasEdgeOptimized} with
-        member x.CopyAsOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = Optimized}
-        member x.CopyAsNotOptimized = {Label = x.Label ; Property = x.Property; WasOptimized = NotOptimized}
-        member x.CopyWithProperty prop = {Label = x.Label ; Property = prop; WasOptimized = x.WasOptimized}
+    and EdgePayload = {Label : string; Property : EdgeProperty; mutable WasSimplified : WasEdgeSimplified} with
+        member x.CopyAsSimplified = {Label = x.Label ; Property = x.Property; WasSimplified = Simplified}
+        member x.CopyAsNotSimplified = {Label = x.Label ; Property = x.Property; WasSimplified = NotSimplified}
+        member x.CopyWithProperty prop = {Label = x.Label ; Property = prop; WasSimplified = x.WasSimplified}
 
     /// Node of a graph extracted from Blech code.
     and BlechNode = Node<NodePayload, EdgePayload>
@@ -169,7 +169,7 @@ module Blech.Visualization.BlechVisGraph
     /// Returns the ids as a pair for a Blech node.
     let findIds = (fun (n:BlechNode) -> (n.Payload.StateCount, n.Payload.SecondaryId))
 
-    /// Converts an edge to a int representation needed for the variable 'optimizedEdges'.
+    /// Converts an edge to a int representation needed for the variable 'simplifiedEdges'.
     let convertToIdTuple (e : BlechEdge) = ((e.Source.Payload.StateCount, e.Source.Payload.SecondaryId), 
                                             (e.Target.Payload.StateCount, e.Target.Payload.SecondaryId))
 
