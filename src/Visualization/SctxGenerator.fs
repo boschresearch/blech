@@ -227,7 +227,7 @@ module Blech.Visualization.SctxGenerator
         let workOnConditions = 
             fun (var:string) -> match Seq.forall System.Char.IsDigit var || var.Equals("true") || var.Equals("false") with
                                     | true -> var
-                                    | false -> var.Replace("not", "!").Replace("or ", "||").Replace("or ", "&&")
+                                    | false -> var.Replace("not", "!").Replace("or ", "||").Replace("and ", "&&")
 
         // Take care of "prev". Replace "prev " with "pre(" and concat a ")" and the end.
         let replacePrev = fun (var:string) -> match var.Contains "prev "with 
