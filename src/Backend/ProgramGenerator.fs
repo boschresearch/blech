@@ -27,7 +27,7 @@ open Blech.Common.Range
 open Blech.Frontend.BlechTypes  
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.Constants
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 
 open Blech.Backend
 

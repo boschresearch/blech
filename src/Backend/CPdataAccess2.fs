@@ -30,7 +30,7 @@ open Blech.Common.PPrint
 
 open Blech.Frontend
 open Blech.Frontend.CommonTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 open Blech.Frontend.BlechTypes
 open Blech.Frontend.TypeCheckContext
 

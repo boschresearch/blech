@@ -19,7 +19,7 @@ namespace Blech.Frontend
 module Attribute =
     
     open Blech.Common.PPrint
-    open PrettyPrint.DocPrint
+    open DocPrint
     
     // sub programs
     [<Literal>] 

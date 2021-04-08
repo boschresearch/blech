@@ -32,7 +32,7 @@ open Blech.Common.TranslationUnitPath
 
 open Constants
 open CommonTypes
-open PrettyPrint.DocPrint
+open DocPrint
 
 
 //=============================================================================

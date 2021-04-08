@@ -27,7 +27,7 @@ open Blech.Frontend
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.Constants
 open Blech.Frontend.BlechTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 open Blech.Frontend.TypeCheckContext
 
 open Blech.Backend

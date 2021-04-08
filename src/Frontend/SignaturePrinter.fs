@@ -23,7 +23,7 @@ module SignaturePrinter =
     
     open Constants
     open CommonTypes
-    open PrettyPrint.DocPrint
+    open DocPrint
     
     // Abbreviations
     module Scope = SymbolTable.Scope

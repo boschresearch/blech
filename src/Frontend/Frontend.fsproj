@@ -16,9 +16,10 @@
     </FsYacc>
     <Compile Include="Constants.fs" />
     <Compile Include="CommonTypes.fs" />
-    <Compile Include="AST.fs" />
-    <Compile Include="PrettyPrint.fs" />
+    <Compile Include="DocPrint.fs" />
     <Compile Include="Attribute.fs" />
+    <Compile Include="AST.fs" />
+    <Compile Include="ASTPrinter.fs" />
     <Compile Include="SyntaxUtils.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="BlechLexer.fs" />

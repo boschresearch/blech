@@ -26,7 +26,7 @@ open Blech.Common.PPrint.PPrint
 open Blech.Frontend
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 open Blech.Frontend.TyChkExpressions
 
 open Blech.Backend
