@@ -1085,11 +1085,11 @@ Subprogram                              /* TODO: Add OptPartial and OptThrows to
                                           Member.Nothing }
 
 ExternalFunction
-    : OptAnnotations EXTERN OptSingletonDef FUNCTION Name InputParameters OptOutputParameters OptReturns OptOnClock
+    : OptAnnotations EXTERN OptSingletonDecl FUNCTION Name InputParameters OptOutputParameters OptReturns OptOnClock
                                         { Member.Prototype { Prototype.range = externalFunctionRange $1 $2 (snd $6) (snd $7) $8 $9
                                                              isExtern = true
-                                                             isSingleton = $3 <> Option.None
-                                                             singletons = []
+                                                             isSingleton = fst $3 <> Option.None
+                                                             singletons = snd $3
                                                              isFunction = true
                                                              isOpaque = false
                                                              name = $5
@@ -1098,7 +1098,7 @@ ExternalFunction
                                                              result = $8
                                                              annotations = $1 } }
                                         
-    | OptAnnotations EXTERN OptSingletonDef FUNCTION ErrorBeforeEOL
+    | OptAnnotations EXTERN OptSingletonDecl FUNCTION ErrorBeforeEOL
                                         { logParserError $2;
                                           Member.Nothing }
 
