@@ -721,6 +721,11 @@ module ExportInference =
         |> exportValueDecl fp.isSingleton <| fp.name
 
 
+    let private inferOpaqueSingleton exp ctx (os: OpaqueSingleton) =
+        List.fold (inferStaticNamedPath exp) ctx os.singletons
+        |> exportValueDecl true <| os.name
+
+
     let private inferUnitDecl exp ctx (ud: AST.UnitDecl) =
         exportValueDecl false ctx ud.name
 
@@ -805,9 +810,9 @@ module ExportInference =
         | Member.Prototype fp ->
             let exp = Exposing.Type ctx.environment fp.name
             inferFunctionPrototype exp ctx fp
-        | Member.OpaqueSingleton _ ->
-            // only occurs in signatures
-            ctx
+        | Member.OpaqueSingleton os ->
+            let exp = Exposing.Type ctx.environment os.name
+            inferOpaqueSingleton exp ctx os
         | Member.Unit u ->
             // inferUnitDecl ctx u
             ctx

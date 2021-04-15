@@ -91,15 +91,15 @@ let private mkDiagnosticWWerror (memLoc: AccessLabel) (nameRange1, _) (nameRange
         let identifier = subProgName.basicId
         let mainInfo: Diagnostics.Information =
             { range = secondRange
-              message = sprintf "Singleton subprogram %s cannot be called concurrently." identifier }
+              message = sprintf "Singleton '%s' cannot be called or used concurrently." identifier }
         let context: Diagnostics.ContextInformation list =
             [ { range = nameRange1
-                message = "First call."
+                message = "First use."
                 isPrimary = false }
               { range = nameRange2
-                message = "Conflicting concurrent call."
+                message = "Conflicting concurrent use."
                 isPrimary = true } ]
-        let note = [ "A function or activity is either explicitly declared or inferred as a singleton because it calls singletons. There may be no concurrent calls to the same singleton subprogram." ]
+        let note = [ "A function or activity is either explicitly declared or inferred as a singleton because it calls or uses singletons. There may be no concurrent calls or uses of the same singleton subprogram." ]
         mainInfo, context, note
     let mainInfo, context, note =
         match memLoc with

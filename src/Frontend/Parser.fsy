@@ -1288,6 +1288,7 @@ ModuleMember
     | Unit                                      { $1 }
     | EnumDef                                   { $1 }
     | StructDef                                 { $1 }
+    | OpaqueSingleton                           { $1 }
     | ExtensionMember                           { $1 }
     | Extension                                 { $1 }
     | Pragma                                    { Member.Pragma $1 }  // TODO: Add pragma to AST

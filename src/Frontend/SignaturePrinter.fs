@@ -827,7 +827,9 @@ module SignaturePrinter =
                 else empty
 
             | AST.Member.OpaqueSingleton os ->
-                failwith "Opaque signatures are not part of module implementations, which are printed here."
+                // Used to group external functions that change the same C object
+                psOpaqueSingletonSignature os.annotations (ctx.GetSingletonSignature os.name) os.name
+                // failwith "Opaque signatures are not part of module implementations, which are printed here."
             
             | AST.Member.Unit u ->
                 empty
