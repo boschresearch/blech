@@ -249,6 +249,15 @@ module SymbolTable =
         member this.IsStaticName name =
             this.lookupTable.ContainsKey name
 
+        /// Returns a list of all usages of <name> including its declaration
+        member this.AllUsages name =
+            // ensure we have declaration of name
+            let name = this.getDeclName name
+            // linear search through lookup table
+            this.lookupTable.Keys
+            |> Seq.filter (fun n -> this.getDeclName n = name)
+            |> Seq.toList
+
 
 
     type NameCheckError = 
