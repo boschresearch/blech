@@ -1,0 +1,28 @@
+struct S
+    var x: int32
+    let y: float32 = 4.
+end
+
+struct T
+    let x: int32
+    var y: int32
+end
+
+@[EntryPoint]
+activity A()
+    var s1: S
+    await true
+    var s2: S = {y = -0.543}
+    await true
+    var s3: S = {x = 77}
+    await true
+    var s4: S = {x = 34, y = 65.65}
+    await true
+    s1 = {}
+    s2 = {y = 5.}
+    s3 = {x = 789}
+    s4 = {x = -32, y=-45.4}
+    await true
+    var t1: T = {x = 1, y = 2}
+    t1 = {x = t1.y, y = t1.x}
+end
