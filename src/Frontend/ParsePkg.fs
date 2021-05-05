@@ -67,7 +67,7 @@ let tokenTagToString token =
     | TOKEN_SIGNAL -> "signal"
     (* --------- units of measure --------- *)
     | TOKEN_UNIT -> "unit"
-    (* --- clocks --- *)
+    (* --- clocks --- 
     | TOKEN_CLOCK -> "clock"
     | TOKEN_COUNT -> "count"
     | TOKEN_UP -> "up"
@@ -76,7 +76,7 @@ let tokenTagToString token =
     | TOKEN_JOIN -> "join"
     | TOKEN_MEET -> "meet"
     | TOKEN_TICK -> "tick"
-    | TOKEN_ON -> "on"
+    | TOKEN_ON -> "on" *)
     (* --------- actions --------- *)
     | TOKEN_EMIT -> "emit"
     | TOKEN_PAST -> "past"

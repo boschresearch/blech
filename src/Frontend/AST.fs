@@ -1184,11 +1184,9 @@ let compilationUnitRange (imports: Import list) defaultRange (members: Member li
         unionRanges (importsRange imports) (membersRange members)
     
 
-let externalFunctionRange (annos: Annotation list) externRange inputsRange  optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option) =
+let externalFunctionRange (annos: Annotation list) externRange inputsRange  optOutputsRange (returns: ReturnDecl option) =
     let endRange = 
-        if Option.isSome onClock then
-            (Option.get onClock).Range
-        elif Option.isSome returns then   
+        if Option.isSome returns then   
             (Option.get returns).range
         elif Option.isSome optOutputsRange then
             Option.get optOutputsRange
@@ -1200,11 +1198,9 @@ let externalFunctionRange (annos: Annotation list) externRange inputsRange  optO
     | hd::_ ->
         unionRanges hd.Range endRange
 
-let prototypeRange (annos: Annotation list) singleton startRange inputsRange optOutputsRange (returns: ReturnDecl option) (onClock: StaticNamedPath option)  =
+let prototypeRange (annos: Annotation list) singleton startRange inputsRange optOutputsRange (returns: ReturnDecl option) =
     let endRange = 
-        if Option.isSome onClock then
-            (Option.get onClock).Range
-        elif Option.isSome returns then   
+        if Option.isSome returns then   
             (Option.get returns).range
         elif Option.isSome optOutputsRange then
             Option.get optOutputsRange
