@@ -120,11 +120,15 @@ rule Token = parse
                               tabInCode lexbuf
                               Token lexbuf }
     
-    | "/*"                  { commentDepth <- 1 
+    | "/*"                  { tokenBuilder.Init (getRange lexbuf)  // Collect comments for 'blech format'
+                              validTokenInComment lexbuf
+                              commentDepth <- 1 
                               commentStart <- Some (getRange lexbuf)
                               SkipBlockComment lexbuf }
     
-    | "//"                  { SkipLineComment lexbuf } 
+    | "//"                  { tokenBuilder.Init (getRange lexbuf)  // Collect comments for 'blech format'
+                              validTokenInComment lexbuf
+                              SkipLineComment lexbuf } 
 
     (* --- strings --- *)
 
@@ -370,26 +374,35 @@ and SkipBlockComment = parse
     // returns the next token after the comment, 
     // in order to make EOF available in case of unterminated comment
 
-    | "*/"                  { commentDepth <- commentDepth - 1
+    | "*/"                  { validTokenInComment lexbuf
+                              commentDepth <- commentDepth - 1
                               if commentDepth = 0 then
                                   commentStart <- None;
+                                  printfn "%s" <| tokenBuilder.Text
                                   Token lexbuf // this tail recursen should not grow the stack
                               else 
                                   SkipBlockComment lexbuf }
        
-    | "/*"                  { commentDepth <- commentDepth + 1
+    | "/*"                  { validTokenInComment lexbuf
+                              commentDepth <- commentDepth + 1
                               SkipBlockComment lexbuf }
 
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
+    | endofline             { validTokenInComment lexbuf
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
                               SkipBlockComment lexbuf }
 
+    | unicodelineterminator { unicodeLineTerminatorInComment lexbuf
+                              SkipLineComment lexbuf }
 
     | chunkwithoutstarandslash
-                            { SkipBlockComment lexbuf }
+                            { validTokenInComment lexbuf
+                              SkipBlockComment lexbuf }
 
-    | '/'                   { SkipBlockComment lexbuf }
+    | '/'                   { validTokenInComment lexbuf
+                              SkipBlockComment lexbuf }
 
-    | "*"                   { SkipBlockComment lexbuf }
+    | "*"                   { validTokenInComment lexbuf
+                              SkipBlockComment lexbuf }
 
     | eof                   { eofInBlockComment lexbuf
                               EOF (getRange lexbuf) }
@@ -399,13 +412,15 @@ and SkipLineComment = parse
     // returns the next token after the comment, 
     // in order to make EOF available in case of a line comment in the last line
 
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine 
+    | endofline             { printfn "%s" <| tokenBuilder.Text
+                              lexbuf.EndPos <- lexbuf.EndPos.NextLine 
                               Token lexbuf } // this tail recursion should not grow the stack
 
-    | unicodelineterminator { unicodeLineTerminator lexbuf
+    | unicodelineterminator { unicodeLineTerminatorInComment lexbuf
                               SkipLineComment lexbuf }
 
-    | chunkwithoutnewline   { SkipLineComment lexbuf }
+    | chunkwithoutnewline   { validTokenInComment lexbuf
+                              SkipLineComment lexbuf }
 
     | eof                   { // line comment in last line is ok
                               EOF (getRange lexbuf) }  
