@@ -670,6 +670,20 @@ module LexerUtils =
     let eofInString lexbuf =
         reportError <| EofInString tokenBuilder.Range
 
+    // collect comments for 'blech format'
+
+    let eofInComment lexbuf =
+        reportError <| EofInDocComment tokenBuilder.Range
+
+    let unicodeLineTerminatorInComment lexbuf=
+        let lr = getLexemeAndRange lexbuf
+        reportError <| InvalidLineTerminator lr
+        tokenBuilder.Append lr
+
+    let validTokenInComment lexbuf =
+        tokenBuilder.Append (getLexemeAndRange lexbuf)
+    
+
     // doc comments 
 
     let eofInDocComment lexbuf =
