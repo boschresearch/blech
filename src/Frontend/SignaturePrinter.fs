@@ -77,7 +77,9 @@ module SignaturePrinter =
                 | AST.Bool (value = false) ->
                     txt "false"
                 | AST.String (value = text) ->
-                    txt text |> dquotes
+                    text.Split BlechString.Linefeed
+                    |> Seq.map txt
+                    |> dpString
                 | AST.Int (value = i) ->
                     string i |> txt
                 | AST.Bits (value = lit) ->
@@ -98,16 +100,15 @@ module SignaturePrinter =
         | AST.Key (key, _) ->
             ppKey key
         | AST.KeyValue (key, value, _) ->
-            ppKey key <+>
-            (chr '=' <.> bpLiteral value |> gnest dpTabsize)
+            ppKey key <+> chr '=' <+> bpLiteral value
         | AST.Structured (key, attrs, _) ->
-            ppKey key <^> 
-            (
-            (List.map bpAttribute attrs) 
-                |> dpCommaSeparatedInParens
-                |> align
-                |> group)
-        
+            ppKey key <+> 
+            ( List.map bpAttribute attrs 
+              |> punctuate comma
+              |> vsep
+              |> align
+              |> parens )
+              
     let bpAnnotation (anno: AST.Annotation) =
         match anno.Attribute with
         | AST.KeyValue (AST.Ident(text=Attribute.Key.linedoc), AST.Literal.String(value=comment), _) ->

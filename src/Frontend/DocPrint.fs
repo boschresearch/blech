@@ -24,6 +24,7 @@ module DocPrint =
     /// pretty printing modules (below).
     
     open System.Text.RegularExpressions
+    open Blech.Common
     open Blech.Common.PPrint
         
     let dpTabsize = 4
@@ -98,9 +99,7 @@ module DocPrint =
     let dpToplevelClose docs =
         docs
         |> vsep
-        //|> align
-        //|> group
-
+        
     let dpOptLinePrefix (optDoc: Doc option) doc =
         match optDoc with
         | Some od ->
@@ -241,3 +240,29 @@ module DocPrint =
         txt "@@" <^> brackets attribute
 
 
+    // Multi line text and multi line strings 
+    let private tquote = Text "\"\"\""
+    let private lrtquote = (tquote, tquote)
+    let private tripleQuotes doc =
+        enclose lrtquote <| doc
+
+
+    let dpMultiLineText (lines : Doc seq) =
+        lines
+        |> vsep
+        |> align
+
+
+    let dpString (lines : Doc seq) = 
+        let len = Seq.length lines
+        assert (len > 0)
+        
+        if len = 1 then 
+            Seq.item 0 lines
+            |> dquotes
+        else
+            dpMultiLineText lines
+            |> tripleQuotes
+            |> nest 3
+        
+       
