@@ -1275,17 +1275,20 @@ Extension
    ----- Modules in Blech implementation files .blc
    ---------------------------------------------------------------------------- */
 
-OptInternal
-    :                                           { None }
-    | INTERNAL                                  { Some $1 }
 
-ModuleHead 
-    : OptInternal MODULE Exposing               { { ModuleSpec.range = optUnionRanges $1 $2 
+ModuleHead
+    : MODULE                                    { (false, $1) }
+    | INTERNAL MODULE                           { (true , unionRanges $1 $1) }
+
+ModuleSpec 
+    : OptAnnotations ModuleHead Exposing        // TODO: Add annotations to AST, check them and print doc comments in code generation, fjg. 21.05.21
+                                                { { ModuleSpec.range = snd $2 
                                                     isSignature = false
-                                                    isInternal = Option.isSome $1
+                                                    isInternal = fst $2
                                                     exposing = $3 } }
-
-    | OptInternal MODULE ErrorBeforeEOL EOL     { logParserError $2
+    
+    | OptAnnotations ModuleHead ErrorBeforeEOL EOL     
+                                                { logParserError (snd $2)
                                                   ModuleSpec.Nothing }
 
 Exposing
@@ -1299,14 +1302,22 @@ ModulePath
     : STRING                                    { parseImportPath (snd $1) (fst $1) } /* range string */
 
 Import
-    : IMPORT OptInternal NameOrWildcard ModulePath Exposing
+    : IMPORT NameOrWildcard ModulePath Exposing
+                                                { { Import.range = importRange $1 $3.Range $4
+                                                    isInternal = false
+                                                    localName = $2
+                                                    modulePath = $3
+                                                    exposing = $4 } } 
+                                                    
+    | IMPORT INTERNAL NameOrWildcard ModulePath Exposing
                                                 { { Import.range = importRange $1 $4.Range $5
-                                                    isInternal = Option.isSome $2
+                                                    isInternal = true
                                                     localName = $3
                                                     modulePath = $4
                                                     exposing = $5 } } 
                                                     
-    | IMPORT ErrorBeforeEOL EOL                 { logParserError $1
+    | IMPORT ErrorBeforeEOL EOL
+                                                { logParserError $1
                                                   { Import.range = unionRanges $1 $3
                                                     isInternal = false
                                                     localName = ParserContext.mkEmptyName
@@ -1327,9 +1338,8 @@ ImportList
     | Import ImportList                         { $1::$2 }
     | SEMICOLON ImportList                      { $2 }
 
-
 Module
-    : ImportList ModuleHead ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
+    : ImportList ModuleSpec ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = $1
                                                     moduleSpec = Option.Some $2
@@ -1353,9 +1363,13 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : OptInternal SIGNATURE                     { { ModuleSpec.range = optUnionRanges $1 $2
+    : SIGNATURE                                 { (false, $1) }  
+    | INTERNAL SIGNATURE                        { (true, unionRanges $1 $2) }
+
+SignatureSpec                                   // TODO: Add annotations to AST, check them and print doc comments in code generation, fjg. 21.05.21
+    : OptAnnotations SignatureHead              { { ModuleSpec.range = snd $2
                                                     isSignature = true
-                                                    isInternal = Option.isSome $1
+                                                    isInternal = fst $2
                                                     exposing = Option.None } }
 
 SignatureMember
@@ -1393,7 +1407,7 @@ ExtensionMemberDecls
 
 
 Signature
-    : ImportList SignatureHead SignatureMembers 
+    : ImportList SignatureSpec SignatureMembers 
                                                 { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
                                                     imports = $1

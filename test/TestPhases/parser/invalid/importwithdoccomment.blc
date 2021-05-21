@@ -1,0 +1,4 @@
+/** An import with doc comment is not allowed */
+import mm "mymodule"
+
+module
