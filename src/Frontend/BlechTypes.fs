@@ -428,6 +428,7 @@ and ProcedureImpl =
 and BlechModule =
     {
         name: TranslationUnitPath
+        documentation: Attribute.OtherDecl
         types: Types list
         funPrototypes: ProcedurePrototype list
         funacts: ProcedureImpl list
@@ -441,6 +442,7 @@ and BlechModule =
     static member MakeEmpty moduleName =
         { 
             name = moduleName
+            documentation = Attribute.OtherDecl.Empty
             types = List.empty 
             funPrototypes = List.empty 
             funacts = List.empty 
@@ -454,7 +456,8 @@ and BlechModule =
         render (Some 72) <| this.ToDoc
     
     member this.ToDoc =
-        [txt (this.name.ToString())]
+        [ txt (this.name.ToString()) ]
+        |> List.append <| this.documentation.ToDoc  
         |> List.append <| (this.memberPragmas |> List.map (fun mp -> mp.ToDoc))
         |> List.append <| (this.types |> List.map (fun t -> t.ToDoc))
         |> List.append <| (this.variables |> List.map (fun v -> v.ToDoc))

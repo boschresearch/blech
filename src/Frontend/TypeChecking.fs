@@ -1273,11 +1273,12 @@ let private fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
-    let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
+    let createPackage ((((((((modName, modDoc), funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
     
         //assert (List.length types = lut.userTypes.Count) // TODO: this assertion is wrong if we have imported types from other modules, fg 01.10.20
         {
             BlechModule.name = modName
+            documentation = modDoc
             types = types
             funPrototypes = funPrototypes
             funacts = funacts
@@ -1293,8 +1294,11 @@ let private fPackage lut (pack: AST.CompilationUnit) =
     
     let moduleName = pack.moduleName
 
+    let moduleDocumentation = Ok Attribute.OtherDecl.Empty // TODO: process mod spec here. fjg. 23.05.21
+
     let typedPack = 
         Ok moduleName
+        |> combine <| moduleDocumentation
         |> combine <| contract funPrototypes
         |> combine <| contract funacts
         |> combine <| contract variables

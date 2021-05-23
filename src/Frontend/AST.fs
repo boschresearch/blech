@@ -545,6 +545,8 @@ and ModuleSpec =
         isSignature: bool
         isInternal: bool
         exposing: Exposing option
+        annotations: Annotation list
+
     }
     member modspec.Range = modspec.range
 
@@ -552,7 +554,8 @@ and ModuleSpec =
         { range = range.Zero
           isSignature = false
           isInternal = false
-          exposing = Option.None }
+          exposing = Option.None 
+          annotations = [] }
 
 /// Blech implementation or interface file
 and CompilationUnit = 

@@ -1285,7 +1285,8 @@ ModuleSpec
                                                 { { ModuleSpec.range = snd $2 
                                                     isSignature = false
                                                     isInternal = fst $2
-                                                    exposing = $3 } }
+                                                    exposing = $3 
+                                                    annotations = $1 } }
     
     | OptAnnotations ModuleHead ErrorBeforeEOL EOL     
                                                 { logParserError (snd $2)
@@ -1370,7 +1371,8 @@ SignatureSpec                                   // TODO: Add annotations to AST,
     : OptAnnotations SignatureHead              { { ModuleSpec.range = snd $2
                                                     isSignature = true
                                                     isInternal = fst $2
-                                                    exposing = Option.None } }
+                                                    exposing = Option.None 
+                                                    annotations = $1 } }
 
 SignatureMember
     /* : Clock                                     { $1 } */

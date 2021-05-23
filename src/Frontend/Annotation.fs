@@ -279,6 +279,7 @@ module Annotation =
                 match attr with
                 | LineDoc _
                 | BlockDoc _ 
+                // TODO: Wrong usage, should have a separate annotation check, correct this. fjg. 23.05.21
                 | SimpleType 
                 | OpaqueStruct
                 | OpaqueArray ->
@@ -292,6 +293,21 @@ module Annotation =
         List.fold checkOdAnnotation (Ok Attribute.OtherDecl.Empty) annotations   
 
     
+    let checkModuleSpec (modSpec : AST.ModuleSpec) =
+        let checkMsAnnotation msattr (anno : AST.Annotation) =
+            let checkAttribute (msattr, attr) =
+                match attr with
+                | LineDoc _
+                | BlockDoc _ ->
+                    Ok { msattr with OtherDecl.doc = List.append msattr.doc [attr] }
+                | _ ->
+                    unsupportedAnnotation anno
+
+            combine msattr (checkAnnotation anno)
+            |> Result.bind checkAttribute
+        List.fold checkMsAnnotation (Ok Attribute.OtherDecl.Empty) modSpec.annotations   
+   
+
     //--------------
     //--- Pragmas
     //--------------
