@@ -1181,8 +1181,7 @@ type private ProcessedMembers =
 
 let private fPackage lut (pack: AST.CompilationUnit) =
     let pos = pack.Range
-    //let spec = pack.spec
-
+    
     let rec processMembers (typedMembers: ProcessedMembers) mems =
         match mems with
         | [] -> 
@@ -1294,11 +1293,11 @@ let private fPackage lut (pack: AST.CompilationUnit) =
     
     let moduleName = pack.moduleName
 
-    let moduleDocumentation = Ok Attribute.OtherDecl.Empty // TODO: process mod spec here. fjg. 23.05.21
+    let moduleDocumentation = Option.map Annotation.checkModuleSpec pack.moduleSpec
 
     let typedPack = 
         Ok moduleName
-        |> combine <| moduleDocumentation
+        |> combine <| ofOption moduleDocumentation
         |> combine <| contract funPrototypes
         |> combine <| contract funacts
         |> combine <| contract variables

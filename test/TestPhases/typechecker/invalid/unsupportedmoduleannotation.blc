@@ -1,0 +1,3 @@
+
+@[CFunction (binding = "<c-function macro>", header = "<C header>.h")]
+module
