@@ -567,20 +567,17 @@ and CompilationUnit =
         members: Member list 
     }
     member this.Range = this.range
+    
     member this.IsModule = 
         match this.moduleSpec with
         | Some modSpec ->
             not modSpec.isSignature
         | None ->
             false
+    
     member this.IsProgram = 
         Option.isNone this.moduleSpec
-    member this.IsInternal = 
-        match this.moduleSpec with
-        | Some modSpec ->
-            modSpec.isInternal
-        | None ->
-            false      
+    
     member this.IsSignature =
         match this.moduleSpec with
         | Some modSpec ->

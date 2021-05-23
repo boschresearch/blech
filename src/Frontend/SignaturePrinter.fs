@@ -876,7 +876,7 @@ module SignaturePrinter =
             let optAnnos = 
                 bpOptAnnotations ms.annotations
             let spec = 
-                if ast.IsInternal then txt "internal signature" else txt "signature"
+                if ms.isInternal then txt "internal signature" else txt "signature"
 
             dpOptLinePrefix optAnnos spec
 
