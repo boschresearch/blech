@@ -872,6 +872,13 @@ module SignaturePrinter =
                 |> dpOptSpacePostfix <| requiredExposedNames   
             else empty
 
+        let psModuleSpec (ms: AST.ModuleSpec) =
+            let optAnnos = 
+                bpOptAnnotations ms.annotations
+            let spec = 
+                if ast.IsInternal then txt "internal signature" else txt "signature"
+
+            dpOptLinePrefix optAnnos spec
 
         let generatedCode =
             bpGeneratedComment <| txt "This is generated code - do not touch!"
@@ -882,11 +889,9 @@ module SignaturePrinter =
             |> dpToplevelClose
 
         let spec = 
-            if ast.IsInternal then
-                txt "internal signature"
-            else
-                txt "signature"
-
+            assert (Option.isSome ast.moduleSpec)
+            psModuleSpec <| Option.get ast.moduleSpec
+            
         let members = 
             List.map psMember ast.members
             |> dpRemoveEmpty
