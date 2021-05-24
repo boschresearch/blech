@@ -166,9 +166,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
                              entryPointOpt =
 
     // Module documentation
-    assert (Option.isSome documentation)  // a module always has a moduleSpec
-    let moduleDoc = cpModuleDocComments (Option.get documentation).doc
-
+    let moduleDoc = cpOptModuleDoc documentation
 
     let selfHeader = generateSelfHeader moduleName
         
@@ -336,8 +334,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
     // Module documentation
-    assert (Option.isSome documentation)  // a module always has a moduleSpec
-    let moduleDoc = cpModuleDocComments (Option.get documentation).doc
+    let moduleDoc = cpOptModuleDoc documentation
 
     // C header
     let importIncludes = generateSubmoduleIncludes importedModules
