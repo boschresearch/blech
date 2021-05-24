@@ -159,10 +159,16 @@ let private mkCCalls functionPrototypes =
 
 /// Emit C code for module as Doc
 let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
+                             (documentation: Attribute.OtherDecl option)
                              (pragmas: Attribute.MemberPragma list) 
                              importedModules
                              (compilations: Compilation list) 
                              entryPointOpt =
+
+    // Module documentation
+    assert (Option.isSome documentation)  // a module always has a moduleSpec
+    let moduleDoc = cpModuleDocComments (Option.get documentation).doc
+
 
     let selfHeader = generateSelfHeader moduleName
         
@@ -274,6 +280,8 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
     // combine all into one Doc
     [ Comment.generatedCode
       
+      moduleDoc
+
       // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
       Comment.selfInclude
       selfHeader
@@ -319,13 +327,19 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
 
 /// Emit C header for module as Doc
 let private cpModuleHeader ctx (moduleName: TranslationUnitPath) 
+                               (documentation: Attribute.OtherDecl option)
                                (pragmas: Attribute.MemberPragma list) 
                                importedModules 
                                (compilations: Compilation list) 
                                entryPointOpt =
-    // C header
+
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
+    // Module documentation
+    assert (Option.isSome documentation)  // a module always has a moduleSpec
+    let moduleDoc = cpModuleDocComments (Option.get documentation).doc
+
+    // C header
     let importIncludes = generateSubmoduleIncludes importedModules
 
     // Translate function prototypes to extern functions and direct C calls
@@ -335,7 +349,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
     
     let externConsts = 
         ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
+        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None) 
         |> Seq.filter (fun (ec: ExternalVarDecl) -> ec.name.IsTopLevel && (not <| ec.name.IsImported moduleName))
 
     let cHeaders = 
@@ -433,6 +447,8 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
     [ includeGuardBegin
       Comment.generatedCode
       
+      moduleDoc
+
       Comment.cHeaders
       cHeaders
       
@@ -528,7 +544,7 @@ let private emitAnything (entryPointOpt: ProcedureImpl option) emitter =
 let public emitCode ctx (modul: BlechModule) importedModules compilations =
     emitAnything
         <| modul.entryPoint
-        <| cpModuleCode ctx modul.name modul.memberPragmas importedModules compilations
+        <| cpModuleCode ctx modul.name modul.documentation modul.memberPragmas importedModules compilations
 
 
 /// Generate contents of the *.h file
@@ -537,7 +553,7 @@ let public emitCode ctx (modul: BlechModule) importedModules compilations =
 let public emitHeader ctx (modul: BlechModule) importedModules compilations =
     emitAnything
         <| modul.entryPoint
-        <| cpModuleHeader ctx modul.name modul.memberPragmas importedModules compilations
+        <| cpModuleHeader ctx modul.name modul.documentation modul.memberPragmas importedModules compilations
 
 
 let public emitApp ctx (modul: BlechModule) compilations entryPointName =

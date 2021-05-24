@@ -78,6 +78,15 @@ let cpOptDocComments (docs: Attribute.Attribute list) =
         None
     | _ ->
         Some (dpToplevelClose <| Seq.map cpDocComment docs)
+
+
+let cpModuleDocComments (docs: Attribute.Attribute list) =
+    match docs with
+    | [] ->
+        empty
+    | _ ->
+        dpToplevelClose <| Seq.map cpDocComment docs
+        
         
 //=============================================================================
 // Atomic language elements
