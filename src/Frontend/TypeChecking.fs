@@ -652,12 +652,14 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
     let qname = lut.ncEnv.GetLookupTable.nameToQname std.name
     let newType =
         if std.isReference then
+            // TODO: Temporarily deactivated, because code generation cannot support them, fjg. 25.05.21
             // create reference type
-            Ok qname
-            |> combine <| checkAllFields std.fields
-            |> Result.map (
-                fun (q, f) -> (std.name.Range, q, f)
-                >> ReferenceTypes.StructType >> ReferenceTypes )
+            // Ok qname
+            // |> combine <| checkAllFields std.fields
+            // |> Result.map (
+            //     fun (q, f) -> (std.name.Range, q, f)
+            //     >> ReferenceTypes.StructType >> ReferenceTypes )
+            unsupported1 "reference-types" (std.range)
         else
             // create value type
             Ok qname
@@ -915,10 +917,11 @@ let private generateVC isAssertion pos conditions msgOpt =
     |> contract
     |> Result.map (createAssume)
 
-
-let private fAssert = generateVC true
-let private fAssume = generateVC false
-       
+// TODO: Temporarily deactivated because code generation does not support them, fjg. 25.05.21
+// let private fAssert = generateVC true
+// let private fAssume = generateVC false       
+let private fAssert = unsupported3 "assert-verification-condition"
+let private fAssume = unsupported3 "assume-verification-condition"
        
 let private fAwait pos conditions =
     contract conditions // conditions are ensured to be without side-effects
