@@ -80,16 +80,12 @@ let cpOptDocComments (docs: Attribute.Attribute list) =
         Some (dpToplevelClose <| Seq.map cpDocComment docs)
 
 
-let cpOptModuleDoc (doc: Attribute.OtherDecl option) =
-    match doc with
-    | None ->
-        empty  
-    | Some decl ->
-        match decl.doc with
-        | [] -> 
-            empty
-        | docs->
-            dpToplevelClose <| Seq.map cpDocComment docs
+let cpModuleDoc (moduleDoc: Attribute.Attribute list) =
+    match moduleDoc with
+    | [] -> 
+        empty
+    | docs->
+        dpToplevelClose <| Seq.map cpDocComment docs
         
         
 //=============================================================================

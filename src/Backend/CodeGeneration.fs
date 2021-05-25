@@ -150,6 +150,13 @@ let generateSubmoduleIncludes otherMods =
     |> List.map (fun otherMod -> TranslatePath.moduleToInclude otherMod.name |> includeQuotedHfile)
     |> dpBlock
 
+let generateModuleDocumentation (optModSpecDocComments: Attribute.OtherDecl option) =
+    match optModSpecDocComments with
+    | None ->
+        empty  
+    | Some attr ->
+        cpModuleDoc attr.doc
+
 let private mkFunctionPrototypes tcc = 
     tcc.nameToDecl.Values
     |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
@@ -165,8 +172,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
                              (compilations: Compilation list) 
                              entryPointOpt =
 
-    // Module documentation
-    let moduleDoc = cpOptModuleDoc documentation
+    let moduleDoc = generateModuleDocumentation documentation
 
     let selfHeader = generateSelfHeader moduleName
         
@@ -333,8 +339,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
 
     let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
     
-    // Module documentation
-    let moduleDoc = cpOptModuleDoc documentation
+    let moduleDoc = generateModuleDocumentation documentation
 
     // C header
     let importIncludes = generateSubmoduleIncludes importedModules
