@@ -670,11 +670,7 @@ module LexerUtils =
     let eofInString lexbuf =
         reportError <| EofInString tokenBuilder.Range
 
-<<<<<<< HEAD
     // collect comments for 'blx format'
-=======
-    // collect comments for 'blech format'
->>>>>>> 5e235cf (Collect comments in lexer)
 
     let eofInComment lexbuf =
         reportError <| EofInDocComment tokenBuilder.Range
