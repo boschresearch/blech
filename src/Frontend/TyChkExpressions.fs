@@ -1269,7 +1269,8 @@ let private checkSimpleLiteral literal =
             { rhs = FloatConst number; typ = AnyFloat; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, number)]
-    | AST.String _ ->
+    | AST.String _ 
+    | AST.MultiLineString _->
         Error [UnsupportedFeature (literal.Range, "undefined, string literal")]
 
 

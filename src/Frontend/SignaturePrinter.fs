@@ -77,9 +77,12 @@ module SignaturePrinter =
                 | AST.Bool (value = false) ->
                     txt "false"
                 | AST.String (value = text) ->
+                    txt text
+                    |> dpString
+                | AST.MultiLineString (value = text) ->
                     text.Split BlechString.Linefeed
                     |> Seq.map txt
-                    |> dpString
+                    |> dpMultiLineString
                 | AST.Int (value = i) ->
                     string i |> txt
                 | AST.Bits (value = lit) ->

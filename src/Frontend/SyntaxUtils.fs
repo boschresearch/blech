@@ -729,31 +729,32 @@ module LexerUtils =
         tokenBuilder.Append (lxm, rng)
             
     let unicodeEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         let esc, rng = getLexemeAndRange lexbuf
-        let mutable unesc = esc
+        // let mutable unesc = esc
         if not <| BlechString.isValidUnicodeEscape esc then 
             reportError <| UnicodeEscapeTooLarge(esc, rng)
         else
-            unesc <- BlechString.unicodeEscapeToString esc
-        tokenBuilder.Append (unesc, rng)
+            // unesc <- BlechString.unicodeEscapeToString esc
+            tokenBuilder.Append (esc, rng)
 
     let decimalEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
-        let mutable nesc = esc
         // let mutable unesc = esc
         if not <| BlechString.isValidDecimalEscape esc then 
             reportError <| DecimalEscapeTooLarge (esc, rng)
         else
-        //    unesc <- BlechString.decimalEscapeToString esc
-            reportError <| EscapeCurrentlyNotSupported (esc, rng)
-        tokenBuilder.Append (nesc, rng)
+            //    unesc <- BlechString.decimalEscapeToString esc
+            tokenBuilder.Append (esc, rng)
 
     let hexEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
         // let unesc =  BlechString.hexEscapeToString esc
-        reportError <| EscapeCurrentlyNotSupported (esc, rng)
+        // Hex escapes are always syntactically correct
         tokenBuilder.Append (esc, rng)
 
     let backslashInString lexbuf = 
@@ -762,9 +763,10 @@ module LexerUtils =
         tokenBuilder.Append (bs, rng)
 
     let escapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         let esc, rng = getLexemeAndRange lexbuf
-        let unesc = BlechString.escapeToString esc
-        tokenBuilder.Append (unesc, rng)
+        // let unesc = BlechString.escapeToString esc
+        tokenBuilder.Append (esc, rng)
 
     let private checkIndentations (lines: string list) rng = 
         let reportUnbalancedIndentations (indent, unbalancedIndents) =

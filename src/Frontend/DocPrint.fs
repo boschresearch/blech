@@ -243,26 +243,25 @@ module DocPrint =
     // Multi line text and multi line strings 
     let private tquote = Text "\"\"\""
     let private lrtquote = (tquote, tquote)
-    let private tripleQuotes doc =
+    let tripleQuotes doc =
         enclose lrtquote <| doc
 
 
-    let dpMultiLineText (lines : Doc seq) =
+    let private dpMultiLineText (lines : Doc seq) =
         lines
         |> vsep
         |> align
 
 
-    let dpString (lines : Doc seq) = 
+    let dpString (line : Doc) = 
+        line
+        |> dquotes
+        
+        
+    let dpMultiLineString (lines : Doc seq) = 
         let len = Seq.length lines
         assert (len > 0)
-        
-        if len = 1 then 
-            Seq.item 0 lines
-            |> dquotes
-        else
-            dpMultiLineText lines
-            |> tripleQuotes
-            |> nest 3
-        
-       
+        dpMultiLineText lines
+        |> tripleQuotes
+        |> nest 3
+    

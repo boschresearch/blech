@@ -1466,7 +1466,7 @@ Identifier
 AttributeLiteral 
     : STRING                                    { Literal.String $1 }
 
-    | MULTILINESTRING                           { Literal.String $1 }
+    | MULTILINESTRING                           { Literal.MultiLineString $1 }
 
     | TRUE                                      { Literal.Bool (true, $1) }
     

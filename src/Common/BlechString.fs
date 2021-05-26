@@ -53,7 +53,6 @@ module BlechString =
         let dec = decEsc.Substring(1)
         Byte.Parse dec
 
-        
     let isValidDecimalEscape (decEsc: string) =
         try 
             ignore <| decimalEscapeToByte decEsc

@@ -430,6 +430,8 @@ module ASTPrint =
                 txt "false"
             | String (value = text) ->
                 txt text |> dquotes
+            | MultiLineString (value = text) ->
+                txt text |> tripleQuotes
             | Bits (value = bits) ->
                 match bits with
                 | BAny (_, repr) -> txt repr

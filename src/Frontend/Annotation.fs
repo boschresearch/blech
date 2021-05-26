@@ -65,15 +65,17 @@ module Annotation =
                
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CFunctionPrototype(binding, Some header))
+                                                  value = header) ] ) 
+                                                        when binding.IsText && header.IsText ->
+            Ok (CFunctionPrototype(binding.Text, Some header.Text))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CFunctionPrototype(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText ->
+            Ok (CFunctionPrototype(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source)) ] ) ->
@@ -82,34 +84,39 @@ module Annotation =
 
         | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CConst(binding, Some header))
+                                                  value = header) ] ) 
+                                                       when binding.IsText && header.IsText ->
+            Ok (CConst(binding.Text, Some header.Text))
         
         | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CConst(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText->
+            Ok (CConst(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CInput(binding, Some header))
+                                                  value = header) ] ) 
+                                                        when binding.IsText && header.IsText ->
+            Ok (CInput(binding.Text, Some header.Text))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CInput(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText ->
+            Ok (CInput(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (COutput(binding, Some header))
+                                                  value = header) ] ) 
+                                                    when binding.IsText && header.IsText ->
+            Ok (COutput(binding.Text, Some header.Text))
         
         | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 

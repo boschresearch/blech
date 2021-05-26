@@ -638,6 +638,7 @@ and ClockExpr =
 and Literal =
     | Bool of value:bool * range:range
     | String of value:string * range:range
+    | MultiLineString of value:string * range:range
     // -- numerical constants --
     | Bits of value: Constants.Bits * range:range
     | Int of value: Constants.Int * unit:UnitExpr option * range:range
@@ -646,10 +647,24 @@ and Literal =
         match l with
         | Bool (range=r)
         | String (range=r)
+        | MultiLineString (range=r)
         | Bits (range=r)
         | Int (range=r)
         | Float (range=r)
             -> r
+
+    // TODO: These members are preliminary helpers for annotation checking
+    // TODO: Change this, when we implement a Blech type for strings/text, fjg. 26.05.21        
+    member this.IsText = 
+        match this with
+        | String _ | MultiLineString _ -> true
+        | _ -> false
+    
+    member this.Text = 
+        match this with
+        | String (value = text) | MultiLineString (value = text) -> text
+        | _ -> failwith "Method only allowed for a string literal"
+    
 
 and LhsInAssignment =
     | Wildcard of range
