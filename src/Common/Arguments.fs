@@ -70,38 +70,38 @@ module Arguments =
             member args.Usage =
                 match args with
                 | Version ->
-                    "show version information."
+                    "Show version information."
                 | Rebuild -> 
-                    "always re-compile from source files."
+                    "Always re-compile from source files."
                 | Dry_Run _ -> 
-                    "do not generate any C code files."
+                    "Do not generate any C code files."
                 | Verbosity _ -> 
-                    "set verbosity <level>, "
+                    "Set verbosity <level>, "
                     + "allowed values are q[uiet], m[inimal], n[ormal], d[etailed], diag[nostic]."
                 
                 | App _ -> 
-                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
+                    "Generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
                 | Project_Dir _ ->
-                    "search for blech modules in <directory>, "
+                    "Search for blech modules in <directory>, "
                     + "defaults to " + "\"" + defaultProjectDir + "\"" + "."
                 | Out_Dir _ -> 
-                    "write all build results to <directory>, which must already exist."
+                    "Write all build results to <directory>, which must already exist."
                 | Blech_Path _ ->
-                    "search for blech library modules in <path>, "
+                    "Search for blech library modules in <path>, "
                     + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
                 
                 | Box _ ->
-                    "compile for box <name>, allowed names are valid Blech identifiers."
+                    "Compile for box <name>, allowed names are valid Blech identifiers."
                 
                 | Word_Size _ -> 
-                    "maximum word size, "
+                    "Maximum word size, "
                     + "allowed values are 8, 16, 32, 64."
                 | Trace -> 
-                    "generate traces on stdout."
+                    "Generate traces on stdout."
                 | Pass_Primitive_By_Address ->
-                    "pass Blech input arguments of primitive type by address."
+                    "Pass Blech input arguments of primitive type by address."
                 | Input _ -> 
-                    "file <name> to be compiled."
+                    "File <filename> to be compiled."
 
 
     type WordSize = 
