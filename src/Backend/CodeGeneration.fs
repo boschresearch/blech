@@ -86,7 +86,7 @@ module Comment =
         cpGeneratedComment <| txt "extern functions to be implemented in C"
 
     let exportedFunctions =
-        cpGeneratedComment <| txt "exported functions"
+        cpGeneratedComment <| txt "activities and functions"
     
     let userTypes = 
         cpGeneratedComment <| txt "all user defined types"
@@ -161,8 +161,9 @@ let private mkFunctionPrototypes tcc =
     tcc.nameToDecl.Values
     |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
 
-let private mkCCalls functionPrototypes =
-    Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall) functionPrototypes
+let private mkCCalls functionPrototypes moduleName =
+    Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall && not (fp.name.IsImported moduleName)) functionPrototypes
+
 
 /// Emit C code for module as Doc
 let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
@@ -232,7 +233,7 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
     // Translate function prototypes to direct C calls
     let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls = mkCCalls functionPrototypes
+    let cCalls = mkCCalls functionPrototypes moduleName
 
     let cHeaders = 
         let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
@@ -347,7 +348,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
     // Translate function prototypes to extern functions and direct C calls
     let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls = mkCCalls functionPrototypes
+    let cCalls = mkCCalls functionPrototypes moduleName
     
     let externConsts = 
         ctx.tcc.nameToDecl.Values
