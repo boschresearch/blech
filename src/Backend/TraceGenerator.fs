@@ -62,26 +62,49 @@ let private cCodeSprintf destination format args =
     |> List.fold cCodeAppendArg ""
     |> sprintf "sprintf(%s, %s%s);" destination (QT + format + QT)
 
+
+let private printerInterface lut name ins outs = 
+    [ [txt PREFIX_DECL]
+      [cpActContext name]
+      ins |> List.map (cpInputParam lut)
+      outs |> List.map (cpOutputParam lut) ]
+      |> List.concat
+      |> dpCommaSeparatedInParens
+
 /// int <name>_<suffix> (char * prefix, struct <name> blc_blech_ctx, <ins>, <outs>) { <body> }
 /// a printer for local variables returns 1 if it printed something 
 /// (there may be activities without local variables, 
 /// then there is nothing to print and 0 is returned)
 let private printerTemplate lut name suffix body ins outs =
-    let printerInterface =
-        [ [txt PREFIX_DECL]
-          [cpActContext name]
-          ins |> List.map (cpInputParam lut)
-          outs |> List.map (cpOutputParam lut) ]
-        |> List.concat
-        |> dpCommaSeparatedInParens
-    
+    // let printerInterface =
+    //     [ [txt PREFIX_DECL]
+    //       [cpActContext name]
+    //       ins |> List.map (cpInputParam lut)
+    //       outs |> List.map (cpOutputParam lut) ]
+    //     |> List.concat
+    //     |> dpCommaSeparatedInParens
     txt "int"
     <+> cpStaticName name <^> txt suffix
-    <+> printerInterface
+    <+> printerInterface lut name ins outs
     <+> txt "{"
     <.> cpIndent body
     <.> txt "}"
 
+/// int <name>_<suffix> (char * prefix, struct <name> blc_blech_ctx, <ins>, <outs>);
+let private printerPrototypeTemplate lut name suffix ins outs =
+//     let printerInterface =
+//         [ [txt PREFIX_DECL]
+//           [cpActContext name]
+//           ins |> List.map (cpInputParam lut)
+//           outs |> List.map (cpOutputParam lut) ]
+//         |> List.concat
+//         |> dpCommaSeparatedInParens
+    
+    txt "int"
+    <+> cpStaticName name <^> txt suffix
+    <+> printerInterface lut name ins outs
+    <^> semi
+    
 
 let private callSubPrinter callerPc name suffix =
     let mangledName = callerPc + "_" + (cpStaticName name |> render None) // doppelt gemoppelt
@@ -105,7 +128,8 @@ let private printPc isLast (pc: ParamDecl) =
     let args = [ PREFIX
                  cCodeDotIfPrefixExists
                  cpPcName pc.name |> render None
-                 cCodeCommaIfNotTopLevel ]
+                 if isLast then 
+                    cCodeCommaIfNotTopLevel ]
     cCodePrintf format args
     |> txt
 
@@ -314,4 +338,33 @@ let genStatePrinters lut compilations entryPointOpt =
         | Some name -> name
     compilations 
     |> List.map (fun c -> genStatePrinter lut c (c.name = ep))
+    |> dpToplevel
+
+
+let private genStatePrinterPrototype lut compilation amIentryPoint =
+    match compilation.actctx with
+    | None -> empty
+    | Some actctx ->
+        let name = compilation.name
+        
+        // generate print function protoypes
+        let printPcsPrototype =
+            printerPrototypeTemplate lut name printPcSuffix [] []
+
+        let printVarsPrototype =
+            let ins = if amIentryPoint then compilation.inputs else []
+            let outs = if amIentryPoint then compilation.outputs else []
+            printerPrototypeTemplate lut name printLocalsSuffix ins outs
+        
+        [printPcsPrototype; empty; printVarsPrototype]
+        |> vsep
+
+
+let genStatePrinterPrototypes lut compilations entryPointOpt =
+    let ep =
+        match entryPointOpt with
+        | None -> QName.CreateAuxiliary [] "" // empty name, no real activity has an empty name
+        | Some name -> name
+    compilations 
+    |> List.map (fun c -> genStatePrinterPrototype lut c (c.name = ep))
     |> dpToplevel

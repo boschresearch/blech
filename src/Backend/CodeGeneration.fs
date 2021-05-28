@@ -94,7 +94,10 @@ module Comment =
     let cProgramFunctions =
         cpGeneratedComment <| txt "program functions: tick, init"
 
-    let cTraceFunction =
+    let statePrinters = 
+        cpGeneratedComment <| txt "trace functions: state printers"
+
+    let traceFunction =
         cpGeneratedComment <| txt "trace function: printState"
 
     // app file comments
@@ -108,7 +111,9 @@ module Comment =
     let testFunction = 
         cpGeneratedComment <| txt "the test main loop"
 
+    // trace printing comments
 
+    
 /// Translates all sub programs of a module into a list of compilations
 let public translate ctx (pack: BlechModule) =
     // translate all subprograms in order
@@ -254,6 +259,9 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         |> List.map (fun c -> dpOptLinePrefix c.doc c.implementation) 
         |> dpToplevel
 
+    // state printers
+    let statePrinters = genStatePrinters ctx.tcc compilations entryPointOpt
+  
     // only relevant for main (entry point) programs - not modules
     let globVars, mainCallback, mainInit, printState =
         match entryPointOpt with
@@ -283,48 +291,59 @@ let private cpModuleCode ctx (moduleName: TranslationUnitPath)
         
     
     // combine all into one Doc
-    [ Comment.generatedCode
+    [ 
+        Comment.generatedCode
       
-      moduleDoc
+        moduleDoc
 
-      // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
-      Comment.selfInclude
-      selfHeader
+        // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
+        Comment.selfInclude
+        selfHeader
       
-      Comment.necessaryHeaders
-      programHeader
-      (if ctx.cliContext.trace then stdioHeader else empty)
+        Comment.necessaryHeaders
+        programHeader
+        if ctx.cliContext.trace then 
+            stdioHeader
       
-      Comment.cHeaders
-      cHeaders
+        Comment.cHeaders
+        cHeaders
       
-      Comment.blechHeader
-      blechHeader
+        Comment.blechHeader
+        blechHeader
       
-      Comment.importHeaders 
-      importIncludes 
+        Comment.importHeaders 
+        importIncludes 
 
-      Comment.cConstants
-      externLocalConstMacros
+        Comment.cConstants
+        externLocalConstMacros
       
-      ////Comment.cFunctions // already part of *.h
-      //directCCalls
-      //Comment.constants
-      //userConst
+          ////Comment.cFunctions // already part of *.h
+          //directCCalls
+          //Comment.constants
+          //userConst
+          
+        Comment.parameters
+        userParams
       
-      Comment.parameters
-      userParams
-      if entryPointOpt.IsSome then
-          Comment.state
-          globVars
-      Comment.compilations
-      code
-      (if ctx.cliContext.trace then genStatePrinters ctx.tcc compilations entryPointOpt else empty)
-      if entryPointOpt.IsSome then
-          Comment.progam
-          mainCallback
-          mainInit
-          (if ctx.cliContext.trace then printState else empty) ]
+        if entryPointOpt.IsSome then
+            Comment.state
+            globVars
+      
+        Comment.compilations
+        code
+      
+        if ctx.cliContext.trace then
+            Comment.statePrinters 
+            statePrinters
+
+        if entryPointOpt.IsSome then
+            Comment.progam
+            mainCallback
+            mainInit
+            if ctx.cliContext.trace then 
+                Comment.traceFunction
+                printState
+    ]
     |> dpRemoveEmpty
     |> dpToplevel
 
@@ -425,7 +444,7 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
     let localFunctions =
         compilations 
         |> List.map (fun c -> c.signature) 
-        |> dpBlock
+        |> dpToplevel
     
     let programFunctionPrototypes, traceFunctionPrototype =
         match entryPointOpt with
@@ -446,52 +465,56 @@ let private cpModuleHeader ctx (moduleName: TranslationUnitPath)
                 |> dpToplevel
             progFunProt, traceFunProt
 
+    // state printers
+    let statePrinterPrototypes = 
+        genStatePrinterPrototypes ctx.tcc compilations entryPointOpt
+  
     // combine all into one Doc
-    [ includeGuardBegin
-      Comment.generatedCode
-      
-      moduleDoc
+    [ 
+        includeGuardBegin
+        Comment.generatedCode
+          
+        moduleDoc
 
-      Comment.cHeaders
-      cHeaders
+        Comment.cHeaders
+        cHeaders
       
-      Comment.blechHeader
-      blechHeader
+        Comment.blechHeader
+        blechHeader
       
-      Comment.importHeaders
-      importIncludes
+        Comment.importHeaders
+        importIncludes
       
-      Comment.userTypes
-      userTypes    // all user types are global
+        Comment.userTypes
+        userTypes    // all user types are global
       
-      Comment.activityContexts
-      activityContexts
+        Comment.activityContexts
+        activityContexts
       
-      // Comment.cConstants
-      // userConst // only top-level constants and params go there, currently none
-      
-      // Comment.constants
-      
-      Comment.cConstants
-      externConstMacros
-      
-      Comment.cFunctions
-      directCCalls
-      
-      Comment.exportedFunctions
-      localFunctions // only exposed functions go there, currently all
+        Comment.cConstants
+        externConstMacros
+          
+        Comment.cFunctions
+        directCCalls
+          
+        Comment.exportedFunctions
+        localFunctions // only exposed functions go there, currently all
 
-      // Program functions must not be created and exposed for blech modules
-      if entryPointOpt.IsSome then
-          Comment.cProgramFunctions
-          programFunctionPrototypes
+        if ctx.cliContext.trace then
+            Comment.statePrinters 
+            statePrinterPrototypes
 
-          (if ctx.cliContext.trace then
-            [ Comment.cTraceFunction
-              traceFunctionPrototype ]
-            |> dpToplevel
-           else empty)
-      includeGuardEnd ]
+        // Program functions must not be created and exposed for blech modules
+        if entryPointOpt.IsSome then
+            Comment.cProgramFunctions
+            programFunctionPrototypes
+
+            if ctx.cliContext.trace then
+                Comment.traceFunction
+                traceFunctionPrototype
+    
+        includeGuardEnd 
+    ]
     |> dpRemoveEmpty
     |> dpToplevel
 

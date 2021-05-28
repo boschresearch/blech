@@ -1005,12 +1005,24 @@ let internal translate ctx (subProgDecl: ProcedureImpl) =
         <.> cpIndent returnPC
         <.> txt "}"
 
-    let signature =
+    let initActivitySignature = 
+        txt "void"
+        <+> cpStaticName (!curComp).name <^> txt "_init"
+        <+> cpActCtxIfaceOnly (!curComp)
+        <^> semi
+
+    let completeActivitySignature =
         txt "blc_pc_t"
         <+> cpStaticName (!curComp).name
         <+> cpIface ctx.tcc (!curComp)
         <^> semi
-        
+
+    let signature =
+        [ initActivitySignature
+          completeActivitySignature ]
+        |> vsep
+
+
     let optDoc = 
         cpOptDocComments subProgDecl.annotation.doc
 
