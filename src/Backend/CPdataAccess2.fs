@@ -446,7 +446,6 @@ and private binExpr tcc s1 s2 infx =
         |> (</>) <| txt infx
         |> (<+>) <| rs.[1].Render
         |> complexInParens rs.[1]
-        // |> parens
     mkPrereqExpr
     <| (getPrereq re1 @ getPrereq re2)
     <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
@@ -462,7 +461,6 @@ and private binConj tcc s1 s2 =
             |> (</>) <| txt "&&"
             |> (<+>) <| rs.[1].Render
             |> complexInParens rs.[1]
-        // |> parens
         mkPrereqExpr
         <| (getPrereq re1 @ getPrereq re2)
         <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
@@ -499,7 +497,6 @@ and private binDisj tcc s1 s2 =
             |> (</>) <| txt "||"
             |> (<+>) <| rs.[1].Render
             |> complexInParens rs.[1]
-            // |> parens
         mkPrereqExpr
         <| (getPrereq re1 @ getPrereq re2)
         <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
@@ -615,7 +612,6 @@ and cpExpr tcc expr : PrereqExpression =
     | Neg subExpr -> 
         let re = cpExpr tcc subExpr
         let render (rs: CExpr list) =
-            // txt "!" <^> parens rs.[0].Render
             txt "!" <^> (rs.[0].Render |> complexInParens rs.[0])
         mkPrereqExpr
         <| re.prereqStmts
@@ -626,7 +622,6 @@ and cpExpr tcc expr : PrereqExpression =
     | Bnot subExpr -> 
         let re = cpExpr tcc subExpr
         let render (rs: CExpr list) =
-            // (txt "~" <^> parens rs.[0].Render)
             txt "~" <^> (rs.[0].Render|> complexInParens rs.[0])
         mkPrereqExpr
         <| re.prereqStmts
