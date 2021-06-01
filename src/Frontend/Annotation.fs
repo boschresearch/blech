@@ -77,8 +77,8 @@ module Annotation =
             Ok <| CFunctionAlias (binding, None)
         | [ AST.KeyValue (key = AST.Ident(text = Key.source); value = source ) ] ->
             checkCFunctionAliasSource binding source
-        | literal :: _ ->
-            Error [ UnsupportedAnnotation literal.Range ]
+        | hd :: _ ->
+            Error [ UnsupportedAnnotation hd.Range ]
 
     let private checkCFunctionHeader binding optHeader =
         match optHeader with
@@ -86,8 +86,8 @@ module Annotation =
             Ok <| CFunctionBinding (binding, None)
         | [ AST.KeyValue (key = AST.Ident(text = Key.header); value = header ) ] ->
             checkCFunctionBindingHeader binding header
-        | literal :: _ ->
-            Error [ UnsupportedAnnotation literal.Range ]
+        | hd :: _ ->
+            Error [ UnsupportedAnnotation hd.Range ]
 
     let private checkCFunctionAlias (alias : AST.Literal) optSource = 
         match alias  with
@@ -103,8 +103,8 @@ module Annotation =
             Ok <| cdata (binding, None)
         | [ AST.KeyValue (key = AST.Ident(text = Key.header); value = header ) ] ->
             checkCDataBindingHeader cdata binding header
-        | literal :: _ ->
-            Error [ UnsupportedAnnotation literal.Range ]
+        | hd :: _ ->
+            Error [ UnsupportedAnnotation hd.Range ]
 
     let private checkCFunctionBinding (binding : AST.Literal) optHeader = 
         match binding  with
@@ -122,6 +122,17 @@ module Annotation =
         | binding -> 
             Error [UnsupportedAnnotation binding.Range]
 
+    let private checkCTypeDef (typedef : AST.Literal) (attrs : AST.Attribute list) = 
+        match typedef, attrs  with
+        | AST.String (value = text), []
+        | AST.MultiLineString (value = text), []-> 
+            Ok <| CType text
+        | td, [] -> 
+            Error [UnsupportedAnnotation td.Range]
+        | _, hd :: _ ->
+            Error [UnsupportedAnnotation hd.Range]
+        
+
     let private checkCFunctionAnnotation (attrs : AST.Attribute list) = 
         match List.head attrs with
         |  AST.KeyValue (key = AST.Ident(text = Key.binding); value = binding) 
@@ -135,6 +146,13 @@ module Annotation =
         match List.head attrs with
         |  AST.KeyValue (key = AST.Ident(text = Key.binding); value = binding) 
             -> checkCDataBinding cdata binding (List.tail attrs)        
+        |  hd -> 
+            Error [ UnsupportedAnnotation hd.Range ]
+
+    let private checkCTypeAnnotation (attrs : AST.Attribute list) = 
+        match List.head attrs with
+        |  AST.KeyValue (key = AST.Ident(text = Key.typedef); value = typedef) 
+            -> checkCTypeDef typedef (List.tail attrs)        
         |  hd -> 
             Error [ UnsupportedAnnotation hd.Range ]
 
@@ -152,22 +170,24 @@ module Annotation =
         | AST.Ident(text = Key.blockdoc) -> checkDocAnnotation BlockDoc value 
         | _ -> Error [UnsupportedAnnotation key.Range]
 
-    let private checkStructuredAnnotation key attrs = 
+    let private checkStructuredAnnotation key attrs =
+        assert (List.length attrs > 0) 
         match key with
         | AST.Ident(text = Attribute.cfunction) -> checkCFunctionAnnotation attrs
         | AST.Ident(text = Attribute.cconst) -> checkCDataAnnotation CConst attrs
         | AST.Ident(text = Attribute.cparam) -> checkCDataAnnotation CParam attrs
         | AST.Ident(text = Attribute.coutput) -> checkCDataAnnotation COutput attrs
         | AST.Ident(text = Attribute.cinput) -> checkCDataAnnotation CInput attrs
-        // | AST.Ident(text = Attribute.ctype) -> checkCTypeAnnotation CType attrs
+        | AST.Ident(text = Attribute.ctype) -> checkCTypeAnnotation attrs
         | _ -> Error [UnsupportedAnnotation key.Range]
 
     let private checkAttribute (attr: AST.Attribute) : Result<Attribute, TyCheckError list> =
         match attr with
         | AST.Key (key = key) -> checkKeyAnnotation key
         | AST.KeyValue ( key = key;  value = value ) -> checkKeyValueAnnotation key value
+        | AST.Structured ( key = key; attrs = [] ) -> Error [UnsupportedAnnotation attr.Range]        
         | AST.Structured ( key = key; attrs = attrs ) -> checkStructuredAnnotation key attrs
-
+        
     let checkAnnotation (anno: AST.Annotation) : Result<Attribute, TyCheckError list> = 
         checkAttribute anno.Attribute
         // match anno.Attribute with

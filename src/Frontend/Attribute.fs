@@ -72,6 +72,7 @@ module Attribute =
         let alias = "alias"
         
         // C typedef
+        [<Literal>] 
         let typedef = "typedef"
 
         // doc comments
