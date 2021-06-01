@@ -38,6 +38,10 @@ module Attribute =
     let coutput = "COutput"
     [<Literal>] 
     let cinput = "CInput"
+
+    // type decls
+    [<Literal>] 
+    let ctype = "CType"
     
     // c pragmas
     [<Literal>]
@@ -63,6 +67,12 @@ module Attribute =
         [<Literal>] 
         let source = "source"
 
+        // C alias 
+        [<Literal>] 
+        let alias = "alias"
+        
+        // C typedef
+        let typedef = "typedef"
 
         // doc comments
         [<Literal>] 
@@ -80,11 +90,13 @@ module Attribute =
         | COutput of binding: string * header: string option
         | CInput of binding: string * header: string option
 
-        | CFunctionPrototype of binding: string * header: string option
-        | CFunctionWrapper of source: string
-
+        | CFunctionBinding of binding: string * header: string option
+        | CFunctionAlias of alias: string * source: string option
+        
         | LineDoc of linedoc: string
         | BlockDoc of blockdoc: string
+
+        | CType of typedef: string
 
         | OpaqueArray
         | OpaqueStruct
@@ -112,6 +124,12 @@ module Attribute =
                 dpStructured key attrs
                 |> dpAnno
 
+            let dpCAlias key cAlias optCSource =
+                dpCBinding key cAlias optCSource
+
+            let dpCType key typedef =
+                dpStructured key [dpKeyValue (txt Key.typedef) typedef]
+
             let optStringToDoc optString = 
                 match optString with
                 | Some s -> Some <| txt s
@@ -130,15 +148,18 @@ module Attribute =
             | CInput (binding, header)->
                 dpCBinding (txt cinput) (txt binding) (optStringToDoc header)
             
-            | CFunctionPrototype (binding, header) ->
+            | CFunctionBinding (binding, header) ->
                 dpCBinding (txt cfunction) (txt binding) (optStringToDoc header)
-            | CFunctionWrapper source ->
-                dpCBinding (txt cfunction) (txt source) None
-                
+            | CFunctionAlias (alias, source) ->  
+                dpCAlias (txt cfunction) (txt alias) (optStringToDoc source)
+            
             | LineDoc doc ->
                 txt "///" <+> txt doc
             | BlockDoc doc ->
                 txt "/**" <^> txt doc <^> txt "*/"
+
+            | CType typedef ->
+                dpCType (txt ctype) (txt typedef)
 
             | OpaqueStruct ->
                 txt opaqueStruct |> dpAnno
@@ -183,7 +204,7 @@ module Attribute =
         | CParam (binding = binding)
         | COutput (binding = binding)
         | CInput (binding = binding)
-        | CFunctionPrototype (binding = binding) ->
+        | CFunctionBinding (binding = binding) ->
             Some binding
         | _ ->
             None
@@ -194,10 +215,31 @@ module Attribute =
         | CParam (header = Some header)
         | COutput (header = Some header)
         | CInput (header = Some header)
-        | CFunctionPrototype (header = Some header) ->
+        | CFunctionBinding (header = Some header) ->
             Some header
         | _ ->
             None
+
+    let private tryGetCAlias (attr: Attribute) =
+        match attr with
+        | CFunctionAlias (alias = alias) -> 
+            Some alias
+        | _ ->
+            None
+
+    let private tryGetCSource (attr: Attribute) =
+        match attr with
+        | CFunctionAlias (source = source) -> 
+            Some source
+        | _ ->
+            None
+
+    let private tryGetCTypedef (attr: Attribute) =
+        match attr with
+        | CType (typedef = typedef) ->
+            Some typedef
+        | _ ->
+            None        
 
 
     //---
@@ -243,7 +285,7 @@ module Attribute =
 
         member fpanno.isDirectCCall =
             match fpanno.cfunction with
-            | Some (CFunctionPrototype (binding = _)) ->
+            | Some (CFunctionBinding (binding = _)) ->
                 true
             | _ ->
                 false

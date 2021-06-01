@@ -40,91 +40,219 @@ module Annotation =
         Error [ BindingIndexOutOfBounds (range, indices)]
 
     /// Creates a typed annotation from an admissible untyped annotation
-    // recursive decent is currently not neccessary
+    // recursive decent
+
+    let private checkDocAnnotation docAttr value = 
+        match value with
+        | AST.String(value = doc) -> Ok <| docAttr doc
+        | _ -> Error [UnsupportedAnnotation value.Range]
+
+    let private checkCFunctionAliasSource alias source =
+        match source with
+        | AST.String (value = source)
+        | AST.MultiLineString (value = source) ->
+            Ok <| CFunctionBinding (alias, Some source)
+        | literal ->
+            Error [ UnsupportedAnnotation literal.Range ]
+
+    let private checkCFunctionBindingHeader binding header =
+        match header with
+        | AST.String (value = header)
+        | AST.MultiLineString (value = header) ->
+            Ok <| CFunctionBinding (binding, Some header)
+        | literal ->
+            Error [ UnsupportedAnnotation literal.Range ]
+
+    let private checkCDataBindingHeader cdata binding header =
+        match header with
+        | AST.String (value = header)
+        | AST.MultiLineString (value = header) ->
+            Ok <| cdata (binding, Some header)
+        | literal ->
+            Error [ UnsupportedAnnotation literal.Range ]
+    
+    let private checkCFunctionSource binding optHeader =
+        match optHeader with
+        | [] -> 
+            Ok <| CFunctionAlias (binding, None)
+        | [ AST.KeyValue (key = AST.Ident(text = Key.source); value = source ) ] ->
+            checkCFunctionAliasSource binding source
+        | literal :: _ ->
+            Error [ UnsupportedAnnotation literal.Range ]
+
+    let private checkCFunctionHeader binding optHeader =
+        match optHeader with
+        | [] -> 
+            Ok <| CFunctionBinding (binding, None)
+        | [ AST.KeyValue (key = AST.Ident(text = Key.header); value = header ) ] ->
+            checkCFunctionBindingHeader binding header
+        | literal :: _ ->
+            Error [ UnsupportedAnnotation literal.Range ]
+
+    let private checkCFunctionAlias (alias : AST.Literal) optSource = 
+        match alias  with
+        | AST.String (value = text)
+        | AST.MultiLineString (value = text) -> 
+            checkCFunctionSource text optSource
+        | binding -> 
+            Error [UnsupportedAnnotation binding.Range]
+
+    let private checkCDataHeader cdata binding optHeader =
+        match optHeader with
+        | [] -> 
+            Ok <| cdata (binding, None)
+        | [ AST.KeyValue (key = AST.Ident(text = Key.header); value = header ) ] ->
+            checkCDataBindingHeader cdata binding header
+        | literal :: _ ->
+            Error [ UnsupportedAnnotation literal.Range ]
+
+    let private checkCFunctionBinding (binding : AST.Literal) optHeader = 
+        match binding  with
+        | AST.String (value = text)
+        | AST.MultiLineString (value = text) -> 
+            checkCFunctionHeader text optHeader
+        | binding -> 
+            Error [UnsupportedAnnotation binding.Range]
+
+    let private checkCDataBinding cdata (binding : AST.Literal) optHeader = 
+        match binding  with
+        | AST.String (value = text)
+        | AST.MultiLineString (value = text) -> 
+            checkCDataHeader cdata text optHeader
+        | binding -> 
+            Error [UnsupportedAnnotation binding.Range]
+
+    let private checkCFunctionAnnotation (attrs : AST.Attribute list) = 
+        match List.head attrs with
+        |  AST.KeyValue (key = AST.Ident(text = Key.binding); value = binding) 
+            -> checkCFunctionBinding binding (List.tail attrs)        
+        |  AST.KeyValue (key = AST.Ident(text = Key.alias); value = alias) 
+            -> checkCFunctionAlias alias (List.tail attrs)        
+        |  hd -> 
+            Error [ UnsupportedAnnotation hd.Range ]
+
+    let private checkCDataAnnotation cdata (attrs : AST.Attribute list) = 
+        match List.head attrs with
+        |  AST.KeyValue (key = AST.Ident(text = Key.binding); value = binding) 
+            -> checkCDataBinding cdata binding (List.tail attrs)        
+        |  hd -> 
+            Error [ UnsupportedAnnotation hd.Range ]
+
+    let private checkKeyAnnotation (key : AST.Key) =
+        match key with
+        | AST.Ident(text = Attribute.entrypoint) -> Ok EntryPoint
+        | AST.Ident(text = Attribute.opaqueArray) -> Ok OpaqueArray
+        | AST.Ident(text = Attribute.opaqueStruct) -> Ok OpaqueStruct
+        | AST.Ident(text = Attribute.simpleType)  -> Ok SimpleType
+        | _ -> Error [UnsupportedAnnotation key.Range]
+
+    let private checkKeyValueAnnotation key value =
+        match key with
+        | AST.Ident(text = Key.linedoc) -> checkDocAnnotation LineDoc value
+        | AST.Ident(text = Key.blockdoc) -> checkDocAnnotation BlockDoc value 
+        | _ -> Error [UnsupportedAnnotation key.Range]
+
+    let private checkStructuredAnnotation key attrs = 
+        match key with
+        | AST.Ident(text = Attribute.cfunction) -> checkCFunctionAnnotation attrs
+        | AST.Ident(text = Attribute.cconst) -> checkCDataAnnotation CConst attrs
+        | AST.Ident(text = Attribute.cparam) -> checkCDataAnnotation CParam attrs
+        | AST.Ident(text = Attribute.coutput) -> checkCDataAnnotation COutput attrs
+        | AST.Ident(text = Attribute.cinput) -> checkCDataAnnotation CInput attrs
+        // | AST.Ident(text = Attribute.ctype) -> checkCTypeAnnotation CType attrs
+        | _ -> Error [UnsupportedAnnotation key.Range]
+
+    let private checkAttribute (attr: AST.Attribute) : Result<Attribute, TyCheckError list> =
+        match attr with
+        | AST.Key (key = key) -> checkKeyAnnotation key
+        | AST.KeyValue ( key = key;  value = value ) -> checkKeyValueAnnotation key value
+        | AST.Structured ( key = key; attrs = attrs ) -> checkStructuredAnnotation key attrs
+
     let checkAnnotation (anno: AST.Annotation) : Result<Attribute, TyCheckError list> = 
-        match anno.Attribute with
-        | AST.Key ( key = AST.Ident(text = Attribute.entrypoint) ) ->
-            Ok EntryPoint
+        checkAttribute anno.Attribute
+        // match anno.Attribute with
+        // | AST.Key ( key = AST.Ident(text = Attribute.entrypoint) ) ->
+        //     Ok EntryPoint
 
-        | AST.Key ( key = AST.Ident(text = Attribute.opaqueArray) ) ->
-            Ok OpaqueArray
+        // | AST.Key ( key = AST.Ident(text = Attribute.opaqueArray) ) ->
+        //     Ok OpaqueArray
         
-        | AST.Key ( key = AST.Ident(text = Attribute.opaqueStruct) ) ->
-            Ok OpaqueStruct
+        // | AST.Key ( key = AST.Ident(text = Attribute.opaqueStruct) ) ->
+        //     Ok OpaqueStruct
         
-        | AST.Key ( key = AST.Ident(text = Attribute.simpleType) ) ->
-            Ok SimpleType
+        // | AST.Key ( key = AST.Ident(text = Attribute.simpleType) ) ->
+        //     Ok SimpleType
 
-        | AST.KeyValue ( key = AST.Ident(text = Key.linedoc) 
-                         value = AST.String(value = doc) ) ->
-            Ok (LineDoc (doc))
+        // | AST.KeyValue ( key = AST.Ident(text = Key.linedoc) 
+        //                  value = AST.String(value = doc) ) ->
+        //     Ok (LineDoc (doc))
 
-        | AST.KeyValue ( key = AST.Ident(text = Key.blockdoc) 
-                         value = AST.String(value = doc) ) ->
-            Ok (BlockDoc (doc))
+        // | AST.KeyValue ( key = AST.Ident(text = Key.blockdoc) 
+        //                  value = AST.String(value = doc) ) ->
+        //     Ok (BlockDoc (doc))
                
-        | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding)
-                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = header) ] ) 
-                                                        when binding.IsText && header.IsText ->
-            Ok (CFunctionPrototype(binding.Text, Some header.Text))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding)
+        //                             AST.KeyValue (key = AST.Ident(text = Key.header) 
+        //                                           value = header) ] ) 
+        //                                                 when binding.IsText && header.IsText ->
+        //     Ok (CFunctionBinding(binding.Text, Some header.Text))
 
-        | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding) ] ) 
-                                                        when binding.IsText ->
-            Ok (CFunctionPrototype(binding.Text, None))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding) ] ) 
+        //                                                 when binding.IsText ->
+        //     Ok (CFunctionBinding(binding.Text, None))
 
-        | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source)) ] ) ->
-            //Ok (CFunctionWrapper source)
-            Error [DeprecatedCFunctionWrapper anno.Range ]
+        // | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source)) ] ) ->
+        //     //Ok (CFunctionWrapper source)
+        //     Error [DeprecatedCFunctionWrapper anno.Range ]
 
-        | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding)
-                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = header) ] ) 
-                                                       when binding.IsText && header.IsText ->
-            Ok (CConst(binding.Text, Some header.Text))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding)
+        //                             AST.KeyValue (key = AST.Ident(text = Key.header) 
+        //                                           value = header) ] ) 
+        //                                                when binding.IsText && header.IsText ->
+        //     Ok (CConst(binding.Text, Some header.Text))
         
-        | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding) ] ) 
-                                                        when binding.IsText->
-            Ok (CConst(binding.Text, None))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding) ] ) 
+        //                                                 when binding.IsText->
+        //     Ok (CConst(binding.Text, None))
 
-        | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding)
-                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = header) ] ) 
-                                                        when binding.IsText && header.IsText ->
-            Ok (CInput(binding.Text, Some header.Text))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding)
+        //                             AST.KeyValue (key = AST.Ident(text = Key.header) 
+        //                                           value = header) ] ) 
+        //                                                 when binding.IsText && header.IsText ->
+        //     Ok (CInput(binding.Text, Some header.Text))
 
-        | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding) ] ) 
-                                                        when binding.IsText ->
-            Ok (CInput(binding.Text, None))
+        // | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding) ] ) 
+        //                                                 when binding.IsText ->
+        //     Ok (CInput(binding.Text, None))
 
-        | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = binding)
-                                    AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = header) ] ) 
-                                                    when binding.IsText && header.IsText ->
-            Ok (COutput(binding.Text, Some header.Text))
+        // | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = binding)
+        //                             AST.KeyValue (key = AST.Ident(text = Key.header) 
+        //                                           value = header) ] ) 
+        //                                             when binding.IsText && header.IsText ->
+        //     Ok (COutput(binding.Text, Some header.Text))
         
-        | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (COutput(binding, None))
+        // | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
+        //                   attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
+        //                                           value = AST.String(value = binding)) ] ) ->
+        //     Ok (COutput(binding, None))
                 
-        | _ ->
-            Error [UnsupportedAnnotation anno.Range]
+        // | _ ->
+        //     Error [UnsupportedAnnotation anno.Range]
 
     
     let checkSubProgram (sp: AST.SubProgram) =
@@ -151,14 +279,14 @@ module Annotation =
         let checkFpAnno fpattr anno = 
             let checkAttribute (fpattr, attr) = 
                 match attr with
-                | CFunctionPrototype (header = header) when fp.isExtern && fp.isFunction ->
+                | CFunctionBinding (header = header) when fp.isExtern && fp.isFunction ->
                     if Option.isSome fpattr.cfunction then
                         multipleUniqueAnnotation anno
                     elif Option.isNone header && not (hasInclude lut) then 
                         missingNamedArgument fp.range Attribute.Key.header
                     else
                         Ok { fpattr with cfunction = Some attr }
-                | CFunctionWrapper _ when fp.isExtern && fp.isFunction ->
+                | CFunctionAlias _ when fp.isExtern && fp.isFunction ->
                     if Option.isSome fpattr.cfunction then
                         multipleUniqueAnnotation anno
                     else
@@ -207,14 +335,14 @@ module Annotation =
         let checkOsAnno osattr anno = 
             let checkAttribute (fpattr, attr) = 
                 match attr with
-                | CFunctionPrototype (header = header) ->
+                | CFunctionBinding (header = header) ->
                     if Option.isSome fpattr.cfunction then
                         multipleUniqueAnnotation anno
                     elif Option.isNone header && not (hasInclude lut) then 
                         missingNamedArgument os.range Attribute.Key.header
                     else
                         Ok { fpattr with cfunction = Some attr }
-                | CFunctionWrapper _ ->
+                | CFunctionAlias _ ->
                     if Option.isSome fpattr.cfunction then
                         multipleUniqueAnnotation anno
                     else
