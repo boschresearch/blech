@@ -28,7 +28,7 @@ module Annotation =
 
     let private missingAnnotation range key =
         Error [MissingAnnotation (range, key)]
-        
+            
     let private multipleUniqueAnnotation (anno : AST.Annotation)  = 
         Error [MultipleUniqueAnnotation (anno.Range, anno.Range)] //TODO: correct this
 
@@ -428,16 +428,46 @@ module Annotation =
         |> Result.bind checkExternVarDecl
 
 
+    let checkOpaqueTypeDecl (otd: AST.OpaqueTypeDecl) =  
+        let checkOdtAnnotation otdattr (anno: AST.Annotation) = 
+            let checkAttribute (otdattr, attr) =
+                match attr with
+                | LineDoc _
+                | BlockDoc _ ->
+                    Ok { otdattr with OpaqueTypeDecl.doc = List.append otdattr.doc [attr] }
+                | SimpleType 
+                | OpaqueStruct
+                | OpaqueArray ->
+                    Ok { otdattr with OpaqueTypeDecl.opaquekind = Some attr }
+                | _ ->
+                    unsupportedAnnotation anno
+
+            combine otdattr (checkAnnotation anno)
+            |> Result.bind checkAttribute
+         
+        // TODO: This is a place holder for 'extern type T' declarations, fjg. 02.06.21
+        // TODO: Will become more elaborated with extern opaque types
+        let checkOpaqueTypeAttribute odtattr =
+            match odtattr.opaquekind with
+            | None ->
+                failwith "Opaque types are generated and always have exactly one suitable annotation"
+            | _ ->
+                Ok odtattr
+
+        List.fold checkOdtAnnotation (Ok Attribute.OpaqueTypeDecl.Empty) otd.annotations   
+        |> Result.bind checkOpaqueTypeAttribute
+    
+
     let checkOtherDecl (annotations: AST.Annotation list) =  
         let checkOdAnnotation odattr (anno: AST.Annotation) = 
             let checkAttribute (odattr, attr) =
                 match attr with
                 | LineDoc _
-                | BlockDoc _ 
+                | BlockDoc _ -> 
                 // TODO: Wrong usage, should have a separate annotation check, correct this. fjg. 23.05.21
-                | SimpleType 
-                | OpaqueStruct
-                | OpaqueArray ->
+                // | SimpleType 
+                // | OpaqueStruct
+                // | OpaqueArray ->
                     Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }
                 | _ ->
                     unsupportedAnnotation anno
