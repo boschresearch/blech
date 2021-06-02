@@ -337,6 +337,24 @@ module Attribute =
             | _ ->
                 None
 
+                
+    type OpaqueTypeDecl = 
+        { 
+            doc: Attribute list
+            opaquekind: Attribute option // StructType, ArrayType, SimpleType
+        }
+        static member Empty = 
+            { doc = []
+              opaquekind = None }
+        
+        member this.ToDoc = 
+            declToDoc this.doc this.opaquekind
+
+        override this.ToString() =
+            this.ToDoc 
+            |> vsep
+            |> render None
+
     /// Used as a general purpose type for any other annotateable declaration
     type OtherDecl = 
         { 

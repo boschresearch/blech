@@ -682,17 +682,13 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
     newType
 
         
-let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OtherDecl, _>) =
-    let mkOpaqueType (n, (a: Attribute.OtherDecl)) =
-        let isArray =
-            a.doc 
-            |> List.exists (function | Attribute.OpaqueArray -> true | _ -> false)
-        let isStruct =
-            a.doc
-            |> List.exists (function | Attribute.OpaqueStruct -> true | _ -> false)
-        let isSimple = 
-            a.doc 
-            |> List.exists (function | Attribute.SimpleType -> true | _ -> false)
+let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OpaqueTypeDecl, _>) =
+    let mkOpaqueType (n, (a: Attribute.OpaqueTypeDecl)) =
+        assert Option.isSome a.opaquekind // opaque kind is generated and should be always correct
+        let ok = Option.get a.opaquekind
+        let isArray = ok = Attribute.OpaqueArray
+        let isStruct = ok = Attribute.OpaqueStruct
+        let isSimple = ok = Attribute.SimpleType
         let newType =
             match isArray, isStruct, isSimple with
             | true, true, _
@@ -1216,7 +1212,7 @@ let private fPackage lut (pack: AST.CompilationUnit) =
             | AST.Member.OpaqueType ot ->
                 let t =
                     fOpaqueTypeDecl lut ot.range ot.name
-                    <| Annotation.checkOtherDecl ot.annotations
+                    <| Annotation.checkOpaqueTypeDecl ot
                 do typedMembers.AddType t
             | AST.Member.TypeAlias t ->
                 let t =
