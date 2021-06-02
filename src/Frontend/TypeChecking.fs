@@ -624,7 +624,7 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
 // Creating user defined type declarations (structs, enums, ...)
 //=============================================================================
 
-let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
+let private fStructTypeDecl lut (std: AST.StructTypeDecl) (annotation: Result<Attribute.TypeDecl, _>) =
     let checkValueFields fields =
         fields
         // ensure the fields are all variable declarations
@@ -674,8 +674,8 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
     newType
 
         
-let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OpaqueTypeDecl, _>) =
-    let mkOpaqueType (n, (a: Attribute.OpaqueTypeDecl)) =
+let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.TypeDecl, _>) =
+    let mkOpaqueType (n, (a: Attribute.TypeDecl)) =
         assert Option.isSome a.opaquekind // opaque kind is generated and should be always correct
         // TODO: Test are handled in Annotation checking, keep Error messages for the moment, fjg 2.6.21
         // let ok = Option.get a.opaquekind
@@ -1211,13 +1211,16 @@ let private fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddMemberPragma (Annotation.checkMemberPragma lut p)
             | AST.Member.EnumType e -> 
                 do typedMembers.AddType (fEnumTypeDecl e)
-            | AST.Member.StructType s -> 
-                do typedMembers.AddType (fStructTypeDecl lut s)
+            | AST.Member.StructType s ->    
+                let st = 
+                    fStructTypeDecl lut s
+                    <| Annotation.checkStructTypeDecl s   
+                do typedMembers.AddType st
             | AST.Member.OpaqueType ot ->
-                let t =
+                let otd =
                     fOpaqueTypeDecl lut ot.range ot.name
                     <| Annotation.checkOpaqueTypeDecl ot
-                do typedMembers.AddType t
+                do typedMembers.AddType otd
             | AST.Member.TypeAlias t ->
                 let t =
                     fTypeAliasDecl t.range t.name
@@ -1349,7 +1352,7 @@ let typeCheckUnLogged (cliContext: Arguments.BlechCOptions)
             Error errs
 
 
-/// Performs type checking starting with an untyped package and a namecheck loopup table.
+/// Performs type checking starting with an untyped package and a namecheck lookup table.
 /// Returns a TypeCheck context and a BlechModule.
 let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit) (ncEnv: SymbolTable.Environment) singletons =
     match typeCheckUnLogged cliContext otherLuts pack ncEnv singletons with

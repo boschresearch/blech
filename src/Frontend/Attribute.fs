@@ -338,7 +338,7 @@ module Attribute =
                 None
 
                 
-    type OpaqueTypeDecl = 
+    type TypeDecl = 
         { 
             doc: Attribute list
             opaquekind: Attribute option // StructType, ArrayType, SimpleType

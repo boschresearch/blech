@@ -252,7 +252,7 @@ let private getUniqueSuccNode node =
 let private makeActCall ctx (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
     let hasCalleeRetVal, calleeRetType =
         match ctx.tcc.nameToDecl.[whoToCall] with
-        | ProcedureImpl s ->
+        | Declarable.ProcedureImpl s ->
             match s.Returns with
             | ValueTypes.Void -> false, ValueTypes s.Returns
             | _ -> true, ValueTypes s.Returns
@@ -260,9 +260,10 @@ let private makeActCall ctx (curComp: Compilation ref) (node: Node) pos pcName w
             match p.returns with
             | ValueTypes.Void -> false, ValueTypes p.returns
             | _ -> true, ValueTypes p.returns
-        | ParamDecl _ 
+        | Declarable.ParamDecl _ 
         | Declarable.VarDecl _ 
-        | Declarable.ExternalVarDecl _ -> 
+        | Declarable.ExternalVarDecl _ 
+        | Declarable.TypeDecl _-> 
             failwith "Expected to find subprogram (activity) declaration here."
     // in case the return value is ignored with _
     // create a temporary variable to receive the value

@@ -195,18 +195,28 @@ and Types =
 // Data declarations 
 //=============================================================================
 
-// Declaration of a new type (note that type aliases do not exist in the typed Blech, they are resolved!)
-and NewTypeDecl =
+// Declaration of a user-defined type (note that type aliases do not exist in the typed Blech, they are resolved!)
+and TypeDecl =
     {
-        representation: Types
-        annotation: Attribute.OtherDecl
-    }
+        pos: range
+        name: QName
+        newtype: Types
+        annotation: Attribute.TypeDecl
+        allReferences: HashSet<range>
+    } 
+
     member this.ToDoc = 
-        this.annotation.ToDoc @ [this.representation.ToDoc]
+        this.annotation.ToDoc @ [this.newtype.ToDoc]
         |> dpToplevelClose
     
-    override this.ToString () = this.representation.ToString()
+    override this.ToString () = render None <| this.ToDoc
 
+
+//=============================================================================
+// Data declarations 
+//=============================================================================
+
+    
 /// Variable Declaration is used to represent a declaration of global and 
 /// local, mutable and immutable data. Of course, not all combinations are
 /// allowed: no mutable global variables in Blech!
