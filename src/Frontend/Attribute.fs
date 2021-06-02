@@ -355,6 +355,7 @@ module Attribute =
             |> vsep
             |> render None
 
+
     /// Used as a general purpose type for any other annotateable declaration
     type OtherDecl = 
         { 

@@ -677,25 +677,37 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
 let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OpaqueTypeDecl, _>) =
     let mkOpaqueType (n, (a: Attribute.OpaqueTypeDecl)) =
         assert Option.isSome a.opaquekind // opaque kind is generated and should be always correct
-        let ok = Option.get a.opaquekind
-        let isArray = ok = Attribute.OpaqueArray
-        let isStruct = ok = Attribute.OpaqueStruct
-        let isSimple = ok = Attribute.SimpleType
-        let newType =
-            match isArray, isStruct, isSimple with
-            | true, true, _
-            | true, _, true
-            | _, true, true ->
-                Error [OpaqueConflictingAnnotations pos]
-            | false, false, false ->
-                Error [OpaqueNeedsAnnotation pos]
-            | true, false, false ->
+        // TODO: Test are handled in Annotation checking, keep Error messages for the moment, fjg 2.6.21
+        // let ok = Option.get a.opaquekind
+        // let isArray = ok = Attribute.OpaqueArray
+        // let isStruct = ok = Attribute.OpaqueStruct
+        // // let isSimple = ok = Attribute.SimpleType
+        // let newType =
+        //     match isArray, isStruct, isSimple with
+        //     | true, true, _
+        //     | true, _, true
+        //     | _, true, true ->
+        //         Error [OpaqueConflictingAnnotations pos]
+        //     | false, false, false ->
+        //         Error [OpaqueNeedsAnnotation pos]
+        //     | true, false, false ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueArray n)
+        //     | false, true, false ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
+        //     | false, false, true ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
+        // // add type declaration to lookup table
+        let newType = 
+            match Option.get a.opaquekind with
+            | Attribute.OpaqueArray ->
                 Ok <| ValueTypes (ValueTypes.OpaqueArray n)
-            | false, true, false ->
+            | Attribute.OpaqueStruct ->
                 Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
-            | false, false, true ->
+            | Attribute.SimpleType ->
                 Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
-        // add type declaration to lookup table
+            | _ ->
+                failwith "Opaque types should always have the correct attribute"
+        
         match newType with
         | Ok typ -> do addTypeToLut lut n name.Range typ
         | _ -> ()
