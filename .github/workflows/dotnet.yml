@@ -1,6 +1,8 @@
 name: .NET
 
 on:
+  workflow_dispatch:
+    branches: [ develop ]
   push:
     branches: [ develop ]
   pull_request:
