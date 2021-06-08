@@ -227,7 +227,7 @@ let private myErrorHandler (lexbuf: FSharp.Text.Lexing.LexBuffer<char>)
 
     
 let private myBlechParser lexer lexbuf : AST.CompilationUnit =
-    let myTables = { BlechParser.tables() with parseError = myErrorHandler lexbuf }
+    let myTables = { BlechParser.tables with parseError = myErrorHandler lexbuf }
     Operators.unbox <| myTables.Interpret(lexer, lexbuf, 0)
     // Todo: Catch exception from parser, in case error token cannot be accepted (which should not happen)
 
