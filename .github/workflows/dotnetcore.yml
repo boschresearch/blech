@@ -1,6 +1,9 @@
 name: build + unit tests
 
 on:
+  workflow_dispatch:
+    branches:
+      - main
   push:
     branches: 
       - main
