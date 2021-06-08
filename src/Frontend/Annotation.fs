@@ -427,10 +427,6 @@ module Annotation =
         List.fold checkVdAnnotation (Ok VarDecl.Empty) v.annotations
         |> Result.bind checkExternVarDecl
 
-    let checkStructTypeDecl (std: AST.StructTypeDecl) =
-        // TODO: Implement annotation check for struct declaration, fjg. 02.06.21
-        Ok Attribute.TypeDecl.Empty
-
 
     let checkOpaqueTypeDecl (otd: AST.OpaqueTypeDecl) =  
         let checkOtdAnnotation tdattr (anno: AST.Annotation) = 
@@ -481,7 +477,12 @@ module Annotation =
          
         List.fold checkOdAnnotation (Ok Attribute.OtherDecl.Empty) annotations   
 
-    
+
+    let checkStructTypeDecl (std: AST.StructTypeDecl) =
+        // TODO: Implement annotation check for struct declaration, fjg. 02.06.21
+        checkOtherDecl std.annotations
+
+
     let checkModuleSpec (modSpec : AST.ModuleSpec) =
         let checkMsAnnotation msattr (anno : AST.Annotation) =
             let checkAttribute (msattr, attr) =

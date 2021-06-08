@@ -207,7 +207,7 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype |> Ok
             | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
-            | Declarable.TypeDecl td -> td.newtype |> Ok // TODO: Not sure about this, fjg. 02.06.21 
+            | Declarable.TypeDecl td -> td.newType |> Ok // TODO: Not sure about this, fjg. 02.06.21 
             | Declarable.ProcedureImpl _ 
             | Declarable.ProcedurePrototype _ -> Error [ProcedureNameUsedLikeAVariable (name.ToString())]
         else
@@ -268,7 +268,7 @@ module TypeCheckContext =
         else
             //adding for the first time
             lut.nameToDecl.Add(name, decl)
-            
+
 
     let addTypeToLut (lut: TypeCheckContext) name range typ =
         // ignores duplicates

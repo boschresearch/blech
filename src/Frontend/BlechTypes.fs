@@ -192,7 +192,7 @@ and Types =
 
 
 //=============================================================================
-// Data declarations 
+// Type declarations 
 //=============================================================================
 
 // Declaration of a user-defined type (note that type aliases do not exist in the typed Blech, they are resolved!)
@@ -200,13 +200,13 @@ and TypeDecl =
     {
         pos: range
         name: QName
-        newtype: Types
+        newType: Types
         annotation: Attribute.TypeDecl
         allReferences: HashSet<range>
     } 
 
     member this.ToDoc = 
-        this.annotation.ToDoc @ [this.newtype.ToDoc]
+        this.annotation.ToDoc @ [this.newType.ToDoc]
         |> dpToplevelClose
     
     override this.ToString () = render None <| this.ToDoc
@@ -439,7 +439,7 @@ and BlechModule =
     {
         name: TranslationUnitPath
         documentation: Attribute.OtherDecl option
-        types: Types list
+        typeDecls: TypeDecl list
         funPrototypes: ProcedurePrototype list
         funacts: ProcedureImpl list
         variables: VarDecl list
@@ -453,7 +453,7 @@ and BlechModule =
         { 
             name = moduleName
             documentation = None
-            types = List.empty 
+            typeDecls = List.empty 
             funPrototypes = List.empty 
             funacts = List.empty 
             variables = List.empty 
@@ -469,7 +469,7 @@ and BlechModule =
     member this.ToDoc =
         [ txt (this.name.ToString()) ]
         |> List.append <| (this.memberPragmas |> List.map (fun mp -> mp.ToDoc))
-        |> List.append <| (this.types |> List.map (fun t -> t.ToDoc))
+        |> List.append <| (this.typeDecls |> List.map (fun t -> t.ToDoc))
         |> List.append <| (this.variables |> List.map (fun v -> v.ToDoc))
         |> List.append <| (this.externalVariables |> List.map (fun v -> v.ToDoc))
         |> List.append <| (this.funPrototypes |> List.map (fun f -> f.ToDoc))
