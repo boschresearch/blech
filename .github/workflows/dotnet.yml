@@ -2,12 +2,15 @@ name: .NET
 
 on:
   workflow_dispatch:
-    branches: [ develop ]
+    branches-ignore:
+      - master
   push:
-    branches: [ develop ]
+    branches-ignore: 
+      - master
   pull_request:
-    branches: [ develop ]
-
+    branches-ignore: 
+      - master
+      
 jobs:
   build:
 
