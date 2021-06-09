@@ -217,6 +217,7 @@ test/SCODE/.metadata
 
 # repo config files
 .*/*
+!.github/*
 
 # config file of blechc test directory
 test/blechc/config
