@@ -987,7 +987,7 @@ let internal translate ctx (subProgDecl: ProcedureImpl) =
 
     let initActivityCode =
         txt "void"
-        <+> cpStaticName (!curComp).name <^> txt "_init"
+        <+> initActivityName (!curComp).name
         <+> cpActCtxIfaceOnly (!curComp)
         <+> txt "{"
         <.> cpIndent initBody // set main pc to 0
@@ -1007,7 +1007,7 @@ let internal translate ctx (subProgDecl: ProcedureImpl) =
 
     let initActivitySignature = 
         txt "void"
-        <+> cpStaticName (!curComp).name <^> txt "_init"
+        <+> initActivityName (!curComp).name
         <+> cpActCtxIfaceOnly (!curComp)
         <^> semi
 

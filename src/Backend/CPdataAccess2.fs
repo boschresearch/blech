@@ -879,9 +879,15 @@ let cpFunctionCall tcc whoToCall inputs outputs =
     <| (pe.cExpr.Render <^> semi)
 
 
+let initActivityName name =
+    // used to be cpStaticName name <^> txt "_init"
+    // but we need to move _init inwards to prevent clashes with valid activity names
+    let infixes = "init" :: (TranslatePath.moduleToCNameParts name.moduleName @ name.prefix)
+    assembleName BLC infixes name.basicId
+
+
 let cpInitActivityCall pcName whoToCall =
-    let renderedWhoToCall = cpStaticName whoToCall
-    let renderedCalleeName = renderedWhoToCall <^> txt "_init"
+    let renderedCalleeName = initActivityName whoToCall
     let subctx = renderSubContext pcName whoToCall
     let actCall = 
         [subctx]
