@@ -625,6 +625,13 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
 //=============================================================================
 
 let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
+    let ensureNonemptyFields (q, f) =
+        if List.isEmpty f then
+            Error [EmptyStruct (std.range, std.name)]
+        else
+            Ok (q, f)
+
+        
     let checkValueFields fields =
         fields
         // ensure the fields are all variable declarations
@@ -664,6 +671,7 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
             // create value type
             Ok qname
             |> combine <| checkValueFields std.fields
+            |> Result.bind ensureNonemptyFields
             |> Result.map (
                 fun (q, f) -> (q, f)
                 >> ValueTypes.StructType >> ValueTypes )
