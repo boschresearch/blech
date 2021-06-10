@@ -86,14 +86,14 @@ def"
     [<Test>]
     let testFindUnbalancedIndentations () =
         Assert.AreEqual(
-            List.Empty,
+            ([] : (int * string) list),
             "\nHello\n world"
             |> splitMultiLineString
             |> findUnbalancedIndentations
             |> snd
             )
         Assert.AreEqual(
-            List.Empty,
+            ([] : (int * string) list),
             "\n\tHello\n\t world"           
             |> splitMultiLineString
             |> findUnbalancedIndentations
@@ -101,7 +101,7 @@ def"
             )
 
         Assert.AreEqual(
-            List.Empty,
+            ([] : (int * string) list),
             "\n\tHello\n\n\t world"           
             |> splitMultiLineString
             |> findUnbalancedIndentations
