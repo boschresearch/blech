@@ -70,7 +70,7 @@ and private translateFunctionStatement ctx curComp stmt =
             let reinit =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
-                | ValueTypes (ArrayType _) ->
+                | ValueTypes (ArrayType _) when v.initValue.rhs.IsCompoundConst ->
                     let lhs =
                         { lhs = LhsCur(TypedMemLoc.Loc v.name)
                           typ = v.datatype
@@ -148,9 +148,24 @@ and private translateFunctionStatement ctx curComp stmt =
                     { lhs = LhsCur (TypedMemLoc.Loc name)
                       typ = ValueTypes typ
                       range = r }
-                // call this function recursively with an Assign action and make a void return
-                [ translateFunctionStatement ctx curComp (Stmt.Assign(r, lhs, expr))
-                  txt "return;" ]
+                
+                // rewrite into assignment
+                let norm =
+                    normaliseAssign ctx.tcc (r, lhs, expr)
+                    |> List.map (function 
+                        | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                        | _ -> failwith "Must be an assignment here!") // not nice
+                
+                // zero out everything that is not set explicitly
+                let reinit =
+                    match expr.typ with
+                    | ValueTypes (ValueTypes.StructType _)
+                    | ValueTypes (ArrayType _) when expr.rhs.IsCompoundConst ->
+                        nullify ctx.tcc lhs
+                    | _ -> empty
+                
+                reinit :: norm 
+                @ [txt "return;"] // correctly translate literal elements
                 |> dpBlock
 
     // synchronous statements
