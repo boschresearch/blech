@@ -441,11 +441,15 @@ and private binExpr tcc s1 s2 infx =
     let re1 = cpExpr tcc s1
     let re2 = cpExpr tcc s2
     let render (rs: CExpr list) =
-        rs.[0].Render
-        |> complexInParens rs.[0]
+        let left =
+            rs.[0].Render
+            |> complexInParens rs.[0]
+        let right =
+            rs.[1].Render
+            |> complexInParens rs.[1]
+        left
         |> (</>) <| txt infx
-        |> (<+>) <| rs.[1].Render
-        |> complexInParens rs.[1]
+        |> (<+>) <| right
     mkPrereqExpr
     <| (getPrereq re1 @ getPrereq re2)
     <| ComplexExpr (render, [getCExpr re1; getCExpr re2])
