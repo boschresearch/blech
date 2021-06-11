@@ -31,6 +31,7 @@ open Blech.Frontend.TyChkExpressions
 
 open Blech.Backend
 
+open Normalisation
 open CPdataAccess2
 open CPrinter
 
@@ -59,8 +60,26 @@ and private translateFunctionStatement ctx curComp stmt =
                 { lhs = LhsCur(TypedMemLoc.Loc v.name)
                   typ = v.datatype
                   range = v.pos }
-            [ init
-              cpAssign ctx.tcc lhs v.initValue ]
+            // rewrite into assignment
+            let norm =
+                normaliseVarDecl ctx.tcc v
+                |> List.map (function 
+                    | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                    | _ -> failwith "Must be an assignment here!") // not nice
+            // zero out everything that is not set explicitly
+            let reinit =
+                match v.datatype with
+                | ValueTypes (ValueTypes.StructType _)
+                | ValueTypes (ArrayType _) ->
+                    let lhs =
+                        { lhs = LhsCur(TypedMemLoc.Loc v.name)
+                          typ = v.datatype
+                          range = v.pos }
+                    nullify ctx.tcc lhs
+                | _ -> empty
+            [ init // declaration
+              reinit // zero out
+              ] @ norm // correctly translate literal elements
             |> dpBlock
     | Stmt.ExternalVarDecl _ -> failwith "Found an external variable in a function. This should have been detected earlier."            
     // actions
