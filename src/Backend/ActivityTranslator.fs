@@ -72,7 +72,7 @@ let rec private cpAction ctx curComp action =
             let reinit =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
-                | ValueTypes (ArrayType _) ->
+                | ValueTypes (ArrayType _) when v.initValue.rhs.IsCompoundConst ->
                     let lhs =
                         { lhs = LhsCur(TypedMemLoc.Loc v.name)
                           typ = v.datatype
@@ -108,8 +108,11 @@ let rec private cpAction ctx curComp action =
     | Action.Return (r, exprOpt) ->
         // note that the stoping of this activity is done in the calling processNode function
         match exprOpt with
-        | None -> empty // control flow will end here - corresponds to a void return
+        | None -> 
+            empty // control flow will end here - corresponds to a void return
         | Some expr ->
+            // copy the value into retvar
+            
             // construct typed lhs
             let lhs =
                 let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
@@ -121,9 +124,24 @@ let rec private cpAction ctx curComp action =
                 { lhs = LhsCur (TypedMemLoc.Loc name)
                   typ = ValueTypes typ
                   range = r }
-            // call this function recursively with an Assign action
-            cpAction ctx curComp (Action.Assign(r, lhs, expr))
+            
+            // rewrite into assignment
+            let norm =
+                normaliseAssign ctx.tcc (r, lhs, expr)
+                |> List.map (function 
+                    | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                    | _ -> failwith "Must be an assignment here!") // not nice
+            
+            // zero out everything that is not set explicitly
+            let reinit =
+                match expr.typ with
+                | ValueTypes (ValueTypes.StructType _)
+                | ValueTypes (ArrayType _) when expr.rhs.IsCompoundConst ->
+                    nullify ctx.tcc lhs
+                | _ -> empty
 
+            reinit :: norm // correctly translate literal elements
+            |> dpBlock
 
 let private cpResetPc tcc (pc: ParamDecl) =
     txt "BLC_SWITCH_TO_NEXTSTEP(" <^> cpPcName pc.name <^> txt ")" <^> semi

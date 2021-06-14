@@ -626,6 +626,11 @@ and RhsStructure =
 
     member this.ToDoc = this.ppExpr dpPrec.["min"]
 
+    member this.IsCompoundConst =
+        match this with
+        | ResetConst | StructConst _ | ArrayConst _ -> true
+        | _ -> false
+
     member this.GetIntConst: Int =
         match this with
         | IntConst i -> i
