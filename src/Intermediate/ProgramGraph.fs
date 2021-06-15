@@ -148,7 +148,8 @@ module IntermediateContext =
             | ProcedurePrototype p -> p.singletons
             | Declarable.VarDecl _ 
             | Declarable.ExternalVarDecl _ 
-            | Declarable.ParamDecl _ -> failwith "Expected whoToCall to be a a function or activity or prototype declaration."
+            | Declarable.ParamDecl _ 
+            | Declarable.TypeDecl _ -> failwith "Expected whoToCall to be a a function or activity or prototype declaration."
         // add each one to given node
         List.iter (addSingletonCall context range node) names
 

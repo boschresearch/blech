@@ -34,6 +34,7 @@ type Declarable =
     | ExternalVarDecl of ExternalVarDecl
     | ProcedureImpl of ProcedureImpl
     | ProcedurePrototype of ProcedurePrototype
+    | TypeDecl of TypeDecl
     
     member this.GetQName() =
         match this with
@@ -42,14 +43,16 @@ type Declarable =
         | ExternalVarDecl {name = x}
         | ProcedurePrototype {name = x} -> x
         | ProcedureImpl i -> i.Name
-    
+        | TypeDecl {name = x} -> x   
+         
     member this.GetLn() =
         match this with
         | ParamDecl {pos = x}
         | VarDecl {pos = x}
         | ExternalVarDecl {pos = x}
         | ProcedureImpl {pos = x} 
-        | ProcedurePrototype {pos = x} -> x
+        | ProcedurePrototype {pos = x} 
+        | TypeDecl {pos = x} -> x
     
     member this.TryGetDefault() =
         match this with
@@ -57,7 +60,8 @@ type Declarable =
         | ExternalVarDecl _ // externals have no default value
         | ParamDecl _
         | ProcedureImpl _
-        | ProcedurePrototype _ -> None
+        | ProcedurePrototype _ 
+        | TypeDecl _ -> None
 
     member this.TryGetMutability =
         match this with
@@ -65,7 +69,8 @@ type Declarable =
         | ExternalVarDecl {mutability = x} -> Some x
         | ParamDecl {isMutable = x} -> if x then Some Mutability.Variable else Some Mutability.Immutable
         | ProcedureImpl _
-        | ProcedurePrototype _ -> None
+        | ProcedurePrototype _ 
+        | TypeDecl _ -> None
 
     member this.TryGetReturnType =
         match this with
@@ -73,7 +78,8 @@ type Declarable =
         | ProcedureImpl i -> Some i.Returns
         | VarDecl _
         | ParamDecl _
-        | ExternalVarDecl _ -> None
+        | ExternalVarDecl _ 
+        | TypeDecl _ -> None
 
     member this.TryGetPrototype =
         match this with
@@ -81,7 +87,8 @@ type Declarable =
         | ProcedureImpl i -> Some i.prototype
         | VarDecl _
         | ParamDecl _
-        | ExternalVarDecl _ -> None
+        | ExternalVarDecl _ 
+        | TypeDecl _ -> None
     
     member this.AddReference pos =
         match this with
@@ -89,7 +96,8 @@ type Declarable =
         | VarDecl {allReferences = ar}
         | ExternalVarDecl {allReferences = ar}
         | ProcedureImpl {allReferences = ar}
-        | ProcedurePrototype {allReferences = ar} ->
+        | ProcedurePrototype {allReferences = ar} 
+        | TypeDecl {allReferences = ar}->
             ar.Add pos
 
 
@@ -103,7 +111,8 @@ type TypeCheckContext =
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
         // range is needed for language services
-        userTypes: Dictionary<QName, (Range.range * Types)> 
+        // TODO: Check if user types can be eliminated completed, since we now have a Declarable.TypeDecl, fjg. 02.06.21
+        userTypes: Dictionary<QName, (Range.range * Types)> // ELIMINATE THIS
         // member pragmas are collected in order to do annotation checking
         memberPragmas: ResizeArray<Attribute.MemberPragma>
         singletons: OpaqueInference.Singletons
@@ -131,7 +140,8 @@ module TypeCheckContext =
         | ProcedureImpl d -> Some d.prototype
         | ParamDecl _
         | VarDecl _ 
-        | ExternalVarDecl _ -> None
+        | ExternalVarDecl _ 
+        | TypeDecl _ -> None
 
     let isConstVarDecl ctx (tml: TypedMemLoc) =
         // ensure it is a VarDecl (not a ParamDecl) and it is a compile time constant
@@ -197,6 +207,7 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype |> Ok
             | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
+            | Declarable.TypeDecl td -> td.newType |> Ok // TODO: Not sure about this, fjg. 02.06.21 
             | Declarable.ProcedureImpl _ 
             | Declarable.ProcedurePrototype _ -> Error [ProcedureNameUsedLikeAVariable (name.ToString())]
         else
@@ -212,6 +223,7 @@ module TypeCheckContext =
             | Declarable.ParamDecl a -> a.datatype
             | Declarable.ProcedureImpl _ 
             | Declarable.ProcedurePrototype _ -> failwith "TML cannot point to a subprogram!"
+            | Declarable.TypeDecl _ -> failwith "TML cannot point to a type declaration"
         | FieldAccess (tml, ident) ->
             match getDatatypeFromTML lut tml with
             | ValueTypes (ValueTypes.StructType (name, fields))
@@ -256,7 +268,7 @@ module TypeCheckContext =
         else
             //adding for the first time
             lut.nameToDecl.Add(name, decl)
-            
+
 
     let addTypeToLut (lut: TypeCheckContext) name range typ =
         // ignores duplicates

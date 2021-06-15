@@ -624,14 +624,14 @@ let private fSubProgram lut pos isFunction name inputs outputs retType body anno
 // Creating user defined type declarations (structs, enums, ...)
 //=============================================================================
 
-let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
+let private fStructTypeDecl lut (std: AST.StructTypeDecl) (annotation: Result<Attribute.TypeDecl, _>) =
+
     let ensureNonemptyFields (q, f) =
         if List.isEmpty f then
             Error [EmptyStruct (std.range, std.name)]
         else
             Ok (q, f)
-
-        
+    
     let checkValueFields fields =
         fields
         // ensure the fields are all variable declarations
@@ -654,64 +654,94 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         
         // note, that QNames for the fields are added when checking the individual vardecls
 
-    // decide if it is a ref type
-    // and then check types of fields
-    let qname = lut.ncEnv.GetLookupTable.nameToQname std.name
-    let newType =
+    let checkFields fields = 
         if std.isReference then
-            // TODO: Temporarily deactivated, because code generation cannot support them, fjg. 25.05.21
-            // create reference type
-            // Ok qname
-            // |> combine <| checkAllFields std.fields
-            // |> Result.map (
-            //     fun (q, f) -> (std.name.Range, q, f)
-            //     >> ReferenceTypes.StructType >> ReferenceTypes )
+            // checkAllFields fields
             unsupported1 "reference-types" (std.range)
         else
-            // create value type
-            Ok qname
-            |> combine <| checkValueFields std.fields
-            |> Result.bind ensureNonemptyFields
-            |> Result.map (
-                fun (q, f) -> (q, f)
-                >> ValueTypes.StructType >> ValueTypes )
-    // add type declaration to lookup table
-    match newType with
-    | Ok typ -> do addTypeToLut lut qname std.name.Range typ
-    | _ -> ()
-    newType
+            checkValueFields fields
 
+    let mkStructType ((qname, attr), vardecls) =
+        let structType = 
+            if std.isReference then
+                // TODO: Why do ref types need an addtional range? This is not finished! fjg, 7.621
+                ReferenceTypes (ReferenceTypes.StructType (std.name.Range, qname, vardecls))
+            else
+                ValueTypes (ValueTypes.StructType (qname, vardecls))
         
-let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OpaqueTypeDecl, _>) =
-    let mkOpaqueType (n, (a: Attribute.OpaqueTypeDecl)) =
-        assert Option.isSome a.opaquekind // opaque kind is generated and should be always correct
-        let ok = Option.get a.opaquekind
-        let isArray = ok = Attribute.OpaqueArray
-        let isStruct = ok = Attribute.OpaqueStruct
-        let isSimple = ok = Attribute.SimpleType
-        let newType =
-            match isArray, isStruct, isSimple with
-            | true, true, _
-            | true, _, true
-            | _, true, true ->
-                Error [OpaqueConflictingAnnotations pos]
-            | false, false, false ->
-                Error [OpaqueNeedsAnnotation pos]
-            | true, false, false ->
-                Ok <| ValueTypes (ValueTypes.OpaqueArray n)
-            | false, true, false ->
-                Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
-            | false, false, true ->
-                Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
-        // add type declaration to lookup table
-        match newType with
-        | Ok typ -> do addTypeToLut lut n name.Range typ
-        | _ -> ()
-        newType
+        let structTypeDecl = 
+            {
+                TypeDecl.pos = std.range
+                name = qname
+                newType = structType
+                annotation = attr
+                allReferences = HashSet()
+            }
 
+        // TODO: For the moment also add to user types, remove this later, fjg. 6.6.21
+        do addTypeToLut lut qname std.name.Range structType
+
+        do addDeclToLut lut qname (Declarable.TypeDecl structTypeDecl)
+        structTypeDecl
+        
+    Ok (lut.ncEnv.GetLookupTable.nameToQname std.name)
+    |> combine <| annotation
+    |> combine <| checkFields std.fields
+    |> Result.bind ensureNonemptyFields
+    |> Result.map mkStructType
+
+
+let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.TypeDecl, _>) =
+    let mkOpaqueType (qname, (attr : Attribute.TypeDecl)) =
+        assert Option.isSome attr.opaquekind // opaque kind is generated and should be always correct
+        // TODO: Test are handled in Annotation checking, keep Error messages for the moment, fjg 2.6.21
+        // let ok = Option.get a.opaquekind
+        // let isArray = ok = Attribute.OpaqueArray
+        // let isStruct = ok = Attribute.OpaqueStruct
+        // // let isSimple = ok = Attribute.SimpleType
+        // let newType =
+        //     match isArray, isStruct, isSimple with
+        //     | true, true, _
+        //     | true, _, true
+        //     | _, true, true ->
+        //         Error [OpaqueConflictingAnnotations pos]
+        //     | false, false, false ->
+        //         Error [OpaqueNeedsAnnotation pos]
+        //     | true, false, false ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueArray n)
+        //     | false, true, false ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
+        //     | false, false, true ->
+        //         Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
+        // // add type declaration to lookup table
+        let opaqueType = 
+            match Option.get attr.opaquekind with
+            | Attribute.OpaqueArray ->
+                ValueTypes (ValueTypes.OpaqueArray qname)
+            | Attribute.OpaqueStruct ->
+                ValueTypes (ValueTypes.OpaqueStruct qname)
+            | Attribute.SimpleType ->
+                ValueTypes (ValueTypes.OpaqueSimple qname)
+            | _ ->
+                failwith "Opaque types should always have the correct attribute"
+
+        let opaqueTypeDecl = 
+            {
+                TypeDecl.pos = pos
+                name = qname
+                newType = opaqueType
+                annotation = attr
+                allReferences = HashSet()
+            }
+        // TODO: For the moment also add to user types, remove this later, fjg. 6.6.21
+        do addTypeToLut lut qname name.Range opaqueType
+
+        do addDeclToLut lut qname (Declarable.TypeDecl opaqueTypeDecl)
+        opaqueTypeDecl
+        
     Ok (lut.ncEnv.GetLookupTable.nameToQname name)
     |> combine <| annotation
-    |> Result.bind mkOpaqueType
+    |> Result.map mkOpaqueType
     
 
 let private fTypeAliasDecl pos = unsupported4 "alias declarations" pos //TODO
@@ -1130,7 +1160,7 @@ type private ProcessedMembers =
         funPrototypes: Collections.ResizeArray<Result<ProcedurePrototype, TyCheckError list>>
         variables: Collections.ResizeArray<Result<VarDecl, TyCheckError list>>
         externalVariables: Collections.ResizeArray<Result<ExternalVarDecl, TyCheckError list>>
-        types: Collections.ResizeArray<Result<Types, TyCheckError list>>
+        typeDecls: Collections.ResizeArray<Result<TypeDecl, TyCheckError list>>
         memberPragmas: ResizeArray<Result<Attribute.MemberPragma, TyCheckError list>>
         mutable entryPoint: Result<ProcedureImpl, TyCheckError list> option
     }
@@ -1138,7 +1168,7 @@ type private ProcessedMembers =
     member this.AddFunPrototype fp = this.funPrototypes.Add fp
     member this.AddVariable v = this.variables.Add v
     member this.AddExternalVariable v = this.externalVariables.Add v
-    member this.AddType t = this.types.Add t
+    member this.AddType t = this.typeDecls.Add t
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
     // TODO: Simplify this, fjg 19.01.19
@@ -1170,7 +1200,7 @@ type private ProcessedMembers =
     member this.GetFunPrototypes = List.ofSeq this.funPrototypes
     member this.GetVariables = List.ofSeq this.variables
     member this.GetExternalVariables = List.ofSeq this.externalVariables
-    member this.GetTypes = List.ofSeq this.types
+    member this.GetTypeDecls = List.ofSeq this.typeDecls
     member this.GetMemberPragmas = List.ofSeq this.memberPragmas
     member this.GetEntryPoint = this.entryPoint
             
@@ -1180,7 +1210,7 @@ type private ProcessedMembers =
             funPrototypes = Collections.ResizeArray()
             variables = Collections.ResizeArray()
             externalVariables = Collections.ResizeArray()
-            types = Collections.ResizeArray()
+            typeDecls = Collections.ResizeArray()
             memberPragmas = Collections.ResizeArray()
             entryPoint = None
         }
@@ -1196,7 +1226,7 @@ let private fPackage lut (pack: AST.CompilationUnit) =
             typedMembers.GetFunPrototypes,
             typedMembers.GetVariables,
             typedMembers.GetExternalVariables,
-            typedMembers.GetTypes,
+            typedMembers.GetTypeDecls,
             typedMembers.GetMemberPragmas,
             typedMembers.GetEntryPoint
         | m::ms ->
@@ -1205,21 +1235,29 @@ let private fPackage lut (pack: AST.CompilationUnit) =
                 () // ignore these members
             | AST.Member.Pragma p ->
                 do typedMembers.AddMemberPragma (Annotation.checkMemberPragma lut p)
-            | AST.Member.EnumType e -> 
-                do typedMembers.AddType (fEnumTypeDecl e)
-            | AST.Member.StructType s -> 
-                do typedMembers.AddType (fStructTypeDecl lut s)
+            | AST.Member.EnumType e ->
+                let et = fEnumTypeDecl e
+                () 
+                // TODO: Add to type decls. fjg, 6.6.21
+                // do typedMembers.AddType et
+            | AST.Member.StructType s ->    
+                let st = 
+                    fStructTypeDecl lut s
+                    <| Annotation.checkStructTypeDecl s   
+                do typedMembers.AddType st
             | AST.Member.OpaqueType ot ->
-                let t =
+                let otd =
                     fOpaqueTypeDecl lut ot.range ot.name
                     <| Annotation.checkOpaqueTypeDecl ot
-                do typedMembers.AddType t
+                do typedMembers.AddType otd
             | AST.Member.TypeAlias t ->
                 let t =
                     fTypeAliasDecl t.range t.name
                     <| fDataType lut t.aliasfor
                     <| Annotation.checkOtherDecl t.annotations
-                do typedMembers.AddType t
+                ()
+                // TODO: Add to type decls. fjg, 6.6.21
+                // do typedMembers.AddType t
             | AST.Member.Unit _ ->
                 //let _ =
                 //    fUnitDecl u.range u.name
@@ -1279,13 +1317,13 @@ let private fPackage lut (pack: AST.CompilationUnit) =
                 do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
-    let createPackage ((((((((modName, modDoc), funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
+    let createPackage ((((((((modName, modDoc), funPrototypes), funacts), variables), externalVariables), typeDecls), memberPragmas), entryPoint) =
     
         //assert (List.length types = lut.userTypes.Count) // TODO: this assertion is wrong if we have imported types from other modules, fg 01.10.20
         {
             BlechModule.name = modName
             documentation = modDoc
-            types = types
+            typeDecls = typeDecls
             funPrototypes = funPrototypes
             funacts = funacts
             variables = variables
@@ -1294,7 +1332,7 @@ let private fPackage lut (pack: AST.CompilationUnit) =
             entryPoint = entryPoint
         }
     
-    let funacts, funPrototypes, variables, externalVariables, types, memberPragmas, entryPoint = 
+    let funacts, funPrototypes, variables, externalVariables, typeDecls, memberPragmas, entryPoint = 
         let typedMembers = ProcessedMembers.Empty ()
         processMembers typedMembers pack.members
     
@@ -1309,7 +1347,7 @@ let private fPackage lut (pack: AST.CompilationUnit) =
         |> combine <| contract funacts
         |> combine <| contract variables
         |> combine <| contract externalVariables
-        |> combine <| contract types
+        |> combine <| contract typeDecls
         |> combine <| contract memberPragmas
         |> combine <| ofOption entryPoint
         |> Result.map createPackage
@@ -1345,7 +1383,7 @@ let typeCheckUnLogged (cliContext: Arguments.BlechCOptions)
             Error errs
 
 
-/// Performs type checking starting with an untyped package and a namecheck loopup table.
+/// Performs type checking starting with an untyped package and a namecheck lookup table.
 /// Returns a TypeCheck context and a BlechModule.
 let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit) (ncEnv: SymbolTable.Environment) singletons =
     match typeCheckUnLogged cliContext otherLuts pack ncEnv singletons with

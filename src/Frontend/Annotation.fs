@@ -429,20 +429,20 @@ module Annotation =
 
 
     let checkOpaqueTypeDecl (otd: AST.OpaqueTypeDecl) =  
-        let checkOdtAnnotation otdattr (anno: AST.Annotation) = 
-            let checkAttribute (otdattr, attr) =
+        let checkOtdAnnotation tdattr (anno: AST.Annotation) = 
+            let checkAttribute (tdattr, attr) =
                 match attr with
                 | LineDoc _
                 | BlockDoc _ ->
-                    Ok { otdattr with OpaqueTypeDecl.doc = List.append otdattr.doc [attr] }
+                    Ok { tdattr with TypeDecl.doc = List.append tdattr.doc [attr] }
                 | SimpleType 
                 | OpaqueStruct
                 | OpaqueArray ->
-                    Ok { otdattr with OpaqueTypeDecl.opaquekind = Some attr }
+                    Ok { tdattr with TypeDecl.opaquekind = Some attr }
                 | _ ->
                     unsupportedAnnotation anno
 
-            combine otdattr (checkAnnotation anno)
+            combine tdattr (checkAnnotation anno)
             |> Result.bind checkAttribute
          
         // TODO: This is a place holder for 'extern type T' declarations, fjg. 02.06.21
@@ -454,7 +454,7 @@ module Annotation =
             | _ ->
                 Ok odtattr
 
-        List.fold checkOdtAnnotation (Ok Attribute.OpaqueTypeDecl.Empty) otd.annotations   
+        List.fold checkOtdAnnotation (Ok Attribute.TypeDecl.Empty) otd.annotations   
         |> Result.bind checkOpaqueTypeAttribute
     
 
@@ -477,7 +477,12 @@ module Annotation =
          
         List.fold checkOdAnnotation (Ok Attribute.OtherDecl.Empty) annotations   
 
-    
+
+    let checkStructTypeDecl (std: AST.StructTypeDecl) =
+        // TODO: Implement annotation check for struct declaration, fjg. 02.06.21
+        Ok Attribute.TypeDecl.Empty
+
+
     let checkModuleSpec (modSpec : AST.ModuleSpec) =
         let checkMsAnnotation msattr (anno : AST.Annotation) =
             let checkAttribute (msattr, attr) =

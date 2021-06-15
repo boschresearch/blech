@@ -192,21 +192,31 @@ and Types =
 
 
 //=============================================================================
+// Type declarations 
+//=============================================================================
+
+// Declaration of a user-defined type (note that type aliases do not exist in the typed Blech, they are resolved!)
+and TypeDecl =
+    {
+        pos: range
+        name: QName
+        newType: Types
+        annotation: Attribute.TypeDecl
+        allReferences: HashSet<range>
+    } 
+
+    member this.ToDoc = 
+        this.annotation.ToDoc @ [this.newType.ToDoc]
+        |> dpToplevelClose
+    
+    override this.ToString () = render None <| this.ToDoc
+
+
+//=============================================================================
 // Data declarations 
 //=============================================================================
 
-// Declaration of a new type (note that type aliases do not exist in the typed Blech, they are resolved!)
-and NewTypeDecl =
-    {
-        representation: Types
-        annotation: Attribute.OtherDecl
-    }
-    member this.ToDoc = 
-        this.annotation.ToDoc @ [this.representation.ToDoc]
-        |> dpToplevelClose
     
-    override this.ToString () = this.representation.ToString()
-
 /// Variable Declaration is used to represent a declaration of global and 
 /// local, mutable and immutable data. Of course, not all combinations are
 /// allowed: no mutable global variables in Blech!
@@ -429,7 +439,7 @@ and BlechModule =
     {
         name: TranslationUnitPath
         documentation: Attribute.OtherDecl option
-        types: Types list
+        typeDecls: TypeDecl list
         funPrototypes: ProcedurePrototype list
         funacts: ProcedureImpl list
         variables: VarDecl list
@@ -443,7 +453,7 @@ and BlechModule =
         { 
             name = moduleName
             documentation = None
-            types = List.empty 
+            typeDecls = List.empty 
             funPrototypes = List.empty 
             funacts = List.empty 
             variables = List.empty 
@@ -459,7 +469,7 @@ and BlechModule =
     member this.ToDoc =
         [ txt (this.name.ToString()) ]
         |> List.append <| (this.memberPragmas |> List.map (fun mp -> mp.ToDoc))
-        |> List.append <| (this.types |> List.map (fun t -> t.ToDoc))
+        |> List.append <| (this.typeDecls |> List.map (fun t -> t.ToDoc))
         |> List.append <| (this.variables |> List.map (fun v -> v.ToDoc))
         |> List.append <| (this.externalVariables |> List.map (fun v -> v.ToDoc))
         |> List.append <| (this.funPrototypes |> List.map (fun f -> f.ToDoc))

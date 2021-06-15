@@ -62,9 +62,10 @@ let internal isLhsMutable lut lhs =
             | Declarable.VarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
             | Declarable.ParamDecl p -> p.isMutable, p.datatype
             | Declarable.ExternalVarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
+            | Declarable.TypeDecl _
             | Declarable.ProcedureImpl _
             | Declarable.ProcedurePrototype _ ->
-                failwith "Asking for mutability of a subprogram. That cannot be right."
+                failwith "Asking for mutability of a subprogram or type declaration. That cannot be right."
         else
             failwith <| sprintf "Lhs %s not in nameToDecl" (qname.ToString())
     | FieldAccess (tml, ident) ->
@@ -1457,8 +1458,10 @@ and internal checkExpr (lut: TypeCheckContext) expr =
                             Error [PrevOnImmutable(expr.Range, qname)]
                     | Declarable.ParamDecl _ -> //Error
                         Error [PrevOnParam(expr.Range, qname)]
+                    | Declarable.TypeDecl _ 
                     | Declarable.ProcedureImpl _
-                    | Declarable.ProcedurePrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
+                    | Declarable.ProcedurePrototype _ -> 
+                        failwith "QName prefix of a TML cannot point to a subprogram or a type declaration!"
                 | ReferenceTypes _
                 | Any
                 | AnyComposite 

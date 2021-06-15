@@ -39,8 +39,9 @@ let isExternalGlobal (lut: TypeCheckContext) actname varname =
         | ParamDecl _
         | Declarable.VarDecl _
         | Declarable.ExternalVarDecl _
-        | ProcedurePrototype _ -> false // actname is a prototype and cannot contain external variable <varname>
-        | ProcedureImpl impl ->
+        | Declarable.ProcedurePrototype _ 
+        | Declarable.TypeDecl _ -> false // actname is a prototype and cannot contain external variable <varname>
+        | Declarable.ProcedureImpl impl ->
             impl.globalInputs @ impl.globalOutputsInScope
             |> List.exists (fun x -> x.name.basicId = varname.basicId)
     | false, _ -> failwithf "%A is unknown to the lookup table" actname
