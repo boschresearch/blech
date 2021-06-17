@@ -76,13 +76,6 @@ let private printerInterface lut name ins outs =
 /// (there may be activities without local variables, 
 /// then there is nothing to print and 0 is returned)
 let private printerTemplate lut name suffix body ins outs =
-    // let printerInterface =
-    //     [ [txt PREFIX_DECL]
-    //       [cpActContext name]
-    //       ins |> List.map (cpInputParam lut)
-    //       outs |> List.map (cpOutputParam lut) ]
-    //     |> List.concat
-    //     |> dpCommaSeparatedInParens
     txt "int"
     <+> cpStaticName name <^> txt suffix
     <+> printerInterface lut name ins outs
@@ -91,15 +84,7 @@ let private printerTemplate lut name suffix body ins outs =
     <.> txt "}"
 
 /// int <name>_<suffix> (char * prefix, struct <name> blc_blech_ctx, <ins>, <outs>);
-let private printerPrototypeTemplate lut name suffix ins outs =
-//     let printerInterface =
-//         [ [txt PREFIX_DECL]
-//           [cpActContext name]
-//           ins |> List.map (cpInputParam lut)
-//           outs |> List.map (cpOutputParam lut) ]
-//         |> List.concat
-//         |> dpCommaSeparatedInParens
-    
+let private printerPrototypeTemplate lut name suffix ins outs =  
     txt "int"
     <+> cpStaticName name <^> txt suffix
     <+> printerInterface lut name ins outs
@@ -319,7 +304,7 @@ let private genStatePrinter lut compilation amIentryPoint =
               txt "int retcode = 0;"
               callPrintersRecursively
               printThisInstanceLocals |> dpBlock
-              if List.isEmpty printThisInstanceLocals then txt "return 0;" else txt "return 1;" ]
+              if List.isEmpty printThisInstanceLocals then txt "return (0 || retcode);" else txt "return 1;" ]
             |> dpBlock
         
         let printVars =
