@@ -1,0 +1,30 @@
+
+@[EntryPoint]
+activity A ()
+    const t: nat32 = 200
+    const b: nat32 = 1000
+	var t_ms_start: nat32 = 123
+    var t_ms: nat32
+    var t_ms_last: nat32
+    cobegin weak
+        repeat
+            await true
+            t_ms = 327
+			await true
+            t_ms = 527
+			await true
+            t_ms = 839
+			await true
+            t_ms = 1200
+			await true
+            t_ms = 1500
+        end
+    with
+        when t_ms - t_ms_start > b abort
+            repeat
+                await t_ms - t_ms_last > t
+                t_ms_last = t_ms
+            end    
+        end    
+    end
+end
