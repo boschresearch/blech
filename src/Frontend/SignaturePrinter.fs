@@ -869,7 +869,7 @@ module SignaturePrinter =
                 Option.map psImportExposes imp.exposing
 
             if ctx.IsRequiredImport imp.localName  then
-                txt "import" 
+                (if imp.isInternal then txt "import internal" else txt "import") 
                 <+> dpModuleName imp.localName
                 <+> dquotes imp.modulePath.path.ToDoc
                 |> dpOptSpacePostfix <| requiredExposedNames   
