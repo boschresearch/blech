@@ -121,34 +121,36 @@ module PCtree =
     let internal asList (tree: PCtree) = tree.AsList
 
     let internal add tree (thread: Thread) (pc: ParamDecl) =
-        let rec addrec treerec ancestors pc =
-            match ancestors with
-            | [] -> failwith "Impossible. Ancestors include at least the current thread itself."
-            | [a] -> // main thread
-                failwith "Main thread pc should have been added via Compilation.addPc"
-            | a :: a2 :: tail -> // keep searching
-                assert (a = treerec.thread)
-                treerec.subPCs 
-                |> List.tryFindIndex (fun subtree -> subtree.thread = a2)
-                |> function
-                    | Some index ->
-                        let subtree = treerec.subPCs.[index]
-                        let newSubTree = addrec subtree (a2 :: tail) pc
-                        let newSubPCs = treerec.subPCs.[0..index-1] @ [newSubTree] @ treerec.subPCs.[index+1..]
-                        { treerec with subPCs = newSubPCs }
-                    | None -> 
-                        assert (tail = [])
-                        assert (a2 = thread)
-                        let newSubtree = mkNew a2 pc
-                        addPCtree treerec newSubtree
-        
+        let transplant dest child =
+            {dest with subPCs = dest.subPCs @ [child]}
+        let rec insertIntoTree tr ancs =
+            // ancs - ancestors sorted from root to current thread
+            assert (tr.thread = List.head ancs)
+            let nextThread = List.head (List.tail ancs)
+            tr.subPCs
+            |> List.tryFindIndex (fun subtree -> subtree.thread = nextThread)
+            |> function
+                | Some index ->
+                    let subtree = insertIntoTree tr.subPCs.[index] (List.tail ancs)
+                    let newSubPCs = tr.subPCs.[0..index-1] @ [subtree] @ tr.subPCs.[index+1..]
+                    { tr with subPCs = newSubPCs }
+                | None ->
+                    // make new subtree for pc
+                    let newSubtree = mkNew thread pc
+                    // transplant every pc that is in a subthread underneath
+                    let subTreesToMove, subTreesUnaffected =
+                        tr.subPCs
+                        |> List.partition (fun subtree -> List.contains nextThread (Thread.allAncestors subtree.thread))
+                    let finalSubtree = List.fold (transplant) newSubtree subTreesToMove
+                    let newSubPCs = subTreesUnaffected @ [finalSubtree]
+                    { tr with subPCs = newSubPCs }        
         let alreadyAdded =
             tree.subPCs |> List.exists (fun t -> t.Contains pc)
         if alreadyAdded then 
             tree // nothing to do
         else
             let allAncestors = Thread.allAncestors thread |> List.rev // sort from root to current thread
-            addrec tree allAncestors pc
+            insertIntoTree tree allAncestors
 
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
