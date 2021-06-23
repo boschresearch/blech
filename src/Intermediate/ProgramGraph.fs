@@ -611,8 +611,17 @@ module ProgramGraph =
 
     /// Find least common fork (may not exist if root is the lca)
     let internal leastCommonFork (node1: Node) (node2: Node) = 
-        Thread.allForks node1.Payload.Thread
-        |> List.tryFind (fun f -> List.contains f (Thread.allForks node2.Payload.Thread))
+        let isForkItself n =
+            match node1.Payload.Typ with
+            | LocationType.CobeginLocation _ -> true
+            | _ -> false
+        let f1 = 
+            [if isForkItself node1 then node1]
+            @ Thread.allForks node1.Payload.Thread
+        let f2 =
+            [if isForkItself node2 then node2]
+            @ Thread.allForks node2.Payload.Thread
+        f1 |> List.tryFind (fun f -> List.contains f (f2))
     
     let memoizedCycles = Dictionary<QName, ResizeArray<Dictionary<Node,Node>*Graph>>()
 
