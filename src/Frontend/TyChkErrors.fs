@@ -357,7 +357,7 @@ type TyCheckError =
             | ValueStructContainsRef (name, refField) -> name.range, sprintf "The structure %s is value typed but contains the reference typed element %s." name.idToString refField.name.basicId
             | ValueArrayMustHaveValueType r -> r, "A value typed array must contain value typed elements."
             | TooManyInitialisers (r, i) -> r, sprintf "More than %d initialisers have been given." i
-            | EmptyStruct (r, _) -> r, sprintf "Structure declarations must contain at least one fields."
+            | EmptyStruct (r, _) -> r, sprintf "Structure declarations must contain at least one field."
             // statements
             | ExternalsInFunction p -> p, "External variables cannot be defined inside functions."
             | SynchronousStatementInFunction p -> p, "Functions must not contain synchronous control flow statements (await, run, abort, cobegin, infinite repeat...end)."
