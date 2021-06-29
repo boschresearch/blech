@@ -1,0 +1,11 @@
+import EX "appWithExternFun_imp"
+
+
+@[EntryPoint]
+activity mainAct()()
+    var i: int32
+    repeat
+        await true
+        i = EX.myExternFun()
+    end
+end

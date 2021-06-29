@@ -36,7 +36,7 @@ module CmdLine =
 
                 | NoOutDir directory ->
                     { range = Range.rangeCmdArgs
-                      message = sprintf "output directory '%s' not found" directory }
+                      message = sprintf "output directory '%s' not found and cannot be created" directory }
            
             member err.ContextInformation = []
             
@@ -53,22 +53,27 @@ module CmdLine =
         | Compile
 
 
-    let handleCommandLine (options: Arguments.BlechCOptions) : Result<Action, Diagnostics.Logger> =
+    let processCmdParameters (options: Arguments.BlechCOptions) : Result<Action, Diagnostics.Logger> =
         
         Logging.setLogLevel options.verbosity
         if options.showVersion then 
             Ok ShowVersion
         else
             let logger = Diagnostics.Logger.create()  
+
             if options.inputFile = "" then 
-                (logger, Diagnostics.Phase.Compiling) ||> Diagnostics.Logger.logFatalError <|  NoInputModule
+                Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling NoInputModule
         
-            if not (Directory.Exists options.outDir || options.isDryRun ) then
-                (logger, Diagnostics.Phase.Compiling) ||> Diagnostics.Logger.logFatalError <| NoOutDir options.outDir
-    
+            if not options.isDryRun then // we actually want to emit code
+                // check if output dir is there or can be created
+                if not (Directory.Exists options.outDir) then
+                    try
+                        do ignore <| Directory.CreateDirectory options.outDir
+                    with _ ->
+                        Diagnostics.Logger.logFatalError logger Diagnostics.Phase.Compiling (NoOutDir options.outDir)        
+            
             if Diagnostics.Logger.hasErrors logger then
                 Error logger
-            
             else
                 Ok Compile
  

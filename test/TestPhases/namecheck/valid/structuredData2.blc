@@ -1,4 +1,4 @@
-module structuredData2
+module
 
 enum MyNum
     EINS = 1
@@ -12,8 +12,8 @@ struct MyStruct
 end
 
 activity main()() 
-    var x: MyStruct = {mode = .EINS, value = 42.1}
-    x.mode = .DREI
+    var x: MyStruct = {mode = EINS, value = 42.1}
+    x.mode = DREI
     await true
     x.value = 17.0
 end

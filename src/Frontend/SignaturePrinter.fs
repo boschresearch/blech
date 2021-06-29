@@ -23,13 +23,21 @@ module SignaturePrinter =
     
     open Constants
     open CommonTypes
-    open PrettyPrint.DocPrint
+    open DocPrint
     
+    // Abbreviations
+    module Scope = SymbolTable.Scope
+
+    let bpGeneratedComment info =
+        txt "/*"
+        <.> txt "**" <+> info
+        <.> txt "*/"
 
     // ----------------------------------------------
     // Functions for printing blech code form an AST    
     // naming: bp<ASTNode> which means: blech print <ASTNode>   
     // ----------------------------------------------
+    
     
     let bpLineDoc comment = 
         txt "///" <^> txt comment
@@ -69,7 +77,12 @@ module SignaturePrinter =
                 | AST.Bool (value = false) ->
                     txt "false"
                 | AST.String (value = text) ->
-                    txt text |> dquotes
+                    txt text
+                    |> dpString
+                | AST.MultiLineString (value = text) ->
+                    text.Split BlechString.Linefeed
+                    |> Seq.map txt
+                    |> dpMultiLineString
                 | AST.Int (value = i) ->
                     string i |> txt
                 | AST.Bits (value = lit) ->
@@ -90,17 +103,16 @@ module SignaturePrinter =
         | AST.Key (key, _) ->
             ppKey key
         | AST.KeyValue (key, value, _) ->
-            ppKey key <+>
-            (chr '=' <.> bpLiteral value |> gnest dpTabsize)
+            ppKey key <+> chr '=' <+> bpLiteral value
         | AST.Structured (key, attrs, _) ->
-            ppKey key <^> 
-            (
-            (List.map (fun a -> bpAttribute a) attrs) 
-                |> dpCommaSeparatedInParens
-                |> align
-                |> group)
-        
-    let private bpAnnotation (anno: AST.Annotation) =
+            ppKey key <+> 
+            ( List.map bpAttribute attrs 
+              |> punctuate comma
+              |> vsep
+              |> align
+              |> parens )
+              
+    let bpAnnotation (anno: AST.Annotation) =
         match anno.Attribute with
         | AST.KeyValue (AST.Ident(text=Attribute.Key.linedoc), AST.Literal.String(value=comment), _) ->
             bpLineDoc comment
@@ -134,11 +146,11 @@ module SignaturePrinter =
         | Some doc -> prefix <+> chr '=' <.> doc
 
 
-    let private bpName name = txt <| name.ToString()
+    let private bpName name = txt <| string name
     
     
-    let private bpStaticNamedPath path =
-        List.map (fun (n: Name) -> txt <| n.idToString) path
+    let private bpStaticNamedPath (snp : AST.StaticNamedPath) =
+        List.map bpName snp.path
         |> punctuate dot
         |> hcat
 
@@ -153,7 +165,7 @@ module SignaturePrinter =
 
 
     
-    // --- types
+    // ---  built-in types
 
     let private bpNaturalType = function
         | Nat8 -> txt "nat8"
@@ -190,10 +202,152 @@ module SignaturePrinter =
             txt "next" <^> space
 
 
-    let rec private bpArrayLength expr =
+    let private bpPermission (permission: AST.Permission) = 
+        match permission with
+        | AST.Permission.ReadOnly (ro = ro) ->
+            match ro with
+            | AST.Immutable.Let -> txt "let"
+            | AST.Immutable.Const -> txt "const"
+            | AST.Immutable.Param -> txt "param"
+        | AST.Permission.ReadWrite (rw = rw) ->
+            match rw with
+            | AST.Mutable.Var -> txt "var"
+
+
+    // --- members
+    
+    // 
+
+    let rec bpStaticVarDecl (vd: AST.VarDecl) =
+        let datatype = Option.map bpDataType vd.datatype
+        let initValue = Option.map bpExpr vd.initialiser
+        
+        let varDecl =
+            bpPermission vd.permission <+> bpName vd.name <^> 
+            (bpTypeAnnotation datatype 
+             |> bpInitValue <| initValue 
+             |> gnest dpTabsize) 
+
+        let optExtern =
+            if vd.isExtern then Some <| txt "extern" else None    
+        
+        bpOptAnnotations vd.annotations
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optExtern varDecl
+
+    // enum type declaration
+    
+    and private bpEnumRawType = function
+        | None -> empty
+        | Some datatype -> chr ':' <+> bpDataType datatype
+        
+    and private bpEnumRawValue = function 
+        | None -> empty
+        | Some staticExpr -> chr '=' <.> bpExpr staticExpr
+
+    and private bpEnumIsDefault = function
+        | false -> empty
+        | true -> txt "default"
+
+    and private bpTagDecl (td: AST.TagDecl) =
+        dpName td.name <+> bpEnumRawValue td.rawvalue <+> bpEnumIsDefault td.isDefault
+        |> gnest dpTabsize
+        
+    and bpEnumTypeDecl optExtensionDocs (et : AST.EnumTypeDecl) =
+        let optRef = 
+            if et.isReference then Some <| txt "ref" else None
+
+        let optExt =
+            match optExtensionDocs with
+            | None ->
+                txt "end"
+            | Some extDocs ->
+                txt "extension"
+                <.> ( extDocs
+                      |> vsep
+                      |> indent dpTabsize )
+                <.> txt "end"
+
+        let enumDecl =
+            txt "enum"
+            <+> dpName et.name
+            <^> bpEnumRawType et.rawtype
+            <.> indent dpTabsize (List.map bpTagDecl et.tags |> vsep)
+            // extensions are preliminaryfor now
+            <.> optExt
+
+        bpOptAnnotations et.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef enumDecl 
+
+    // struct type declaration
+
+    and private bpDynamicMember (dm : AST.Member) = 
+        match dm with
+        | AST.Member.Var vd ->
+            let datatype = Option.map bpDataType vd.datatype
+            let initValue = Option.map bpExpr vd.initialiser        
+            let varDecl =
+                bpPermission vd.permission <+> bpName vd.name <^> 
+                (bpTypeAnnotation datatype 
+                 |> bpInitValue <| initValue 
+                 |> gnest dpTabsize) 
+
+            bpOptAnnotations vd.annotations
+            |> dpOptLinePrefix
+            <| varDecl
+        | _ ->
+            failwith "Unexpected dynamic member"
+
+
+    and bpStructTypeDecl optExtensionDocs (st : AST.StructTypeDecl) =
+        let optRef = 
+            if st.isReference then Some <| txt "ref" else None
+
+        let optExt =
+            match optExtensionDocs with
+            | None ->
+                txt "end"
+            | Some extDocs ->
+                txt "extension"
+                <.> ( extDocs
+                      |> vsep
+                      |> indent dpTabsize )
+                <.> txt "end"
+
+        let structDecl =
+            txt "struct"
+            <+> dpName st.name
+            <.> indent dpTabsize (List.map bpDynamicMember st.fields |> vsep)
+            // extensions are preliminaryfor now
+            <.> optExt
+
+        bpOptAnnotations st.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef structDecl
+
+    // typealias declaration
+
+    and bpTypeAliasDecl (ta : AST.TypeAliasDecl) =
+        let optRef =
+            if ta.isReference then Some <| txt "ref" else None
+            
+        let typealiasDecl = 
+            txt "typealias"
+            <+> dpName ta.name
+            <+> (chr '=' <.> bpDataType ta.aliasfor
+                 |> gnest dpTabsize)
+
+        bpOptAnnotations ta.annotations 
+        |> dpOptLinePrefix
+        <| dpOptSpacePrefix optRef typealiasDecl
+        
+
+    // --- data types
+
+    and private bpArrayLength expr =
         bpExpr expr
 
-   
     and private bpOptDataType optTyp = 
         match optTyp with
         | None -> empty
@@ -218,8 +372,8 @@ module SignaturePrinter =
             (empty |> brackets) <^> bpDataType dty 
         | AST.Signal (dtyOpt, _) ->
             (bpOptDataType dtyOpt |> group) <+> txt "signal"
-        | AST.TypeName name ->
-            bpStaticNamedPath name.path
+        | AST.TypeName tn ->
+            bpStaticNamedPath tn
 
     
 
@@ -240,14 +394,15 @@ module SignaturePrinter =
         
     and private bpDynamicAccessPath (loc: AST.DynamicAccessPath) = 
         bpTemporalQualifier loc.timepoint <^> bpAccessList loc.path
-            
+      
+    
 
     // --- expressions
 
     and private bpOptExpr optExpr = 
         match optExpr with
-            | None -> Empty
-            | Some expr -> bpPrecExpr dpPrec.["min"] expr
+        | None -> Empty
+        | Some expr -> bpPrecExpr dpPrec.["min"] expr
 
     and private bpExpr (expr: AST.Expr)  = 
         bpPrecExpr dpPrec.["min"] expr
@@ -258,19 +413,19 @@ module SignaturePrinter =
         | AST.LhsInAssignment.Loc l -> 
             bpDynamicAccessPath l    
             
-    and private ppStructField name value =
+    and private bpStructField name value =
         bpName name <+> chr '=' <+> bpExpr value
 
 
-    and private ppWithOptIndex suffix = function 
+    and private bpWithOptIndex suffix = function 
         | None ->
             suffix
         | Some index ->
             (bpExpr index
                 |> brackets) <+> chr '=' <+> suffix
         
-    and private ppArrayField index value =
-        index |> ppWithOptIndex (bpExpr value) 
+    and private bpArrayField index value =
+        index |> bpWithOptIndex (bpExpr value) 
         
     
     and private bpSubProgramCall pName inputs optOutputs =
@@ -294,9 +449,9 @@ module SignaturePrinter =
                 | AST.FieldExpr.ResetFields -> 
                     [empty]
                 | AST.FieldExpr.StructFields sfs -> 
-                    sfs |> List.map (fun sf -> ppStructField sf.name sf.expr)
+                    sfs |> List.map (fun sf -> bpStructField sf.name sf.expr)
                 | AST.FieldExpr.ArrayFields afs -> 
-                    afs |> List.map (fun af -> ppArrayField af.index af.value)
+                    afs |> List.map (fun af -> bpArrayField af.index af.value)
             fields
             |> dpCommaSeparatedInBraces
             |> align
@@ -307,16 +462,14 @@ module SignaturePrinter =
             |> (</>) <| bpDynamicAccessPath buf
             |> align
             |> group                     
-        | AST.Expr.ImplicitMember name ->
-            chr '.' <^> bpStaticNamedPath name.path
         // --- variable
         | AST.Expr.Var access ->
             bpDynamicAccessPath access 
         // --- function call
         | AST.Expr.FunctionCall (fp, inputs, optOutputs, _)->
             bpSubProgramCall fp 
-            <| List.map (fun e -> bpExpr e) inputs
-            <| List.map (fun e -> bpDynamicAccessPath e) optOutputs
+            <| List.map bpExpr inputs
+            <| List.map bpDynamicAccessPath optOutputs
         // --- logical operators ---
         | AST.Expr.Not (expr, _) -> 
             fun p -> txt "not" <+> bpPrecExpr p expr
@@ -431,13 +584,21 @@ module SignaturePrinter =
             <+> bpDataType param.datatype
 
 
-    let private bpOptReturns prefix = function
+    let private bpOptReturns prefix optReturns =
+        match optReturns with
         | None -> prefix
         | Some doc -> prefix <.> doc
+
     
-    
+    let private bpOutputs prefix outputs =
+        match outputs with
+        | [] -> 
+            prefix
+        | outputs ->
+            prefix <.> dpArguments outputs
+
+
     let private bpReturnDecl (ret: AST.ReturnDecl) = 
-            // TODO: improve formatting for missing ref and sharing - now creates blanks because of <+>, fjg 24.01.19    
             let ref = 
                 if ret.isReference then txt "ref" <+> empty 
                 else empty
@@ -468,7 +629,7 @@ module SignaturePrinter =
         let externPrototype =
             txt "extern" <+> txt "function" <+> bpName ef.name <^>
                 (dpArguments inputs
-                |> dpOptArguments <| outputs
+                |> bpOutputs <| outputs
                 |> bpOptReturns <| optReturns
                 |> align
                 |> group) 
@@ -478,94 +639,269 @@ module SignaturePrinter =
         <| externPrototype
 
 
-    let bpPermission (permission: AST.Permission) = 
-        match permission with
-        | AST.Permission.ReadOnly (ro = ro) ->
-            match ro with
-            | AST.Immutable.Let -> txt "let"
-            | AST.Immutable.Const -> txt "const"
-            | AST.Immutable.Param -> txt "param"
-            // | Input -> txt "input"
-        | AST.Permission.ReadWrite (rw = rw) ->
-            match rw with
-            | AST.Mutable.Var -> txt "var"
-            // | Output -> txt "output"
-
-
 
     /// Prints the blech source code for a signature file from namechecking lookuptable and an AST
-    let printSignature (lut: SymbolTable.LookupTable) (ast: AST.Package) =
-        assert (Option.isSome ast.spec )                // only modules have signatures
-        assert (ast.loadWhat = Package.Implementation)  // interfaces do not have signatures 
-
+    let printSignature (ctx : ExportInference.ExportContext) (ast : AST.CompilationUnit) =
+        assert ast.IsModule // only modules have signatures
 
         // ----------------------------------------------
         // Functions for printing signature code form an AST    
         // naming: ps<ASTNode> which means: print signature <ASTNode>   
         // ----------------------------------------------
 
-        let psSpec lut (spec : AST.ModuleSpec) =
-            txt "signature" <+> bpStaticNamedPath spec.path
+        let psAbstractType annotations abstractType isRef (name: Name) =
+            let optAnnos = 
+                bpOptAnnotations annotations
+            let abstractKind = 
+                match abstractType with
+                | OpaqueInference.Simple -> Attribute.SimpleType.ToDoc
+                | OpaqueInference.Array -> Attribute.OpaqueArray.ToDoc
+                | OpaqueInference.Struct -> Attribute.OpaqueStruct.ToDoc
+            let optRef =
+                if isRef then Some <| txt "ref" else None
+                
+            txt "type" <+> dpName name
+            |> dpOptSpacePrefix optRef
+            |> dpOptLinePrefix (Some abstractKind)
+            |> dpOptLinePrefix optAnnos
+
+        let psIdentifier (id : Identifier) = 
+            txt <| string id
+
+        let psLongIdentifier (su : LongIdentifier) =
+            List.map psIdentifier su
+            |> punctuate dot
+            |> hcat
+
+        //let psSingletonUsage (su: ExportInference.SingletonUsage) = 
+        //    List.map psLongIdentifier su
+
+        let psSingletonSignature (singletonSig: ExportInference.SingletonSignature) =
+            let usedSingletons = 
+                match singletonSig with
+                | ExportInference.Opaque su
+                | ExportInference.Translucent su ->
+                    if List.isEmpty su then None
+                    else List.map psLongIdentifier su
+                         |> dpCommaSeparatedInBrackets
+                         |> Some
+
+            txt "singleton"
+            |> dpOptSpacePostfix <| usedSingletons
+            
         
+        let psPrototype isFunction name inputs outputs result =
+            let subprog = if isFunction then txt "function" else txt "activity"
+            let inputs = List.map bpParamDecl inputs
+            let outputs = List.map bpParamDecl outputs
+            let optReturns = Option.map bpReturnDecl result
+
+            subprog <+> bpName name <+>
+            (dpArguments inputs
+                |> bpOutputs <| outputs
+                |> bpOptReturns <| optReturns
+                |> align
+                |> group) 
+
+
         let psSubProgram (sp: AST.SubProgram) =
-            let subprog =
-                if sp.isFunction then
-                    txt "function"
-                else    
-                    txt "activity"
+            let optAnnos = bpOptAnnotations sp.annotations
             
-            let inputs = List.map bpParamDecl sp.inputs
-            let outputs = List.map bpParamDecl sp.outputs
-            let optReturns = Option.map bpReturnDecl sp.result
+            dpOptLinePrefix optAnnos
+            <| psPrototype sp.isFunction sp.name sp.inputs sp.outputs sp.result
 
-            let prototype = 
-                subprog <+> bpName sp.name <^>
-                (dpArguments inputs
-                 |> dpOptArguments <| outputs
-                 |> bpOptReturns <| optReturns
+
+        let psSingletonSubProgram (singletonSig : ExportInference.SingletonSignature) (sp: AST.SubProgram) = 
+            // printfn "Singleton Signature for sub program: %A\n Singleton Signature %A" sp.name singletonSig
+            let optAnnos = bpOptAnnotations sp.annotations
+            let singleton = psSingletonSignature singletonSig
+            let prototype = psPrototype sp.isFunction sp.name sp.inputs sp.outputs sp.result
+
+            dpOptLinePrefix optAnnos
+            <| ( singleton <.> prototype
+                 |> align 
+                 |> group )
+
+
+        let psSingletonExternalFunction (singletonSig : ExportInference.SingletonSignature) (pt: AST.Prototype) = 
+            let optAnnos = bpOptAnnotations pt.annotations
+            let singleton = psSingletonSignature singletonSig
+            let prototype = psPrototype true pt.name pt.inputs pt.outputs pt.result
+
+            dpOptLinePrefix optAnnos
+            <| ( txt "extern" <.> singleton <.> prototype 
                  |> align
-                 |> group) 
+                 |> group )
 
-            bpOptAnnotations sp.annotations
-            |> dpOptLinePrefix
-            <| prototype
-           
-        let psStaticVarDecl (vd: AST.VarDecl) =
-            let datatype = Option.map bpDataType vd.datatype
-            let initValue = Option.map bpExpr vd.initialiser
-            
-            let varDecl =
-                bpPermission vd.permission <+> bpName vd.name <^> 
-                (bpTypeAnnotation datatype 
-                 |> bpInitValue <| initValue 
-                 |> gnest dpTabsize) 
 
-            let optExtern =
-                if vd.isExtern then Some <| txt "extern" else None    
-            
-            bpOptAnnotations vd.annotations
-            |> dpOptLinePrefix
-            <| dpOptSpacePrefix optExtern varDecl
+        let psOpaqueSingletonSignature annotations (singletonSig : ExportInference.SingletonSignature) (name: Name)  = 
+            let optAnnos = bpOptAnnotations annotations
 
-        // TODO: check exposedness, fjg 25.01.19
-        let psMember lut (mbr: AST.Member) =
+            dpOptLinePrefix optAnnos
+            <| ( psSingletonSignature singletonSig <+> dpName name
+                 |> align
+                 |> group )
+
+
+        let psExtensionMember (mbr: AST.Member) =
             match mbr with
-            | AST.Member.Subprogram subProg ->
-                psSubProgram subProg
-            | AST.Member.Prototype protoTyp ->
-                bpExternalFunction protoTyp
-            | AST.Member.Var vdecl when vdecl.permission.IsStatic ->
-                psStaticVarDecl vdecl
-            | AST.Member.Pragma p ->
-                bpPragma p
+            | AST.Member.Subprogram sp ->
+                psSubProgram sp
+            | AST.Member.TypeAlias ta ->
+                bpTypeAliasDecl ta
             | _ ->
-                empty
+                failwith "Extensions are preliminary and only used to test implicit member access"
 
-        let imports = List.map (psMember lut) ast.imports
-        let spec = Option.get ast.spec |> psSpec lut
-        let members = List.map (psMember lut) ast.members
+
+        let psOptExtensions (extensionMembers: AST.Member list) = 
+            match extensionMembers with
+            | [] -> 
+                None
+            | mbrs ->
+                List.map psExtensionMember mbrs
+                |> Some 
+            
+            
+        let psStructTypeDecl (st: AST.StructTypeDecl) =
+            psOptExtensions st.members
+            |> bpStructTypeDecl <|st
+
+
+        let psEnumTypeDecl (st: AST.EnumTypeDecl) =
+            psOptExtensions st.members
+            |> bpEnumTypeDecl <|st
+
+
+        let psMember (mbr : AST.Member) =
+            
+            match mbr with
+            | AST.Member.EnumType et -> 
+                if ctx.IsExported et.name then 
+                    if ctx.IsOpaqueType et.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType et.name
+                        psAbstractType et.annotations absType et.isReference et.name 
+                    else
+                        psEnumTypeDecl et 
+                else empty  
+            
+            | AST.Member.StructType st ->
+                if ctx.IsExported st.name then 
+                    if ctx.IsOpaqueType st.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType st.name
+                        psAbstractType st.annotations absType st.isReference st.name 
+                    else 
+                        psStructTypeDecl st
+                else empty  
+
+            | AST.Member.TypeAlias ta ->
+                if ctx.IsExported ta.name then 
+                    if ctx.IsOpaqueType ta.name then
+                        let absType = Option.get <| ctx.TryGetOpaqueType ta.name
+                        psAbstractType ta.annotations absType ta.isReference ta.name 
+                    else 
+                        bpTypeAliasDecl ta
+                else empty  
+                
+            | AST.Member.OpaqueType ot ->
+                failwith "this should not occur"
+            
+            | AST.Member.Var vdecl ->
+                if ctx.IsExported vdecl.name then 
+                    bpStaticVarDecl vdecl
+                else empty
+
+            | AST.Member.Subprogram sp ->
+                if ctx.IsExported sp.name then
+                    if ctx.HasOpaqueSingletonSignature sp.name then
+                        psOpaqueSingletonSignature sp.annotations (ctx.GetSingletonSignature sp.name) sp.name
+                    elif ctx.HasTranslucentSingletonSignature sp.name then
+                        psSingletonSubProgram (ctx.GetSingletonSignature sp.name) sp
+                    else
+                        psSubProgram sp
+                else empty
+
+            | AST.Member.Prototype pt ->
+                if ctx.IsExported pt.name then
+                    if ctx.HasOpaqueSingletonSignature pt.name then
+                        psOpaqueSingletonSignature pt.annotations (ctx.GetSingletonSignature pt.name) pt.name
+                    elif ctx.HasTranslucentSingletonSignature pt.name then
+                        psSingletonExternalFunction (ctx.GetSingletonSignature pt.name) pt
+                    else
+                        bpExternalFunction pt
+                else empty
+
+            | AST.Member.OpaqueSingleton os ->
+                // Used to group external functions that change the same C object
+                psOpaqueSingletonSignature os.annotations (ctx.GetSingletonSignature os.name) os.name
+                // failwith "Opaque signatures are not part of module implementations, which are printed here."
+            
+            | AST.Member.Unit u ->
+                empty
+                // bpUnitDecl u
+            
+            | AST.Member.Clock c ->
+                empty
+                // bpClockDecl c
+            
+            | AST.Member.Pragma p ->
+                empty
+            
+            | AST.Member.Nothing -> 
+                failwith "this should have been removed"
+
+
+        let psImportExposes (exposing: AST.Exposing) =
+            let requiredExposedNames =
+                List.filter ctx.IsRequiredImport exposing.names
+
+            if List.isEmpty requiredExposedNames then
+                empty
+            else
+                txt "exposes" <.> 
+                ( List.map dpName requiredExposedNames
+                  |> dpRemoveEmpty
+                  |> dpCommaSeparated )
+                |> align
+                |> group
+            
+        let psImport (imp: AST.Import) = 
+            let requiredExposedNames = 
+                Option.map psImportExposes imp.exposing
+
+            if ctx.IsRequiredImport imp.localName  then
+                (if imp.isInternal then txt "import internal" else txt "import") 
+                <+> dpModuleName imp.localName
+                <+> dquotes imp.modulePath.path.ToDoc
+                |> dpOptSpacePostfix <| requiredExposedNames   
+            else empty
+
+        let psModuleSpec (ms: AST.ModuleSpec) =
+            let optAnnos = 
+                bpOptAnnotations ms.annotations
+            let spec = 
+                if ms.isInternal then txt "internal signature" else txt "signature"
+
+            dpOptLinePrefix optAnnos spec
+
+        let generatedCode =
+            bpGeneratedComment <| txt "This is generated code - do not touch!"
+
+        let imports = 
+            List.map psImport ast.imports
+            |> dpRemoveEmpty
+            |> dpToplevelClose
+
+        let spec = 
+            assert (Option.isSome ast.moduleSpec)
+            psModuleSpec <| Option.get ast.moduleSpec
+            
+        let members = 
+            List.map psMember ast.members
+            |> dpRemoveEmpty
+            |> dpToplevel
         
-        (imports @ spec :: members)
+        [generatedCode; imports; spec ; members]
+        |> dpRemoveEmpty
         |> dpToplevel
         |> render (Some 80)
 

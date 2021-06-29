@@ -1,0 +1,8 @@
+struct ASDF
+    // empty!
+end
+
+@[EntryPoint]
+activity running()
+    await true
+end

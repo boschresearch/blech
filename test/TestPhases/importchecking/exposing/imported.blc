@@ -1,0 +1,9 @@
+module exposes S, init
+
+struct S
+    var i: int32 
+end
+
+function init() returns S
+    return {i = 42}
+end

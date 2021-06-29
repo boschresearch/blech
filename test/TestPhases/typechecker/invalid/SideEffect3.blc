@@ -1,4 +1,4 @@
-module SideEffect3
+module
 
 function sideffect()(x: int32) returns bool
     x = x + 1

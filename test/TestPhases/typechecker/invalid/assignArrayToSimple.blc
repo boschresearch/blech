@@ -1,4 +1,4 @@
-module assignArrayToSimple
+module
 
 struct MyS
   var f1: int8

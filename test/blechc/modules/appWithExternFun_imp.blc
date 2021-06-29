@@ -1,0 +1,5 @@
+
+module exposes myExternFun 
+
+@[CFunction(binding="increase_global_state()", header="appWithExternFun.ext.h")]
+extern function myExternFun()() returns int32

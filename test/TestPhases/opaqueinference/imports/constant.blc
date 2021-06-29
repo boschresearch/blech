@@ -1,0 +1,3 @@
+module exposes C 
+
+const C : bits8 = 0xF

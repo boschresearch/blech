@@ -1,4 +1,4 @@
-module structuredData
+module
 
 enum MyNum: nat8
     EINS = 1
@@ -7,8 +7,8 @@ enum MyNum: nat8
 end
 
 activity main()() 
-    var x: MyNum = .EINS
-    x = .DREI
+    var x: MyNum = EINS
+    x = DREI
     await true
     x = MyNum.ZWEI
 end

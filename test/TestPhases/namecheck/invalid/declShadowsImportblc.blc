@@ -1,0 +1,7 @@
+import M "../imports/importMe"
+
+module exposes M
+
+struct M
+    var a: bool
+end

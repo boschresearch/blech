@@ -1,0 +1,103 @@
+activity Act1 ( in6: float32, in3: bool, in2: float32, in1: float32 )
+              ( loc9: float32, loc19: float32, loc20: float32, loc21: float32, loc5: float32, loc6: float32, loc8: float32, loc7: float32 )
+    await true
+end
+
+activity Act2 ( loc16: float32, loc10: float32, loc11: float32, loc12: float32, loc14: float32, loc13: float32, loc15: float32, out2: float32 )
+              ( out3: float32 )
+    await true
+end
+
+function fun1 ( in3: bool )
+              ( loc1: float32, loc2: float32, loc4: int16 )
+end
+
+function fun2(loc3: float32, in5: float32)  (loc1: float32, loc2: float32, loc10: float32, loc4: int16)
+end
+
+function fun3(loc6: float32, in5: float32, loc7: float32, loc5: float32, loc19: float32, loc20: float32, loc21: float32)
+                        (loc1: float32, loc25: float32, loc17: float32, loc18: float32, loc22: float32, loc23: float32)
+end
+
+function fun4(loc4: int16, f: float32, loc2: float32) returns float32
+    return 0
+end
+
+function fun5 (loc19: float32, loc20: float32, loc21: float32, loc1: float32, loc25: float32, loc2: float32, loc24: float32)
+      (loc12: float32, out2: float32, loc11: float32, loc3: float32, loc26: float32, loc13: float32)
+end
+
+function fun6 (loc25: float32, loc26: float32, loc19: float32, loc20: float32, loc23: float32, loc7: float32)  
+    (out1: float32)
+end
+
+function fun7(loc25: float32, loc8: float32) returns float32
+    return 0
+end
+
+function fun8(loc25: float32, loc12: float32, loc24: float32, loc8: float32) returns float32
+    return 0
+end
+
+function fun9(loc25: float32, loc12: float32) returns float32
+    return 0
+end
+
+function fun10 ()  (loc10: float32, out2: float32, loc11: float32, loc12: float32, loc13: float32, out1: float32, loc14: float32, loc15: float32, loc16: float32, loc17: float32, loc18: float32)
+end
+
+@[EntryPoint]
+activity testActivity ( in1: float32, in2: float32, in3: bool, in4: bool, in5: float32, in6: float32 )
+                      ( out1: float32, out2: float32, out3: float32 )
+    //
+    var loc1: float32 = 0.0
+    var loc2: float32 = 0.0
+    var loc3: float32 = 0.0
+    var loc4: int16 = 0
+    var loc5: float32
+    var loc6: float32
+    var loc7: float32
+    var loc8: float32
+    var loc9: float32
+    var loc10: float32
+    var loc11: float32
+    var loc12: float32
+    var loc13: float32
+    var loc14: float32
+    var loc15: float32
+    var loc16: float32
+    var loc17: float32
+    var loc18: float32
+    var loc19: float32 // 300
+    var loc20: float32 // 300
+    var loc21: float32 // 300
+    var loc22: float32
+    var loc23: float32
+    var loc24: float32
+    var loc25: float32
+    var loc26: float32
+
+    cobegin
+        run Act1 (in6, in3, in2, in1)  (loc9, loc19, loc20, loc21, loc5, loc6, loc8, loc7)
+    with
+        run Act2(loc16, loc10, loc11, loc12, loc14, loc13, loc15, out2)  (out3)
+    with
+        repeat
+            fun1(in3)  (loc1, loc2, loc4)
+
+            if in4 then
+                fun2(loc3, in5)  (loc1, loc2, loc10, loc4)
+                fun3(loc6, in5, loc7, loc5, loc19, loc20, loc21)  (loc1, loc25, loc17, loc18, loc22, loc23)
+                loc24 = fun4(loc4, 0, loc2) // const
+                fun5 (loc19, loc20, loc21, loc1, loc25, loc2, loc24)  (loc12, out2, loc11, loc3, loc26, loc13)
+                fun6 (loc25, loc26, loc19, loc20, loc23, loc7)  (out1)
+                loc14 = fun7(loc25, loc8)
+                loc15 = fun8(loc25, loc12, loc24, loc8)
+                loc16 = fun9(loc25, loc12)
+            else
+                fun10()  (loc10, out2, loc11, loc12, loc13, out1, loc14, loc15, loc16, loc17, loc18)  
+            end
+            await true
+        end
+    end
+end

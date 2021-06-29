@@ -1,4 +1,4 @@
-module loopinst
+module
 
 activity main ()() 
     var x: int8 = 17

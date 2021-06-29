@@ -1,0 +1,11 @@
+
+
+function f()
+end
+
+function g(f: int32) end
+
+@[EntryPoint]
+activity Main()
+    await true
+end

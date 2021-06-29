@@ -1,0 +1,6 @@
+import _ "../imports/hiddenConstOfExposedConst"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

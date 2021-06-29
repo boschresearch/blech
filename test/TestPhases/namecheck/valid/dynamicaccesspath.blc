@@ -1,4 +1,4 @@
-module dynamicaccesspath
+module
 
 struct S 
     var x: int8

@@ -1,0 +1,39 @@
+// This testcase produces a causality cycle error
+// Actually, there is no cycle here but the compiler (as of June 2021) is too strict and refuses this program
+@[EntryPoint]
+activity A () () 
+    var r1: nat16
+    var q1: nat16
+    var l1: nat32
+    var sync: bool
+    cobegin
+        // repeat
+            cobegin weak
+                repeat
+                    r1 = 17
+                    await true
+                until r1 != 0 end
+            with
+                await q1 == r1
+                l1 = 17
+                let bar = sync
+            end
+            cobegin weak
+                repeat
+                    r1 = 17
+                    await true
+                until r1 != 0 end
+            with
+                await q1 == r1
+                l1 = 17
+                let bar = sync
+            end
+            // do stuff
+        // end
+    with
+        repeat
+            await 42 != l1
+            sync = true
+        end
+    end
+end

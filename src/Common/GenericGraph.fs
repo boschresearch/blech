@@ -266,43 +266,25 @@ with
 /// This type is used to mark the vertices during a traversal
 type private NodeLabel = Unvisited | Visited | Finished
 
-/// <summary>
+
 ///    Performs a depth-first-traversal of the graph.
-/// </summary>
 ///
-/// <param name="forward">
-///    Boolean flag indicating whether traversal is going forward
+/// forward - Boolean flag indicating whether traversal is going forward
 ///    or backward.
-/// </param>
-///
-/// <param name="nodes">
-///    Sequence of nodes that the DFS will start from.
-/// </param>
-///
-/// <param name="onNodeVisit">
-///    A callback which is called with a node as paramter when a node is
+/// nodes - Sequence of nodes that the DFS will start from.
+/// onNodeVisit - A callback which is called with a node as paramter when a node is
 ///    visited the first time. If the callback returns true, traversal
 ///    aborted and the whole call returns true, otherwise traversal is
 ///    proceed.
-/// </param>
-///
-/// <param name="onNodeFinish">
-///    A callback which is called with a node as paramter when a node is
+/// onNodeFinish - A callback which is called with a node as paramter when a node is
 ///    visited the last time (finished). If the callback returns true,
 ///    traversal aborted and the whole call returns true, otherwise
 ///    traversal is proceed.
-/// </param>
-///
-/// <param name="onCycleDetect">
-///    A callback which is called with a node as paramter when a cycle is
+/// onCycleDetect - A callback which is called with a node as paramter when a cycle is
 ///    found. If the callback returns true, traversal aborted and the whole
 ///    call returns true, otherwise traversal is proceed.
-/// </param>
-///
-/// <returns>
-///    true if the traversal was aborted by a callback which returned true.
+/// returns true if the traversal was aborted by a callback which returned true.
 ///    If the traversal was not aborted, it returns false.
-/// </returns>
 let depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit =
     
     // Keep track of visited nodes, default label is Unvisited
@@ -344,76 +326,44 @@ let depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleD
         }
     )
 
-/// <summary>
+
 ///    Performs a depth-first-traversal of the graph along the forward
 ///    edges
-/// </summary>
-///
-/// <param name="nodes">
-///    Sequence of nodes that the DFS will start from.
-/// </param>
-///
-/// <param name="onNodeVisit">
-///    A callback which is called with a node as paramter when a node is
+/// nodes - Sequence of nodes that the DFS will start from.
+/// onNodeVisit - A callback which is called with a node as paramter when a node is
 ///    visited the first time. If the callback returns true, traversal
 ///    aborted and the whole call returns true, otherwise traversal is
 ///    proceed.
-/// </param>
-///
-/// <param name="onNodeFinish">
-///    A callback which is called with a node as paramter when a node is
+/// onNodeFinish - A callback which is called with a node as paramter when a node is
 ///    visited the last time (finished). If the callback returns true,
 ///    traversal aborted and the whole call returns true, otherwise
 ///    traversal is proceed.
-/// </param>
-///
-/// <param name="onCycleDetect">
-///    A callback which is called with a node as paramter when a cycle is
+/// onCycleDetect - A callback which is called with a node as paramter when a cycle is
 ///    found. If the callback returns true, traversal aborted and the whole
 ///    call returns true, otherwise traversal is proceed.
-/// </param>
-///
-/// <returns>
-///    true if the traversal was aborted by a callback which returned true.
+/// returns true if the traversal was aborted by a callback which returned true.
 ///    If the traversal was not aborted, it returns false.
-/// </returns>
 let depthsFirstForward nodes onNodeVisit onNodeFinish onCycleDetect onRevisit =
     let selectNeighbours (n: Node<_,_>) = n.Successors
     depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit
 
-/// <summary>
+
 ///    Performs a depth-first-traversal of the graph along the backward
 ///    edges
-/// </summary>
-///
-/// <param name="nodes">
-///    Sequence of nodes that the DFS will start from.
-/// </param>
-///
-/// <param name="onNodeVisit">
-///    A callback which is called with a node as paramter when a node is
+/// nodes - Sequence of nodes that the DFS will start from.
+/// onNodeVisit - A callback which is called with a node as paramter when a node is
 ///    visited the first time. If the callback returns true, traversal
 ///    aborted and the whole call returns true, otherwise traversal is
 ///    proceed.
-/// </param>
-///
-/// <param name="onNodeFinish">
-///    A callback which is called with a node as paramter when a node is
+/// onNodeFinish - A callback which is called with a node as paramter when a node is
 ///    visited the last time (finished). If the callback returns true,
 ///    traversal aborted and the whole call returns true, otherwise
 ///    traversal is proceed.
-/// </param>
-///
-/// <param name="onCycleDetect">
-///    A callback which is called with a node as paramter when a cycle is
+/// onCycleDetect - A callback which is called with a node as paramter when a cycle is
 ///    found. If the callback returns true, traversal aborted and the whole
 ///    call returns true, otherwise traversal is proceed.
-/// </param>
-///
-/// <returns>
-///    true if the traversal was aborted by a callback which returned true.
+/// returns true if the traversal was aborted by a callback which returned true.
 ///    If the traversal was not aborted, it returns false.
-/// </returns>
 let private depthsFirstBackward nodes onNodeVisit onNodeFinish onCycleDetect onRevisit =
     let selectNeighbours (n: Node<_,_>) = n.Predecessors
     depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit

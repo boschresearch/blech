@@ -1,0 +1,38 @@
+import Ex "externalConst_imp" exposes S
+
+activity A (arg: int32) returns int32
+    @[CConst(binding="3*(C_NAME_CONST_I32 + 1)", header="externalConst.ext.h")]
+    extern const extActVarI8: int32
+    
+    await true
+    
+    let foo1 = extActVarI8 + arg
+
+    await true
+
+    return foo1
+end
+
+activity B (myS: S)
+    
+    
+    var res: int32
+
+    if myS.s < 0.0 then run _ =  A(Ex.extConstI8)
+    else 
+        run res = A(2 * Ex.extConstI8)
+        let foo2 = Ex.extVarArr // activity level declared
+        let foo3 = Ex.extVarArr[0] + 7 // top level
+    end
+end
+
+@[EntryPoint]
+activity E ()
+    
+    
+
+    let foo4 = Ex.extVarS // activity defined
+    let foo5 = Ex.extVarS.s // top level
+    
+    run B(Ex.extVarS)
+end

@@ -1,0 +1,9 @@
+
+import c "../imports/constant" 
+
+typealias T = c.C
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

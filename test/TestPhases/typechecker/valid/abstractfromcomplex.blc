@@ -1,0 +1,7 @@
+import ac "../imports/abstracttype"
+
+module
+
+function init () returns ac.S
+    return ac.init()
+end

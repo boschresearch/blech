@@ -1,0 +1,53 @@
+
+module exposes 
+        // p, c, f, a, 
+        T,
+        // Color,
+        S,
+        MyColor
+
+typealias T = int32
+
+enum Color : T
+    Red = 1
+    Blue = 2 default
+end
+
+struct S 
+    var x: T 
+    var y: bool
+extension
+    function f() end
+end
+
+// enum Color2
+//     Red
+//     Blue default
+// end
+
+param p: bits8 = 0x8F
+param p2: bits8 = 0x8F & p
+
+// const p3: bits8 = 0x8F
+// const p4: bits8 = 0x8F & p3
+
+const MyColor: Color = Red 
+
+// const c = 42 : nat8
+// const c2 = 42 : nat8
+
+// function f (x: int23) 
+//     let b = p4
+// end
+
+function f2 () 
+    
+    var x:[3:nat8] int32
+end
+
+// activity a ()
+//     await true
+// end
+// activity a2 ()
+//     await true
+// end

@@ -1,0 +1,21 @@
+import _ "returnsStructFromExternFunctionType_imp" exposes S
+
+@[CFunction(binding="rrr_impl($1, $2)", header="returnsStructFromExternFunction.ext.h")]
+extern function rrr(a: bool) returns S
+    
+   
+   
+
+
+
+
+
+   
+
+@[EntryPoint]
+activity start ()()
+    
+    var myS: S = rrr(false)
+    await true
+    _ = rrr(true)
+end

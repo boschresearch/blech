@@ -1,4 +1,4 @@
-module AssignVoidToInt
+module
 
 function calc1() returns int8
     return 0

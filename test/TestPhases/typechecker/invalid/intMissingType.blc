@@ -1,4 +1,4 @@
-module intMissingType
+module
 
 function intMissingType()
     var a = -129

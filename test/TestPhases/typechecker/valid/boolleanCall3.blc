@@ -1,4 +1,4 @@
-module boolleanCall3
+module
 
 
 activity other (i: bool)()

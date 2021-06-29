@@ -1,4 +1,4 @@
-module XClassArgumentShares
+module
 
 ref struct x
     var x: int8 = 0 

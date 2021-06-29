@@ -1,0 +1,18 @@
+module exposes T, two, Color, RED, BLUE
+
+typealias T = int32
+
+const two: T = 2
+
+enum Color : T
+    Red = 1
+    Blue = two default
+extension // Thats bad because internal structure and methods are either hidden or exposed together 
+    function Init () returns Color
+        return Red
+    end
+end
+
+const RED : Color = Color.Red
+
+const BLUE : Color = Blue

@@ -20,6 +20,7 @@ namespace Blech.Common
 module Arguments =
     
     open Argu // see: https://fsprojects.github.io/Argu/index.html
+    open System.IO
 
     type Verbosity = 
         | Q 
@@ -40,8 +41,8 @@ module Arguments =
     //    | Csv
     
     let defaultBlechPath = "."
-    let defaultSourcePath = "." 
-    let defaultOutDir = "."
+    let defaultProjectDir = "." 
+    let defaultOutDir = Path.Combine (".", "blech") // put all generated files into blech folder bei default
     let defaultAppName = "blech"
     
     
@@ -52,10 +53,11 @@ module Arguments =
         | [<Unique; AltCommandLine("-v")>] Verbosity of level : Verbosity 
         
         | [<Unique; EqualsAssignment>] App of name : string option
-        | [<Unique; AltCommandLine("-sp")>] Source_Path of path : string 
+        | [<Unique; AltCommandLine("-pd")>] Project_Dir of directory : string 
         | [<Unique; AltCommandLine("-od")>] Out_Dir of directory : string
         | [<Unique; AltCommandLine("-bp")>] Blech_Path of path : string
         
+        | [<Unique; EqualsAssignment>] Box of name : string
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
@@ -72,20 +74,25 @@ module Arguments =
                 | Rebuild -> 
                     "always re-compile from source files."
                 | Dry_Run _ -> 
-                    "do not write any result files."
-                | App _ -> 
-                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
-                | Source_Path _ ->
-                    "search for blech modules in <path> templates, "
-                    + "defaults to " + "\"" + defaultSourcePath + "\"" + "."
-                | Out_Dir _ -> 
-                    "write all build results to <directory>, which must already exist."
-                | Blech_Path _ ->
-                    "search for blech modules in <path> templates, "
-                    + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
+                    "do not generate any C code files."
                 | Verbosity _ -> 
                     "set verbosity <level>, "
                     + "allowed values are q[uiet], m[inimal], n[ormal], d[etailed], diag[nostic]."
+                
+                | App _ -> 
+                    "generate '<name>.c' as main application, default is '" + defaultAppName + ".c'."
+                | Project_Dir _ ->
+                    "search for blech modules in <directory>, "
+                    + "defaults to " + "\"" + defaultProjectDir + "\"" + "."
+                | Out_Dir _ -> 
+                    "write all build results to <directory>, which must already exist."
+                | Blech_Path _ ->
+                    "search for blech library modules in <path>, "
+                    + "defaults to " + "\"" + defaultBlechPath + "\"" + "."
+                
+                | Box _ ->
+                    "compile for box <name>, allowed names are valid Blech identifiers."
+                
                 | Word_Size _ -> 
                     "maximum word size, "
                     + "allowed values are 8, 16, 32, 64."
@@ -118,27 +125,32 @@ module Arguments =
     type BlechCOptions =  // TODO: Move this to separate file in utils
         {
             inputFile: string
+            box: string option
             appName: string option
-            sourcePath: string
+            projectDir : string
             outDir: string
             blechPath: string
             showVersion: bool
             isDryRun: bool
             isRebuild: bool
+            isFrontendTest : bool // used to stop import compilation before type check
             trace: bool
             wordSize: WordSize
             passPrimitiveByAddress: bool
             verbosity: Verbosity
         }
+
         static member Default = {
                 inputFile = ""
+                box = None
                 appName = None
-                sourcePath = defaultSourcePath
+                projectDir = defaultProjectDir 
                 outDir = defaultOutDir
                 blechPath = defaultBlechPath
                 showVersion = false
                 isDryRun = false
                 isRebuild = false
+                isFrontendTest = false // currently used to test language features that do not typecheck
                 trace = false
                 wordSize = W32
                 passPrimitiveByAddress = false
@@ -162,12 +174,14 @@ module Arguments =
             { opts with isRebuild = true }
         | Dry_Run ->
             { opts with isDryRun = true }
-        | Source_Path sp ->
-            { opts with sourcePath = sp }
+        | Project_Dir pd ->
+            { opts with projectDir = pd }
         | Out_Dir od ->
             { opts with outDir = od }
         | Blech_Path bp ->
             { opts with blechPath = bp}
+        | Box bn ->
+            { opts with box = Some bn}
         | Verbosity v ->
             { opts with verbosity = v }
         | Word_Size ws ->
@@ -177,12 +191,18 @@ module Arguments =
         | Pass_Primitive_By_Address ->
             { opts with passPrimitiveByAddress = true }
 
+
     let private parseWordSize ws = 
         if ws = 8 || ws = 16 || ws = 32 || ws = 64 then
             ws
         else
             failwith <| "invalid word size " + string ws + ". Allowed values are 8, 16, 32, 64."
-       
+
+    let private parseBoxName bn = 
+        if TranslationUnitPath.PathRegex.isValidFileOrDirectoryName bn then
+            bn
+        else
+            failwith <| sprintf "invalid library name \"%s\". Allowed names are valid Blech identifiers." bn
 
     let parser = 
         ArgumentParser.Create<BlechCArg>(programName = "blechc")
@@ -195,6 +215,8 @@ module Arguments =
     
             if config.Contains <@ Word_Size @> then 
                 ignore <| config.PostProcessResult(<@ Word_Size @>, parseWordSize)
+            if config.Contains <@ Box @> then
+                ignore <| config.PostProcessResult(<@ Box @>, parseBoxName)
     
             let opts =
                 config.GetAllResults()

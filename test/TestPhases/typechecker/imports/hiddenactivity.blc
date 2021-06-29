@@ -1,0 +1,7 @@
+module exposes g
+
+singleton activity f() await false end
+
+activity g()   
+     run f()
+end

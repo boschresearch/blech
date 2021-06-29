@@ -1,0 +1,6 @@
+import I "nofile"
+
+@[EntryPoint]
+activity Main () ()
+    await true
+end

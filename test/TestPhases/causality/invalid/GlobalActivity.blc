@@ -1,4 +1,4 @@
-module GlobalActivity
+module
 
 activity main () ()
     var data: int32 = 0

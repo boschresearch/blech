@@ -1,4 +1,4 @@
-module ActivityReturn
+module
 
 activity calc() returns int32
     cobegin

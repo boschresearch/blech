@@ -1,0 +1,11 @@
+module exposes c1, MyInt, c2, f
+
+typealias MyInt = int8
+
+const c1: MyInt = 42 
+
+function f() returns int8
+    return 42
+end
+
+const c2: MyInt = c1 + 42 + f() // will create a typecheck error, 'f()' is not a compiletime value

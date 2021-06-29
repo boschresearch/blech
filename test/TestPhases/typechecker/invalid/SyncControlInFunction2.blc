@@ -1,4 +1,4 @@
-module SyncControlInFunction2
+module
 
 function calc() returns float64
     

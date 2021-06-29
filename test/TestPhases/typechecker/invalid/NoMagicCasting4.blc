@@ -1,4 +1,4 @@
-module NoMagicCasting4
+module
 
 function noMagicCasting()
     var a: float64 = -128

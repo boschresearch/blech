@@ -1,0 +1,15 @@
+@[EntryPoint]
+activity A ()
+    var s: nat8 
+    if s == 0 then
+        return // illegal
+    else
+        s = 0
+    end
+
+    repeat
+        await true
+        s = s + 1
+    until s >= 18 end
+end
+

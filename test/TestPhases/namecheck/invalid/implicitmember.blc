@@ -1,0 +1,11 @@
+
+module
+
+struct S
+    var x: bool
+end
+
+function f ()
+    var s: S
+    x = true // dynamic memvber is not implicitly accessible
+end

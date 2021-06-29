@@ -32,45 +32,53 @@ type Declarable =
     | ParamDecl of ParamDecl
     | VarDecl of VarDecl
     | ExternalVarDecl of ExternalVarDecl
-    | SubProgramDecl of SubProgramDecl
-    | FunctionPrototype of FunctionPrototype
+    | ProcedureImpl of ProcedureImpl
+    | ProcedurePrototype of ProcedurePrototype
     
     member this.GetQName() =
         match this with
         | ParamDecl {name = x}
         | VarDecl {name = x} 
         | ExternalVarDecl {name = x}
-        | SubProgramDecl {name = x}
-        | FunctionPrototype {name = x} -> x
+        | ProcedurePrototype {name = x} -> x
+        | ProcedureImpl i -> i.Name
     
     member this.GetLn() =
         match this with
         | ParamDecl {pos = x}
         | VarDecl {pos = x}
         | ExternalVarDecl {pos = x}
-        | SubProgramDecl {pos = x} 
-        | FunctionPrototype {pos = x} -> x
+        | ProcedureImpl {pos = x} 
+        | ProcedurePrototype {pos = x} -> x
     
     member this.TryGetDefault() =
         match this with
         | VarDecl {initValue = x} -> Some x
         | ExternalVarDecl _ // externals have no default value
         | ParamDecl _
-        | SubProgramDecl _
-        | FunctionPrototype _ -> None
+        | ProcedureImpl _
+        | ProcedurePrototype _ -> None
 
     member this.TryGetMutability =
         match this with
         | VarDecl {mutability = x}
         | ExternalVarDecl {mutability = x} -> Some x
         | ParamDecl {isMutable = x} -> if x then Some Mutability.Variable else Some Mutability.Immutable
-        | SubProgramDecl _
-        | FunctionPrototype _ -> None
+        | ProcedureImpl _
+        | ProcedurePrototype _ -> None
 
     member this.TryGetReturnType =
         match this with
-        | FunctionPrototype {returns = x}
-        | SubProgramDecl {returns = x} -> Some x
+        | ProcedurePrototype {returns = x} -> Some x
+        | ProcedureImpl i -> Some i.Returns
+        | VarDecl _
+        | ParamDecl _
+        | ExternalVarDecl _ -> None
+
+    member this.TryGetPrototype =
+        match this with
+        | ProcedurePrototype p -> Some p
+        | ProcedureImpl i -> Some i.prototype
         | VarDecl _
         | ParamDecl _
         | ExternalVarDecl _ -> None
@@ -80,8 +88,8 @@ type Declarable =
         | ParamDecl {allReferences = ar}
         | VarDecl {allReferences = ar}
         | ExternalVarDecl {allReferences = ar}
-        | SubProgramDecl {allReferences = ar}
-        | FunctionPrototype {allReferences = ar} ->
+        | ProcedureImpl {allReferences = ar}
+        | ProcedurePrototype {allReferences = ar} ->
             ar.Add pos
 
 
@@ -91,42 +99,36 @@ type Declarable =
 type TypeCheckContext = 
     { 
         cliContext: Arguments.BlechCOptions
-        ncEnv: SymbolTable.LookupTable
+        ncEnv: SymbolTable.Environment
         nameToDecl: Dictionary<QName, Declarable>
         // user types are required to resolve new types or type aliases defined in terms of user types
-        userTypes: Dictionary<QName, Types> 
+        // range is needed for language services
+        userTypes: Dictionary<QName, (Range.range * Types)> 
         // member pragmas are collected in order to do annotation checking
-        memberPragmas: ResizeArray<Attribute.MemberPragma> 
+        memberPragmas: ResizeArray<Attribute.MemberPragma>
+        singletons: OpaqueInference.Singletons
     }
-    static member Empty =
+    static member Empty modName =
         { cliContext = Arguments.BlechCOptions.Default
-          ncEnv = SymbolTable.LookupTable.Empty
+          ncEnv = SymbolTable.Environment.init modName
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
-          memberPragmas = ResizeArray() }
+          memberPragmas = ResizeArray()
+          singletons = Map.empty }
 
-    static member Init cliContext ncLut =
+    static member Init cliContext (ncEnv: SymbolTable.Environment) singletons =
         { cliContext = cliContext
-          ncEnv = ncLut
+          ncEnv = ncEnv
           nameToDecl = Dictionary() 
           userTypes = Dictionary() 
-          memberPragmas = ResizeArray() }
+          memberPragmas = ResizeArray() 
+          singletons = singletons }
 
 
 module TypeCheckContext =
     let private tryGetSubProgramDeclAsPrototype = function
-        | FunctionPrototype p -> Some p
-        | SubProgramDecl d -> Some {
-                FunctionPrototype.pos = d.pos
-                isFunction = d.isFunction
-                isSingleton = d.IsSingleton
-                name = d.name
-                inputs = d.inputs
-                outputs = d.outputs
-                returns = d.returns
-                annotation = Attribute.FunctionPrototype.Empty
-                allReferences = d.allReferences
-            }
+        | ProcedurePrototype p -> Some p
+        | ProcedureImpl d -> Some d.prototype
         | ParamDecl _
         | VarDecl _ 
         | ExternalVarDecl _ -> None
@@ -195,8 +197,8 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype |> Ok
             | Declarable.ExternalVarDecl v -> v.datatype |> Ok
             | Declarable.ParamDecl a -> a.datatype |> Ok
-            | Declarable.SubProgramDecl _ 
-            | Declarable.FunctionPrototype _ -> Error [IllegalAccessOfTypeInfo (name.ToString())]
+            | Declarable.ProcedureImpl _ 
+            | Declarable.ProcedurePrototype _ -> Error [ProcedureNameUsedLikeAVariable (name.ToString())]
         else
             Error [NotInLUTPrevError (name.ToString())]
 
@@ -208,11 +210,11 @@ module TypeCheckContext =
             | Declarable.VarDecl v -> v.datatype 
             | Declarable.ExternalVarDecl v -> v.datatype
             | Declarable.ParamDecl a -> a.datatype
-            | Declarable.SubProgramDecl _ 
-            | Declarable.FunctionPrototype _ -> failwith "TML cannot point to a subprogram!"
+            | Declarable.ProcedureImpl _ 
+            | Declarable.ProcedurePrototype _ -> failwith "TML cannot point to a subprogram!"
         | FieldAccess (tml, ident) ->
             match getDatatypeFromTML lut tml with
-            | ValueTypes (ValueTypes.StructType (_, name, fields))
+            | ValueTypes (ValueTypes.StructType (name, fields))
             | ReferenceTypes (ReferenceTypes.StructType (_, name, fields)) ->
                 fields
                 |> List.find (fun f -> f.name.basicId = ident)
@@ -236,21 +238,35 @@ module TypeCheckContext =
 
     // Setters ====================================================================
     let addDeclToLut (lut: TypeCheckContext) name decl =
-        if lut.nameToDecl.ContainsKey(name) then
-            failwith <| sprintf "Fatal error: tried to add the name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
+        // for a procedure implementation a name is always added twice: first for the prototype and then for the implementation
+        // last one wins, so we can access the extra information
+
+        if lut.nameToDecl.ContainsKey name then
+            match lut.nameToDecl.[name] with
+            | Declarable.ProcedurePrototype _ ->
+                // update a prototype with its implementation
+                lut.nameToDecl.[name] <- decl
+            //| Declarable.ProcedureImpl _ -> 
+            //    () // nothing to do
+            | item when item = decl  -> 
+                // ignores duplicates
+                ()
+            | _ ->
+                failwith "what the heck? why has the same name two different declarations?"
         else
+            //adding for the first time
             lut.nameToDecl.Add(name, decl)
+            
 
-
-    let addTypeToLut (lut: TypeCheckContext) name typ =
-        if lut.userTypes.ContainsKey(name) then
-            failwith <| sprintf "Fatal error: tried to add the type name \"%s\" to the lookup table twice. Probably name resolution works incorrectly!" (name.ToString())
-        else
-            lut.userTypes.Add(name, typ)
+    let addTypeToLut (lut: TypeCheckContext) name range typ =
+        // ignores duplicates
+        ignore <| lut.userTypes.TryAdd(name, (range, typ))
 
 
     let addPragmaToLut (lut: TypeCheckContext) pragma =
-        lut.memberPragmas.Add pragma
+        // ignores duplicates
+        if not <| lut.memberPragmas.Contains pragma then
+            do lut.memberPragmas.Add pragma
 
 
     // Testers ====================================================================

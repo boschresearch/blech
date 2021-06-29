@@ -1,0 +1,23 @@
+// module exposes S
+
+struct S 
+    var x: int32 
+    var y: bool
+extension
+    function f() returns bool
+        var s: S = {y = true}
+        return s.y
+    end
+
+    activity a() 
+        var s: S
+        s.x = 42
+        await true
+    end
+end
+
+@[EntryPoint]
+activity Main ()
+    var s: S
+    await true
+end

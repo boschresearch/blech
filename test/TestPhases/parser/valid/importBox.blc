@@ -1,0 +1,8 @@
+
+import mymod "box:package/a/b/file"
+
+module
+
+activity main()
+end
+

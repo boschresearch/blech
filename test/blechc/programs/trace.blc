@@ -1,0 +1,14 @@
+activity C ()
+    var c: bool
+    await true
+end
+
+activity B ()
+    run C()
+end
+
+@[EntryPoint]
+activity A ()
+    var a: bool
+    run B()
+end

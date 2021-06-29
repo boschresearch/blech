@@ -1,0 +1,12 @@
+module exposes f
+
+singleton function s ()
+end
+
+singleton [s] function t ()
+    s()
+end
+
+function f()
+    t()
+end

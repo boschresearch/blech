@@ -148,11 +148,10 @@ rule Token = parse
     (* ---- module system ---- *)
     | "module"              { MODULE (getRange lexbuf) }
     | "import"              { IMPORT (getRange lexbuf) }
-    | "from"                { fromStart <- getRange lexbuf
-                              FromPath lexbuf } 
     | "exposes"             { EXPOSES (getRange lexbuf) }
     | "signature"           { SIGNATURE (getRange lexbuf) }
-
+    | "internal"            { INTERNAL (getRange lexbuf) }
+    
     (* --- extensions --- *)
     
     | "extension"           { EXTENSION (getRange lexbuf) }
@@ -181,8 +180,8 @@ rule Token = parse
 
     (* --- user-defined types --- *)
 
+    | "typealias"           { TYPEALIAS (getRange lexbuf) }
     | "type"                { TYPE (getRange lexbuf) }
-    | "newtype"             { NEWTYPE (getRange lexbuf) }
     | "enum"                { ENUM (getRange lexbuf) }
     | "struct"              { STRUCT (getRange lexbuf) }
 
@@ -193,7 +192,7 @@ rule Token = parse
     | "unit"                { UNIT (getRange lexbuf) }
 
     (* --- clocks --- *)
-    | "clock"               { CLOCK (getRange lexbuf) }
+    (* | "clock"               { CLOCK (getRange lexbuf) }
     | "count"               { COUNT (getRange lexbuf) }
     | "up"                  { UP (getRange lexbuf) }
     | "down"                { DOWN (getRange lexbuf) }
@@ -202,7 +201,8 @@ rule Token = parse
     | "meet"                { MEET (getRange lexbuf) }
     | "tick"                { TICK (getRange lexbuf) }
     | "on"                  { ON (getRange lexbuf) }
-
+    *)
+    
     (* --------- actions --------- *)
 
     | "emit"                { EMIT (getRange lexbuf) }
@@ -551,19 +551,3 @@ and CollectMultiLineString = parse
     | _                     { unknownTokenInString lexbuf
                               CollectMultiLineString lexbuf }
 
-
-and FromPath = parse
-    | path                  { let path, rng = getLexemeAndRange lexbuf in
-                              FROMPATH {Blech.Frontend.AST.FromPath.path = path
-                                        range = Range.unionRanges fromStart rng } }
-
-    | endofline             { lexbuf.EndPos <- lexbuf.EndPos.NextLine; 
-                              FromPath lexbuf }
-    
-    | [' ']                 { FromPath lexbuf }
-
-    | ['\t']                { tabularUsed lexbuf; 
-                              FromPath lexbuf }
-
-    | _                     { notAPath lexbuf;
-                              Token lexbuf }

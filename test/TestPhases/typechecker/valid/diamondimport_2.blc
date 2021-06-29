@@ -1,0 +1,7 @@
+import c "../imports/client2" // imports service itself
+import s "../imports/service"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

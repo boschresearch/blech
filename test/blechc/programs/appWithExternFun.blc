@@ -1,0 +1,11 @@
+@[CFunction(binding="increase_global_state()", header="appWithExternFun.ext.h")]
+extern function myExternFun()() returns int32
+
+@[EntryPoint]
+activity mainAct()()
+    var i: int32
+    repeat
+        await true
+        i = myExternFun()
+    end
+end

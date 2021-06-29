@@ -1,0 +1,52 @@
+module
+
+@[periodic(counter = 10, resolution = 1000)]
+clock ms10 = count 10
+
+clock ms30 = ms10 down 3
+clock ms50 = ms10 down 5 off 1
+
+clock oneOf30or50ms = ms30 join ms50
+clock both30and50ms = ms30 meet ms50
+
+
+
+function f(x: int32 on ms50) returns int32 on ms30
+    var ref x = MyClass() on ms50
+    var ref x: MyClass = {} on ms50
+end
+
+ref struct Bla
+    let x: int32
+extension
+    activity name(x: int32) returns bool on ms10
+    end
+end
+
+
+@[interrupt(number = 42)]
+clock one = count 1
+
+@[mainloop]
+clock two = count 1
+
+@[periodic(period = 10, resolution = 1000)]
+clock three = count 10
+
+clock onePer3 = one down 3  // ticks every 3rd time of clock one
+clock onePer5 = one down 5  
+
+clock onePer3Other = one down 3 // not related to clock onePer3
+
+clock onePer15 = (onePer3) meet onePer5
+
+clock each = one meet two meet three  // this is always the start clock
+clock startAlias = two meet onePer3   // error: the compiler should issue an error
+
+clock any = one join two join three        // ticks if any of the related clocks tick
+clock onePer15OrTwo = onePer15 join two 
+
+clock oneOther = onePer3 join onePer5  
+clock onePer5Other = one meet onePer5  
+
+clock pureAlias = a.very.long.name.importedClock // no new clock

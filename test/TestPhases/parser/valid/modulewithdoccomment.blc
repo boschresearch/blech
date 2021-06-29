@@ -1,0 +1,5 @@
+import mm "mymodule"
+
+/** A doc comment for the module */
+// A line doc comment for the module
+internal module 

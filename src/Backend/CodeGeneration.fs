@@ -16,17 +16,24 @@
 
 module Blech.Backend.CodeGeneration
 
+// Concerning header files we follow:
+// http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
+
+
 open Blech.Common
+open Blech.Common.TranslationUnitPath
 open Blech.Common.PPrint.PPrint
 
 open Blech.Frontend
 open Blech.Frontend.BlechTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 
 open CPdataAccess2
 open CPrinter
+open TraceGenerator
 
 
+[<RequireQualifiedAccess>]
 module Comment =
 
     let generatedCode =
@@ -39,9 +46,15 @@ module Comment =
     
     let blechHeader = 
         cpGeneratedComment <| txt "blech types"
+
+    let importHeaders = 
+        cpGeneratedComment <| txt "imports"
     
     let selfInclude = 
         cpGeneratedComment <| txt "exports, user types and C wrappers"
+
+    let necessaryHeaders =
+        cpGeneratedComment <| txt "necessary C headers"
 
     let cConstants = 
         cpGeneratedComment <| txt "direct C constants"
@@ -71,6 +84,9 @@ module Comment =
   
     let cPrototypes = 
         cpGeneratedComment <| txt "extern functions to be implemented in C"
+
+    let exportedFunctions =
+        cpGeneratedComment <| txt "activities and functions"
     
     let userTypes = 
         cpGeneratedComment <| txt "all user defined types"
@@ -78,7 +94,10 @@ module Comment =
     let cProgramFunctions =
         cpGeneratedComment <| txt "program functions: tick, init"
 
-    let cTraceFunction =
+    let statePrinters = 
+        cpGeneratedComment <| txt "trace functions: state printers"
+
+    let traceFunction =
         cpGeneratedComment <| txt "trace function: printState"
 
     // app file comments
@@ -92,34 +111,77 @@ module Comment =
     let testFunction = 
         cpGeneratedComment <| txt "the test main loop"
 
+    // trace printing comments
 
+    
 /// Translates all sub programs of a module into a list of compilations
 let public translate ctx (pack: BlechModule) =
     // translate all subprograms in order
     pack.funacts
     |> List.fold (fun compilations funact ->
-        if funact.isFunction then FunctionTranslator.translate ctx funact
-        else ActivityTranslator.translate ctx compilations funact
+        if funact.IsFunction then FunctionTranslator.translate ctx funact
+        else ActivityTranslator.translate ctx funact
         |> List.singleton
         |> List.append compilations) []
 
 
+/// Common header definitions
+let stdioHeader = txt "#include <stdio.h>"
+
+let programHeader = txt "#include <string.h>"
+
+let includeQuotedHfile hfile = 
+    txt "#include" <+> (txt hfile |> dquotes)
+
+let blechHeader = includeQuotedHfile "blech.h"
+
+let generateSelfHeader =
+    TranslatePath.moduleToInclude >> includeQuotedHfile
+        
+let generateCProgramHeader =
+    TranslatePath.moduleToCFileInclude >> includeQuotedHfile
+
+let generateIncludeGuards moduleName =
+    let guard = txt <| TranslatePath.moduleToIncludeGuard moduleName
+    let includeGuardBegin = 
+        txt "#ifndef" <+> guard
+        <.> txt "#define" <+> guard
+    let includeGuardEnd = 
+        txt "#endif" <+> enclose (txt "/* ", txt " */") guard
+    includeGuardBegin, includeGuardEnd
+
+let generateSubmoduleIncludes otherMods =
+    otherMods
+    |> List.map (fun otherMod -> TranslatePath.moduleToInclude otherMod.name |> includeQuotedHfile)
+    |> dpBlock
+
+let generateModuleDocumentation (optModSpecDocComments: Attribute.OtherDecl option) =
+    match optModSpecDocComments with
+    | None ->
+        empty  
+    | Some attr ->
+        cpModuleDoc attr.doc
+
+let private mkFunctionPrototypes tcc = 
+    tcc.nameToDecl.Values
+    |> Seq.choose (fun d -> match d with | Declarable.ProcedurePrototype f -> Some f | _ -> None)
+
+let private mkCCalls functionPrototypes moduleName =
+    Seq.filter (fun (fp: ProcedurePrototype) -> fp.IsDirectCCall && not (fp.name.IsImported moduleName)) functionPrototypes
+
+
 /// Emit C code for module as Doc
-let private cpModuleCode ctx (moduleName: SearchPath.ModuleName) 
+let private cpModuleCode ctx (moduleName: TranslationUnitPath) 
+                             (documentation: Attribute.OtherDecl option)
                              (pragmas: Attribute.MemberPragma list) 
+                             importedModules
                              (compilations: Compilation list) 
-                             entryPoint =
-    // C header
-    let programHeader = txt "#include <string.h>"
+                             entryPointOpt =
 
-    let ioHeader = txt "#include <stdio.h>"
+    let moduleDoc = generateModuleDocumentation documentation
 
-    let blechHeader = txt "#include \"blech.h\""
-
-    let inclSelfHeader =
-        let hFile = txt <| SearchPath.moduleToInclude moduleName
-        txt "#include" <+> dquotes hFile 
-
+    let selfHeader = generateSelfHeader moduleName
+        
     // Blech const become #define macros in C
     // right now all go to the module code, because nothing gets exported
     // constants local to subprograms should also work
@@ -128,13 +190,14 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.VarDecl f -> Some f | _ -> None)
 
-    let externConsts = 
+    let externLocalVars = 
         ctx.tcc.nameToDecl.Values
         |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None)
-    
+        |> Seq.filter (fun (e: ExternalVarDecl) -> not (e.name.IsTopLevel || e.name.IsImported moduleName))
+
     /// C define macros for external constants / params
     /// e.g. #define blc_MyActivity_myConst &FOO(BAR)
-    let externConstMacros = 
+    let externLocalConstMacros = 
         let renderExternConst (ec: ExternalVarDecl) = 
             let cexpr = 
                 match ec.annotation.cvardecl with
@@ -151,7 +214,7 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
             cpOptDocComments ec.annotation.doc
             |> dpOptLinePrefix <| macro
 
-        externConsts
+        externLocalVars
         |> Seq.filter (fun extVar -> match extVar.mutability with Mutability.CompileTimeConstant | Mutability.StaticParameter -> true | _ -> false)
         |> Seq.map renderExternConst
         |> dpBlock
@@ -172,48 +235,23 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         |> Seq.map renderParam
         |> dpBlock
 
-
-    // Type Declarations 
-
-    // All user types go to the header file, fjg 21.01.19
-    // let userTypes = 
-    //    ctx.tcc.userTypes.Values
-    //    |> Seq.map (cpUserType)
-    //    |> ppBlock
-
-    // Global variables
-    let entryCompilation = compilations |> List.find (fun c -> c.name = entryPoint)
-    let globVars = cpMainStateAsStatics entryCompilation
-    
     // Translate function prototypes to direct C calls
-    let functionPrototypes = 
-        ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.FunctionPrototype f -> Some f | _ -> None)
+    let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls =
-        Seq.filter (fun (fp: FunctionPrototype) -> fp.isDirectCCall) functionPrototypes
+    let cCalls = mkCCalls functionPrototypes moduleName
 
     let cHeaders = 
-        let hfiles =
-            let cCalls = Seq.choose (fun (fp: FunctionPrototype) -> fp.annotation.TryGetCHeader) cCalls
-            let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
-            let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
+        let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
+        let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externLocalVars
+        let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
-            Seq.append extConsts cCalls 
-            |> Seq.append cIncludes 
-            |> Seq.distinct
-        
-        let includeHfile hfile = 
-            txt "#include" <+> (txt hfile |> dquotes)
-        
-        Seq.map includeHfile hfiles
+        seq {extConsts; cCalls; cIncludes }
+        |> Seq.concat 
+        |> Seq.distinct
+        |> Seq.map includeQuotedHfile
         |> dpBlock
     
-    let directCCalls = 
-        cCalls
-        |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
-        |> dpToplevel
-
+    let importIncludes = generateSubmoduleIncludes importedModules
 
     // Translated subprograms
     let code = 
@@ -221,120 +259,182 @@ let private cpModuleCode ctx (moduleName: SearchPath.ModuleName)
         |> List.map (fun c -> dpOptLinePrefix c.doc c.implementation) 
         |> dpToplevel
 
-        
-
-    // tick function
-    let mainCallback = 
-        ProgramGenerator.mainCallback ctx.tcc ctx.cliContext.passPrimitiveByAddress 
-                                      (AppName.tick moduleName) 
-                                      entryCompilation.name 
-                                      entryCompilation
-    
-    // init function
-    let mainInit = 
-        ProgramGenerator.mainInit ctx (AppName.init moduleName) entryCompilation
-        
- 
-    let printState =
-        ProgramGenerator.printState ctx (AppName.printState moduleName) entryCompilation
-
-    // just an idea how to determine static memory usage
-    //let printStatistics =
-    //    """
-    //    void blc_blech_ScatteredLocals_printStats() {
-    //        printf("Context size: %d bytes\n", sizeof blc_blech_ctx);
-    //    }
-    //    """ |> txt
+    // state printers
+    let statePrinters = genStatePrinters ctx.tcc compilations entryPointOpt
+  
+    // only relevant for main (entry point) programs - not modules
+    let globVars, mainCallback, mainInit, printState =
+        match entryPointOpt with
+        | None -> empty, empty, empty, empty
+        | Some entryPoint ->
+            let entryCompilation = compilations |> List.find (fun c -> c.name = entryPoint)
+            (
+                // global variables
+                cpMainStateAsStatics entryCompilation,
+                // tick function
+                ProgramGenerator.mainCallback ctx.tcc ctx.cliContext.passPrimitiveByAddress 
+                                              (AppName.tick moduleName) 
+                                              entryCompilation.name 
+                                              entryCompilation,
+                // init function
+                ProgramGenerator.mainInit ctx (AppName.init moduleName) entryCompilation,
+                // state printer
+                ProgramGenerator.printState ctx (AppName.printState moduleName) entryCompilation
+            )
+            // just an idea how to determine static memory usage
+            //let printStatistics =
+            //    """
+            //    void blc_blech_ScatteredLocals_printStats() {
+            //        printf("Context size: %d bytes\n", sizeof blc_blech_ctx);
+            //    }
+            //    """ |> txt
         
     
     // combine all into one Doc
-    [ Comment.generatedCode
-      programHeader
-      (if ctx.cliContext.trace then ioHeader else empty)
-      Comment.cHeaders
-      cHeaders
-      Comment.blechHeader
-      blechHeader
-      Comment.selfInclude
-      inclSelfHeader
-      Comment.cConstants
-      externConstMacros
-      Comment.cFunctions
-      directCCalls
-      //Comment.constants
-      //userConst
-      Comment.parameters
-      userParams
-      Comment.state
-      globVars
-      Comment.compilations
-      code
-      Comment.progam
-      mainCallback
-      mainInit
-      (if ctx.cliContext.trace then printState else empty) ]
-    |> dpRemoveEmptyLines
+    [ 
+        Comment.generatedCode
+      
+        moduleDoc
+
+        // Guideline #12 in http://umich.edu/~eecs381/handouts/CppHeaderFileGuidelines.pdf
+        Comment.selfInclude
+        selfHeader
+      
+        Comment.necessaryHeaders
+        programHeader
+        if ctx.cliContext.trace then 
+            stdioHeader
+      
+        Comment.cHeaders
+        cHeaders
+      
+        Comment.blechHeader
+        blechHeader
+      
+        Comment.importHeaders 
+        importIncludes 
+
+        Comment.cConstants
+        externLocalConstMacros
+      
+          ////Comment.cFunctions // already part of *.h
+          //directCCalls
+          //Comment.constants
+          //userConst
+          
+        Comment.parameters
+        userParams
+      
+        if entryPointOpt.IsSome then
+            Comment.state
+            globVars
+      
+        Comment.compilations
+        code
+      
+        if ctx.cliContext.trace then
+            Comment.statePrinters 
+            statePrinters
+
+        if entryPointOpt.IsSome then
+            Comment.progam
+            mainCallback
+            mainInit
+            if ctx.cliContext.trace then 
+                Comment.traceFunction
+                printState
+    ]
+    |> dpRemoveEmpty
     |> dpToplevel
 
 // end of cpModuleCode
 
 /// Emit C header for module as Doc
-let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPoint =
+let private cpModuleHeader ctx (moduleName: TranslationUnitPath) 
+                               (documentation: Attribute.OtherDecl option)
+                               (pragmas: Attribute.MemberPragma list) 
+                               importedModules 
+                               (compilations: Compilation list) 
+                               entryPointOpt =
+
+    let includeGuardBegin, includeGuardEnd = generateIncludeGuards moduleName
+    
+    let moduleDoc = generateModuleDocumentation documentation
+
     // C header
-    let guard = txt <| SearchPath.moduleToIncludeGuard moduleName
-        
-    let includeGuardBegin = 
-        txt "#ifndef" <+> guard
-        <.> txt "#define" <+> guard
-
-    let includeGuardEnd = 
-        txt "#endif" <+> enclose (txt "/* ", txt " */") guard
-
-    let blechHeader = 
-        txt "#include \"blech.h\""
+    let importIncludes = generateSubmoduleIncludes importedModules
 
     // Translate function prototypes to extern functions and direct C calls
-    let functionPrototypes = 
-        ctx.tcc.nameToDecl.Values
-        |> Seq.choose (fun d -> match d with | Declarable.FunctionPrototype f -> Some f | _ -> None)
+    let functionPrototypes = mkFunctionPrototypes ctx.tcc
     
-    let cCalls =
-        Seq.filter (fun (fp: FunctionPrototype) -> fp.isDirectCCall) functionPrototypes
+    let cCalls = mkCCalls functionPrototypes moduleName
+    
+    let externConsts = 
+        ctx.tcc.nameToDecl.Values
+        |> Seq.choose (fun d -> match d with | Declarable.ExternalVarDecl f -> Some f | _ -> None) 
+        |> Seq.filter (fun (ec: ExternalVarDecl) -> ec.name.IsTopLevel && (not <| ec.name.IsImported moduleName))
 
-    let cWrappers = 
-        Seq.except cCalls functionPrototypes
+    let cHeaders = 
+        let cCalls = Seq.choose (fun (fp: ProcedurePrototype) -> fp.annotation.TryGetCHeader) cCalls
+        let extConsts = Seq.choose (fun (vd: ExternalVarDecl) -> vd.annotation.TryGetCHeader) externConsts
+        let cIncludes = List.choose (fun (mp: Attribute.MemberPragma) -> mp.TryGetCHeader) pragmas
 
-    let cCallHeaders = 
-        let hfiles =
-            Seq.choose(fun fp -> fp.annotation.TryGetCHeader) cCalls
-            |> Seq.distinct
-        
-        let includeHfile hfile = 
-            txt "#include" <+> (txt hfile |> dquotes)
-        
-        Seq.map includeHfile hfiles
+        seq {extConsts; cCalls; cIncludes }
+        |> Seq.concat 
+        |> Seq.distinct
+        |> Seq.map includeQuotedHfile
         |> dpBlock
+
+    //let cCallHeaders = 
+    //    let hfiles =
+    //        cCalls
+    //        |> Seq.choose(fun fp -> fp.annotation.TryGetCHeader) 
+    //        |> Seq.distinct
+        
+    //    let includeHfile hfile = 
+    //        txt "#include" <+> (txt hfile |> dquotes)
+        
+    //    Seq.map includeHfile hfiles
+    //    |> dpBlock
 
     // Type Declarations
     let userTypes = 
-        ctx.tcc.userTypes.Values
-        |> Seq.map cpUserType
-        |> dpBlock
+        ctx.tcc.userTypes
+        |> Seq.choose (fun kvp -> if kvp.Key.moduleName = moduleName then Some kvp.Value else None) // make sure only this module's types are printed
+        |> Seq.map (snd >> cpUserType)
+        |> vsep // keep empty lines
 
     // Activity Contexts
     let activityContexts =
-        List.map cpContextTypeDeclaration compilations
+        compilations
+        |> List.map (cpContextTypeDeclaration ctx.tcc) 
         |> dpBlock
 
-    let externFunctions =
-        let ifaceOf (fp: FunctionPrototype) =
-            {Compilation.mkNew fp.name with inputs = fp.inputs; outputs = fp.outputs}
-        cWrappers
-        |> Seq.toList // change to List for eager evaluation since ctx.tcc may be updated during the map iteration
-        |> List.map (fun fp -> cpExternFunction ctx.tcc fp.annotation.doc fp.name (ifaceOf fp) (fp.returns) )
-        |> dpToplevel
+    /// e.g. #define blc_MyActivity_myConst &FOO(BAR)
+    let externConstMacros =     
+        let renderExternConst (ec: ExternalVarDecl) = 
+            let cexpr = 
+                match ec.annotation.cvardecl with
+                | Some (Attribute.CConst (binding = text))
+                | Some (Attribute.CParam (binding = text)) ->
+                    txt text |> parens
+                | _ -> 
+                    failwith "This should never happen"            
+            
+            let macro = 
+                txt "#define" <+> (renderCName Current ctx.tcc ec.name) <+> cexpr
+                |> groupWith (txt " \\")
+            
+            cpOptDocComments ec.annotation.doc
+            |> dpOptLinePrefix <| macro
+        // printfn "Extern Consts: %A" externConsts
+        externConsts
+        |> Seq.filter (fun extVar -> match extVar.mutability with Mutability.CompileTimeConstant | Mutability.StaticParameter -> true | _ -> false)
+        |> Seq.map renderExternConst
+        |> dpBlock
 
-    let directCCalls = // TODO: directCCalls must not be exported, check this, fjg. 20.02.19
+
+    let directCCalls =
         cCalls
         |> Seq.map (fun fp -> cpDirectCCall ctx.tcc fp)
         |> dpBlock
@@ -344,76 +444,90 @@ let private cpModuleHeader ctx (moduleName: SearchPath.ModuleName) (compilations
     let localFunctions =
         compilations 
         |> List.map (fun c -> c.signature) 
-        |> dpBlock
+        |> dpToplevel
     
-    let entryCompilation = 
-        compilations |> List.find (fun c -> c.name = entryPoint)
+    let programFunctionPrototypes, traceFunctionPrototype =
+        match entryPointOpt with
+        | None -> empty, empty // no entry point means we are compiling a module, nothing to do here
+        | Some entryPoint ->   // we have a main program and thus need tick function etc...
+            let entryCompilation = 
+                compilations |> List.find (fun c -> c.name = entryPoint)
+            let progFunProt =
+                let emptyIface =
+                    Compilation.mkNew entryPoint // the name is irrelevant here, the point is to make a compilation without inputs, outputs or retvalue
+                let voidType = (ValueTypes ValueTypes.Void) // remember that return values are passed via extra parameter
+                [ ProgramGenerator.programFunctionPrototype ctx.tcc ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
+                  ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.init moduleName) emptyIface voidType ]
+                |> dpToplevel
+            let traceFunProt =
+                let voidType = (ValueTypes ValueTypes.Void)
+                [ ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
+                |> dpToplevel
+            progFunProt, traceFunProt
 
-    let programFunctionPrototypes =
-        // TODO: The tick function can return a value, not always void, fjg. 18.04.19
-        let qname = AppName.init moduleName
-        let voidType = (ValueTypes ValueTypes.Void) 
-        //[ ProgramGenerator.programFunctionProtoype ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation.iface voidType
-        //  ProgramGenerator.programFunctionProtoype false (AppName.init moduleName) Iface.Empty voidType ]
-        // is that the correct merge?
-        [ ProgramGenerator.programFunctionPrototype ctx.tcc ctx.cliContext.passPrimitiveByAddress (AppName.tick moduleName) entryCompilation voidType
-          ProgramGenerator.programFunctionPrototype ctx.tcc false qname (Compilation.mkNew qname) voidType
-          ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
-        |> dpToplevel
-
-    let traceFunctionPrototype =
-        let voidType = (ValueTypes ValueTypes.Void)
-        [ ProgramGenerator.programFunctionPrototype ctx.tcc false (AppName.printState moduleName) entryCompilation voidType ]
-        |> dpToplevel
-
+    // state printers
+    let statePrinterPrototypes = 
+        genStatePrinterPrototypes ctx.tcc compilations entryPointOpt
+  
     // combine all into one Doc
-    [ includeGuardBegin
-      Comment.generatedCode
-      Comment.blechHeader
-      blechHeader
-      Comment.userTypes
-      userTypes    // all user types are global
-      Comment.activityContexts
-      activityContexts
-      // userConst // only exposed constants and params go there, currently none
-      Comment.cPrototypes
-      externFunctions
-      // directCCalls  // only exposed direct C Calls go there, currently none
-      // localFunctions  // only exposed functions go there, currently none
+    [ 
+        includeGuardBegin
+        Comment.generatedCode
+          
+        moduleDoc
 
-      // TODO: Program functions must not be created and exposed for blech modules, fjg. 18.04.19
-      Comment.cProgramFunctions
-      programFunctionPrototypes
+        Comment.cHeaders
+        cHeaders
+      
+        Comment.blechHeader
+        blechHeader
+      
+        Comment.importHeaders
+        importIncludes
+      
+        Comment.userTypes
+        userTypes    // all user types are global
+      
+        Comment.activityContexts
+        activityContexts
+      
+        Comment.cConstants
+        externConstMacros
+          
+        Comment.cFunctions
+        directCCalls
+          
+        Comment.exportedFunctions
+        localFunctions // only exposed functions go there, currently all
 
-      (if ctx.cliContext.trace then
-        [ Comment.cTraceFunction
-          traceFunctionPrototype ]
-        |> dpToplevel
-       else empty)
+        if ctx.cliContext.trace then
+            Comment.statePrinters 
+            statePrinterPrototypes
 
-      includeGuardEnd ]
-    |> dpRemoveEmptyLines
+        // Program functions must not be created and exposed for blech modules
+        if entryPointOpt.IsSome then
+            Comment.cProgramFunctions
+            programFunctionPrototypes
+
+            if ctx.cliContext.trace then
+                Comment.traceFunction
+                traceFunctionPrototype
+    
+        includeGuardEnd 
+    ]
+    |> dpRemoveEmpty
     |> dpToplevel
 
 // end of cpModuleHeader
 
-
 /// Emit C code for main app as Doc
 /// compilations is required to find the entry point name
-let private cpApp ctx (moduleName: SearchPath.ModuleName) (compilations: Compilation list) entryPointName =
-    // C header
-    let cHeaders = txt "#include <stdio.h>"
-
-    let blechHeader = txt "#include \"blech.h\""
-    
-    let includeCProgramFile = 
-        let hfile = txt <| SearchPath.moduleToCFileInclude moduleName
-        txt "#include" <+> dquotes hfile
-
-    // main
-    // static variables
+let private cpApp ctx (moduleName: TranslationUnitPath) (compilations: Compilation list) entryPointName =
+    let includeCProgramFile = generateCProgramHeader moduleName
+        
     let entryCompilation = compilations |> List.find (fun c -> c.name = entryPointName)
     
+    // inputs and outputs of the entry point (are not part of the internal Blech state)
     let staticVars = cpMainParametersAsStatics ctx.tcc entryCompilation
 
     let mainLoop = 
@@ -424,33 +538,50 @@ let private cpApp ctx (moduleName: SearchPath.ModuleName) (compilations: Compila
 
     // combine all into one Doc
     [ Comment.generatedCode
-      Comment.cHeaders
-      (if ctx.cliContext.trace then cHeaders else empty)
+
+      Comment.necessaryHeaders
+      (if ctx.cliContext.trace then stdioHeader else empty)
+      
       Comment.blechHeader
       blechHeader
+      
       Comment.blechCInclude
       includeCProgramFile
+      
       Comment.externalState
       staticVars
+      
       Comment.testFunction
       mainLoop ]
-    |> dpRemoveEmptyLines
+    |> dpRemoveEmpty
     |> dpToplevel
 // end of cpApp
 
-// TODO: Use module name for self include. Remove separate entryPointName param - it is part of package fjg 10.01.19
-let public emitCode ctx (package: BlechModule) compilations entryPointName =
-    cpModuleCode ctx package.name package.memberPragmas compilations entryPointName
-    //|> render (Some 160)
+
+let private emitAnything (entryPointOpt: ProcedureImpl option) emitter =
+    entryPointOpt
+    |> Option.map (fun ep -> ep.Name)
+    |> emitter 
     |> render (Some 80)
 
-// TODO: Remove entryPointName, it is part of package. fjg 10.01.19
-let public emitHeader ctx (package: BlechModule) compilations entryPointName =
-    cpModuleHeader ctx package.name compilations entryPointName
-    //|> render (Some 160)
-    |> render (Some 80)
+/// Generate contents of the *.c file
+/// The choice whether to emit a module or a main program code is based on
+/// the option modul.entryPoint
+let public emitCode ctx (modul: BlechModule) importedModules compilations =
+    emitAnything
+        <| modul.entryPoint
+        <| cpModuleCode ctx modul.name modul.documentation modul.memberPragmas importedModules compilations
 
-let public emitApp ctx (package: BlechModule) compilations entryPointName =
-    cpApp ctx package.name compilations entryPointName
-    //|> render (Some 160)
+
+/// Generate contents of the *.h file
+/// The choice whether to emit a module or a main program header is based on
+/// the option modul.entryPoint
+let public emitHeader ctx (modul: BlechModule) importedModules compilations =
+    emitAnything
+        <| modul.entryPoint
+        <| cpModuleHeader ctx modul.name modul.documentation modul.memberPragmas importedModules compilations
+
+
+let public emitApp ctx (modul: BlechModule) compilations entryPointName =
+    cpApp ctx modul.name compilations entryPointName
     |> render (Some 80)

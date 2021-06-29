@@ -1,0 +1,14 @@
+module exposes Act1, Act2
+
+singleton function f()
+end
+
+activity Act1 () ()
+    f()
+    await true
+end
+
+activity Act2 () ()
+    f()
+    await true
+end

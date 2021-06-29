@@ -45,7 +45,16 @@ module Annotation =
         match anno.Attribute with
         | AST.Key ( key = AST.Ident(text = Attribute.entrypoint) ) ->
             Ok EntryPoint
+
+        | AST.Key ( key = AST.Ident(text = Attribute.opaqueArray) ) ->
+            Ok OpaqueArray
         
+        | AST.Key ( key = AST.Ident(text = Attribute.opaqueStruct) ) ->
+            Ok OpaqueStruct
+        
+        | AST.Key ( key = AST.Ident(text = Attribute.simpleType) ) ->
+            Ok SimpleType
+
         | AST.KeyValue ( key = AST.Ident(text = Key.linedoc) 
                          value = AST.String(value = doc) ) ->
             Ok (LineDoc (doc))
@@ -56,51 +65,58 @@ module Annotation =
                
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CFunctionPrototype(binding, Some header))
+                                                  value = header) ] ) 
+                                                        when binding.IsText && header.IsText ->
+            Ok (CFunctionPrototype(binding.Text, Some header.Text))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CFunctionPrototype(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText ->
+            Ok (CFunctionPrototype(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cfunction) 
-                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source) 
-                                                  value = AST.String(value = source)) ] ) ->
-            Ok (CFunctionWrapper source)
+                          attrs = [ AST.KeyValue (key = AST.Ident(text = Key.source)) ] ) ->
+            //Ok (CFunctionWrapper source)
+            Error [DeprecatedCFunctionWrapper anno.Range ]
 
         | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CConst(binding, Some header))
+                                                  value = header) ] ) 
+                                                       when binding.IsText && header.IsText ->
+            Ok (CConst(binding.Text, Some header.Text))
         
         | AST.Structured( key = AST.Ident(text = Attribute.cconst) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CConst(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText->
+            Ok (CConst(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (CInput(binding, Some header))
+                                                  value = header) ] ) 
+                                                        when binding.IsText && header.IsText ->
+            Ok (CInput(binding.Text, Some header.Text))
 
         | AST.Structured( key = AST.Ident(text = Attribute.cinput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding)) ] ) ->
-            Ok (CInput(binding, None))
+                                                  value = binding) ] ) 
+                                                        when binding.IsText ->
+            Ok (CInput(binding.Text, None))
 
         | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
-                                                  value = AST.String(value = binding))
+                                                  value = binding)
                                     AST.KeyValue (key = AST.Ident(text = Key.header) 
-                                                  value = AST.String(value = header)) ] ) ->
-            Ok (COutput(binding, Some header))
+                                                  value = header) ] ) 
+                                                    when binding.IsText && header.IsText ->
+            Ok (COutput(binding.Text, Some header.Text))
         
         | AST.Structured( key = AST.Ident(text = Attribute.coutput) 
                           attrs = [ AST.KeyValue (key = AST.Ident(text = Key.binding) 
@@ -166,8 +182,13 @@ module Annotation =
         
         let checkParameterIndex (fpattr : FunctionPrototype)  =
             match fpattr.TryGetCBinding with
-            | Some cbinding -> 
-                let maxIndex = List.length fp.inputs + List.length fp.outputs
+            | Some cbinding ->
+                let returnIdx = // if extern function returns a complex value, 
+                                // we assume there is an extra parameter for this in the C function
+                    match fp.result with 
+                    | None -> 0
+                    | Some r -> if r.datatype.IsSimple then 0 else 1
+                let maxIndex = List.length fp.inputs + List.length fp.outputs + returnIdx
                 let idcsOutOfBounds = List.filter (fun i -> i < 1 || i > maxIndex) (Bindings.getParameterIndices cbinding)
                 if List.isEmpty idcsOutOfBounds then
                     Ok fpattr
@@ -182,6 +203,34 @@ module Annotation =
         |> Result.bind checkParameterIndex 
 
     
+    let checkOpaqueSingleton (lut: TypeCheckContext) (os: AST.OpaqueSingleton) =
+        let checkOsAnno osattr anno = 
+            let checkAttribute (fpattr, attr) = 
+                match attr with
+                | CFunctionPrototype (header = header) ->
+                    if Option.isSome fpattr.cfunction then
+                        multipleUniqueAnnotation anno
+                    elif Option.isNone header && not (hasInclude lut) then 
+                        missingNamedArgument os.range Attribute.Key.header
+                    else
+                        Ok { fpattr with cfunction = Some attr }
+                | CFunctionWrapper _ ->
+                    if Option.isSome fpattr.cfunction then
+                        multipleUniqueAnnotation anno
+                    else
+                        Ok { fpattr with cfunction = Some attr }
+                | LineDoc _
+                | BlockDoc _ ->
+                    Ok { fpattr with doc = List.append fpattr.doc [attr] }        
+                | _ ->
+                    unsupportedAnnotation anno
+        
+            combine osattr (checkAnnotation anno)
+            |> Result.bind checkAttribute
+        
+        List.fold checkOsAnno (Ok Attribute.FunctionPrototype.Empty) os.annotations
+        
+
     let checkVarDecl lut (v: AST.VarDecl) =
         let checkVdAnnotation vdattr (anno: AST.Annotation) =
             let checkAttribute (vdattr, attr) =
@@ -236,8 +285,12 @@ module Annotation =
             let checkAttribute (odattr, attr) =
                 match attr with
                 | LineDoc _
-                | BlockDoc _ ->
-                    Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }        
+                | BlockDoc _ 
+                // TODO: Wrong usage, should have a separate annotation check, correct this. fjg. 23.05.21
+                | SimpleType 
+                | OpaqueStruct
+                | OpaqueArray ->
+                    Ok { odattr with OtherDecl.doc = List.append odattr.doc [attr] }
                 | _ ->
                     unsupportedAnnotation anno
 
@@ -247,6 +300,21 @@ module Annotation =
         List.fold checkOdAnnotation (Ok Attribute.OtherDecl.Empty) annotations   
 
     
+    let checkModuleSpec (modSpec : AST.ModuleSpec) =
+        let checkMsAnnotation msattr (anno : AST.Annotation) =
+            let checkAttribute (msattr, attr) =
+                match attr with
+                | LineDoc _
+                | BlockDoc _ ->
+                    Ok { msattr with OtherDecl.doc = List.append msattr.doc [attr] }
+                | _ ->
+                    unsupportedAnnotation anno
+
+            combine msattr (checkAnnotation anno)
+            |> Result.bind checkAttribute
+        List.fold checkMsAnnotation (Ok Attribute.OtherDecl.Empty) modSpec.annotations   
+   
+
     //--------------
     //--- Pragmas
     //--------------

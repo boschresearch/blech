@@ -1,0 +1,6 @@
+import internal m "box:library/module"
+
+@[EntryPoint]
+activity Main ()
+    await true
+end

@@ -1,0 +1,7 @@
+module exposes Buffer, Index
+
+typealias Index = nat32 
+
+typealias Element = bool  // abstract
+
+typealias Buffer = [4: Index] Element

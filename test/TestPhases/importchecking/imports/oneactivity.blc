@@ -1,0 +1,5 @@
+module exposes AnAct
+
+activity AnAct ()
+    await true
+end

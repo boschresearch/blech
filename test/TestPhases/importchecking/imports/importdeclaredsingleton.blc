@@ -1,0 +1,5 @@
+import os "./declaredsingleton" exposes g
+
+module exposes h
+
+singleton [g] function h () end

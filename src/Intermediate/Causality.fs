@@ -91,15 +91,15 @@ let private mkDiagnosticWWerror (memLoc: AccessLabel) (nameRange1, _) (nameRange
         let identifier = subProgName.basicId
         let mainInfo: Diagnostics.Information =
             { range = secondRange
-              message = sprintf "Singleton subprogram %s cannot be called concurrently." identifier }
+              message = sprintf "Singleton '%s' cannot be called or used concurrently." identifier }
         let context: Diagnostics.ContextInformation list =
             [ { range = nameRange1
-                message = "First call."
+                message = "First use."
                 isPrimary = false }
               { range = nameRange2
-                message = "Conflicting concurrent call."
+                message = "Conflicting concurrent use."
                 isPrimary = true } ]
-        let note = [ "A function or activity is either explicitly declared or inferred as a singleton because it calls singletons. There may be no concurrent calls to the same singleton subprogram." ]
+        let note = [ "A function or activity is either explicitly declared or inferred as a singleton because it calls or uses singletons. There may be no concurrent calls or uses of the same singleton subprogram." ]
         mainInfo, context, note
     let mainInfo, context, note =
         match memLoc with
@@ -246,7 +246,7 @@ let private determineCycles pg =
     |> Seq.filter filterDelaying
     |> Seq.toList   // important step to prevent error "Collection was modified; enumeration operation may not execute"
     |> List.iter cycleAnalysisGraph.RemoveEdge // remove all tick edges since no causality cycle can pass through an await
-
+    
     let pairs = GenericGraph.johnson75 cycleAnalysisGraph // decompose the resulting graph into cycles
     [for pair in pairs do yield (GenericGraph.mergeMappings mapping (fst pair), snd pair)]
 
@@ -320,22 +320,26 @@ and internal findNameRead wrPair trhs =
         |> findNameRead <| ex2
 
 let private transitiveBackwardClosureWR (pg: ProgramGraph) =
-    let rec fix f x =
-        let res = Seq.append x (f x) |> Seq.distinct
-        if Seq.length res = Seq.length x then res
-        else fix f res
+    // collect all immediate control flow predecessors
+    let myDepthsFirstBackward nodes =
+        let visitedNodes = HashSet()
+        let selectNeighbours (n: Node) =
+            n.Incoming 
+            |> Seq.filter isImmediateTransition
+            |> Seq.map (fun e -> e.Source)
+        let onNodeVisit _ newNode =
+            ignore <| visitedNodes.Add newNode
+            false
+        ignore <| GenericGraph.depthsFirstTraverse selectNeighbours nodes onNodeVisit GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
+        visitedNodes
     // find all nodes that are the source of a WR edge
     let relevantNodes = 
         pg.Graph.Nodes |> Seq.filter (fun n -> n.Outgoing |> Seq.exists isDataFlow)
     // for every source walk backwards to immediate control flow predecessors
     for n in relevantNodes do
-        // collect all their corresponding WR links
+        // remember all data flow edges leaving this node
         let allWRedges = n.Outgoing |> Seq.filter isDataFlow
-        let immediatePredecessors (x: Node) =
-            x.Incoming
-            |> Seq.filter isImmediateTransition
-            |> Seq.map (fun e -> e.Source)
-        let instantaneousPredecessors = seq{n} |> fix (Seq.map immediatePredecessors >> Seq.collect id) 
+        let instantaneousPredecessors = myDepthsFirstBackward <| seq{n} 
         // add all WR edges of original node to resp. predecessor
         instantaneousPredecessors
         |> Seq.iter (fun p ->
@@ -385,8 +389,10 @@ let private addWRedges context name writtenVar logger =
                                 (rangeInWN, writingNode) 
                                 (rangeInRN, readingNode)
                             ) 
-                elif areBothInSurfOrDepth pg.Graph writingNode readingNode then
+                elif areBothInSurfOrDepth name pg.Graph writingNode readingNode then
                     pg.Graph.AddEdge (DataFlow (writtenVar, rangeInWN, rangeInRN)) writingNode readingNode // and in that case add a WR edge
+                    // we do add edges here but the cycle decomposition of the original graph should be enough to decide areBothInSurfOrDepth
+                    // the actual causality cycle analysis comes later in a second step where we do a cycle decomposition again
                 else
                     ()
                 )
@@ -435,30 +441,30 @@ let private checkCausality context causalityLogger activityName =
     // check write-write errors
     context.subprogWrittenNodes.[activityName]
     |> Seq.iter (fun memLoc -> checkWW memLoc.Key (Seq.toList memLoc.Value) causalityLogger)
-
+    
     // introduce WR edges for causality cycle check
     context.subprogWrittenNodes.[activityName]
     |> Seq.iter (fun varName -> addWRedges context activityName varName.Key causalityLogger)
-        
+    
     // check write-read and instantaneous cycles
     determineCycles context.pgs.[activityName]
     |> Seq.iter (fun mapAndCycle -> checkWR mapAndCycle causalityLogger)
 
-let private getLoggerAfterCausalityCheck context = 
-    let causalityLogger = Diagnostics.Logger.create()
+let private getLoggerAfterCausalityCheck logger context = 
+    // let causalityLogger = Diagnostics.Logger.create()
     context.pgs.Keys
-    |> Seq.iter (fun name -> checkCausality context causalityLogger name)
+    |> Seq.iter (fun name -> checkCausality context logger name)
 
-    causalityLogger
+    logger
         
 /// Inserts DataFlow edges into the graphs as a side effect.
 /// These are relevant both for checking causality and for 
 /// Block generation and ordering.
-let private checkCausalityOfContext context =
-    let causalityLogger = getLoggerAfterCausalityCheck context
+let private checkCausalityOfContext logger context =
+    let causalityLogger = getLoggerAfterCausalityCheck logger context
 
-    // for every activity write its program graph
-    // to the logger (now including the data flow edges)
+    // for every activity log its program graph
+    // (now including the data flow edges)
     context.pgs
     |> Seq.iter(fun kvp -> 
         Blech.Common.Logging.log6 "Main" ("program graph for " + kvp.Key.ToString() + "\n" + kvp.Value.ToString())
@@ -469,5 +475,5 @@ let private checkCausalityOfContext context =
     else
         Ok context.pgs
 
-let checkPackCausality (lut, pack) =
-    createPGofPackage (lut, pack) |> checkCausalityOfContext
+let checkPackCausality logger lut pack =
+    createPGofPackage (lut, pack) |> checkCausalityOfContext logger

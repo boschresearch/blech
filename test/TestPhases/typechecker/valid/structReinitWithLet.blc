@@ -1,4 +1,4 @@
-module structReinitWithLet
+module
 
 struct MyS
   var f1: int8
@@ -8,7 +8,7 @@ end
 struct MyT
   var g1: float64
   var g2: MyS
-  var g3: int32
+  let g3: int32
 end
 
 activity A(a: MyS, b: MyT)(d: int32)
@@ -28,8 +28,7 @@ activity main()()
         t.g2.f1 = t.g2.f1 + 1
         t.g2.f2 = false
       else
-        t = {g1=3.4, g2=s}
-        t = {}
+        t = {g1=3.4, g2=s, g3=8} // g3 is immutable!
       end
     end
   with

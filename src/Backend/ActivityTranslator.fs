@@ -28,7 +28,7 @@ open Blech.Common.PPrint
 
 open Blech.Frontend
 open Blech.Frontend.CommonTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 open Blech.Frontend.BlechTypes
 
 open Blech.Intermediate
@@ -72,7 +72,7 @@ let rec private cpAction ctx curComp action =
             let reinit =
                 match v.datatype with
                 | ValueTypes (ValueTypes.StructType _)
-                | ValueTypes (ArrayType _) ->
+                | ValueTypes (ArrayType _) when v.initValue.rhs.IsCompoundConst ->
                     let lhs =
                         { lhs = LhsCur(TypedMemLoc.Loc v.name)
                           typ = v.datatype
@@ -85,11 +85,10 @@ let rec private cpAction ctx curComp action =
         if List.contains v.name (!curComp).varsToPrev then
             // Dually to local variables--prev on external variables are 
             // generated as static C variables and thus added to the local interface here
-            let prevName = {v.name with prefix = "blech_prev" :: v.name.prefix} // TODO hack, fix the string magic!
-            let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = prevName; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
+            let newIface = Compilation.addLocal (!curComp) {pos = v.pos; name = v.name; datatype = v.datatype; isMutable = true; allReferences = HashSet()}
             curComp := newIface
             // add new declaration to type check table
-            TypeCheckContext.addDeclToLut ctx.tcc prevName (Declarable.ExternalVarDecl {v with name = prevName})
+            TypeCheckContext.addDeclToLut ctx.tcc v.name (Declarable.ExternalVarDecl v)
             // make sure the prev variable is initialised in the first reaction
             // this is crucial if the prev value is used in the same block where the variable is declared
             cpAssignDefaultPrevInActivity ctx.tcc v.name
@@ -109,22 +108,40 @@ let rec private cpAction ctx curComp action =
     | Action.Return (r, exprOpt) ->
         // note that the stoping of this activity is done in the calling processNode function
         match exprOpt with
-        | None -> empty // control flow will end here - corresponds to a void return
+        | None -> 
+            empty // control flow will end here - corresponds to a void return
         | Some expr ->
+            // copy the value into retvar
+            
             // construct typed lhs
             let lhs =
                 let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
                 let typ =
                     match ctx.tcc.nameToDecl.[(!curComp).name] with
-                    | FunctionPrototype p -> p.returns
-                    | SubProgramDecl d -> d.returns
+                    | ProcedurePrototype p -> p.returns
+                    | ProcedureImpl d -> d.Returns
                     | _ -> failwith "expected subprogram, got something else"
                 { lhs = LhsCur (TypedMemLoc.Loc name)
                   typ = ValueTypes typ
                   range = r }
-            // call this function recursively with an Assign action
-            cpAction ctx curComp (Action.Assign(r, lhs, expr))
+            
+            // rewrite into assignment
+            let norm =
+                normaliseAssign ctx.tcc (r, lhs, expr)
+                |> List.map (function 
+                    | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                    | _ -> failwith "Must be an assignment here!") // not nice
+            
+            // zero out everything that is not set explicitly
+            let reinit =
+                match expr.typ with
+                | ValueTypes (ValueTypes.StructType _)
+                | ValueTypes (ArrayType _) when expr.rhs.IsCompoundConst ->
+                    nullify ctx.tcc lhs
+                | _ -> empty
 
+            reinit :: norm // correctly translate literal elements
+            |> dpBlock
 
 let private cpResetPc tcc (pc: ParamDecl) =
     txt "BLC_SWITCH_TO_NEXTSTEP(" <^> cpPcName pc.name <^> txt ")" <^> semi
@@ -136,7 +153,8 @@ let private cpCopyInGlobal tcc (v: ExternalVarDecl) =
         |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
         |> txt
     match v.datatype with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         let declare = cpArrayDeclDoc name v.datatype <^> semi
         let memcpy =
             txt "memcpy"
@@ -159,7 +177,8 @@ let private cpCopyOutGlobal tcc (v: ExternalVarDecl) =
         |> Option.defaultValue "" //TODO: failwith or introduce errors in the code generation phase?
         |> txt
     match v.datatype with
-    | ValueTypes (ArrayType _) ->
+    | ValueTypes (ArrayType _)
+    | ValueTypes (OpaqueArray _) ->
         let memcpy =
             txt "memcpy"
             <+> dpCommaSeparatedInParens
@@ -209,7 +228,9 @@ let private assignPc (pcDecl: ParamDecl) newVal =
 
 let private advancePC (ctx: TranslationContext) comp source target =
     let newVal = ctx.bgs.[comp.name].node2BlockNode.[target].Payload.Priority
-    let tree = findTreeFor comp source
+    let tree = findTreeFor comp target // the pc is selected by the target because a transition may cross
+                                       // block boundaries: from a sub-thread to its enclosing abort-end
+                                       // in this case it is the enclosing pc that needs to be advanced
     // note that for priority i, the pc is set to 2i
     assignPc tree.mainpc (2 * newVal)
 
@@ -245,17 +266,31 @@ let private getUniqueSuccNode node =
     else
         failwith "FAIL: expected exactly one successor"
 
-let private makeActCall ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
-    let callee = compilations |> List.find (fun c -> c.name = whoToCall)
+
+let private makeActCall ctx (curComp: Compilation ref) (node: Node) pos pcName whoToCall receiverVar inputs outputs retcodeVar =
+    let hasCalleeRetVal, calleeRetType =
+        match ctx.tcc.nameToDecl.[whoToCall] with
+        | ProcedureImpl s ->
+            match s.Returns with
+            | ValueTypes.Void -> false, ValueTypes s.Returns
+            | _ -> true, ValueTypes s.Returns
+        | Declarable.ProcedurePrototype p -> 
+            match p.returns with
+            | ValueTypes.Void -> false, ValueTypes p.returns
+            | _ -> true, ValueTypes p.returns
+        | ParamDecl _ 
+        | Declarable.VarDecl _ 
+        | Declarable.ExternalVarDecl _ -> 
+            failwith "Expected to find subprogram (activity) declaration here."
     // in case the return value is ignored with _
     // create a temporary variable to receive the value
     let receiver, receiverDecl =
-        match callee.retvar, receiverVar with
-        | Some r, None ->
+        match hasCalleeRetVal, receiverVar with
+        | true, None ->
             // calle does return something but no receiver var has been specified (_)
             // create dummy receiver variable
             let lhsName = mkIndexedAuxQNameFrom "receiverVar"
-            let lhsTyp = r.datatype
+            let lhsTyp = calleeRetType
             let tmpDecl = cpArrayDeclDoc (renderCName Current ctx.tcc lhsName) lhsTyp <^> semi
             let v = 
                 { 
@@ -270,26 +305,26 @@ let private makeActCall ctx (compilations: Compilation list) (curComp: Compilati
             TypeCheckContext.addDeclToLut ctx.tcc lhsName (Declarable.VarDecl v)
             let tmpLhs = Some {lhs = LhsCur (TypedMemLoc.Loc lhsName); typ = lhsTyp; range = range0} // range0 since it does not exist in original source code
             tmpLhs, [tmpDecl]
-        | Some _, Some {lhs = ReturnVar} ->
+        | true, Some {lhs = ReturnVar} ->
             // caller does not store return value but immediately returns it further up the call chain
             let callerRetVar = Option.get (!curComp).retvar
             let returnLhs = Some { lhs = LhsCur (TypedMemLoc.Loc callerRetVar.name); typ = callerRetVar.datatype; range = callerRetVar.pos }
             returnLhs, []
-        | Some _, Some _
+        | true, Some _
             // caller receives the returned value in some receiver variable (cannot be wildcard at this point)
-        | None, None ->
+        | false, None ->
             // calle does not return anything and thus there is not receiver variable
             receiverVar, []
-        | None, Some _ ->
+        | false, Some _ ->
             // this is unreachable
-            // ruled out by type checker: calle returns nothing but caller provides a receiver
+            // ruled out by type checker: callee returns nothing but caller provides a receiver
             failwith "Caller provides a receiver but there is nothing to be returned."
 
-    let translatedCall = cpActivityCall ctx.tcc pcName callee.name inputs outputs receiver retcodeVar
+    let translatedCall = cpActivityCall ctx.tcc pcName whoToCall inputs outputs receiver retcodeVar
     receiverDecl @ [translatedCall] |> dpBlock
 
 
-let rec private processNode ctx (compilations: Compilation list) (curComp: Compilation ref) (node: Node) =
+let rec private processNode ctx (curComp: Compilation ref) (node: Node) =
     match node.Payload.Typ with
     | HitAwaitLocation ->
         // advance counter
@@ -314,7 +349,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 let transBody = 
                     if areInSameBlock ctx (!curComp).name node target then
                         // if one unguarded transition, leading a node inside the same block, translate that node
-                        processNode ctx compilations curComp target
+                        processNode ctx curComp target
                     else
                         // if one unguarded transition, that leaves block, advance pc
                         advancePC ctx !curComp node target
@@ -342,7 +377,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 let transSucc =
                     if areInSameBlock ctx (!curComp).name node target then
                         // if one unguarded transition, leading a node inside the same block, translate that node
-                        processNode ctx compilations curComp target
+                        processNode ctx curComp target
                     else
                         // if one unguarded transition, that leaves block, advance pc
                         advancePC ctx !curComp node target
@@ -364,7 +399,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 let target = edge.Target
                 if areInSameBlock ctx (!curComp).name node target then
                     // if one unguarded transition, leading a node inside the same block, translate that node
-                    processNode ctx compilations curComp target
+                    processNode ctx curComp target
                 else
                     // if one unguarded transition, that leaves block, advance pc
                     advancePC ctx !curComp node target
@@ -383,8 +418,19 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 match edge.Payload with 
                 | ControlFlow (Some (_, guard)) -> // translate transitions
                     let target = edge.Target
+                    let possiblyTerminateAbortBody =
+                        // in case the target is an abort-end, make sure we set the body's pc
+                        // to 0 so no block that is scheduled between this node and the abort node
+                        // can make progress
+                        // clean up eventually!
+                        match target.Payload.Typ with
+                        | AbortEnd bodyEnd -> endThread !curComp bodyEnd
+                        | _ -> empty
                     let {prereqStmts=prereqStmts; cExpr=transCond} = cpExpr ctx.tcc guard
-                    let transBody = advancePC ctx !curComp node target
+                    let transBody = 
+                        [ advancePC ctx !curComp node target
+                          possiblyTerminateAbortBody ]
+                        |> dpBlock
                     Some (prereqStmts |> dpBlock, (transCond.Render, transBody))
                 | ReturnFlow (_, guard) ->
                     let target = edge.Target
@@ -481,36 +527,41 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
           nextStep ]
         |> dpBlock
                 
-    | AbortEnd innerDelayNodes -> // stop all subthreads and continue like a normal location
-        // there should be one control flow successor
-        let nextNode = getUniqueSuccNode node
-        // test termination condition
-        let thisThreadID = node.Payload.Thread.ID
-        let prePCs =
-            innerDelayNodes
-            |> Seq.choose (fun n -> 
-                if not (n.Payload.Thread.ID = thisThreadID) then Some n //(pc4node n)
-                else None
-                )
-            |> Seq.distinct
+    | AbortBegin (waitNode,_) ->
+        let succ = getUniqueSuccNode node
+        let startBody = advancePC ctx !curComp succ succ // this effectively initialises the subprograms pc to its first block
+        let gotoSleep = advancePC ctx !curComp node waitNode
+        [ startBody; gotoSleep ]
+        |> dpBlock
         
-        // set all sub thread's pcs to 0 (to deactive them for future reactions)
-        //         and proceed with next node
-        let codeDoc =
-            let deactivate = 
-                prePCs 
-                |> Seq.map (fun pc -> endThread !curComp pc)
-                |> dpBlock
-            
-            let transSucc = 
-                if areInSameBlock ctx (!curComp).name node nextNode then
-                    // if one unguarded transition, leading a node inside the same block, translate that node
-                    processNode ctx compilations curComp nextNode
-                else
-                    // if one unguarded transition, that leaves block, advance pc
-                    advancePC ctx !curComp node nextNode
-            [deactivate; transSucc] |> dpBlock
-        codeDoc </> txt @"/* abort subthreads and carry on */"
+    | AbortEnd bodyExit ->
+        let abortBody =
+            endThread !curComp bodyExit </> txt @"/* terminate abort body */"
+        let proceedToSucc =
+            match Seq.length (ProgramGraph.cfSucc node) with
+            | 0 -> // dead end, e.g. end of an activity, set pc = 0
+                endThread !curComp node <+> txt @"/* end */"
+            | 1 ->
+                let edge = 
+                    node.Outgoing
+                    |> Seq.filter ProgramGraph.isImmediateTransition
+                    |> Seq.head 
+                match edge.Payload with
+                | ControlFlow None -> 
+                    let target = edge.Target
+                    if areInSameBlock ctx (!curComp).name node target then
+                        // if one unguarded transition, leading a node inside the same block, translate that node
+                        processNode ctx curComp target
+                    else
+                        // if one unguarded transition, that leaves block, advance pc
+                        advancePC ctx !curComp node target
+                | TerminateThread _ -> // terminate thread
+                    endThread !curComp node <+> txt @"/* term */"
+                | _ -> failwith "expected UNguarded transition" // Dataflow transitions are excluded by construction since they never emanate from nor point to simple Locations.
+            | _ ->
+                failwith "An AbortEnd location must have no more than one transition."
+        [ abortBody; proceedToSucc ]
+        |> dpBlock
 
     | Location ->
         // an exit node
@@ -527,7 +578,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
                 let target = edge.Target
                 if areInSameBlock ctx (!curComp).name node target then
                     // if one unguarded transition, leading a node inside the same block, translate that node
-                    processNode ctx compilations curComp target
+                    processNode ctx curComp target
                 else
                     // if one unguarded transition, that leaves block, advance pc
                     advancePC ctx !curComp node target
@@ -546,27 +597,17 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
         let nextNodeStep =
             if areInSameBlock ctx (!curComp).name node succ then
                 // if one unguarded transition, leading a node inside the same block, translate that node
-                processNode ctx compilations curComp succ
+                processNode ctx curComp succ
             else
                 // if one unguarded transition, that leaves block, advance pc
                 advancePC ctx !curComp node succ
         
-        // select callee's pcs from activity context and initialise them
-        let callee = compilations |> List.find (fun c -> c.name = whoToCall)
         // add the PCs and locals of subprogram to this instance
-        curComp := Compilation.addSubContext !curComp thisNodePc whoToCall callee.GetActCtx
-        let calleesPCs = (!curComp).GetActCtx.subcontexts.[thisNodePc, whoToCall].pcs.AsList
-        let prefixedPcs = calleesPCs |> List.map (fun p -> accessPC4node !curComp node <^> txt "_" <^> cpStaticName whoToCall <^> txt "." <^> txt p.name.basicId)
+        curComp := Compilation.addSubContext !curComp thisNodePc whoToCall
+        
+        // select callee's pcs from activity context and initialise them
         let initCalleesPCs =
-            match prefixedPcs with
-            | mainpc :: otherPCs ->
-                [
-                    [mainpc </> txt "=" </> (2 * initValue ctx whoToCall |> string |> txt) <^> semi]
-                    otherPCs |> List.map (fun pc -> pc </> txt "=" </> txt "0" <^> semi)
-                ]
-                |> List.concat
-                |> dpBlock
-            | _ -> failwith "A called activity needs to have at least one PC in its interface."
+            cpInitActivityCall thisNodePc whoToCall
 
         let retcodeVarDoc =
             renderCName Current ctx.tcc retcodeVar
@@ -576,7 +617,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             
         // in case the return value is ignored with _
         // create a temporary variable to receive the value
-        let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
+        let translatedCall = makeActCall ctx curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
 
         // suppress warning about set but unused value using a void cast with no effect
         let unused =
@@ -619,7 +660,7 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
             let lhsTyp = ValueTypes(IntType Int32)
             cpType lhsTyp <+> renderCName Current ctx.tcc retcodeVar <^> semi
 
-        let translatedCall = makeActCall ctx compilations curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
+        let translatedCall = makeActCall ctx curComp node pos thisNodePc whoToCall receiverVar inputs outputs retcodeVar
 
         let returnOrProceed = 
             match receiverVar with
@@ -635,14 +676,14 @@ let rec private processNode ctx (compilations: Compilation list) (curComp: Compi
              translatedCall
              returnOrProceed ]
 
-let private translateBlock ctx compilations curComp block =
+let private translateBlock ctx curComp block =
     // traverse subgraph
     // at each location perform the required action, then traverse all outgoing CONTROL FLOW edges and (respecting the guards)
     // perform the next action or set the pc
     // note that due to current block construction, each block contains only a sequence, branching control flow can only occur at the last (exit) node
     let prioAsPc = 2 * block.Priority |> string |> txt
     let cond = accessPC4block !curComp block <+> txt "==" <+> prioAsPc
-    let body = processNode ctx compilations curComp block.innerNodes.[0]
+    let body = processNode ctx curComp block.innerNodes.[0]
     cpIfOnly cond body
 
 /// Extract all QNames of variables that require a prev location in given code
@@ -811,6 +852,7 @@ let private collectVarsToPrev2 pg =
         | HitAwaitLocation 
         | StartFromAwaitLocation
         | Location 
+        | AbortBegin _
         | AbortEnd _
         | GuardLocation
         | CobeginLocation _
@@ -830,7 +872,7 @@ let private collectVarsToPrev2 pg =
     @ (pg.Graph.Edges |> Seq.toList |> List.map processEdge |> List.concat)
     |> List.distinct
 
-let private translateActivity ctx compilations curComp (subProgDecl: SubProgramDecl) =
+let private translateActivity ctx curComp (subProgDecl: ProcedureImpl) =
     let addPc _ (node : Node) =
         let pc =
             { name = mkAuxQNameFrom <| render None (createPcName4node node)
@@ -840,21 +882,11 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
               allReferences = HashSet() }
         curComp := Compilation.addPc !curComp node.Payload.Thread pc
         false
-    // this fixes an issue in which the thread discovery follows data edges and therefore discovers
-    // child threads before their parents
-    // TODO: make this more elegant in the future, instead of re-implementing depthFirstForward
-    let depthsFirstForward nodes onNodeVisit onNodeFinish onCycleDetect onRevisit =
-        let selectNeighbours (n: Node) = 
-            n.Outgoing
-            |> Seq.filter (fun edge -> match edge.Payload with DataFlow _ -> false | _ -> true)
-            |> Seq.map (fun edge -> edge. Target)
-        GenericGraph.depthsFirstTraverse selectNeighbours nodes onNodeVisit onNodeFinish onCycleDetect onRevisit
-    
-    let name = subProgDecl.name
+    let name = subProgDecl.Name
     curComp := { !curComp with varsToPrev = collectVarsToPrev2 ctx.pgs.[name] }
     // build pc tree by traversing the program graph and create a pc per thread
     let progGraph = ctx.pgs.[name]
-    let aborted = depthsFirstForward [progGraph.Entry] addPc GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
+    let aborted = GenericGraph.depthsFirstForward [progGraph.Entry] addPc GenericGraph.proceed GenericGraph.proceed GenericGraph.proceed
     assert not aborted
     let blockGraph = ctx.bgs.[name].blockGraph
     // perform scheduling (i.e. compute block priorities)
@@ -864,45 +896,49 @@ let private translateActivity ctx compilations curComp (subProgDecl: SubProgramD
     blockGraph.Nodes
     |> Seq.toList
     |> List.sortBy (fun bn -> bn.Payload.Priority)
-    |> List.map (fun bn -> translateBlock ctx compilations curComp bn.Payload) 
+    |> List.map (fun bn -> translateBlock ctx curComp bn.Payload) 
     // return C source code
 
-    
-/// Generate statements which initialises program counters 
-/// used in the init function
-let internal mainPCinit ctx (entryCompilation: Compilation) =
-    let mainPc = txt "blc_blech_ctx." <^> txt entryCompilation.GetActCtx.pcs.mainpc.name.basicId
-    let initVal = initValue ctx entryCompilation.name
+
+let private pcInit ctx prefix (comp: Compilation) =
+    // TODO passing the "blc_blech_ctx. or ->" as a string seems unclean, fg 12.10.20
+    let mainPc = txt prefix <^> txt comp.GetActCtx.pcs.mainpc.name.basicId
+    let initVal = initValue ctx comp.name
     let initVal2 = 2 * initVal |> string |> txt
     mainPc <+> txt "=" <+> initVal2 <^> semi // assignPC won't work here, mind the level of indirection!
     |> cpIndent
 
+/// Generate statements which initialises program counters 
+/// used in the init function
+let internal mainPCinit ctx (entryCompilation: Compilation) =
+    pcInit ctx (CTX + ".") entryCompilation
+
 
 /// Given a translation context, a list of produced compilations so far,
 /// and an activity, produce a Compilation for that activity.
-let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
+let internal translate ctx (subProgDecl: ProcedureImpl) =
     // for an activity, translate its graph
     // while doing so collect all local variables, pcs
     // wrap code in function that expects values for all
     // ins, outs, globals, locals, pcs
-    let name = subProgDecl.name
+    let name = subProgDecl.Name
     // generate a retvar if the activity is non-void
     let retvar =
-        if subProgDecl.returns = Void then
+        if subProgDecl.Returns = Void then
             None
         else
-            let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
+            let qname = QName.Create subProgDecl.Name.moduleName (subProgDecl.Name.prefix @ [subProgDecl.Name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.Returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v
     
-    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
+    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.Inputs; outputs = subProgDecl.Outputs; retvar = retvar}
         
-    let code = translateActivity ctx compilations curComp subProgDecl
+    let code = translateActivity ctx curComp subProgDecl
 
     let resetPCs =
         (!curComp).GetActCtx.pcs.AsList
@@ -965,9 +1001,18 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
             :: rest 
             |> dpBlock
 
+    let initBody = pcInit ctx (fromContext "") !curComp
+
+    let initActivityCode =
+        txt "void"
+        <+> initActivityName (!curComp).name
+        <+> cpActCtxIfaceOnly (!curComp)
+        <+> txt "{"
+        <.> cpIndent initBody // set main pc to 0
+        <.> txt "}"
+
     let completeActivityCode =
-        txt "static" // TODO must be non-static if activity is exposed, fjg 17.01.19
-        <+> txt "blc_pc_t"
+        txt "blc_pc_t"
         <+> cpStaticName (!curComp).name
         <+> cpIface ctx.tcc (!curComp)
         <+> txt "{"
@@ -978,18 +1023,36 @@ let internal translate ctx compilations (subProgDecl: SubProgramDecl) =
         <.> cpIndent returnPC
         <.> txt "}"
 
-    let signature =
+    let initActivitySignature = 
+        txt "void"
+        <+> initActivityName (!curComp).name
+        <+> cpActCtxIfaceOnly (!curComp)
+        <^> semi
+
+    let completeActivitySignature =
         txt "blc_pc_t"
         <+> cpStaticName (!curComp).name
         <+> cpIface ctx.tcc (!curComp)
         <^> semi
-        
+
+    let signature =
+        [ initActivitySignature
+          completeActivitySignature ]
+        |> vsep
+
+
     let optDoc = 
         cpOptDocComments subProgDecl.annotation.doc
+
+    let initAndStep =
+        [ initActivityCode
+          empty // insert empty line in between
+          completeActivityCode ]
+        |> vsep
 
     curComp := { !curComp
                  with 
                     signature = signature
-                    implementation = completeActivityCode
+                    implementation = initAndStep
                     doc = optDoc }
     !curComp

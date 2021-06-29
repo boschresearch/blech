@@ -1,4 +1,4 @@
-module ReturnMissing
+module
 
 function calc() returns int64
     if true then

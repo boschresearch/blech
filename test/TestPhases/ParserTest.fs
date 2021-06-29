@@ -30,10 +30,9 @@ type Test() =
     /// run parseValidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "validFiles")>]
-    member x.parseValidFiles (loadWhat, moduleName, filePath) =
+    member __.ParseValidFiles (implOrIface, moduleName, filePath) =
         let logger = Diagnostics.Logger.create ()
-        let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath
-        //printfn "%s" (Blech.Common.Printer.mkStringPrn (Blech.Frontend.ASTWalkers.print (Blech.Frontend.AST.ASTNode.Package result)))
+        let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
         if Result.isError ast then
             Diagnostics.Emitter.printDiagnostics logger
         Assert.True (Result.isOk ast)
@@ -47,10 +46,10 @@ type Test() =
     /// run parseInvalidInputs
     [<Test>]
     [<TestCaseSource(typedefof<Test>, "invalidFiles")>]
-    member x.parseInvalidInputs (loadWhat, moduleName, filePath) =
+    member __.ParseInvalidInputs (implOrIface, moduleName, filePath) =
         try
             let logger = Diagnostics.Logger.create ()
-            let ast = Blech.Frontend.ParsePkg.parseModule logger loadWhat moduleName filePath 
+            let ast = Blech.Frontend.ParsePkg.parseModuleFromFile logger implOrIface moduleName filePath
             if Result.isError ast then
                 Diagnostics.Emitter.printDiagnostics logger
             Assert.False (Result.isOk ast)

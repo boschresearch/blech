@@ -1,0 +1,5 @@
+import dummy "../imports/constant"
+
+module 
+
+const incr42 = FortyTwo + 1 // no implicit access to dummy.FortyTwo

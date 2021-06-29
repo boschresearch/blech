@@ -1,4 +1,4 @@
-module extensions
+module
 
 struct Class
     var x:int32

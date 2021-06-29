@@ -27,23 +27,19 @@ module SyntaxErrors =
     open Blech.Common.Range
     
     type ParserError = 
-        | InconsistentModuleName of moduleName: AST.StaticNamedPath
+        | ImportPathMalformed of string * Range.range
         | NotUnitOne of number: string * range: Range.range
         | UnexpectedEOF of range: Range.range * expectedTokens: string list * start: Range.range
         | UnexpectedEndOfInput of range: Range.range * start: Range.range
         | UnexpectedToken of token: string * range: Range.range * expectedTokens: string list * start: Range.range
-        | UnexpectedSignatureMember of implementation: Range.range // * signatureHead: Range.range
-        | UnexpectedModuleMember of prototype: Range.range // * moduleHead: Range.range
-        | UnexpectedExposure of exposing: Range.range // * signatureHead: Range.range
                 
         interface Diagnostics.IDiagnosable with
             member err.MainInformation =
-                match err with
-                | InconsistentModuleName moduleName ->
-                    { range = moduleName.Range 
-                      message = sprintf "module name '%s'is not consistent with the filesystem."
-                                <| moduleName.dottedPathToString } 
-                
+                match err with        
+                | ImportPathMalformed (msg, pos) ->
+                    { range = pos
+                      message = "malformed import path." }
+
                 | NotUnitOne (number, range) ->
                     { range = range
                       message = sprintf "incorrent constant '%s' in unit expression, must be '1'." number }
@@ -60,38 +56,23 @@ module SyntaxErrors =
                     { range = range
                       message = sprintf "syntax error '%s'." token }
 
-                | UnexpectedSignatureMember implementation ->
-                    { range = implementation
-                      message = "unexpected implementation in interface file." }
-
-                | UnexpectedModuleMember prototype ->
-                    { range = prototype
-                      message = "unexpected prototype in implementation file." }
-    
-                | UnexpectedExposure exposing ->
-                    { range = exposing
-                      message = "unexpected exposing in signature file." }
-                
                 
             member err.ContextInformation: Diagnostics.ContextInformation list= 
                 match err with
-                | InconsistentModuleName moduleName ->
-                    [ { range = moduleName.Range 
-                        message = "should map to file and/or directory."
-                        isPrimary = true } ]
-
                 | UnexpectedToken (_token, range, _, start) ->
                     [ { range = start; message = "start of chunk."; isPrimary = false }
                       { range = range; message = "unexpected token."; isPrimary = true } ]
+                
+                | ImportPathMalformed (msg, pos) ->
+                    [ { range = pos
+                        message = msg 
+                        isPrimary = true} ]
                 
                 | _ ->
                     []
 
             member err.NoteInformation = 
                 match err with
-                | InconsistentModuleName _ ->
-                    [ "check file name and source path." ]
-                
                 | UnexpectedEOF (_, expectedTokens, _) ->
                     List.fold 
                     <| fun acc -> fun tok -> sprintf "expected '%s'," tok :: acc
@@ -104,18 +85,6 @@ module SyntaxErrors =
                     <| [ "or other token." ] 
                     <| expectedTokens
                 
-                | UnexpectedModuleMember _ ->
-                    [ "source is implementation file."
-                      "prototype is not allowed." ]
-                
-                | UnexpectedSignatureMember _ ->
-                    [ "source is interface file."
-                      "implementation is not allowed." ]
-                
-                | UnexpectedExposure _ ->
-                    [ "source is interface file."
-                      "an interface file exposes everything." ]
-
                 | _  ->
                     []
 
@@ -257,12 +226,15 @@ module SyntaxErrors =
     
 
 module ParserUtils = 
-    open System.Numerics
+    
     open System
-
+    open System.Numerics
 
     open Blech.Common
+    open Blech.Common.TranslationUnitPath
+
     open SyntaxErrors
+
 
     type ParserErrorInfo = 
         {
@@ -271,33 +243,26 @@ module ParserUtils =
             expectedTokens: string list
         }
     
-    //type PackageHead = 
-    //    { 
-    //        currentModuleName: string
-    //        isSignature: bool 
-    //        range: Range.range 
-    //    }
-    //    static member Default = 
-    //        { currentModuleName = ""; isSignature = false; range = Range.rangeStartup }
-        
-        
+    
     type ParserContext = 
         {
-            mutable currentModuleName: LongIdentifier
-            mutable currentLoadWhat: Package.LoadWhat
-            //mutable packageHead: PackageHead
+            mutable currentModuleName: TranslationUnitPath
+            mutable currentLoadWhat: CompilationUnit.ImplOrIface
             mutable errorTokenAccepted: bool
             mutable errorInfo : ParserErrorInfo option
             mutable diagnosticsLogger: Diagnostics.Logger 
+            mutable auxWildcardIndex : int  // unique for every compiled file
+            mutable nameIndex : int // unique for every recursive compilation
         }
 
         static member Default = {
-                currentModuleName = []
-                currentLoadWhat = Package.Implementation
-                // packageHead = PackageHead.Default 
+                currentModuleName = TranslationUnitPath.Empty
+                currentLoadWhat = CompilationUnit.Blc
                 errorTokenAccepted = false
                 errorInfo = None
                 diagnosticsLogger = Diagnostics.Logger.create()
+                auxWildcardIndex = 0
+                nameIndex = 0
             }
     
             
@@ -311,10 +276,11 @@ module ParserUtils =
             parserContext <- 
                 { currentModuleName = moduleName
                   currentLoadWhat = loadWhat
-                  // packageHead = { PackageHead.Default with currentModuleName = moduleName } 
                   errorTokenAccepted = false
                   errorInfo = None
-                  diagnosticsLogger = diagnosticsLogger }
+                  diagnosticsLogger = diagnosticsLogger 
+                  auxWildcardIndex = 0  // reinitialised for every compiled file
+                  nameIndex = parserContext.nameIndex}  // incremented for every name accross all file during recursive compilation
     
 
         let getDiagnosticsLogger () = parserContext.diagnosticsLogger, Diagnostics.Phase.Parsing
@@ -325,10 +291,10 @@ module ParserUtils =
             parserContext.errorTokenAccepted <- bool
 
         let getModuleName () = parserContext.currentModuleName
-        let getLoadWhat () = parserContext.currentLoadWhat
+        // let getLoadWhat () = parserContext.currentLoadWhat
         //let isSignature () = parserContext.packageHead.isSignature
-        let isInterface () = parserContext.currentLoadWhat = Package.Interface
-        let isImplementation () = parserContext.currentLoadWhat = Package.Implementation
+        let isInterface () = parserContext.currentLoadWhat = CompilationUnit.Blh
+        let isImplementation () = parserContext.currentLoadWhat = CompilationUnit.Blc
         //let getHeadRange () = parserContext.packageHead.range
         //let setPackageHead isSignature range = 
         //    parserContext.packageHead <- { parserContext.packageHead with isSignature = isSignature; range = range }
@@ -346,7 +312,54 @@ module ParserUtils =
             parserContext.errorInfo <- None
             lpe
         
+        /// This never clashes with a Blech identifier
+        /// Starts with '<wildcard>0' for every parsed file during a recursive compilation
+        //let mkAuxIdentifierFromWildCard wildcard =
+        //    let cur = parserContext.auxWildcardIndex
+        //    parserContext.auxWildcardIndex <- cur + 1
+        //    // printfn "Aux index: %d" cur
+        //    sprintf "%s%s" wildcard (string cur) 
 
+        
+        let private newNameIndex () = 
+            parserContext.nameIndex <- parserContext.nameIndex + 1
+            parserContext.nameIndex
+
+        /// Creates a name with a unique index across all files during a recursive compilation
+        let mkName (id : Identifier) (range : Range.range) : Name = 
+            { id = id 
+              range = range 
+              index = newNameIndex () }
+
+        let mkEmptyName = 
+            { id = "" 
+              range = Range.range0 
+              index = -1 }
+
+        /// Helper function for language server, construct a name without specifying an index
+        /// CommonTypes.Name.CompareTo and CommonTypes.Name.Equals
+        let mkFakeName id range =
+            { id = id
+              range = range
+              index = -1 }
+
+        let private newWildcardIndex () = 
+            parserContext.auxWildcardIndex <- parserContext.auxWildcardIndex + 1
+            parserContext.auxWildcardIndex
+            
+
+        /// This never clashes with a Blech name
+        /// Starts with '<wildcard>1' for every parsed file during a recursive compilation
+        let mkNameFromWildcard (wildcard : Identifier) (range: Range.range) : Name =
+            let wcidx = newWildcardIndex()
+            { id = sprintf "%s%s" wildcard <| string wcidx 
+              range = range 
+              index = newNameIndex () }  
+
+        
+
+
+        
     /// strips '_' from number, e.g. 100_000 -> 100000
     let private strip_ s =
         String.collect (fun c -> if c = '_' then "" else string c) s
@@ -481,42 +494,25 @@ module ParserUtils =
         <| e
 
 
-    let parseOne (nat: string, r: Range.range) =
+    let parseOne (nat: string, r: Range.range) = // TODO: dead code? fg 26.01.21
         match System.Int32.TryParse(nat) with
         | (true,value) when value = 1 -> 
             ()
         | _ ->
             reportError <| NotUnitOne (nat, r)
 
-    /// Checks the correct module in the package head
-    let checkModuleName (name: AST.StaticNamedPath) =
-        if not (name.identifiers = ParserContext.getModuleName ()) then
-            reportError <| InconsistentModuleName name 
-            
-
-    /// Checks if the static member appears in an implementation or interface context
-    // no longer needed, fjg 11.12.19
-    //let checkSourceContext (staticMember: AST.Member) =
-    //    if ParserContext.isInterface () then
-    //        if not staticMember.isInterface then
-    //            Diagnostics.Logger.logError
-    //            <|| ParserContext.getDiagnosticsLogger ()
-    //            <| UnexpectedSignatureMember staticMember.Range
-                
-    //    else
-    //        if staticMember.isInterface then
-    //            Diagnostics.Logger.logError
-    //            <|| ParserContext.getDiagnosticsLogger ()
-    //            <| UnexpectedModuleMember staticMember.Range 
-                
-    //    staticMember
-
-
-    /// Checks the absence of exposing clauses in an interface context 
-    let checkExposing (exposing: AST.Exposing option) =
-        if ParserContext.isInterface () then
-            if Option.isSome exposing then
-                reportError <| UnexpectedExposure (Option.get exposing).Range       
+    let parseImportPath pos strToParse =
+        let currentPath = ParserContext.getModuleName ()
+        match makeFromPath currentPath strToParse with
+        | Ok tup -> 
+            { AST.ModulePath.range = pos
+              AST.ModulePath.path = tup }
+        | Error (msg, colOffset) ->
+            let errStart = Range.pos(pos.Start.Line, pos.Start.Column + colOffset)
+            let errPos = Range.mkFileIndexRange pos.FileIndex errStart pos.End
+            reportError <| ImportPathMalformed (msg, errPos)
+            { range = pos
+              path = TranslationUnitPath.Empty }
 
        
     /// Logs the last stored parser error
@@ -538,9 +534,7 @@ module ParserUtils =
                                       start = startRange )
                 | None ->
                     UnexpectedEndOfInput (range = r, start = startRange)
-            Diagnostics.Logger.logError
-            <|| ParserContext.getDiagnosticsLogger ()
-            <| parserError
+            reportError parserError
 
     
     let getStartOfLine (r: Range.range) =
@@ -559,7 +553,20 @@ module ParserUtils =
         AST.Annotation(keyValue, range)
 
     let lineDocToAnnotation = docToAnnotation Attribute.Key.linedoc
+    
     let blockDocToAnnotation = docToAnnotation Attribute.Key.blockdoc
+
+
+    let makePreemption range preemption conditions body = 
+        match preemption with
+        | CommonTypes.Abort ->
+            AST.Preempt (range, CommonTypes.Abort, conditions, CommonTypes.Before, body)
+        | CommonTypes.Suspend ->
+            AST.Preempt (range, CommonTypes.Suspend, conditions, CommonTypes.Before, body)
+        | CommonTypes.Reset -> 
+            let abortFinished = ParserContext.mkName (CommonTypes.mkPrefixIndexedNameFrom "abortFinished") range 
+            AST.rewriteResetToAbortInLoop abortFinished range conditions body
+
 
 
 module LexerUtils =
@@ -596,12 +603,10 @@ module LexerUtils =
 
     /// this mutable number is used to track the nesting of /* .. */ comments in the SkipComment rule
     // TODO: encapsulate as LexerContext
-    let mutable fromStart: Range.range = Range.range0
     let mutable commentStart: Range.range option = None
     let mutable commentDepth = 0
 
     let mutable tokenBuilder = TokenBuilder()
-    // let mutable tabIndent : (Range.range * int) option = None   // 
     
 
     let getLexeme (lexbuf: LexBuffer<char>) = 
@@ -724,31 +729,32 @@ module LexerUtils =
         tokenBuilder.Append (lxm, rng)
             
     let unicodeEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         let esc, rng = getLexemeAndRange lexbuf
-        let mutable unesc = esc
+        // let mutable unesc = esc
         if not <| BlechString.isValidUnicodeEscape esc then 
             reportError <| UnicodeEscapeTooLarge(esc, rng)
         else
-            unesc <- BlechString.unicodeEscapeToString esc
-        tokenBuilder.Append (unesc, rng)
+            // unesc <- BlechString.unicodeEscapeToString esc
+            tokenBuilder.Append (esc, rng)
 
     let decimalEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
-        let mutable nesc = esc
         // let mutable unesc = esc
         if not <| BlechString.isValidDecimalEscape esc then 
             reportError <| DecimalEscapeTooLarge (esc, rng)
         else
-        //    unesc <- BlechString.decimalEscapeToString esc
-            reportError <| EscapeCurrentlyNotSupported (esc, rng)
-        tokenBuilder.Append (nesc, rng)
+            //    unesc <- BlechString.decimalEscapeToString esc
+            tokenBuilder.Append (esc, rng)
 
     let hexEscapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         // TODO: make strings literals to byte arrays to support byte-size escapes
         let esc, rng = getLexemeAndRange lexbuf
         // let unesc =  BlechString.hexEscapeToString esc
-        reportError <| EscapeCurrentlyNotSupported (esc, rng)
+        // Hex escapes are always syntactically correct
         tokenBuilder.Append (esc, rng)
 
     let backslashInString lexbuf = 
@@ -757,9 +763,10 @@ module LexerUtils =
         tokenBuilder.Append (bs, rng)
 
     let escapeInString lexbuf =
+        // TODO: shift unescaping to a later phase, fjg 26.05.21
         let esc, rng = getLexemeAndRange lexbuf
-        let unesc = BlechString.escapeToString esc
-        tokenBuilder.Append (unesc, rng)
+        // let unesc = BlechString.escapeToString esc
+        tokenBuilder.Append (esc, rng)
 
     let private checkIndentations (lines: string list) rng = 
         let reportUnbalancedIndentations (indent, unbalancedIndents) =
@@ -784,9 +791,11 @@ module LexerUtils =
             mls, rng
 
     let finishSingleLineString lexbuf =
+        tokenBuilder.Append (String.Empty, getRange lexbuf) // Add range of closing " to token
         tokenBuilder.Token
 
     let unknownTokenInString lexbuf =
         unknownToken lexbuf  // TODO: separate error message
         tokenBuilder.Append (getLexemeAndRange lexbuf)
+
 

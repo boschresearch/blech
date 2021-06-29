@@ -1,0 +1,12 @@
+import P "prev_imp"
+
+@[EntryPoint]
+activity Main () ()
+    var o = P.mkO()
+    var monitor: nat32
+    cobegin
+        run P.A(prev o)(monitor)
+    with
+        run P.B(monitor)(o)
+    end
+end

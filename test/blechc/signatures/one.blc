@@ -1,0 +1,3 @@
+module exposes one
+
+const one = 1 : int32

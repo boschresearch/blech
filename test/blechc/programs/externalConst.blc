@@ -1,0 +1,47 @@
+struct S
+    var s: float32
+end
+
+@[CConst(binding="c_name_extVarI8", header="externalConst.ext.h")]
+extern const extConstI8: int32
+@[CConst(binding="c_name_extVarArr", header="externalConst.ext.h")]
+extern const extVarArr: [8]int32
+
+// This cannot be an external without creating a loop in .h-file includes
+// see tests for modules
+const extVarS: S = {}
+
+activity A (arg: int32) returns int32
+    @[CConst(binding="3*(c_name_extVarI8 + 1)", header="externalConst.ext.h")]
+    extern const extActVarI8: int32
+    
+    await true
+    
+    let foo1 = extActVarI8 + arg
+
+    await true
+
+    return foo1
+end
+
+activity B (myS: S)
+    @[CConst(binding="c_name_extVarArr", header="externalConst.ext.h")]
+    extern const extActVarArr: [8]int32
+    var res: int32
+
+    if myS.s < 0.0 then run _ =  A(extConstI8)
+    else 
+        run res = A(2 * extConstI8)
+        let foo2 = extActVarArr // activity level declared
+        let foo3 = extVarArr[0] + 7 // top level
+    end
+end
+
+@[EntryPoint]
+activity E ()
+    const extActVarS: S = {} // cannot be external either see above extVarS
+    let foo4 = extActVarS // activity defined
+    let foo5 = extVarS.s // top level
+    
+    run B(extActVarS)
+end

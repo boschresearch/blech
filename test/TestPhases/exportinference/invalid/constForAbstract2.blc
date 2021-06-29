@@ -1,0 +1,7 @@
+
+module exposes c
+
+typealias Index = nat8
+typealias Element = int32
+
+const c: [3: Index] Element = {[0: Index] = 42: Element}

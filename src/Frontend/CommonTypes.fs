@@ -20,8 +20,12 @@
 /// with the untyped AST.)
 module Blech.Frontend.CommonTypes
 
+
 open Blech.Common
+open Blech.Common.TranslationUnitPath
+
 open Constants
+
 
 // Names /////////////////////////////////////////////////////////////////
 
@@ -34,26 +38,17 @@ let idsToString (ids: LongIdentifier) =
 
 type IdLabel = 
     | Auxiliary
-    | Static
-    | Dynamic // TODO: what the hell is a 'dynamic' QName?
-              // It seems in fact that this simply discerns the scope in which this name was introduced.
-              // The top-level scope being 'static' and any other scope, such as a subprogram, a for-loop header etc... are called dynamic.
-              // Meaning that a subprogram-local const has a QName with 'dynamic' label! What is dynamic about it?
-              // For now we use this in CPdataAccess to render names correctly. (fg, 04.04.19)
+    | Static  // subprogram, module, type, const, param, opaque singleton, unit, enum tag, struct field
+    | Dynamic // var, let, formal parameter, extern var, extern let
 
 /// qualified names
 type QName = 
     {
-        moduleName: SearchPath.ModuleName
-        prefix: LongIdentifier // TODO: what exactly is the meaning of prefix? 
-                               // Is the following invariant true:
-                               // prefix is empty <=> QName is on top level <=> IsStatic, or equivalently
-                               // prefix is non-empty <=> QName is declared inside a subprogram <=> IsDynamic
-                               // ???
-                               // How is that for names in structures? OO style programming?
-                               // fg, 04.04.19
+        moduleName: TranslationUnitPath
+        prefix: LongIdentifier // prefix is empty <=> QName is on top level 
+                               // prefix is non-empty <=> QName is declared inside a scope (subprogram, struct type, enum type)
         basicId: Identifier
-        label: IdLabel
+        label: IdLabel         
     } 
 
     static member Create moduleName path id label =
@@ -65,7 +60,7 @@ type QName =
         }
 
     static member CreateAuxiliary path id =
-        QName.Create [] path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
+        QName.Create TranslationUnitPath.Empty path id (IdLabel.Auxiliary) // Auxiliary identifiers are always local to modules
 
     /// Creates a QName for program names: tick, init, printState
     static member CreateProgramName moduleName id =
@@ -79,6 +74,14 @@ type QName =
 
     member qn.IsDynamic = 
         qn.label = Dynamic
+
+    /// Qname is a top level declaration
+    member this.IsTopLevel = 
+        List.isEmpty this.prefix
+
+    /// Qname is an imported name for the current module
+    member this.IsImported (currentModule: TranslationUnitPath) = 
+        this.moduleName <> currentModule
 
     // TODO: This is currently only used for acitivity states, which does not take imports into account,
     // therefore it does not take qn.moduleName into account. Change this with code generation for imports, fjg 26.01.19
@@ -97,33 +100,39 @@ type QName =
 type Name = 
     {
         id : Identifier
-        range: Range.range
+        range : Range.range
+        index : int
     }
-
-    static member FromFileOrDirectoryId (identifier: string) =
-        { id = identifier
-          range = Range.rangeStartup }
-        
+    
     member name.Range = name.range
     
     member name.idToString = name.id
     
     override name.ToString() = name.id
 
-    // Todo: Is it really necessary to use the id - a range should uniquely identify the occurence of a name: fjg 25.07.2018
+    // CustomEquality is defined via the name's index
     override name.Equals obj =
         match obj with
-        | :? Name as otherName 
-            -> name.range.Code = otherName.range.Code
+        | :? Name as otherName ->
+            if name.index = -1 || otherName.index = -1 then
+                // fake names without a valid index, compare id and range
+                name.range = otherName.range
+            else
+                name.index = otherName.index
         | _ -> false
-    override name.GetHashCode() = name.range.GetHashCode()
 
-    // Names are ordered according to the start of of their source code position 
+    override name.GetHashCode() = name.range.GetHashCode() //name.index // maybe better: hash name.index
+
+    // CustomComparison is defined via the names's index 
     interface System.IComparable with
         member name.CompareTo obj =
             match obj with
             | :? Name as otherName ->
-                Range.posOrder.Compare (name.range.Start, otherName.range.Start)
+                if name.index = -1 || otherName.index = -1 then
+                    // fake names without a valid index, compare id and range
+                    Range.rangeOrder.Compare (name.range, otherName.range)
+                else
+                    compare name.index otherName.index
             | _ -> 
                 invalidArg "obj" "cannot compare values of different types"
 

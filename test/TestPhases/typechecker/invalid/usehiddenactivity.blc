@@ -1,0 +1,7 @@
+import os "../imports/hiddenactivity"
+
+module
+
+activity h()
+    run os.f()  
+end

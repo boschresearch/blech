@@ -1,0 +1,16 @@
+
+signature
+
+singleton hidden // opaque singleton
+
+singleton[hidden] activity visible ()
+
+
+type IntStack  // opaque type
+
+function init () returns IntStack
+singleton function initFromEnv () returns IntStack
+
+function push (x: int32) (stack: IntStack)
+function pop () (stack: IntStack) returns int32
+function top (stack: IntStack) returns int32

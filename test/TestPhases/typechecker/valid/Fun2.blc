@@ -1,0 +1,17 @@
+
+struct S
+    var mutableField: float32
+    var alsomutableField: float32 = 88.9
+end
+
+function myFun ()(x: [8]S)
+    x[2] = {mutableField = 2.2}
+end
+
+@[EntryPoint]
+activity A ()()
+    var a: [8]S
+    await true
+    myFun()(a)
+    await true
+end

@@ -1,0 +1,7 @@
+module exposes f
+
+typealias T = int32
+
+function f() returns T 
+    return 42
+end

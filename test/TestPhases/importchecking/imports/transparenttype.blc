@@ -1,0 +1,9 @@
+module exposes S, init
+
+struct S 
+    var x: bool
+end
+
+function init() returns S 
+    return {x = true}
+end

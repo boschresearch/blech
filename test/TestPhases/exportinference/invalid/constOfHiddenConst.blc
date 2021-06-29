@@ -1,0 +1,8 @@
+module exposes exposedConst, exposedArray 
+
+const hiddenConst: int32 = 42
+
+const exposedConst = hiddenConst
+
+const exposedArray: [hiddenConst] int32 = {hiddenConst}
+

@@ -1,4 +1,4 @@
-module struct1empty
+module
 
 struct MyS
   var f1: int8
@@ -8,7 +8,7 @@ end
 struct MyT
   var g1: float64
   var g2: MyS
-  var g3: int32
+  let g3: int32
 end
 
 function f (i: MyS)(out: MyT) returns MyT

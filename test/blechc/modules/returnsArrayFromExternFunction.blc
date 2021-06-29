@@ -1,0 +1,14 @@
+import _ "returnsArrayFromExternFunctionType_imp" exposes LEN, Foo
+
+@[CFunction(binding="rrr_impl($1, $2, $3)", header="returnsArrayFromExternFunction.ext.h")]
+extern function rrr(a: bool)(lala: [LEN]Foo) returns [LEN]Foo
+
+@[EntryPoint]
+activity start ()()
+    
+    var myS: [LEN]Foo
+    var asdf: [LEN]Foo
+    myS = rrr(false)(asdf)
+    await true
+    _ = rrr(true)(asdf)
+end

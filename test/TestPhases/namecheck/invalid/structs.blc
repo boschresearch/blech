@@ -1,22 +1,21 @@
-module structs
+module
 
 
 
 struct S      
 end
 
-// with
 enum E 
     A 
 extension
     function f()
-        var x: E
+        var x: E = A
         var y: S
         isA(x, y)          // wrong
     end
 
     function isA(x: E, y: S) returns bool
-        E.f()          // correct
+        E.f()          // wrong, just call f()
     end
 end
 
@@ -25,8 +24,6 @@ function f()
 end
 
 function isA(x: E, y: S) returns bool
-    E.f()          // wrong
+    E.f()          // Correct
 end
             
-
-// end

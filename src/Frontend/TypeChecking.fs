@@ -257,6 +257,10 @@ let rec private checkAbsenceOfSyncStmts stmts =
     applyToList checkAbsenceOfSyncStmt stmts
 
 
+type StmtDuration =
+    | Delay
+    | Instantaneous
+    | ReturnImmediately
 /// An activity must have some synchronous delay statement on every possible 
 /// execution path through its body.
 /// This can be an await or a run statement.
@@ -265,25 +269,44 @@ let rec private checkAbsenceOfSyncStmts stmts =
 // Here we throw an error if that is the only statement in the activity.
 // In causality analysis we throw an error any way.
 let private checkStmtsWillPause p name stmts =
+    let hasImmediateReturn = List.exists (fun x -> x = ReturnImmediately)
+    let hasInstantaneous = List.exists (fun x -> x = Instantaneous)
+    let allDelay = List.forall (fun x -> x = Delay)
+    let checkAll l =
+        if hasImmediateReturn l then ReturnImmediately
+        elif hasInstantaneous l then Instantaneous
+        else assert allDelay l; Delay
     /// Given a statement (which may actually span a tree of statements),
     /// check that on every path we must hit a delaying statement.
     let rec areAllPathsWithDelay oneStmt =
         match oneStmt with
         // immediate statements
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
-        | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _ 
-        | WhileRepeat _ -> false // a while could be skipped over (we do not try to evaluate the condition)
+        | Stmt.ExternalVarDecl _ | FunctionCall _ | WhileRepeat _ -> Instantaneous // a while could be skipped over (we do not try to evaluate the condition)
+        // return ends control flow immediately
+        | Return _ -> ReturnImmediately
         // delay statements
-        | Await _ | ActivityCall _ -> true
+        | Await _ | ActivityCall _ -> Delay
         // statements containing statements
         | RepeatUntil (_, stmts, _, _)
         | Preempt (_,_,_,_,stmts) ->
             areAllPathsWithDelay (StmtSequence stmts)
         | ITE (_, _, ifBranch, elseBranch) ->
-            areAllPathsWithDelay (StmtSequence ifBranch)
-            && areAllPathsWithDelay (StmtSequence elseBranch)
-        | StmtSequence stmts -> 
-            List.exists areAllPathsWithDelay stmts // false for empty list
+            [
+                areAllPathsWithDelay (StmtSequence ifBranch)
+                areAllPathsWithDelay (StmtSequence elseBranch)
+            ]
+            |> checkAll
+        | StmtSequence stmts ->
+            let folder prev succ =
+                match prev, succ with
+                | Delay, _ -> Delay
+                | Instantaneous, x -> x
+                | ReturnImmediately, _ -> ReturnImmediately
+            stmts
+            |> List.map areAllPathsWithDelay
+            |> List.fold folder Instantaneous // Instantaneous is the neutral element regarding activity termination,
+                                              // and is also the correct result for an empty list
         | Cobegin (_,blocks) ->
             // we could allow instantaneous blocks whenever there is at least one
             // strong block which delays - but this is complex to check and explain 
@@ -292,33 +315,28 @@ let private checkStmtsWillPause p name stmts =
             |> List.unzip
             |> snd
             |> List.map (StmtSequence >> areAllPathsWithDelay)
-            |> List.forall id // cobegin delays if every block delays
+            |> checkAll // cobegin delays if every block delays
 
     areAllPathsWithDelay (StmtSequence stmts)
     |> function
-        | true -> Ok ()
-        | false -> Error [ActivityHasInstantaneousPath(p, name)]
+        | Delay -> Ok ()
+        | Instantaneous
+        | ReturnImmediately -> Error [ActivityHasInstantaneousPath(p, name)]
 
 
-let private determineGlobalOutputs lut bodyRes =
+let private determineExternals lut bodyRes =
     let rec searchExternalVarDecl oneStmt =
         let searchUnzipAndCollect xs = 
-            let ll = xs |> List.map searchExternalVarDecl 
-            ll |> List.map (fun (l1,_,_) -> l1) |> List.concat |> List.distinct, 
-            ll |> List.map (fun (_,l2,_) -> l2) |> List.concat |> List.distinct,
-            ll |> List.map (fun (_,_,l3) -> l3) |> List.concat |> List.distinct
+            let (ins, outs) = xs |> List.map searchExternalVarDecl |> List.unzip
+            ins |> List.concat |> List.distinct, 
+            outs |> List.concat |> List.distinct
         match oneStmt with
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v],[v] // add v to this scope for code generation and to overall list for causality checking
-        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[],[]
-        // aggregate globals used in subactivities
-        | ActivityCall (_, name, _, _, _) ->
-            match lut.nameToDecl.[name] with
-            | SubProgramDecl spd -> [], [], spd.globalOutputsAccumulated
-            | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Variable -> [],[v] // add v to this scope for code generation
+        | Stmt.ExternalVarDecl v when v.mutability.Equals Mutability.Immutable -> [v],[]
         //atomic statements which are not a mutable external variable
         | Stmt.VarDecl _ | Assign _ | Assert _ | Assume _ | Stmt.Print _
         | Stmt.ExternalVarDecl _ | FunctionCall _ | Return _
-        | Await _ -> [],[],[]
+        | Await _ | ActivityCall _ -> [],[]
         // note that since external variables cannot appear inside functions, we ignore function calls
         // on the statement level AND all expressions that could call functions
         // statements containing statements
@@ -338,127 +356,9 @@ let private determineGlobalOutputs lut bodyRes =
             |> searchUnzipAndCollect
 
     match bodyRes with
-    | Error _ -> [],[],[]
+    | Error _ -> [],[]
     | Ok body -> searchExternalVarDecl (StmtSequence body)
 
-
-let private determineCalledSingletons lut bodyRes =
-    let rec processFunCall name inputs outputs =
-        match lut.nameToDecl.[name] with
-        | SubProgramDecl spd -> 
-            if spd.IsSingleton then [spd.name] else []
-            @ spd.singletons
-        | FunctionPrototype fp -> if fp.isSingleton then [fp.name] else []
-        | Declarable.VarDecl _ 
-        | Declarable.ExternalVarDecl _ 
-        | Declarable.ParamDecl _ -> failwith "Expected to check a function declaration for singletons."
-        @ List.collect singletonCalls inputs
-        @ checkLhs outputs
-    and checkLhs lhss =
-        let checkLhs out =
-            match out.lhs with
-            | Wildcard -> []
-            | ReturnVar -> []
-            | LhsCur tml
-            | LhsNext tml ->
-                tml.FindAllIndexExpr
-                |> List.collect singletonCalls
-        lhss |> List.collect checkLhs
-    and checkOptReceiver optRcv = 
-        match optRcv with
-        | Some (UsedLoc lhs) -> 
-            checkLhs [lhs]
-        | Some (FreshLoc _)
-        | Some (ReturnLoc _)
-        | None -> 
-            []
-    and singletonCalls expr =
-        let recurFields fields =
-            fields
-            |> List.collect (snd >> singletonCalls)
-        match expr.rhs with
-        // locations
-        | RhsCur tml
-        | Prev tml -> tml.FindAllIndexExpr |> List.collect singletonCalls
-        // constants and literals
-        | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _ | ResetConst _ -> []
-        | StructConst fields -> recurFields fields
-        | ArrayConst elems -> recurFields elems
-        // call, has no side-effect IFF it does not write any outputs
-        // this assumption is only valid when there are not global variables (as is the case in Blech)
-        // and no external C variables are written (TODO!)
-        | FunCall (name, inputs, outputs) ->
-            processFunCall name inputs outputs
-        // unary
-        | Convert (e, _, _)
-        | Neg e 
-        | Bnot e -> 
-            singletonCalls e
-        // logical
-        | Conj (x, y) | Disj (x, y) 
-        // bitwise
-        | Band (x, y) | Bor(x, y) | Bxor (x, y)
-        | Shl (x, y) | Shr (x, y) | Sshr (x, y) | Rotl (x, y) | Rotr (x, y) 
-        // relational
-        | Les (x, y) | Leq (x, y) | Equ (x, y)
-        // arithmetic
-        | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
-            singletonCalls x @ singletonCalls y
-
-    let rec searchSingletons oneStmt =
-        match oneStmt with
-        // aggregate singletons from subprograms
-        | ActivityCall (_, name, receiverOpt, inputs, outputs) ->
-            let recSingletons = 
-                match lut.nameToDecl.[name] with
-                | SubProgramDecl spd -> 
-                    if spd.IsSingleton then [spd.name] else []
-                    @ spd.singletons
-                | _ -> failwith "Activity declaration expected, found something else" // cannot happen anyway
-            let resInputs = List.collect singletonCalls inputs
-            // let resReceiver = receiverOpt |> Option.toList |> checkLhs
-            let resReceiver = checkOptReceiver receiverOpt 
-            let resOutputs = outputs |> checkLhs
-            recSingletons @ resReceiver @ resInputs @ resOutputs
-        | FunctionCall (_, name, inputs, outputs) ->
-            processFunCall name inputs outputs
-        //atomic statements 
-        | Stmt.VarDecl v -> singletonCalls v.initValue
-        | Assign (_,lhs,rhs) ->
-            List.collect singletonCalls [rhs]
-            @ checkLhs [lhs]
-        | Assert (_,rhs,_) 
-        | Assume (_,rhs,_)
-        | Await (_,rhs) -> singletonCalls rhs
-        | Stmt.Print (_, _, rhss) -> List.collect singletonCalls rhss
-        | Stmt.ExternalVarDecl _ -> []
-        | Return (_,rhsOpt) -> 
-            rhsOpt
-            |> Option.map singletonCalls 
-            |> Option.defaultValue []
-        // statements containing statements
-        | RepeatUntil (_, stmts, rhs, _)
-        | Preempt (_,_,rhs,_,stmts)
-        | WhileRepeat (_, rhs, stmts) ->
-            singletonCalls rhs
-            @ List.collect searchSingletons stmts
-        | StmtSequence stmts ->
-            List.collect searchSingletons stmts
-        | ITE (_, rhs, ifBranch, elseBranch) ->
-            singletonCalls rhs
-            @ List.collect searchSingletons (ifBranch @ elseBranch)
-        | Cobegin (_, blocks) ->
-            blocks
-            |> List.unzip
-            |> snd
-            |> List.concat
-            |> List.collect searchSingletons
-
-    match bodyRes with
-    | Error _ -> []
-    | Ok body ->
-        searchSingletons (StmtSequence body) 
-        |> List.distinct // filter out multiple calls to the same function/activity
         
 //=============================================================================
 // Short-hand stuff
@@ -501,11 +401,11 @@ let private unsupported9 str r _ _ _ _ _ _ _ _ = Error [UnsupportedFeature (r, s
 //=============================================================================
 
 /// Check a type annotation
-let rec private fDataType  = checkDataType
+let rec private fDataType = checkDataType
 
 /// Create a variable declaration. It may be local to a subprogram or global.
 /// It may be mutable or immutable (when local).
-let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
+let private fVarDecl insideTypeDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno =
     let mutability =
         match permission with 
         | AST.ReadOnly (ro, _) ->
@@ -545,10 +445,10 @@ let private fVarDecl lut pos (name: Name) permission dtyOpt initValOpt vDeclAnno
         v
 
     let dtyAndInit = 
-        alignOptionalTypeAndValue pos name.id dtyOpt initValOpt
+        alignOptionalTypeAndValue insideTypeDecl pos name.id dtyOpt initValOpt
         |> Result.bind checkMutabilityCompliance
         
-    Ok (lut.ncEnv.nameToQname name)
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
     |> combine <| dtyAndInit
     |> combine <| vDeclAnno
     |> Result.map createVarDecl
@@ -588,16 +488,16 @@ let private fExternalVarDecl lut pos (name: Name) permission dtyOpt initValOpt v
         do addDeclToLut lut qualifiedName (Declarable.ExternalVarDecl v)
         v
 
-    Ok (lut.ncEnv.nameToQname name)
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
     |> combine <| dtyGiven
     |> combine <| checkMutability
     |> combine <| vDeclAnno
     |> combine <| checkNoInit
     |> Result.map createExternalVarDecl
 
-let private recVarDecl lut (v: AST.VarDecl) =
+let private recVarDecl insideTypeDecl lut (v: AST.VarDecl) =
     assert (not v.isExtern)
-    fVarDecl lut v.range v.name v.permission
+    fVarDecl insideTypeDecl lut v.range v.name v.permission
     <| Option.map (fDataType lut) v.datatype
     <| Option.map (checkExpr lut) v.initialiser
     <| Annotation.checkVarDecl lut v 
@@ -622,20 +522,21 @@ let private fParamDecl lut pos name mutableFlag dtyRes =
         do addDeclToLut lut qualifiedName (Declarable.ParamDecl a)
         a
 
-    (Ok (lut.ncEnv.nameToQname name),
+    (Ok (lut.ncEnv.GetLookupTable.nameToQname name),
         dtyRes)
     ||> combine
     |> Result.map createArgDecl
 
 
 /// Type check a function prototype
-let private fFunPrototype lut pos name isSingleton inputs outputs retType annotation =
+let private fFunPrototype lut kind pos name inputs outputs retType annotation =
+    let singletons = OpaqueInference.collectSingletons lut.ncEnv lut.singletons name
     let createFunPrototype ((((qname, ins), outs), ret), annotation) = 
         let funPrototype =
             {
-                FunctionPrototype.pos = pos
-                isFunction = true
-                isSingleton = isSingleton
+                ProcedurePrototype.pos = pos
+                kind = kind
+                singletons = singletons
                 name = qname
                 inputs = ins
                 outputs = outs
@@ -643,7 +544,7 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
                 annotation = annotation
                 allReferences = HashSet()
             }
-        do addDeclToLut lut qname (Declarable.FunctionPrototype funPrototype)
+        do addDeclToLut lut qname (Declarable.ProcedurePrototype funPrototype)
         funPrototype
 
     // check that it is a first class type
@@ -657,7 +558,7 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
                 | _ -> Error [MustReturnFirstClassType (pos, name.id)]
                 )
 
-    Ok (lut.ncEnv.nameToQname name)
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
     |> combine <| contract inputs
     |> combine <| contract outputs
     |> combine <| checkReturn retType
@@ -666,25 +567,19 @@ let private fFunPrototype lut pos name isSingleton inputs outputs retType annota
 
 
 /// Type check a sub program
-let private fSubProgram lut pos isFunction name isSingleton inputs outputs retType body annotation =
-    let createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons) (((((qname, ins), outs), ret), stmts), annotation) = 
+let private fSubProgram lut pos isFunction name inputs outputs retType body annotation =
+    let createSubProgram (globalInputs, localGlobalOutputs) ((((qname, prototype),_), stmts), annotation) = 
         let funact =
             {
-                SubProgramDecl.isFunction = isFunction
+                ProcedureImpl.prototype = prototype
                 pos = pos
-                name = qname
-                inputs = ins
-                outputs = outs
                 globalInputs = globalInputs
                 globalOutputsInScope = localGlobalOutputs
-                globalOutputsAccumulated = allGlobalOutputs
-                singletons = singletons
                 body = stmts
-                returns = ret
                 annotation = annotation
                 allReferences = HashSet()
             }
-        do addDeclToLut lut qname (Declarable.SubProgramDecl funact)
+        do addDeclToLut lut qname (Declarable.ProcedureImpl funact)
         funact
     // check that there is only one return value and it is a first class type
     let checkReturn rets bodyContractionRes =
@@ -712,19 +607,17 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
             |> Result.bind (checkStmtsWillPause pos name)
             |> Result.bind (fun _ -> cb) // if there is no instantaneous path, return the contracted body
     
-    let globalInputs, localGlobalOutputs, allGlobalOutputs = determineGlobalOutputs lut contractedBody
-    let singletons = 
-        if isSingleton then [lut.ncEnv.nameToQname name]
-        else []
-        @ determineCalledSingletons lut contractedBody
+    let externalInputs, externalOutputs = determineExternals lut contractedBody
 
-    Ok (lut.ncEnv.nameToQname name)
-    |> combine <| contract inputs
-    |> combine <| contract outputs
+    let kind = if isFunction then LocalFunction else Activity
+    let checkedPrototype = fFunPrototype lut kind pos name inputs outputs retType (Ok Attribute.FunctionPrototype.Empty)
+
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
+    |> combine <| checkedPrototype
     |> combine <| checkReturn retType contractedBody
     |> combine <| contractedBody
     |> combine <| annotation
-    |> Result.map (createSubProgram (globalInputs, localGlobalOutputs, allGlobalOutputs, singletons))
+    |> Result.map (createSubProgram (externalInputs, externalOutputs)) //, singletons))
 
 
 //=============================================================================
@@ -732,14 +625,23 @@ let private fSubProgram lut pos isFunction name isSingleton inputs outputs retTy
 //=============================================================================
 
 let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
+    let ensureNonemptyFields (q, f) =
+        if List.isEmpty f then
+            Error [EmptyStruct (std.range, std.name)]
+        else
+            Ok (q, f)
+
+        
     let checkValueFields fields =
         fields
         // ensure the fields are all variable declarations
         |> List.choose (function | AST.Member.Var v -> Some v | _ -> None) 
         // typify struct fields
-        |> List.map (recVarDecl lut) // type check field declarations as variable declarations
+        |> List.map (recVarDecl true lut) // type check field declarations as variable declarations
         // make sure they are of value type
-        |> List.map (Result.bind (fun v -> if v.datatype.IsValueType() then Ok v else Error[ValueStructContainsRef (std.name, v)]))
+        |> List.map (Result.bind (fun v -> if v.datatype.IsValueType then Ok v else Error[ValueStructContainsRef (std.name, v)]))
+        // ensure the initialisers (if present) do not call functions (this is until we implement compile-time evaluated functions)
+        |> List.map (Result.bind (fun v -> if isStaticExpr lut v.initValue then Ok v else Error [StructMustHaveStaticInit(v.pos, v.name, v.initValue)]))
         |> contract
 
     let checkAllFields fields =
@@ -747,37 +649,75 @@ let private fStructTypeDecl lut (std: AST.StructTypeDecl) =
         // ensure the fields are all variable declarations
         |> List.choose (function | AST.Member.Var v -> Some v | _ -> None) 
         // typify struct fields
-        |> List.map (recVarDecl lut) // type check field declarations as variable declarations
+        |> List.map (recVarDecl true lut) // type check field declarations as variable declarations
         |> contract // here we do not care, if the datatype is value or reference type
         
         // note, that QNames for the fields are added when checking the individual vardecls
 
     // decide if it is a ref type
     // and then check types of fields
-    let qname = lut.ncEnv.nameToQname std.name
+    let qname = lut.ncEnv.GetLookupTable.nameToQname std.name
     let newType =
         if std.isReference then
+            // TODO: Temporarily deactivated, because code generation cannot support them, fjg. 25.05.21
             // create reference type
-            Ok qname
-            |> combine <| checkAllFields std.fields
-            |> Result.map (
-                fun (q, f) -> (std.name.Range, q, f)
-                >> ReferenceTypes.StructType >> ReferenceTypes )
+            // Ok qname
+            // |> combine <| checkAllFields std.fields
+            // |> Result.map (
+            //     fun (q, f) -> (std.name.Range, q, f)
+            //     >> ReferenceTypes.StructType >> ReferenceTypes )
+            unsupported1 "reference-types" (std.range)
         else
             // create value type
             Ok qname
             |> combine <| checkValueFields std.fields
+            |> Result.bind ensureNonemptyFields
             |> Result.map (
-                fun (q, f) -> (std.name.Range, q, f)
+                fun (q, f) -> (q, f)
                 >> ValueTypes.StructType >> ValueTypes )
     // add type declaration to lookup table
     match newType with
-    | Ok typ -> do addTypeToLut lut qname typ
+    | Ok typ -> do addTypeToLut lut qname std.name.Range typ
     | _ -> ()
     newType
 
         
-let private fNewTypeDecl pos = unsupported4 "new type declarations" pos //TODO
+let private fOpaqueTypeDecl lut pos (name: Name) (annotation: Result<Attribute.OtherDecl, _>) =
+    let mkOpaqueType (n, (a: Attribute.OtherDecl)) =
+        let isArray =
+            a.doc 
+            |> List.exists (function | Attribute.OpaqueArray -> true | _ -> false)
+        let isStruct =
+            a.doc
+            |> List.exists (function | Attribute.OpaqueStruct -> true | _ -> false)
+        let isSimple = 
+            a.doc 
+            |> List.exists (function | Attribute.SimpleType -> true | _ -> false)
+        let newType =
+            match isArray, isStruct, isSimple with
+            | true, true, _
+            | true, _, true
+            | _, true, true ->
+                Error [OpaqueConflictingAnnotations pos]
+            | false, false, false ->
+                Error [OpaqueNeedsAnnotation pos]
+            | true, false, false ->
+                Ok <| ValueTypes (ValueTypes.OpaqueArray n)
+            | false, true, false ->
+                Ok <| ValueTypes (ValueTypes.OpaqueStruct n)
+            | false, false, true ->
+                Ok <| ValueTypes (ValueTypes.OpaqueSimple n)
+        // add type declaration to lookup table
+        match newType with
+        | Ok typ -> do addTypeToLut lut n name.Range typ
+        | _ -> ()
+        newType
+
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
+    |> combine <| annotation
+    |> Result.bind mkOpaqueType
+    
+
 let private fTypeAliasDecl pos = unsupported4 "alias declarations" pos //TODO
 let private fEnumTypeDecl (etd: AST.EnumTypeDecl) = unsupported1 "enum declarations" etd.range //TODO 
 let private fUnitDecl pos = unsupported4 "unit declarations" pos //TODO
@@ -797,13 +737,13 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | _ -> failwith "Location must not be const or param"
         | AST.ReadWrite _ -> Mutability.Variable
     
-    let createVarDecl ((qualifiedName, (dty, value)), anno) =
+    let createVarDecl ((qualifiedName, (dty, initVal)), anno) =
         let v = {
             pos = pos
             BlechTypes.VarDecl.name = qualifiedName
             datatype = dty
             mutability = mutability
-            initValue = value
+            initValue = initVal
             annotation = anno
             allReferences = HashSet()
         }    
@@ -816,11 +756,24 @@ let private fFreshLocation lut pos (name: Name) permission (rhsTyp: Types) dtyOp
             | None -> Ok rhsTyp  // if no datatype is given take the activity return type as the location type
             | Some lhsTypRes -> lhsTypRes    
         dtyRes
-        |> Result.map (getInitValueWithoutZeros Range.range0 "")
+        |> Result.map (fun dty ->
+            match dty with
+            | ValueTypes (ValueTypes.OpaqueSimple _) ->
+                Ok {rhs = NatConst Constants.Nat.Zero8; typ = ValueTypes (NatType Nat8); range = pos} // 0 for simple types
+            | ValueTypes (ValueTypes.OpaqueArray _)
+            | ValueTypes (ValueTypes.OpaqueStruct _) ->
+                Ok { rhs = ArrayConst [Constants.SizeOne, { rhs = NatConst Constants.Nat.Zero8; 
+                                                         typ = ValueTypes (NatType Nat8); 
+                                                         range = pos }]; 
+                     typ = ValueTypes (ValueTypes.ArrayType(Constants.SizeOne, ValueTypes.NatType Nat8)); 
+                     range = pos } // {0} for complex types
+            | _ ->
+                getInitValueWithoutZeros Range.range0 "" dty
+            )
         |> Result.bind (combine dtyRes)
         
 
-    Ok (lut.ncEnv.nameToQname name)
+    Ok (lut.ncEnv.GetLookupTable.nameToQname name)
     |> combine <| dtyAndInit
     |> combine <| vDeclAnno
     |> Result.map createVarDecl
@@ -831,7 +784,7 @@ let private checkFreshLocation lut (v: AST.VarDecl) (rhsTyp: Types) =
     <| Option.map (fDataType lut) v.datatype
     <| Annotation.checkVarDecl lut v 
 
-let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl = 
+let private checkAssignReceiver pos lut (rcvOpt: AST.Receiver option) decl = 
 
     let checkReturnType (storage: Receiver option) declName declReturns =
         match storage with
@@ -863,18 +816,15 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
             | Some (UsedLoc tlhs) ->
                 let typ = tlhs.typ
                 if isLhsMutable lut tlhs.lhs then
-                    if typ.IsAssignable then  // TODO: This will always be true if we assign structs with let fields, fjg 30.06.20
-                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-                            Ok storage 
-                        else 
-                            Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
-                    else
-                        Error [AssignmentToLetFields (pos, tlhs.ToString())]
+                    if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
+                        Ok storage 
+                    else 
+                        Error [ReturnTypeMismatch(pos, typ, ValueTypes declReturns)]
                 else Error [AssignmentToImmutable (pos, tlhs.ToString())]
             )
     
-    let checkNeedForReceiver (rcv: AST.Receiver option) decl =
-        match rcv with
+    let checkNeedForReceiver (rcvOpt: AST.Receiver option) decl =
+        match rcvOpt with
         | Some location ->
             match decl.returns with
             | Void ->
@@ -901,7 +851,7 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
         | None ->
             Ok None
     
-    checkNeedForReceiver rcv decl
+    checkNeedForReceiver rcvOpt decl
     |> Result.bind checkLocation
     |> Result.bind (fun receiver -> checkReturnType receiver decl.name decl.returns)
 
@@ -910,9 +860,12 @@ let private checkAssignReceiver pos lut (rcv: AST.Receiver option) decl =
 /// An activity may return a value that is stored in resStorage upon termination.
 /// This is different to a function call
 let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: Result<_,_> list) outputs =
-    let checkIsActivity decl =
-        if not decl.isFunction then Ok()
-        else Error [RunAFun(pos, decl)]
+    let checkIsActivity (decl: ProcedurePrototype) =
+        if decl.IsActivity then Ok()
+        elif decl.IsFunction then
+            Error [RunAFun(pos, decl)]
+        else
+            Error [ActNotExist(pos, decl)]
     
     let createCall name (((_, ins), outs), retvar) =
         ActivityCall (pos, name, retvar, ins, outs)
@@ -920,13 +873,12 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
     match ap with
     | AST.Procedure dname ->
         ensureCurrent dname
-        |> Result.map lut.ncEnv.dpathToQname
+        |> Result.map lut.ncEnv.GetLookupTable.dpathToQname
         |> Result.bind (getSubProgDeclAsPrototype lut pos)
         |> Result.bind (fun decl ->
             checkIsActivity decl
             |> combine <| checkInputs pos inputs decl.name decl.inputs
             |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-            //|> combine <| checkReturnType resStorage decl.name decl.returns
             |> combine <| checkAssignReceiver pos lut rcv decl
             |> Result.map (createCall decl.name)
             )
@@ -940,17 +892,14 @@ let private fActCall lut pos (rcv: AST.Receiver option) (ap: AST.Code) (inputs: 
 
 let private fAssign lut pos lhs rhs =
     let createAssign myleft (myright: TypedRhs) =
-        amendRhsExpr false myleft.typ myright
+        amendRhsExpr myleft.typ myright
         |> Result.map (fun amendedRight -> Assign (pos, myleft, amendedRight))
     
     lhs
     |> combine <| rhs
     |> Result.bind (fun (l, r) -> 
         if isLhsMutable lut l.lhs then
-            if l.typ.IsAssignable then
-                createAssign l r
-            else
-                Error [AssignmentToLetFields (pos, l.ToString())]
+            createAssign l r
         else Error [AssignmentToImmutable (pos, l.ToString())]
         )
 
@@ -976,10 +925,11 @@ let private generateVC isAssertion pos conditions msgOpt =
     |> contract
     |> Result.map (createAssume)
 
-
-let private fAssert = generateVC true
-let private fAssume = generateVC false
-       
+// TODO: Temporarily deactivated because code generation does not support them, fjg. 25.05.21
+// let private fAssert = generateVC true
+// let private fAssume = generateVC false       
+let private fAssert = unsupported3 "assert-verification-condition"
+let private fAssume = unsupported3 "assume-verification-condition"
        
 let private fAwait pos conditions =
     contract conditions // conditions are ensured to be without side-effects
@@ -1052,61 +1002,6 @@ let private fSubScope _ stmts =
     |> Result.map StmtSequence
 
 
-//let private fActCall lut pos actp resStorage inputs outputs =
-//    let checkIsActivity decl =
-//        if not decl.isFunction then Ok()
-//        else Error [RunAFun(pos, decl)]
-//    let checkReturnType storage declName declReturns =
-//        match storage with
-//        | None ->
-//            match declReturns with
-//            | Void -> Ok None
-//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
-//        | Some (Ok (FreshLoc vdecl)) -> // Receiver declaration disabled after type check: delete this case to enable 
-//            unsupported1 "Receiver declaration in run statement" vdecl.pos
-//        | Some receiverRes ->
-//            receiverRes 
-//            |> Result.bind ( 
-//                fun (receiver: Receiver) -> 
-//                match receiver.Typ with 
-//                | Any -> // wildcard
-//                    Ok None
-//                | ValueTypes _ ->
-//                    Ok (Some receiver) 
-//                | _ -> Error [ ValueMustBeOfValueType (receiver) ]
-//                )
-//        |> Result.bind (
-//            function
-//            | None -> Ok None
-//            | Some rcvr ->
-//                let typ = rcvr.Typ
-//                if isReceiverMutable lut rcvr then
-//                    if rcvr.Typ.IsAssignable then
-//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-//                            Ok (Some rcvr) 
-//                        else 
-//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
-//                    else
-//                        Error [AssignmentToLetFields (pos, rcvr.ToString())]
-//                else Error [AssignmentToImmutable (pos, rcvr.ToString())]
-//            )
-//    let createCall name (((_, ins), outs), retvar) =
-//        ActivityCall (pos, name, retvar, ins, outs)
-    
-//    match actp with
-//    | AST.Procedure dname ->
-//        ensureCurrent dname
-//        |> Result.map lut.ncEnv.dpathToQname
-//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-//        |> Result.bind (fun decl ->
-//            checkIsActivity decl
-//            |> combine <| checkInputs pos inputs decl.name decl.inputs
-//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-//            |> combine <| checkReturnType resStorage decl.name decl.returns
-//            |> Result.map (createCall decl.name)
-//            )
-
-
 let private fFunCall lut pos fp inputs outputs =
     checkFunCall true lut pos fp inputs outputs
     |> Result.map(fun ((n, i, o), _) -> FunctionCall (pos, n, i, o))
@@ -1123,7 +1018,7 @@ let private fReturn retTypOpt pos exprOpt =
     | None, None -> Return (pos, None) |> Ok
     | Some retTyp, Some expr ->
         combine retTyp expr 
-        |> Result.bind (fun (r, e) -> amendRhsExpr true r e)
+        |> Result.bind (fun (r, e) -> amendRhsExpr r e)
         |> Result.bind (fun (e: TypedRhs) -> match e.typ with | ValueTypes _ -> Ok e | _ -> Error [NonFirstClassReturnStmt pos])
         |> Result.map (fun e -> Return (pos, Some e))
     | None, Some _ -> Error [VoidSubprogCannotReturnValues(pos)]
@@ -1147,7 +1042,7 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
             chkExternalVarDecl lut vdecl
             |> Result.map (Stmt.ExternalVarDecl)
         else
-            recVarDecl lut vdecl
+            recVarDecl false lut vdecl
             |> Result.map (Stmt.VarDecl)
     | AST.Assign (range, lhs, rhs) ->
         fAssign lut range
@@ -1183,14 +1078,14 @@ let rec private recStmt lut retTypOpt x = // retTypOpt is required for amending 
         <| List.isEmpty conds // endless loop if there are no conditions
     | AST.NumericFor (range, var, init, limit, step, body) ->
         fNumericFor range
-        <| recVarDecl lut var
+        <| recVarDecl false lut var
         <| (checkExpr lut init |> Result.map(tryEvalConst lut))
         <| (checkExpr lut limit |> Result.map(tryEvalConst lut))
         <| Option.map (checkExpr lut >> Result.map(tryEvalConst lut)) step
         <| List.map (recStmt lut retTypOpt) body
     | AST.IteratorFor (range, var, iterator, iterable, body) ->
         fIteratorFor range iterator
-        <| recVarDecl lut var
+        <| recVarDecl false lut var
         <| (checkExpr lut iterable |> Result.map(tryEvalConst lut))
         <| List.map (recStmt lut retTypOpt) body
     // observation
@@ -1235,13 +1130,13 @@ let private recReturnDecl lut (a: AST.ReturnDecl) =
 
 type private ProcessedMembers =
     {
-        funacts: Collections.ResizeArray<Result<SubProgramDecl, TyCheckError list>>
-        funPrototypes: Collections.ResizeArray<Result<FunctionPrototype, TyCheckError list>>
+        funacts: Collections.ResizeArray<Result<ProcedureImpl, TyCheckError list>>
+        funPrototypes: Collections.ResizeArray<Result<ProcedurePrototype, TyCheckError list>>
         variables: Collections.ResizeArray<Result<VarDecl, TyCheckError list>>
         externalVariables: Collections.ResizeArray<Result<ExternalVarDecl, TyCheckError list>>
         types: Collections.ResizeArray<Result<Types, TyCheckError list>>
         memberPragmas: ResizeArray<Result<Attribute.MemberPragma, TyCheckError list>>
-        mutable entryPoint: Result<SubProgramDecl, TyCheckError list> option
+        mutable entryPoint: Result<ProcedureImpl, TyCheckError list> option
     }
     member this.AddFunAct fa = this.funacts.Add fa
     member this.AddFunPrototype fp = this.funPrototypes.Add fp
@@ -1251,7 +1146,7 @@ type private ProcessedMembers =
     member this.AddMemberPragma mp = this.memberPragmas.Add mp
             
     // TODO: Simplify this, fjg 19.01.19
-    member this.UpdateEntryPoint (pack: AST.Package) (act: Result<SubProgramDecl, _>) =
+    member this.UpdateEntryPoint (pack: AST.CompilationUnit) (act: Result<ProcedureImpl, _>) =
         let optEp = 
             match act with
             | Ok subprog ->
@@ -1268,9 +1163,9 @@ type private ProcessedMembers =
                 Some (Ok ep)   
             | Some ep, Some (Ok epFst) when pack.IsProgram ->
                 Some (Error [MultipleEntryPoints (epFst.pos, ep.pos)])
-            | Some ep, None when pack.IsLibrary ->
+            | Some ep, None when pack.IsModule ->
                 Some (Error [IllegalEntryPoint (ep.pos, pack)])
-            | Some ep, Some (Error err) when pack.IsLibrary ->
+            | Some ep, Some (Error err) when pack.IsModule ->
                 Some (Error (err @ [IllegalEntryPoint (ep.pos, pack)]))   
             | _, ep ->
                 ep
@@ -1295,11 +1190,9 @@ type private ProcessedMembers =
         }
 
 
-// this is also an entry point for testing, hence public
-let public fPackage lut (pack: AST.Package) =
+let private fPackage lut (pack: AST.CompilationUnit) =
     let pos = pack.Range
-    //let spec = pack.spec
-
+    
     let rec processMembers (typedMembers: ProcessedMembers) mems =
         match mems with
         | [] -> 
@@ -1312,8 +1205,7 @@ let public fPackage lut (pack: AST.Package) =
             typedMembers.GetEntryPoint
         | m::ms ->
             match m with
-            | AST.Member.Nothing 
-            | AST.Member.Import _ ->
+            | AST.Member.Nothing ->
                 () // ignore these members
             | AST.Member.Pragma p ->
                 do typedMembers.AddMemberPragma (Annotation.checkMemberPragma lut p)
@@ -1321,14 +1213,12 @@ let public fPackage lut (pack: AST.Package) =
                 do typedMembers.AddType (fEnumTypeDecl e)
             | AST.Member.StructType s -> 
                 do typedMembers.AddType (fStructTypeDecl lut s)
-            | AST.Member.NewType nt ->
+            | AST.Member.OpaqueType ot ->
                 let t =
-                    fNewTypeDecl nt.range nt.name
-                    // <| fDataType lut nt.representation
-                    <| Option.map (fDataType lut) nt.representation
-                    <| Annotation.checkOtherDecl nt.annotations
+                    fOpaqueTypeDecl lut ot.range ot.name
+                    <| Annotation.checkOtherDecl ot.annotations
                 do typedMembers.AddType t
-            | AST.Member.Type t ->
+            | AST.Member.TypeAlias t ->
                 let t =
                     fTypeAliasDecl t.range t.name
                     <| fDataType lut t.aliasfor
@@ -1348,12 +1238,12 @@ let public fPackage lut (pack: AST.Package) =
                     chkExternalVarDecl lut v
                     |> typedMembers.AddExternalVariable
                 else
-                    recVarDecl lut v
+                    recVarDecl false lut v
                     |> typedMembers.AddVariable
             | AST.Member.Subprogram a ->
                 let retTypOpt = Option.map (recReturnDecl lut) a.result
                 let funact = 
-                    fSubProgram lut a.range a.isFunction a.name a.isSingleton
+                    fSubProgram lut a.range a.isFunction a.name
                     <| List.map (recParamDecl lut) a.inputs
                     <| List.map (recParamDecl lut) a.outputs
                     <| retTypOpt
@@ -1362,20 +1252,43 @@ let public fPackage lut (pack: AST.Package) =
                 do typedMembers.AddFunAct funact
                 do typedMembers.UpdateEntryPoint pack funact
             | AST.Member.Prototype f ->
+                let kind = 
+                    if f.isOpaque then
+                        ProcedureKind.OpaqueProcedure
+                    elif f.isExtern && f.isFunction then
+                        ProcedureKind.ExternFunction
+                    elif not f.isExtern && f.isFunction then
+                        ProcedureKind.LocalFunction
+                    elif not f.isExtern && not f.isFunction then
+                        ProcedureKind.Activity
+                    else
+                        failwith "Inconsistent prototype AST generated by parser"
                 let funPrototype =
-                    fFunPrototype lut f.range f.name f.isSingleton
+                    fFunPrototype lut kind f.range f.name
                     <| List.map (recParamDecl lut) f.inputs
                     <| List.map (recParamDecl lut) f.outputs
                     <| Option.map (recReturnDecl lut) f.result
                     <| Annotation.checkFunctionPrototype lut f
                 do typedMembers.AddFunPrototype funPrototype
+            | AST.Member.OpaqueSingleton s ->
+                // TODO: Maybe create a separate typed member, fjg. 19.01.21
+                let kind = ProcedureKind.OpaqueProcedure
+                let funPrototype =
+                    fFunPrototype lut kind s.range s.name
+                    <| List.map (recParamDecl lut) [] // inputs
+                    <| List.map (recParamDecl lut) [] // outputs
+                    <| Option.map (recReturnDecl lut) None // result
+                    // annotations are printed into the signature
+                    <| Annotation.checkOpaqueSingleton lut s
+                do typedMembers.AddFunPrototype funPrototype
             processMembers typedMembers ms
         
-    let createPackage (((((((modName, funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
+    let createPackage ((((((((modName, modDoc), funPrototypes), funacts), variables), externalVariables), types), memberPragmas), entryPoint) =
     
-        assert (List.length types = lut.userTypes.Count)
+        //assert (List.length types = lut.userTypes.Count) // TODO: this assertion is wrong if we have imported types from other modules, fg 01.10.20
         {
             BlechModule.name = modName
+            documentation = modDoc
             types = types
             funPrototypes = funPrototypes
             funacts = funacts
@@ -1387,12 +1300,15 @@ let public fPackage lut (pack: AST.Package) =
     
     let funacts, funPrototypes, variables, externalVariables, types, memberPragmas, entryPoint = 
         let typedMembers = ProcessedMembers.Empty ()
-        processMembers typedMembers (pack.imports @ pack.members)
+        processMembers typedMembers pack.members
     
     let moduleName = pack.moduleName
 
+    let moduleDocumentation = Option.map Annotation.checkModuleSpec pack.moduleSpec
+
     let typedPack = 
         Ok moduleName
+        |> combine <| ofOption moduleDocumentation
         |> combine <| contract funPrototypes
         |> combine <| contract funacts
         |> combine <| contract variables
@@ -1411,14 +1327,34 @@ let public fPackage lut (pack: AST.Package) =
     Result.bind checkEntryPoint typedPack
 
 
-/// Performs type checking starting with an untyped package and a namecheck loopup table.
-/// Returns a TypeCheck context and a BlechModule.
-let typeCheck (cliContext: Arguments.BlechCOptions)  (pack: AST.Package, ncEnv: SymbolTable.LookupTable) =
-    let lut = TypeCheckContext.Init cliContext ncEnv
+ 
+// Execute type check test runs from here to skip the logging features of typeCheck
+let typeCheckUnLogged (cliContext: Arguments.BlechCOptions) 
+                      otherLuts 
+                      (pack: AST.CompilationUnit) 
+                      (ncEnv: SymbolTable.Environment) 
+                      singletons =
+    let lut = TypeCheckContext.Init cliContext ncEnv singletons
+    otherLuts
+    |> List.iter (fun otherLut ->
+        for pair in otherLut.nameToDecl do addDeclToLut lut pair.Key pair.Value
+        for pair in otherLut.userTypes do addTypeToLut lut pair.Key (fst pair.Value) (snd pair.Value)
+        for pragma in otherLut.memberPragmas do addPragmaToLut lut pragma
+        )
     fPackage lut pack
     |> function
         | Ok p -> 
-            Blech.Common.Logging.log6 "Main" ("typed syntax tree built\n" + p.ToString())
             Ok (lut, p)
-        | Error errs -> Error (Diagnostics.wrapErrsInLogger Diagnostics.Phase.Typing errs)
-        
+        | Error errs ->
+            Error errs
+
+
+/// Performs type checking starting with an untyped package and a namecheck loopup table.
+/// Returns a TypeCheck context and a BlechModule.
+let typeCheck (cliContext: Arguments.BlechCOptions) logger otherLuts (pack: AST.CompilationUnit) (ncEnv: SymbolTable.Environment) singletons =
+    match typeCheckUnLogged cliContext otherLuts pack ncEnv singletons with
+    | Ok (lut, blechModule) ->
+        Blech.Common.Logging.log6 "Main" ("typed syntax tree built\n" + blechModule.ToString())
+        Ok (lut, blechModule)
+    | Error errs -> 
+        Error (Diagnostics.wrapErrsInLogger logger Diagnostics.Phase.Typing errs)

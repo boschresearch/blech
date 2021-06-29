@@ -1,0 +1,11 @@
+import _ "imported" exposes S, init
+
+module exposes myS, DoIt
+
+const myS: S = {i = 42}
+
+activity DoIt()
+    var s : S = myS
+    s = init()
+    await true
+end

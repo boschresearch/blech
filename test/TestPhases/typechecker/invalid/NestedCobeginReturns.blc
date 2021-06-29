@@ -1,4 +1,4 @@
-module NestedCobeginReturns
+module
 
 activity main ()() returns int8
     var a: int8 = 0

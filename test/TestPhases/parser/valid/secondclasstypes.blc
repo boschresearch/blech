@@ -1,6 +1,6 @@
-module secondclasstypes
+module
 
-type Emitted = int32 signal                              // event type
+typealias Emitted = int32 signal                              // event type
 // typealias Writer = fun () (MyStruct) -> (int32, bool) // function type
 // typealias Testing = act (float32) (MyClass)           // activity type 
 
@@ -12,7 +12,7 @@ extension
     param p: int8 = 0       // static member, can be changed in the binary 
 
     function init () returns MyClass
-        return {x = 42, c = .Red}
+        return {x = 42, c = Red}
     end
 
     function f (this: MyClass) end

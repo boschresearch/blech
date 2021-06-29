@@ -1,4 +1,4 @@
-module looploopinst
+module
 
 activity main ()() 
     repeat

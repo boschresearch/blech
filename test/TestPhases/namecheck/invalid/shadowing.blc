@@ -1,4 +1,4 @@
-module shadowing
+module
 
 activity f()
     var x: int32

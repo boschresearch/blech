@@ -1,0 +1,39 @@
+module
+
+struct MyS
+  var f1: int8
+  var f2: bool
+end
+
+struct MyT
+  var g1: float64
+  var g2: MyS
+  var g3: int32
+end
+
+activity A(a: MyS, b: MyT)(d: int32)
+  repeat
+    await true
+    d = b.g2.f1 - a.f1
+  end
+end
+
+activity main()()
+  let s: MyS = {f1=23, f2=true}
+  var t: MyT = {g1=3.4, g2=s, g3=-7}
+  cobegin
+    repeat
+      await true
+      if t.g2.f2 then
+        t.g2.f1 = t.g2.f1 + 1
+        t.g2.f2 = false
+      else
+        t = {g1=3.4, g2=s}
+        t = {}
+      end
+    end
+  with
+    var diff: int32
+    run A(s, t)(diff)
+  end
+end

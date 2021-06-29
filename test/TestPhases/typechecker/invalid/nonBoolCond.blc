@@ -1,4 +1,4 @@
-module nonBoolCond
+module
 
 activity empty ()()
     var x: int8 = 9

@@ -1,4 +1,4 @@
-module PrevParam
+module
 
 param p: int64 = 7
 activity main ()()

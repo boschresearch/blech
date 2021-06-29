@@ -1,0 +1,17 @@
+@[CFunction(binding="",header="")]
+extern singleton function g() returns bool
+
+function f() returns bool
+    return g()
+end
+
+activity B()
+    await f()
+end
+
+@[EntryPoint]
+activity A()
+    if f() then
+    end
+    await true
+end

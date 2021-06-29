@@ -1,0 +1,9 @@
+import u "../imports/upstream" exposes T, f, A  // namechecking still missing
+
+module exposes Main
+
+activity Main ()
+    // var x: u.T = {x = 42}
+    // var y: T = {x = 43}
+    await true
+end

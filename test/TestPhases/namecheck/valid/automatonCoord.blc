@@ -1,4 +1,4 @@
-module automatonCoord
+module
 
 enum Xs: int8
     X1 = 1 default
@@ -11,29 +11,29 @@ activity actionA(x: Xs)
     repeat
         //oneStepOfA()
         await true
-    until prev x == .X3 and x == .X2 end             // X3 -> X2
+    until prev x == X3 and x == X2 end             // X3 -> X2
 end
 
 activity actionB(x: Xs)
     repeat
         //oneStepOfB()
         await true
-    until prev x == .X2 and x == .X1 end             // X2 -> X1
+    until prev x == X2 and x == X1 end             // X2 -> X1
 end
 
 activity coordinatingAandB(x: Xs)
     cobegin
         repeat                                           // loop forever
-            when prev x == .X2 and x == .X1 
-                 or prev x == .X2 and x == .X4 reset // reset if not: X2 -> X3
-                await prev x == .X1 and x == .X2         // X1 -> X2
-                await prev x == .X2 and x == .X3         // X2 -> X3  
+            when prev x == X2 and x == X1 
+                 or prev x == X2 and x == X4 reset // reset if not: X2 -> X3
+                await prev x == X1 and x == X2         // X1 -> X2
+                await prev x == X2 and x == X3         // X2 -> X3  
             end    
             run actionA(x)                               // until X3 -> X2
         end
     with
         repeat                                           // loop forever
-            await prev x == .X1 and x == .X2             // X1 -> X2
+            await prev x == X1 and x == X2             // X1 -> X2
             run actionB(x)                               // until X2 -> X1
         end
     end

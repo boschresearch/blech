@@ -17,6 +17,7 @@
 
 open Blech.Common
 open Blech.Common.Range
+open Blech.Common.TranslationUnitPath // TODO: move import parser to syntax utils
 
 open Blech.Frontend.CommonTypes 
 open Blech.Frontend.AST
@@ -41,13 +42,10 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> ATAT
 
 /* ---- modules ---- */
-%token <range> MODULE SIGNATURE IMPORT EXPOSES
+%token <range> MODULE SIGNATURE IMPORT EXPOSES INTERNAL
 
 /* ---- name space ---- */
 %token <range> EXTENSION
-
-/* ---- paths ---- */
-%token <FromPath> FROMPATH
 
 /* ---- predefined types ---- */
 %token <range> BOOL
@@ -57,7 +55,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 %token <range> FLOAT32 FLOAT64
 
 /* ---- user-defined types ---- */
-%token <range> TYPE NEWTYPE ENUM STRUCT SHARES
+%token <range> TYPEALIAS TYPE ENUM STRUCT SHARES
 
 /* --- partial subprogram  --- */
 %token <range> QUEST
@@ -65,10 +63,11 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 /* ---- units of measure ---- */
 %token <range> UNIT
 
-/* ---- clocks ---- */
+/* ---- clocks ----
 %token <range> CLOCK
 %token <range> COUNT UP DOWN OFF JOIN MEET
 %token <range> TICK ON
+*/
 
 /* ---- declarations and conversions ---- */
 %token <range> ACTIVITY FUNCTION SINGLETON
@@ -143,8 +142,8 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
 
 
 
-%start Package
-%type <Package> Package
+%start Compilation
+%type <CompilationUnit> Compilation
 
 %%
 
@@ -158,8 +157,7 @@ open Blech.Frontend.SyntaxUtils.ParserUtils
    ---------------------------------------------------------------------------- */
 
 Name
-    : ID                            { { Name.id = fst $1
-                                        range = snd $1 } }
+    : ID                            { ParserContext.mkName (fst $1) (snd $1) }
 
 NamePath
     : Name                          { ([$1], []) }
@@ -169,14 +167,10 @@ PointedName
     : NamePath                      { {StaticNamedPath.path = fst $1
                                        dots = snd $1 
                                        qname = ref None } }
-ImplicitMember
-    : POINT NamePath                { {StaticNamedPath.path = fst $2
-                                       dots = $1 :: snd $2
-                                       qname = ref None } }
 
 /* ----------------------------------------------------------------------------
    ----- CLOCKS
-   ---------------------------------------------------------------------------- */
+   ---------------------------------------------------------------------------- 
 
 ClockDefinition
     : PointedName                                                   { ClockExpr.ClockName $1 }
@@ -233,6 +227,7 @@ MeetElement
                                                                                          unionRanges $1 $3 ) }
     | LPAREN DownSample RPAREN                                      { ClockExpr.Parens ( ClockExpr.DownSample $2,
                                                                                          unionRanges $1 $3 ) }
+*/
 
 /* ----------------------------------------------------------------------------
    ----- Units of measure
@@ -275,7 +270,7 @@ OptUnitDef /* used in declaration of locals where the unit may be inferred */
 
 Type
     : Datatype                              { $1 }
-    | SecondClassType                         { $1 }
+    | SecondClassType                       { $1 }
 
 Datatype
     : PointedName                           { TypeName $1 }
@@ -336,44 +331,30 @@ OptModifiers
 /* ----- user-defined types ----- */
 
 TypeAliasDecl
-    : OptAnnotations OptModifiers TYPE Name ASSIGN Type      
-                                            { Member.Type { TypeDecl.range = typeNameRange $1 $2 $3 $6
-                                                            isReference = $2 <> Option.None
-                                                            name = $4
-                                                            aliasfor = $6
-                                                            members = []
-                                                            annotations = $1 } }
+    : OptAnnotations OptModifiers TYPEALIAS Name ASSIGN Type      
+                                            { Member.TypeAlias { TypeAliasDecl.range = typeDeclRange $1 $2 $3 $6.Range
+                                                                 isReference = $2 <> Option.None
+                                                                 name = $4
+                                                                 aliasfor = $6
+                                                                 members = []
+                                                                 annotations = $1 } }
 
-    | OptAnnotations OptModifiers TYPE ErrorBeforeEOL EOL        
+    | OptAnnotations OptModifiers TYPEALIAS ErrorBeforeEOL EOL        
                                             { logParserError $3;
                                               Member.Nothing }
 
 
-NewTypeDecl
-    : OptAnnotations OptModifiers NEWTYPE Name ASSIGN Type      
-                                            { Member.NewType { NewTypeDecl.range = typeDeclRange $1 $2 $3 $4.Range
-                                                               isReference = $2 <> Option.None
-                                                               name = $4
-                                                               representation = None 
-                                                               members = []
-                                                               annotations = $1 } }
+OpaqueTypeDecl
+    : OptAnnotations OptModifiers TYPE Name     
+                                            { Member.OpaqueType { OpaqueTypeDecl.range = typeDeclRange $1 $2 $3 $4.Range
+                                                                  isReference = $2 <> Option.None
+                                                                  name = $4
+                                                                  // representation = None 
+                                                                  members = []
+                                                                  annotations = $1 } }
     | OptAnnotations OptModifiers TYPE ErrorBeforeEOL EOL  
                                             { logParserError $3;
                                               Member.Nothing }
-
-NewTypeDef
-    : OptAnnotations OptModifiers NEWTYPE Name ASSIGN Type      
-                                            { Member.NewType { NewTypeDecl.range = typeNameRange $1 $2 $3 $6
-                                                               isReference = $2 <> Option.None
-                                                               name = $4
-                                                               representation = Some $6 
-                                                               members = []
-                                                               annotations = $1 } }
-
-    | OptAnnotations OptModifiers TYPE ErrorBeforeEOL EOL  
-                                            { logParserError $3;
-                                              Member.Nothing }
-
 
 OptExtension
     :                                       { [] }
@@ -494,7 +475,6 @@ Location
 AssignLocation
     : Location                                  { LhsInAssignment.Loc $1 }
     | WILDCARD                                  { LhsInAssignment.Wildcard (snd $1) }
- /*   | EMIT Location                             { EventLoc $2 } */
 
 LocationList
     : Location                     
@@ -512,8 +492,10 @@ OptAccess
                                                 { Access.Point($2, unionRanges $1 $2.Range) :: $3 }
     | LBRACKET Expr RBRACKET OptAccess
                                                 { Access.Index($2, unionRanges $1 $3) :: $4 }
-	| POINT LBRACKET Expr RBRACKET OptAccess    
-												{ Access.StaticIndex($3, unionRanges $1 $4) :: $5 }
+
+    /* TODO: Do we keep this in the language? fjg. 11.11.20 */
+    | POINT LBRACKET Expr RBRACKET OptAccess    
+                                                { Access.StaticIndex($3, unionRanges $1 $4) :: $5 }
                                                 
 
 /* --- Literals ----- */
@@ -648,9 +630,6 @@ PrimaryExpr
     | LEN Expr                %prec UNARY       { Len ($2, unionRanges $1 $2.Range) }
     | CAP Expr                %prec UNARY       { Cap ($2, unionRanges $1 $2.Range) }
   
-    /* --- implicit member access to a type (i.e. enum tags, methods, constants --- */
-    | ImplicitMember                            { ImplicitMember $1 }
-
     /* --- variables, and structured datatype access, object access --- */
     | Location                                  { Var $1 }
   
@@ -667,7 +646,7 @@ PrimaryExpr
     | Literal                                   { Const $1 }
 
     /* --- the error variable --- */            /* Todo: Add the error variable correctly to AST */
-  | ERROR                                       { Var { DynamicAccessPath.path = [ Name {Name.id = "error"; range = $1} ]
+    | ERROR                                     { Var { DynamicAccessPath.path = [ Name <| ParserContext.mkName "error" $1 ]
                                                         timepoint = Current
                                                         subexpr = ref []
                                                         qname = ref None } }
@@ -703,7 +682,6 @@ ConditionSeq
 Condition
     : Expr                                      { Condition.Cond $1 }    /* boolean expression, must be side-effect free */
     | SignalBinding                             { $1 }                   /* for signal types */
-    | ClockTick                                 { $1 }              
 
 /* ----- Verification Conditions ----- */
 
@@ -725,7 +703,7 @@ VerificationCondition   /* fjg todo: Add slices and and strings as built-in slic
 /* ----- Local Declarations ----- */
 
 LocalVariable
-    : OptAnnotations VariableQualifier OptRef Name TypeAnnotation OptOnClock  /* fjg todo: add clock to AST and range */
+    : OptAnnotations VariableQualifier OptRef Name TypeAnnotation
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $5.Range
                                                              name = $4
                                                              permission = $2
@@ -735,7 +713,7 @@ LocalVariable
                                                              initialiser = None
                                                              annotations = $1 } }
     
-    | OptAnnotations EXTERN VariableQualifier OptRef Name TypeAnnotation OptOnClock  /* fjg todo: add clock to AST and range */
+    | OptAnnotations EXTERN VariableQualifier OptRef Name TypeAnnotation
                                                 { LocalVar { VarDecl.range = unionRanges $2 $6.Range
                                                              name = $5
                                                              permission = $3
@@ -745,7 +723,7 @@ LocalVariable
                                                              initialiser = None
                                                              annotations = $1 } }
 
-    | OptAnnotations VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr OptOnClock  
+    | OptAnnotations VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr
                                                 { LocalVar { VarDecl.range = unionRanges $2.Range $7.Range
                                                              name = $4
                                                              permission = $2
@@ -823,34 +801,22 @@ ValueReceiver
     : AssignLocation                            { Receiver.Location $1 } 
     | FreshLocation                             { Receiver.FreshLocation $1 }
 
-ActivityCall                         /* fjg: todo: add next info and clock info to AST */
+ActivityCall
                                      /* TODO: Add OptPartial to AST, fjg 24.09.19 */
-    : OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  
+    : OptNext RUN Location OptPartial Inputs OptOutputs  
                                                 { Stmt.ActivityCall (callRange $1 $2 <| snd $5 <| snd $6, 
                                                                      None,
                                                                      Code.Procedure $3, 
                                                                      fst $5, 
                                                                      fst $6) }
   
-    | OptNext RUN ValueReceiver ASSIGN Location OptPartial Inputs OptOutputs OptOnClock  
+    | OptNext RUN ValueReceiver ASSIGN Location OptPartial Inputs OptOutputs
                                                 { Stmt.ActivityCall (callRange $1 $2 <| snd $7 <| snd $8, 
                                                                      Some $3,
                                                                      Code.Procedure $5, 
                                                                      fst $7, 
                                                                      fst $8) }
-/*
-    | OptNext RUN LocalVariable ASSIGN Location OptPartial Inputs OptOutputs OptOnClock  
-                                                { Stmt.ActivityCall (callRange None $1.Range <| snd $7 <| snd $8, 
-                                                                     Some $1,
-                                                                     Code.Procedure $5, 
-                                                                     fst $7, 
-                                                                     fst $8) }
-*/
-/*
-    | AssignLocation ASSIGN ErrorBeforeEOL EOL  
-                                                { logParserError $1.Range;
-                                                  Stmt.Nothing }
-*/
+
     | OptNext RUN ErrorBeforeEOL EOL            
                                                 { logParserError $2;
                                                   Stmt.Nothing }
@@ -903,9 +869,7 @@ Stmt
 
 
     /* --- emit statement */
-
     | EmitStatement                             { $1 }
-    /* | EMIT Location                             { Stmt.Emit (unionRanges $1 $2.Range, $2) } */
 
     /* --- subprogram activation --- */                                                             
     | FunctionCall                              { $1 }                
@@ -944,10 +908,10 @@ Stmt
 
     /* --- preemptions --- */
     | WHEN ConditionSeq Preemption Block END  
-                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
+                                                { makePreemption (unionRanges $1 $5) $3 $2 $4 }        
     
     | WHEN ConditionSeq Preemption Block THEN Block END   /* todo: add optional then block to AST, fjg 27.9.19 */
-                                                { mkPreemption (unionRanges $1 $5) $3 $2 $4 }        
+                                                { makePreemption (unionRanges $1 $5) $3 $2 $4 }        
 
     | WHEN error END                            { logParserError $1;
                                                   Stmt.Nothing }        
@@ -993,7 +957,7 @@ OptOutputs
 
 OptReturn
     :                                           { [] }
-    | RETURN OptNext RUN Location OptPartial Inputs OptOutputs OptOnClock  OptSemicolon
+    | RETURN OptNext RUN Location OptPartial Inputs OptOutputs OptSemicolon
                                                 { [ Stmt.ActivityCall (tailCallRange $1 <| snd $6 <| snd $7, 
                                                                      Some (ReturnLocation $1) ,
                                                                      Code.Procedure $4, 
@@ -1016,25 +980,10 @@ StmtSequence
     | SEMICOLON StmtSequence                    { $2 }
 
 SignalBinding
-    /*
-    : VariableQualifier OptRef Name OptTypeAnnotation ASSIGN Expr        /* Expr must be side-effect free */     
-                                                { Condition.SignalBinding { VarDecl.range = unionRanges $1.Range $6.Range
-                                                                            name = $3
-                                                                            permission = $1
-                                                                            isReference = $2 <> Option.None
-                                                                            isExtern = false
-                                                                            datatype = $4
-                                                                            initialiser = Some $6
-                                                                            annotations =  [] } }     
-    */ 
     : FreshLocation ASSIGN Expr        /* Expr must be side-effect free, Usage of Expr as initialiser is probably wrong */     
                                                 { Condition.SignalBinding { $1 with
                                                                                 VarDecl.range = unionRanges $1.Range $3.Range
                                                                                 initialiser = Some $3 } }    
-
-
-ClockTick
-    : TICK PointedName                          { Condition.Tick ($2, unionRanges $1 $2.Range) }
 
 OptNext
     :                                           { None }
@@ -1048,16 +997,10 @@ OptWeak
     :                                           { Strong }
     | WEAK                                      { Weak }
 
-OptOnClock
-    :                                           { None }
-    | ON PointedName                            { Some $2}
-
 
 /* ----------------------------------------------------------------------------
    ----- Subprogram declarations: activities and functions
    ---------------------------------------------------------------------------- */
-
-/* fjg TODO: add on clock information to AST */
 
 OptSingletonDef 
     :                                   { None }
@@ -1065,10 +1008,17 @@ OptSingletonDef
 
 OptSingletonDecl 
     :                                   { (None, []) }
-    | SINGLETON PointedNameList         { (Some $1, $2) }
+    | SingletonDecl                     { (Some (fst $1), snd $1) }
+
+SingletonDecl
+    : SINGLETON OptSingletonUsage       { ($1, $2) }
+
+OptSingletonUsage
+    :                                   { [] }  
+    | LBRACKET PointedNameList RBRACKET { $2 }
 
 PointedNameList
-    :                                   { [] }
+    : PointedName                       { [ $1 ] }
     | PointedName COMMA PointedNameList { $1::$3 }
 
 OptPartial
@@ -1076,50 +1026,61 @@ OptPartial
     | QUEST                             { Some $1 }
 
 Subprogram                              /* TODO: Add OptPartial and OptThrows to AST, fjg 24.09.19 */
-    : OptAnnotations OptSingletonDef FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows OptOnClock Block END
-                                        { Member.Subprogram { range = subprogramRange $1 $2 (snd $3) $12
-                                                              isSingleton = $2 <> Option.None
+    : OptAnnotations OptSingletonDecl FunOrAct Name OptPartial InputParameters OptOutputParameters OptReturns OptThrows Block END
+                                        { Member.Subprogram { range = subprogramRange $1 (fst $2) (snd $3) $11
+                                                              isSingleton = fst $2 <> Option.None
+                                                              singletons = snd $2
                                                               isFunction = fst $3
                                                               name = $4
                                                               inputs = fst $6 
                                                               outputs = fst $7 
                                                               result = $8
-                                                              body = $11 
+                                                              body = $10 
                                                               annotations = $1 } }   
 
-    | OptAnnotations OptSingletonDef FunOrAct error END
+    | OptAnnotations OptSingletonDecl FunOrAct error END
                                         { logParserError (snd $3);
                                           Member.Nothing }
 
 ExternalFunction
-    : OptAnnotations EXTERN OptSingletonDef FUNCTION Name InputParameters OptOutputParameters OptReturns OptOnClock
-                                        { Member.Prototype { Prototype.range = externalFunctionRange $1 $2 (snd $6) (snd $7) $8 $9
+    : OptAnnotations EXTERN OptSingletonDecl FUNCTION Name InputParameters OptOutputParameters OptReturns
+                                        { Member.Prototype { Prototype.range = externalFunctionRange $1 $2 (snd $6) (snd $7) $8
                                                              isExtern = true
-                                                             isSingleton = $3 <> Option.None
-                                                             singletons = []
+                                                             isSingleton = fst $3 <> Option.None
+                                                             singletons = snd $3
                                                              isFunction = true
+                                                             isOpaque = false
                                                              name = $5
                                                              inputs = fst $6
                                                              outputs = fst $7
                                                              result = $8
                                                              annotations = $1 } }
                                         
-    | OptAnnotations EXTERN OptSingletonDef FUNCTION ErrorBeforeEOL
+    | OptAnnotations EXTERN OptSingletonDecl FUNCTION ErrorBeforeEOL
                                         { logParserError $2;
                                           Member.Nothing }
 
+OpaqueSingleton
+    : OptAnnotations SingletonDecl Name  
+                                        { Member.OpaqueSingleton { OpaqueSingleton.range = opaqueSingletonRange $1 (fst $2) $3.range
+                                                                   singletons = snd $2
+                                                                   name = $3
+                                                                   annotations = $1 } }
+
 Prototype
-    : OptAnnotations OptSingletonDecl FunOrAct Name InputParameters OptOutputParameters OptReturns OptOnClock
-                                        { Member.Prototype { Prototype.range = prototypeRange $1 (fst $2) (snd $3) (snd $5) (snd $6) $7 $8
+    : OptAnnotations OptSingletonDecl FunOrAct Name InputParameters OptOutputParameters OptReturns
+                                        { Member.Prototype { Prototype.range = prototypeRange $1 (fst $2) (snd $3) (snd $5) (snd $6) $7
                                                              isExtern = false
                                                              isSingleton = fst $2 <> Option.None
                                                              singletons = snd $2
                                                              isFunction = fst $3
+                                                             isOpaque = false
                                                              name = $4
                                                              inputs = fst $5
                                                              outputs = fst $6
                                                              result = $7
                                                              annotations = $1 } }
+
                                         
     | OptAnnotations OptSingletonDecl FunOrAct ErrorBeforeEOL
                                         { logParserError (snd $3);
@@ -1162,7 +1123,7 @@ OutputParameterList
     | OutputParameter COMMA OutputParameterList { $1::$3 }
 
 InputParameter
-    : OptRef Name OptSharing COLON Type OptOnClock   // Todo: Add optref to AST, fjg 15.11       
+    : OptRef Name OptSharing COLON Type    // Todo: Add optref to AST, fjg 15.11       
                                         { { ParamDecl.range = unionRanges $2.Range $5.Range 
                                             name = $2 
                                             isMutable = false
@@ -1170,7 +1131,7 @@ InputParameter
                                             sharing = $3 } }    
 
 OutputParameter
-    : Name OptSharing COLON Type OptOnClock       
+    : Name OptSharing COLON Type       
                                         { { ParamDecl.range = unionRanges $1.Range $4.Range 
                                             name = $1 
                                             isMutable = true // isMutable is set to false for input parameters
@@ -1265,13 +1226,15 @@ ExternalVariable
    ---------------------------------------------------------------------------- */
     
 ModuleMember
-    : Clock                                     { $1 }
-    | Unit                                      { $1 }
+    /* : Clock                                     { $1 } */
+    : Unit                                      { $1 }
     | EnumDef                                   { $1 }
     | StructDef                                 { $1 }
-/*    | NewType                                   { $1 }  */
+    | OpaqueSingleton                           { $1 }
     | ExtensionMember                           { $1 }
     | Extension                                 { $1 }
+    | Pragma                                    { Member.Pragma $1 }  // TODO: Add pragma to AST
+    
     
 ExtensionMember
     : Subprogram                                { $1 }
@@ -1287,7 +1250,6 @@ DynamicMember /* a struct field */
 ModuleMembers
     :                                           { [] }      
     | ModuleMember ModuleMembers                { $1::$2 }
-    | Pragma ModuleMembers                      { Member.Pragma $1 :: $2 }  // TODO: Add pragma to AST
     | SEMICOLON ModuleMembers                   { $2 }
 
 ExtensionMembers
@@ -1313,48 +1275,59 @@ Extension
    ----- Modules in Blech implementation files .blc
    ---------------------------------------------------------------------------- */
 
-ModuleHead 
-    : MODULE PointedName Exposing               { checkModuleName $2  // TODO: Check module import from .blc
-                                                  let rng = moduleHeadRange $1 $2 $3
-                                                  { ModuleSpec.range = rng  
-                                                    path = $2.names
-                                                    exposing = $3 } }
 
-    | MODULE ErrorBeforeEOL EOL                 { logParserError $1
+ModuleHead
+    : MODULE                                    { (false, $1) }
+    | INTERNAL MODULE                           { (true , unionRanges $1 $1) }
+
+ModuleSpec 
+    : OptAnnotations ModuleHead Exposing        // TODO: Add annotations to AST, check them and print doc comments in code generation, fjg. 21.05.21
+                                                { { ModuleSpec.range = snd $2 
+                                                    isSignature = false
+                                                    isInternal = fst $2
+                                                    exposing = $3 
+                                                    annotations = $1 } }
+    
+    | OptAnnotations ModuleHead ErrorBeforeEOL EOL     
+                                                { logParserError (snd $2)
                                                   ModuleSpec.Nothing }
 
 Exposing
     :                                           { Option.None }
-    | EXPOSES ELLIPSIS                          { Option.Some <| Exposing.All ( unionRanges $1 $2 )  }
-    | EXPOSES NameList                          { Option.Some <| Exposing.Few ( $2, unionRanges $1 (List.last $2).Range )  }
+    | EXPOSES NameList                          { Option.Some { Exposing.names = $2 
+                                                                range = unionRanges $1 (List.last $2).Range } }
     | EXPOSES ErrorBeforeEOL EOL                { logParserError $1;
                                                   Option.None }
 
-RenameExpose
-    : Exposing                                  { (None, $1) }
-    | AS Name Exposing                          { (Some $2, $3) }
-
-
-FromRenameExpose            
-    : RenameExpose                              { (None, $1) }
-    | FROMPATH RenameExpose                     { (Some $1, $2) }
-
+ModulePath
+    : STRING                                    { parseImportPath (snd $1) (fst $1) } /* range string */
 
 Import
-    : IMPORT PointedName FromRenameExpose       { let fromPath, (rename, exposing) = $3
-                                                  Member.Import  { Import.range = $1  // correct this
-                                                                   name = $2
-                                                                   from = fromPath
-                                                                   localName = rename
-                                                                   exposing = exposing } } 
-    | IMPORT ErrorBeforeEOL EOL                          
+    : IMPORT NameOrWildcard ModulePath Exposing
+                                                { { Import.range = importRange $1 $3.Range $4
+                                                    isInternal = false
+                                                    localName = $2
+                                                    modulePath = $3
+                                                    exposing = $4 } } 
+                                                    
+    | IMPORT INTERNAL NameOrWildcard ModulePath Exposing
+                                                { { Import.range = importRange $1 $4.Range $5
+                                                    isInternal = true
+                                                    localName = $3
+                                                    modulePath = $4
+                                                    exposing = $5 } } 
+                                                    
+    | IMPORT ErrorBeforeEOL EOL
                                                 { logParserError $1
-                                                  Member.Import  { Import.range = unionRanges $1 $3
-                                                                   name = StaticNamedPath.Empty
-                                                                   from = None
-                                                                   localName = None
-                                                                   exposing = None } }
+                                                  { Import.range = unionRanges $1 $3
+                                                    isInternal = false
+                                                    localName = ParserContext.mkEmptyName
+                                                    modulePath = ModulePath.Empty
+                                                    exposing = None } }
 
+NameOrWildcard
+    : Name                                      { $1 }
+    | WILDCARD                                  { ParserContext.mkNameFromWildcard (fst $1) (snd $1) }
 
 NameList
     : Name                                      { [$1] }
@@ -1364,16 +1337,13 @@ NameList
 ImportList
     :                                           { [] } 
     | Import ImportList                         { $1::$2 }
-    | Pragma ImportList                         { Member.Pragma $1 :: $2 }  // TODO: Add pragma to AST
     | SEMICOLON ImportList                      { $2 }
 
-
 Module
-    : ImportList ModuleHead ModuleMembers       { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleSpec ModuleMembers       { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
-                                                    imports = $1 |> filterOutNothingMembers
-                                                    spec = Option.Some $2
+                                                    imports = $1
+                                                    moduleSpec = Option.Some $2
                                                     members = $3 |> filterOutNothingMembers } }
 
 /* ----------------------------------------------------------------------------
@@ -1382,11 +1352,10 @@ Module
    ---------------------------------------------------------------------------- */
 
 Program    
-    : ImportList ModuleMember ModuleMembers     { { Package.range = packageRange $1 $2.Range $3
+    : ImportList ModuleMember ModuleMembers     { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
-                                                    imports = $1 |> filterOutNothingMembers 
-                                                    spec = Option.None
+                                                    imports = $1 
+                                                    moduleSpec = Option.None
                                                     members = $2::$3 |> filterOutNothingMembers } }
  
 
@@ -1395,24 +1364,26 @@ Program
    ---------------------------------------------------------------------------- */
 
 SignatureHead
-    : SIGNATURE PointedName                     { checkModuleName $2  // TODO: Check signature import from .blh
-                                                  let rng = unionRanges $1 $2.Range
-                                                  { ModuleSpec.range = rng 
-                                                    path = $2.names
-                                                    exposing = Option.None } }
+    : SIGNATURE                                 { (false, $1) }  
+    | INTERNAL SIGNATURE                        { (true, unionRanges $1 $2) }
 
-
-    | SIGNATURE ErrorBeforeEOL EOL              { logParserError $1
-                                                  ModuleSpec.Nothing }
-
+SignatureSpec                                   // TODO: Add annotations to AST, check them and print doc comments in code generation, fjg. 21.05.21
+    : OptAnnotations SignatureHead              { { ModuleSpec.range = snd $2
+                                                    isSignature = true
+                                                    isInternal = fst $2
+                                                    exposing = Option.None 
+                                                    annotations = $1 } }
 
 SignatureMember
-    : Clock                                     { $1 }
-    | Unit                                      { $1 }
+    /* : Clock                                     { $1 } */
+    : Unit                                      { $1 }
     | EnumDecl                                  { $1 }
     | StructDecl                                { $1 }
+    | OpaqueTypeDecl                            { $1 }
+    | OpaqueSingleton                           { $1 }
     | ExtensionMemberDecl                       { $1 }
     | ExtensionDecl                             { $1 }
+
 
 SignatureMembers
     :                                           { [] }
@@ -1427,6 +1398,7 @@ ExtensionMemberDecl
     : Prototype                                 { $1 }
     | ExternalFunction                          { $1 }    // Question: Should this be removed? Only necessary for definitions?, fjg. 15.01.20   
     | Constant                                  { $1 }
+    | ExternalConstant                          { $1 } 
     | TypeAliasDecl                             { $1 }
 
 ExtensionMemberDecls
@@ -1437,28 +1409,27 @@ ExtensionMemberDecls
 
 
 Signature
-    : ImportList SignatureHead SignatureMembers 
-                                                { { Package.range = packageRange $1 $2.Range $3
+    : ImportList SignatureSpec SignatureMembers 
+                                                { { CompilationUnit.range = compilationUnitRange $1 $2.Range $3
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
-                                                    imports = $1 |> filterOutNothingMembers
-                                                    spec = Some $2
+                                                    imports = $1
+                                                    moduleSpec = Some $2
                                                     members = $3 |> filterOutNothingMembers } }
+
 
 /* --------------------------
    --- Parser Entry Point --- 
    -------------------------- */
 
-Package 
+Compilation 
     : Module EOF                                { $1 }    
     | Signature EOF                             { $1 }
     | Program EOF                               { $1 }
     | error EOF                                 { logParserError (getStartOfFile $2);
-                                                  { Package.range = $2
+                                                  { CompilationUnit.range = $2
                                                     moduleName = ParserContext.getModuleName ()
-                                                    loadWhat = ParserContext.getLoadWhat ()
                                                     imports = []
-                                                    spec = Option.None
+                                                    moduleSpec = Option.None
                                                     members = [] } }
 
 
@@ -1495,7 +1466,7 @@ Identifier
 AttributeLiteral 
     : STRING                                    { Literal.String $1 }
 
-    | MULTILINESTRING                           { Literal.String $1 }
+    | MULTILINESTRING                           { Literal.MultiLineString $1 }
 
     | TRUE                                      { Literal.Bool (true, $1) }
     

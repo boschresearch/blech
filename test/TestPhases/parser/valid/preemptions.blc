@@ -1,4 +1,4 @@
-module preemptions
+module
 
 activity doingNothing()
     when false abort

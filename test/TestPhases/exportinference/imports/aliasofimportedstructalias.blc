@@ -1,0 +1,9 @@
+import aoaa "aliasofstructalias"
+
+module exposes init
+
+typealias T = aoaa.AAT 
+
+function init() returns T 
+    return aoaa.init()
+end

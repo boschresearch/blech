@@ -1,0 +1,8 @@
+import M "../imports/moduleToImport"
+
+module
+
+activity X()
+    await true
+    var t: M.O1 = {} // error: T not visible
+end

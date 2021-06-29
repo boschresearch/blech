@@ -1,0 +1,19 @@
+module exposes C, initO, changeC
+
+struct O 
+    var x: bool
+end
+
+struct C 
+    let foo: O
+    let bar: float32
+end
+
+function initO () returns O
+    return {x = false}
+end
+
+function changeC (c: C) returns C
+    return { foo = { x = not c.foo.x },
+             bar = c.bar + 1 }
+end

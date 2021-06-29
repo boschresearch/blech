@@ -1,0 +1,7 @@
+
+module exposes SideEffect
+activity SideEffect()()
+    @[COutput(binding="", header="")]
+    extern var foo: float32
+    await false
+end

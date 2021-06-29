@@ -1,0 +1,21 @@
+
+module exposes aSingletonFunction,
+               notASingletonFunction,
+               ASingletonActivity,
+               NotASingletonActivity
+
+singleton function aSingletonFunction ()
+end
+
+function notASingletonFunction ()
+end
+
+activity ASingletonActivity ()
+    @[COutput (binding ="<c-variable>", header = "<c-header>.h")]
+    extern var b: bool
+    await true
+end
+
+activity NotASingletonActivity ()
+    await true
+end

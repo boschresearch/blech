@@ -1,4 +1,4 @@
-module ResetCounter2
+module
 
 activity main ()()
     var cnt : int8

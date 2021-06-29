@@ -1,0 +1,10 @@
+import M "../imports/mod"
+
+@[EntryPoint]
+activity Main () ()
+    cobegin
+        run M.Act1()
+    with
+        run M.Act2()
+    end
+end

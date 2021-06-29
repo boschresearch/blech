@@ -1,0 +1,14 @@
+
+import h "hidden"
+
+module exposes A
+
+function hidden () returns h.S
+    return h.init()
+end
+
+
+activity A ()
+    var hs: h.S = hidden()
+    await true
+end

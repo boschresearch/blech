@@ -26,11 +26,12 @@ open Blech.Common.PPrint.PPrint
 open Blech.Frontend
 open Blech.Frontend.CommonTypes
 open Blech.Frontend.BlechTypes
-open Blech.Frontend.PrettyPrint.DocPrint
+open Blech.Frontend.DocPrint
 open Blech.Frontend.TyChkExpressions
 
 open Blech.Backend
 
+open Normalisation
 open CPdataAccess2
 open CPrinter
 
@@ -59,8 +60,26 @@ and private translateFunctionStatement ctx curComp stmt =
                 { lhs = LhsCur(TypedMemLoc.Loc v.name)
                   typ = v.datatype
                   range = v.pos }
-            [ init
-              cpAssign ctx.tcc lhs v.initValue ]
+            // rewrite into assignment
+            let norm =
+                normaliseVarDecl ctx.tcc v
+                |> List.map (function 
+                    | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                    | _ -> failwith "Must be an assignment here!") // not nice
+            // zero out everything that is not set explicitly
+            let reinit =
+                match v.datatype with
+                | ValueTypes (ValueTypes.StructType _)
+                | ValueTypes (ArrayType _) when v.initValue.rhs.IsCompoundConst ->
+                    let lhs =
+                        { lhs = LhsCur(TypedMemLoc.Loc v.name)
+                          typ = v.datatype
+                          range = v.pos }
+                    nullify ctx.tcc lhs
+                | _ -> empty
+            [ init // declaration
+              reinit // zero out
+              ] @ norm // correctly translate literal elements
             |> dpBlock
     | Stmt.ExternalVarDecl _ -> failwith "Found an external variable in a function. This should have been detected earlier."            
     // actions
@@ -123,15 +142,30 @@ and private translateFunctionStatement ctx curComp stmt =
                     let name = (!curComp).retvar |> Option.get |> (fun p -> p.name)
                     let typ =
                         match ctx.tcc.nameToDecl.[(!curComp).name] with
-                        | FunctionPrototype p -> p.returns
-                        | SubProgramDecl d -> d.returns
+                        | ProcedurePrototype p -> p.returns
+                        | ProcedureImpl d -> d.Returns
                         | _ -> failwith "expected subprogram, got something else"
                     { lhs = LhsCur (TypedMemLoc.Loc name)
                       typ = ValueTypes typ
                       range = r }
-                // call this function recursively with an Assign action and make a void return
-                [ translateFunctionStatement ctx curComp (Stmt.Assign(r, lhs, expr))
-                  txt "return;" ]
+                
+                // rewrite into assignment
+                let norm =
+                    normaliseAssign ctx.tcc (r, lhs, expr)
+                    |> List.map (function 
+                        | Stmt.Assign(_, lhs, rhs) -> cpAssign ctx.tcc lhs rhs
+                        | _ -> failwith "Must be an assignment here!") // not nice
+                
+                // zero out everything that is not set explicitly
+                let reinit =
+                    match expr.typ with
+                    | ValueTypes (ValueTypes.StructType _)
+                    | ValueTypes (ArrayType _) when expr.rhs.IsCompoundConst ->
+                        nullify ctx.tcc lhs
+                    | _ -> empty
+                
+                reinit :: norm 
+                @ [txt "return;"] // correctly translate literal elements
                 |> dpBlock
 
     // synchronous statements
@@ -144,34 +178,33 @@ and private translateFunctionStatement ctx curComp stmt =
 // Statements of functions cannot be interleaved with other concurrent statements.
 // Hence we can generate a program coutner free code, disregarding the individual blocks.
 /// Returns the translated function body
-let private translateFunction ctx curComp (funDecl: SubProgramDecl) =
-    assert funDecl.isFunction
+let private translateFunction ctx curComp (funDecl: ProcedureImpl) =
+    assert funDecl.IsFunction
     funDecl.body
     |> translateFunctionStatements ctx curComp
 
-let internal translate ctx (subProgDecl: SubProgramDecl) =
-    let name = subProgDecl.name
+let internal translate ctx (subProgDecl: ProcedureImpl) =
+    let name = subProgDecl.Name
     
     let retvar, retType =
-        if subProgDecl.returns.IsPrimitive then
-            None, cpType (ValueTypes subProgDecl.returns)
+        if subProgDecl.Returns.IsPrimitive then
+            None, cpType (ValueTypes subProgDecl.Returns)
         else
-            let qname = QName.Create subProgDecl.name.moduleName (subProgDecl.name.prefix @ [subProgDecl.name.basicId]) "retvar" Dynamic
+            let qname = QName.Create subProgDecl.Name.moduleName (subProgDecl.Name.prefix @ [subProgDecl.Name.basicId]) "retvar" Dynamic
             let v = { name = qname
                       pos = subProgDecl.pos
-                      datatype = ValueTypes subProgDecl.returns
+                      datatype = ValueTypes subProgDecl.Returns
                       isMutable = true 
                       allReferences = HashSet() }
             TypeCheckContext.addDeclToLut ctx.tcc qname (Declarable.ParamDecl v)
             Some v, cpType (ValueTypes Void)
     
-    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.inputs; outputs = subProgDecl.outputs; retvar = retvar}
+    let curComp = ref {Compilation.mkNew name with inputs = subProgDecl.Inputs; outputs = subProgDecl.Outputs; retvar = retvar}
     
     let code = translateFunction ctx curComp subProgDecl
     
     let completeFunctionCode =
-        txt "static" // TODO must be non-static if function is exposed, fjg 17.01.19
-        <+> retType
+        retType
         <+> cpStaticName (!curComp).name
         <+> cpFunctionIface ctx.tcc (!curComp)
         <+> txt "{"

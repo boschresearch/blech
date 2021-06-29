@@ -1,6 +1,6 @@
-signature interface
+signature
 
-type MyInt = int32 // exposing method
+typealias MyInt = int32 // exposing method
 // with
     // mutating function b:method() returns int32
     //     return 42

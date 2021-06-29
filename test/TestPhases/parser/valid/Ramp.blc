@@ -1,8 +1,8 @@
 
-import Float32 from <Float32> exposes min, max 
-import Clock from <Clock> exposes dt
+import Float32 "Float32" exposes min, max 
+import Clock "Clock" exposes dt
 
-module Ramp
+module
 
 /* ----------------------------------------------------------------------- *
  *  Ramp.blc

@@ -1,0 +1,7 @@
+import I "importRecA"
+
+module
+
+activity Main () ()
+    await true
+end

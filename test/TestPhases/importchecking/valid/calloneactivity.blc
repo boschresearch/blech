@@ -1,0 +1,6 @@
+import o "../imports/oneactivity" 
+
+@[EntryPoint]
+activity Main () ()
+    run o.AnAct()
+end

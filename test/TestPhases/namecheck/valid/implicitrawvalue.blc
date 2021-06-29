@@ -1,0 +1,13 @@
+module
+
+enum Color 
+    Red
+    Green
+    Blue
+end
+
+enum Farbe : Color
+    Rot 
+    Gruen = Green    // must be .Green or Color.Green
+    Blau  
+end

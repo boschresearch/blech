@@ -1,0 +1,11 @@
+signature
+
+// singleton function u()
+   
+singleton s    
+
+singleton [s] function t()
+
+singleton u
+
+singleton [u, t] function f()

@@ -1,0 +1,12 @@
+module exposes S, extConstI8, extVarArr, extVarS
+
+struct S
+    var s: float32
+end
+
+@[CConst(binding="C_NAME_CONST_I32", header="externalConst.ext.h")]
+extern const extConstI8: int32
+@[CConst(binding="c_name_extVarArr", header="externalConst.ext.h")]
+extern const extVarArr: [8]int32
+
+const extVarS: S = { s = 1.0 }

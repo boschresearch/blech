@@ -62,8 +62,8 @@ let internal isLhsMutable lut lhs =
             | Declarable.VarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
             | Declarable.ParamDecl p -> p.isMutable, p.datatype
             | Declarable.ExternalVarDecl v -> v.mutability.Equals Mutability.Variable, v.datatype
-            | Declarable.SubProgramDecl _
-            | Declarable.FunctionPrototype _ ->
+            | Declarable.ProcedureImpl _
+            | Declarable.ProcedurePrototype _ ->
                 failwith "Asking for mutability of a subprogram. That cannot be right."
         else
             failwith <| sprintf "Lhs %s not in nameToDecl" (qname.ToString())
@@ -71,7 +71,7 @@ let internal isLhsMutable lut lhs =
         let ism, typ = isTmlMutable tml
         if ism then
             match typ with
-            | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+            | ValueTypes (ValueTypes.StructType (typname, typfields))
             | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                 typfields
                 |> List.tryFind (fun f -> f.name.basicId = ident)
@@ -91,29 +91,36 @@ let internal isLhsMutable lut lhs =
 
 
 /// Returns true when the evaluation of expr does not change the program's state
-let rec private hasNoSideEffect expr =
+let rec private hasNoSideEffect lut expr =
+    let recHasNoSideEffect = hasNoSideEffect lut
     let recurFields fields =
         fields
-        |> List.map (snd >> hasNoSideEffect)
+        |> List.map (snd >> recHasNoSideEffect)
         |> List.forall id
     match expr.rhs with
     // locations
     | RhsCur tml 
-    | Prev tml -> tml.FindAllIndexExpr |> List.forall hasNoSideEffect
+    | Prev tml -> tml.FindAllIndexExpr |> List.forall recHasNoSideEffect
     // constants and literals
     | BoolConst _ | IntConst _ | BitsConst _ | NatConst _ | FloatConst _  | ResetConst -> true
     | StructConst fields -> recurFields fields
     | ArrayConst elems -> recurFields elems
-    // call, has no side-effect IFF it does not write any outputs
+    // call, has no side-effect if it does not write any outputs, 
+    // nor changes anything in the environment (singleton!)
     // this assumption is only valid when there are not global variables (as is the case in Blech)
-    // and no external C variables are written (TODO!)
-    | FunCall (_, inputs, outputs) ->
+    | FunCall (qname, inputs, outputs) ->
+        let isSingleton =
+            lut.nameToDecl.[qname].TryGetPrototype
+            |> function
+                | None -> false
+                | Some prot -> prot.IsSingleton
         List.isEmpty outputs 
-        && List.forall hasNoSideEffect inputs
+        && not isSingleton
+        && List.forall recHasNoSideEffect inputs
     // type conversion
-    | Convert (e, _, _) -> hasNoSideEffect e
+    | Convert (e, _, _) -> recHasNoSideEffect e
     // unary 
-    | Neg e | Bnot e -> hasNoSideEffect e
+    | Neg e | Bnot e -> recHasNoSideEffect e
     // logical
     | Conj (x, y) | Disj (x, y) 
     // bitwise 
@@ -123,7 +130,7 @@ let rec private hasNoSideEffect expr =
     | Les (x, y) | Leq (x, y) | Equ (x, y)
     // arithmetic
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> 
-        hasNoSideEffect x && hasNoSideEffect y
+        recHasNoSideEffect x && recHasNoSideEffect y
 
 
 /// True if given expression contains only compile time or param values
@@ -578,7 +585,7 @@ and getInitValueForTml lut tml =
                     | Some e -> snd e |> Ok // found an initialiser, return that
                     | None ->               // nope, get default value for that field
                         match v.typ with
-                        | ValueTypes (ValueTypes.StructType (_, _, fields)) ->
+                        | ValueTypes (ValueTypes.StructType (_, fields)) ->
                             fields 
                             |> List.find (fun vdecl -> vdecl.name.basicId = ident)
                             |> (fun vdecl -> getInitValueWithoutZeros Range.range0 "" vdecl.datatype)
@@ -994,7 +1001,7 @@ let private remainder ((expr1: TypedRhs), (expr2: TypedRhs)) =
 let private typeAnnotation range (checkedExpr: TypedRhs, checkedType: Types) =
     let expr = 
         if checkedExpr.typ.IsCompoundLiteral then
-            amendCompoundLiteral false checkedType checkedExpr
+            amendCompoundLiteral checkedType checkedExpr
         else 
             tryAmendPrimitiveAny checkedType checkedExpr        
     expr
@@ -1208,10 +1215,7 @@ let internal checkOutputs (lut: TypeCheckContext) pos (outputArgs: Result<_,_> l
                     Error [ExprMustBeALocationL (pos, argExpr)] :: typecheckOutputs ls
                 else
                     if isLhsMutable lut argExpr.lhs then
-                        if argExpr.typ.IsAssignable then
-                            Ok argExpr :: typecheckOutputs ls
-                        else
-                            Error [AssignmentToLetFields (pos, argExpr.ToString())] :: typecheckOutputs ls
+                        Ok argExpr :: typecheckOutputs ls
                     else
                         Error [ImmutableOutArg(pos, argExpr)] :: typecheckOutputs ls
             else
@@ -1229,9 +1233,9 @@ let internal checkInputs pos (inputArgs: Result<_,_> list) declName (inputParams
     let rec typecheckInputs = function
         | [] -> []
         | ((argDecl: ParamDecl), (expr: TypedRhs))::ls -> 
-            match amendRhsExpr true argDecl.datatype expr with // this behaves like an initialisation
+            match amendRhsExpr argDecl.datatype expr with // this behaves like an initialisation
             | Ok amendedExpr ->
-                if argDecl.datatype.IsValueType() || isExprALocation amendedExpr then
+                if argDecl.datatype.IsValueType || isExprALocation amendedExpr then
                     Ok amendedExpr :: typecheckInputs ls
                 else
                     Error [ExprMustBeALocationR (pos, expr)] :: typecheckInputs ls
@@ -1265,7 +1269,8 @@ let private checkSimpleLiteral literal =
             { rhs = FloatConst number; typ = AnyFloat; range = pos } |> Ok
         else
             Error [NumberLargerThanAnyFloat(pos, number)]
-    | AST.String _ ->
+    | AST.String _ 
+    | AST.MultiLineString _->
         Error [UnsupportedFeature (literal.Range, "undefined, string literal")]
 
 
@@ -1323,7 +1328,7 @@ let rec private checkAggregateLiteral lut al r =
 
 /// Translate a dynamic access path to a typed memory location
 and private checkUntimedDynamicAccessPath lut dname =
-    let qname, subexpr = lut.ncEnv.decomposeDpath dname
+    let qname, subexpr = lut.ncEnv.GetLookupTable.decomposeDpath dname
     let tmlInit =
         combine 
         <| Ok (Loc qname) 
@@ -1340,7 +1345,7 @@ and private checkUntimedDynamicAccessPath lut dname =
                 tmlAndType
                 |> Result.bind (fun (tml,typ) ->
                     match typ with
-                    | ValueTypes (ValueTypes.StructType (_, typname, typfields))
+                    | ValueTypes (ValueTypes.StructType (typname, typfields))
                     | ReferenceTypes (ReferenceTypes.StructType(_, typname, typfields)) ->
                         typfields
                         |> List.tryFind (fun f -> f.name.basicId = name.id)
@@ -1427,7 +1432,6 @@ and internal checkExpr (lut: TypeCheckContext) expr =
     | AST.Expr.Const literal -> checkSimpleLiteral literal
     | AST.Expr.AggregateConst (ac, r) -> checkAggregateLiteral lut ac r
     | AST.Expr.SliceConst (_, _, _, r) -> Error [UnsupportedFeature (r, "slice const")] // TODO
-    | AST.Expr.ImplicitMember spath -> Error [UnsupportedFeature (spath.Range, "implicit members")] // TODO
     // -- variables --
     | AST.Expr.Var dname ->
         let makeTimedRhsStructure ( tml, dty ) =
@@ -1453,8 +1457,8 @@ and internal checkExpr (lut: TypeCheckContext) expr =
                             Error [PrevOnImmutable(expr.Range, qname)]
                     | Declarable.ParamDecl _ -> //Error
                         Error [PrevOnParam(expr.Range, qname)]
-                    | Declarable.SubProgramDecl _
-                    | Declarable.FunctionPrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
+                    | Declarable.ProcedureImpl _
+                    | Declarable.ProcedurePrototype _ -> failwith "QName prefix of a TML cannot point to a subprogram!"
                 | ReferenceTypes _
                 | Any
                 | AnyComposite 
@@ -1552,14 +1556,6 @@ and internal checkDataType lut utyDataType =
     | AST.FloatType (size, _, _) -> FloatType size |> ValueTypes |> Ok
     // structured types
     | AST.ArrayType (size, elemDty, pos) ->
-        //let ensurePositiveSize num =
-        //    if num > Constants.SizeZero then Ok num
-        //    else Error [PositiveSizeExpected(pos, num)]
-        //let checkSize =
-        //    checkExpr lut 
-        //    >> Result.bind (evalCompTimeSize lut)
-        //    //>> Result.bind ensurePositiveSize
-        //checkSize size
         checkExpr lut size
         |> Result.bind (evalCompTimeSize lut)
         |> Result.bind(fun checkedSize ->
@@ -1575,10 +1571,10 @@ and internal checkDataType lut utyDataType =
     | AST.TypeName spath ->
         // look up given static name in the dict of known named types (user types)
         // TODO: Create a lookup function in TypeCheckContext and return the result here, fjg. 24.02.20
-        let found, typ =
-            lut.ncEnv.spathToQname spath
+        let found, res =
+            lut.ncEnv.GetLookupTable.spathToQname spath
             |> lut.userTypes.TryGetValue
-        if found then Ok typ
+        if found then Ok (snd res)
         else Error [ NotInLUTPrevError spath.dottedPathToString ]
     // unsupported now:
     | AST.SliceType _
@@ -1612,9 +1608,12 @@ and internal checkAssignLExpr lut lhs =
 /// A function call can either appear as a statement and then must call a void function.
 /// Or a function call can be part of an expression and then the called function must return a non-void, first class value.
 and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code) (inputs: Result<_,_> list) (outputs: Result<_,_> list) =
-    let checkIsFunction decl =
-        if decl.isFunction then Ok()
-        else Error [FunCallToAct(pos, decl)]
+    let checkIsFunction (decl: ProcedurePrototype) =
+        if decl.IsFunction then Ok()
+        elif decl.IsActivity then
+            Error [FunCallToAct(pos, decl)]
+        else
+            Error [FunNotExist(pos, decl)]
 
     let checkReturnType declName declReturns =
         if isStatement then
@@ -1632,7 +1631,7 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
     match fp with
     | AST.Procedure dname ->
         ensureCurrent dname
-        |> Result.map lut.ncEnv.dpathToQname
+        |> Result.map lut.ncEnv.GetLookupTable.dpathToQname
         |> Result.bind (getSubProgDeclAsPrototype lut pos)
         |> Result.bind (fun decl ->
             checkIsFunction decl
@@ -1643,62 +1642,6 @@ and internal checkFunCall isStatement (lut: TypeCheckContext) pos (fp: AST.Code)
             )
 
 
-/// Type check activity calls.
-/// An activity may return a value that is stored in resStorage upon termination.
-/// This is different to a function call which 
-
-// MOVED TO TYPECHECKING BECAUSE IT IS A STATEMENT
-//let internal checkActCall lut pos (ap: AST.Code) resStorage (inputs: Result<_,_> list) outputs =
-//    let checkIsActivity decl =
-//        if not decl.isFunction then Ok()
-//        else Error [RunAFun(pos, decl)]
-//    let checkReturnType storage declName declReturns =
-//        match storage with
-//        | None ->
-//            match declReturns with
-//            | Void -> Ok None
-//            | _ -> Error [ActCallMustExplicitlyIgnoreResult (pos, declName.basicId)]
-//        | Some leftExprRes ->
-//            leftExprRes |> Result.bind (
-//                fun lexpr -> 
-//                    match lexpr.typ with 
-//                    | Any -> // wildcard
-//                        Ok None
-//                    | ValueTypes _ ->
-//                        Ok (Some lexpr) 
-//                    | _ -> Error [ ValueMustBeOfValueType (lexpr) ]
-//                )
-//        |> Result.bind (
-//            function
-//            | None -> Ok None
-//            | Some (lexpr: TypedLhs) ->
-//                let typ = lexpr.typ
-//                if isLhsMutable lut lexpr.lhs then
-//                    if lexpr.typ.IsAssignable then
-//                        if isLeftSupertypeOfRight typ (ValueTypes declReturns) then 
-//                            Ok (Some lexpr) 
-//                        else 
-//                            Error [ReturnTypeMismatch(pos, declReturns, typ)]
-//                    else
-//                        Error [AssignmentToLetFields (pos, lexpr.ToString())]
-//                else Error [AssignmentToImmutable (pos, lexpr.ToString())]
-//                )
-//    let createCall name (((_, ins), outs), retvar) =
-//        ActivityCall (pos, name, retvar, ins, outs)
-    
-//    match ap with
-//    | AST.Procedure dname ->
-//        ensureCurrent dname
-//        |> Result.map lut.ncEnv.dpathToQname
-//        |> Result.bind (getSubProgDeclAsPrototype lut pos)
-//        |> Result.bind (fun decl ->
-//            checkIsActivity decl
-//            |> combine <| checkInputs pos inputs decl.name decl.inputs
-//            |> combine <| checkOutputs lut pos outputs decl.name decl.outputs
-//            |> combine <| checkReturnType resStorage decl.name decl.returns
-//            |> Result.map (createCall decl.name)
-//            )
-
 /// Check that condition is a boolean, side-effect free expression
 let internal fCondition lut cond = 
     let ensureBoolean (e: TypedRhs) =
@@ -1706,7 +1649,7 @@ let internal fCondition lut cond =
         | ValueTypes BoolType -> Ok e
         | _ -> Error [ExpectedBoolExpr (e.Range, e)]
     let ensureSideEffectFree (e: TypedRhs) =
-        if hasNoSideEffect e then Ok e
+        if hasNoSideEffect lut e then Ok e
         else Error [ConditionHasSideEffect e]
     match cond with
     | AST.Cond expr ->

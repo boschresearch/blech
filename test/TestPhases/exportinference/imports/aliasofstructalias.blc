@@ -1,0 +1,13 @@
+module exposes init
+
+struct T
+    var b: bool 
+end
+
+typealias AT = T
+
+typealias AAT = AT
+
+function init() returns AAT
+    return { b = true }
+end

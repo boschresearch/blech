@@ -1,0 +1,7 @@
+module exposes Color
+
+enum Color
+    Red
+    Yellow
+    Green
+end

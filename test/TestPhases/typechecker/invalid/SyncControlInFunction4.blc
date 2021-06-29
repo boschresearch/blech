@@ -1,4 +1,4 @@
-module SyncControlInFunction4
+module
 
 function calc() returns float64
     repeat

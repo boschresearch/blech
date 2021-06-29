@@ -1,0 +1,15 @@
+import X "externalVariables_imp"
+
+
+
+@[EntryPoint]
+activity E ()
+    @[COutput(binding="c_name_S2", header="externalVariables.ext.h")]
+    extern var extVarS: X.S
+    
+    extVarS = {s = 7.7}
+    let foo4 = prev extVarS
+    let foo5 = prev extVarS.s
+    
+    run X.B(extVarS)
+end

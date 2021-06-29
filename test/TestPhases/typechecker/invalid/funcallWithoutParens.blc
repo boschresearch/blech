@@ -1,0 +1,9 @@
+function f()() returns bool
+    return false
+end
+
+@[EntryPoint]
+activity Main () ()
+    var x = f // ()
+    await true
+end

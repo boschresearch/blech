@@ -1,0 +1,9 @@
+internal module exposes S, init
+
+struct S 
+    var b: bool 
+end
+
+function init() returns S 
+    return { b = true }
+end

@@ -30,14 +30,6 @@ open Blech.Intermediate
 type Action = Blech.Intermediate.Action
 
 
-type TranslationContext = {
-    tcc: TypeCheckContext
-    pgs: Dictionary<QName, ProgramGraph>
-    bgs: Dictionary<QName, BlockGraph.T>
-    cliContext: Blech.Common.Arguments.BlechCOptions
-}
-
-
 /// Program counters are hierarchically represented in a tree structure
 /// The root node is the main program counter of an activity
 /// Other nodes represent pcs for cobegin branches
@@ -74,7 +66,7 @@ type ActivityContext =
         locals: ParamDecl list
         pcs: PCtree // tree for THIS activity only
         // Sub-context is identified by a program counter name and a callee name
-        subcontexts: Map<string * QName, ActivityContext>
+        subcontexts: Set<string * QName>
     }
 
 
@@ -86,7 +78,7 @@ type Compilation =
         retvar: ParamDecl option
         actctx: ActivityContext option // None for functions
         varsToPrev: QName list // always empty for functions
-        signature: Doc // goes into blh
+        signature: Doc // C prototype, goes into *.h
         implementation: Doc // pretty printed C code
         doc: Doc option // optional "doc"-comment
     }
@@ -94,6 +86,15 @@ type Compilation =
         match this.actctx with
         | Some x -> x
         | None -> failwith "Tried to access activity context where there is none. Is this Compilation a function?"
+
+
+type TranslationContext = {
+    tcc: TypeCheckContext
+    pgs: Dictionary<QName, ProgramGraph>
+    bgs: Dictionary<QName, BlockGraph.T>
+    compilations: Compilation list
+    cliContext: Blech.Common.Arguments.BlechCOptions
+}
 
 
 [<AutoOpen>]
@@ -120,48 +121,50 @@ module PCtree =
     let internal asList (tree: PCtree) = tree.AsList
 
     let internal add tree (thread: Thread) (pc: ParamDecl) =
-        let rec addrec treerec ancestors pc =
-            match ancestors with
-            | [] -> failwith "Impossible. Ancestors include at least the current thread itself."
-            | [a] -> // main thread
-                failwith "Main thread pc should have been added via Compilation.addPc"
-            | a :: a2 :: tail -> // keep searching
-                assert (a = treerec.thread)
-                treerec.subPCs 
-                |> List.tryFindIndex (fun subtree -> subtree.thread = a2)
-                |> function
-                    | Some index ->
-                        let subtree = treerec.subPCs.[index]
-                        let newSubTree = addrec subtree (a2 :: tail) pc
-                        let newSubPCs = treerec.subPCs.[0..index-1] @ [newSubTree] @ treerec.subPCs.[index+1..]
-                        { treerec with subPCs = newSubPCs }
-                    | None -> 
-                        assert (tail = [])
-                        assert (a2 = thread)
-                        let newSubtree = mkNew a2 pc
-                        addPCtree treerec newSubtree
-        
+        let transplant dest child =
+            {dest with subPCs = dest.subPCs @ [child]}
+        let rec insertIntoTree tr ancs =
+            // ancs - ancestors sorted from root to current thread
+            assert (tr.thread = List.head ancs)
+            let nextThread = List.head (List.tail ancs)
+            tr.subPCs
+            |> List.tryFindIndex (fun subtree -> subtree.thread = nextThread)
+            |> function
+                | Some index ->
+                    let subtree = insertIntoTree tr.subPCs.[index] (List.tail ancs)
+                    let newSubPCs = tr.subPCs.[0..index-1] @ [subtree] @ tr.subPCs.[index+1..]
+                    { tr with subPCs = newSubPCs }
+                | None ->
+                    // make new subtree for pc
+                    let newSubtree = mkNew thread pc
+                    // transplant every pc that is in a subthread underneath
+                    let subTreesToMove, subTreesUnaffected =
+                        tr.subPCs
+                        |> List.partition (fun subtree -> List.contains nextThread (Thread.allAncestors subtree.thread))
+                    let finalSubtree = List.fold (transplant) newSubtree subTreesToMove
+                    let newSubPCs = subTreesUnaffected @ [finalSubtree]
+                    { tr with subPCs = newSubPCs }        
         let alreadyAdded =
             tree.subPCs |> List.exists (fun t -> t.Contains pc)
         if alreadyAdded then 
             tree // nothing to do
         else
             let allAncestors = Thread.allAncestors thread |> List.rev // sort from root to current thread
-            addrec tree allAncestors pc
+            insertIntoTree tree allAncestors
 
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module ActivityContext =
     
     let internal mkNew thread mainpc = 
-        {locals = []; pcs = PCtree.mkNew thread mainpc; subcontexts = Map.empty}
+        {locals = []; pcs = PCtree.mkNew thread mainpc; subcontexts = Set.empty}
     
     let internal addLocal local ctx = 
         {ctx with ActivityContext.locals = addUniqueParam local ctx.locals}
     
-    let internal addSubContext ctx pcName calleName subctx = 
+    let internal addSubContext ctx pcName calleName = 
         {ctx with ActivityContext.subcontexts = 
-                  ctx.subcontexts.Add((pcName, calleName), subctx)} // keep in order
+                  ctx.subcontexts.Add(pcName, calleName)} // keep in order
 
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -186,9 +189,9 @@ module Compilation =
                     |> (ActivityContext.addLocal local) 
                     |> Some }
 
-    let internal addSubContext comp pcName calleName subctx =
+    let internal addSubContext comp pcName calleName =
         { comp with Compilation.actctx = 
-                    ActivityContext.addSubContext comp.GetActCtx pcName calleName subctx 
+                    ActivityContext.addSubContext comp.GetActCtx pcName calleName 
                     |> Some }
 
     /// Add program counter to this computation's activity context
