@@ -1,4 +1,5 @@
 
+
 # Blech Compiler
 
 ![](https://github.com/boschresearch/blech/workflows/build%20+%20unit%20tests/badge.svg)
@@ -13,6 +14,8 @@ applicable Open Source licenses allow you to adapt the software to your needs.
 Before using it in a safety relevant setting, make sure that the software
 fulfills your requirements and adjust it according to any applicable safety
 standards (e.g. ISO 26262).
+
+For a documentation of this fork, read "Visualization of abstract modes in Blech".
 
 ## Quick guide to the Blech compiler
 
@@ -118,6 +121,34 @@ The resulting executable will run the program for 60 reactions and print the var
 
 To include the generated C code in your own project inspect `blech.c` for details. In particular, make sure you call the `init` function on initial startup and then `tick` with every reaction.
 For programmers familiar with Arduino these correspond to the `setup` and `loop` functions.
+
+### Visualization of abstract modes in Blech
+This fork implements a sub-module for extracting a visualization abstract modes in given Blech Code. The visualization is done with SCCharts. The module will output a .sctx file. SCTX is the textual SCChart syntax. To view the visualization, the output file needs to be imported into a SCCharts Editor such as [KIELER](https://rtsys.informatik.uni-kiel.de/confluence/display/KIELER/Quick+Start+Guide
+) or [KEITH](https://rtsys.informatik.uni-kiel.de/confluence/display/KIELER/KEITH). Note that the generated SCChart is not a semantically equivalent program and can not be used for execution. It is an abstract visual representation of the statefulness of the Blech code in question.
+
+To activate the visualisation module in its default settings type the following. The output file will automatically generated in the current directory.
+
+```
+blechc -vis blechFile.blc
+```
+Alternatively, the flag ``--visualize`` can be used.
+
+To enhance the usage of the stateful visuzalizations. This module allows to label states. They can be labelled with the following statemnt in Blech code. Corresponding states in the visualization will be lablled as such.
+
+```
+@@[label="This is a label."]
+```
+The visualization offers some more configurations.
+
+| Flag                      | Alternative flag         | Description                                                                                                                                                                                                          |
+|---------------------------|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|  \-\-vis-breakrunstatement  | -vis_breakRunStmt        | With this flag activated, the activites referenced in run statements will be inlined in the visualization. Recommended for small programms and activites only.                                                       |
+| \-\-vis-cbgnpatternwithhier | -vis-cbgnPatternWithHier | Uses an alternative visualization for a recognized pattern in cobegins (modelling a weak abort). This will have a hierarchical visualization of said pattern, in comparison with the hierarchy breaking alternative. |
+| \-\-vis-cbgnpattern       | -vis_CbgnPattern       | This flag will cause the cobegin pattern described above be recognized but with a hierachy-less visualization.                                                                                                                                |
+| \-\-vis-includeorigcode   | -vis_includeOrigcode        | With this flag set, the original blech code will be included as a comment in the visualization.                                                                                                                  |
+| \-\-vis-notuseconnector        | -vis_notUseConnector        | With this flag set, connector states will not be used in the visualization instead of simple states whenever possible. Not recommended to use.                                                                               |
+| \-\-vis-disablebreakhier        | -vis_disableBreakHier        | Disables the simplification step of breaking introduced hierarchies. Not recommended to use.                                                                               |
+| \-\-vis-disablecollapsetrans        | -vis_disableCollapseTrans        | Disables the simplification step of breaking introduced hierarchies. Not recommended to use.                                                                                  |
 
 ## License
 

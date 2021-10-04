@@ -59,6 +59,14 @@ module Arguments =
         // code generation configuration
         | [<Unique; EqualsAssignment>] Word_Size of bits: int
         | [<Unique>] Trace
+        | [<Unique; AltCommandLine("-vis")>] Visualize
+        | [<Unique; AltCommandLine("-vis_breakRunStmt")>] Vis_BreakRunStatement
+        | [<Unique; AltCommandLine("-vis_cbgnPatternWithHier")>] Vis_CbgnPatternWithHier
+        | [<Unique; AltCommandLine("-vis_cbgnPattern")>] Vis_CbgnPattern
+        | [<Unique; AltCommandLine("-vis_includeOrigcode")>] Vis_includeOrigCode
+        | [<Unique; AltCommandLine("-vis_notUseConnector")>] Vis_notUseConnector
+        | [<Unique; AltCommandLine("-vis_disableBreakHier")>] Vis_DisableBreakHier
+        | [<Unique; AltCommandLine("-vis_disableCollapseTrans")>] Vis_DisableCollapseTrans
         | [<Unique>] Pass_Primitive_By_Address
         
         // input is only one file, because of the module system
@@ -95,7 +103,22 @@ module Arguments =
                     "pass Blech input arguments of primitive type by address."
                 | Input _ -> 
                     "file <name> to be compiled."
-
+                | Visualize _ ->
+                    "outputs a .sctx file in the current directory that visualizes an abstract (stateful) view of the code in the given file."
+                | Vis_BreakRunStatement _ ->
+                    "indicates, whether a generated abstract visualization of the code should break the hierarchies on run statements."
+                | Vis_CbgnPatternWithHier _ ->
+                    "alternative improvement of cobegin pattern. Instead of breaking the hierarchy, a hierarchical node with weak abort transition is added."
+                | Vis_CbgnPattern _ ->
+                    "turns on the cobegin pattern detection in the visualization."
+                | Vis_includeOrigCode _ ->
+                    "if this flag is set, the original BlechCode is included as a comment in the resulting .sctx."
+                | Vis_notUseConnector _ ->
+                    "if used, connector states are not used."
+                | Vis_DisableBreakHier _ ->
+                    "Disables the simplification step of breaking hierarchies. Not recommended."
+                | Vis_DisableCollapseTrans _ ->
+                    "Disables the simplification step of collapsing transient transitions. Not recommended."
 
     type WordSize = 
         | W8 | W16 | W32 | W64
@@ -129,6 +152,14 @@ module Arguments =
             wordSize: WordSize
             passPrimitiveByAddress: bool
             verbosity: Verbosity
+            visualize: bool
+            vis_breakHierOnActCalls: bool
+            vis_cbgnPatternWithHier : bool
+            vis_cbgnPattern : bool
+            vis_includeOrigCode : bool
+            vis_notUseConnector : bool
+            vis_disableBreakHier : bool 
+            vis_disableCollapseTrans : bool
         }
         static member Default = {
                 inputFile = ""
@@ -143,6 +174,14 @@ module Arguments =
                 wordSize = W32
                 passPrimitiveByAddress = false
                 verbosity = Quiet
+                visualize = false
+                vis_breakHierOnActCalls = false
+                vis_cbgnPatternWithHier = false
+                vis_cbgnPattern = false
+                vis_includeOrigCode = false
+                vis_notUseConnector = false
+                vis_disableBreakHier = false
+                vis_disableCollapseTrans = false
             }
 
         
@@ -176,6 +215,22 @@ module Arguments =
             { opts with trace = true }
         | Pass_Primitive_By_Address ->
             { opts with passPrimitiveByAddress = true }
+        | Visualize _ ->
+            { opts with visualize = true }
+        | Vis_BreakRunStatement _ ->
+            { opts with vis_breakHierOnActCalls = true }
+        | Vis_CbgnPatternWithHier _ ->
+            { opts with vis_cbgnPatternWithHier = true }
+        | Vis_CbgnPattern _ ->
+            { opts with vis_cbgnPattern = true }
+        | Vis_includeOrigCode _ ->
+            { opts with vis_includeOrigCode = true }
+        | Vis_notUseConnector _ ->
+            { opts with vis_notUseConnector = true }
+        | Vis_DisableBreakHier _ ->
+            { opts with vis_disableBreakHier = true }
+        | Vis_DisableCollapseTrans _ ->
+            { opts with vis_disableCollapseTrans = true }
 
     let private parseWordSize ws = 
         if ws = 8 || ws = 16 || ws = 32 || ws = 64 then

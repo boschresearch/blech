@@ -182,6 +182,19 @@ with
         // remove old node
         this.RemoveNode oldNode
 
+    /// Replace the payload of a specified node, which is done by
+    /// creating a new node with the same transitions but new payload
+    /// and deleting the old one. Returns the new node.
+    member this.ReplacePayloadInByAndReturn oldNode newPayload : Node<'NodeData, 'EdgeData> = 
+        // create new node with new payload
+        let newNode = this.AddNode newPayload
+        // copy all incoming and outgoing transitions to new node
+        oldNode.Incoming |> Seq.iter (fun e -> this.AddEdge e.Payload e.Source newNode)
+        oldNode.Outgoing |> Seq.iter (fun e -> this.AddEdge e.Payload newNode e.Target)
+        // remove old node
+        this.RemoveNode oldNode
+        newNode
+
     member this.FilterNodes criterion =
         this.Nodes |> Seq.filter (fun node -> criterion (node.Payload))
 

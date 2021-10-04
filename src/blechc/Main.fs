@@ -24,6 +24,7 @@ module Main =
     open Blech.Intermediate
     open Blech.Backend
     open Blech.Backend.CodeGeneration
+    open Blech.Visualization
 
     exception FatalError // Temporary. Remove this.
 
@@ -157,6 +158,12 @@ module Main =
         //    failwith "No entry point given. Please annotate one activity with @[EntryPoint]"
         //| Some _ -> ()
     
+        // Visualization module.
+        match cliContext.visualize with 
+            | true -> Logging.log2 "Main" ("checking causality in " + inputFile) 
+                      Visualization.startSynthesis cliContext tyAstAndLutRes inputFile
+            | false -> ()
+
         // create program graphs and check their causality
         Logging.log2 "Main" ("checking causality in " + inputFile) 
         let causalityCheckRes =
