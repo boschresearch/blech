@@ -1,7 +1,10 @@
 
 # Blech Compiler
 
-[![.NET](https://github.com/boschresearch/blech/actions/workflows/dotnet.yml/badge.svg)](https://github.com/boschresearch/blech/actions/workflows/dotnet.yml)
+[![.NET](https://github.com/boschresearch/blech/actions/workflows/dotnet.yml/badge.svg)](https://github.com/boschresearch/blech/actions/workflows/dotnet.yml) [![Project Status: Inactive – The project has reached a stable, usable state but is no longer being actively developed; support/maintenance will be provided as time allows.](https://www.repostatus.org/badges/latest/inactive.svg)](https://www.repostatus.org/#inactive)
+
+ 
+[![Project Status: Moved to http://github.com/blech-lang/blech – The project has been moved to a new location, and the version at that location should be considered authoritative.](https://www.repostatus.org/badges/latest/moved.svg)](https://www.repostatus.org/#moved) to [development.blech-lang.org](http://development.blech-lang.org)
 
 Blech is a language for developing reactive, real-time critical embedded software.
 This open source project implements a compiler which translates Blech to C.
